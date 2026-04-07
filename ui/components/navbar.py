@@ -463,6 +463,7 @@ class Navbar(QFrame):
         self._tab_keys = [
             "navbar.tab.completed_claims",
             "navbar.tab.cases",
+            "navbar.tab.case_management",
             "navbar.tab.import",
             "navbar.tab.duplicates",
             "navbar.tab.field_assignment",
@@ -813,10 +814,10 @@ class Navbar(QFrame):
     # -- Role-based Visibility --
 
     TAB_PERMISSIONS = {
-        "admin":            [0, 1, 2, 3, 4, 5],
-        "data_manager":     [0, 1, 2, 3, 4, 5],
+        "admin":            [0, 1, 2, 3, 4, 5, 6],
+        "data_manager":     [0, 1, 2, 3, 4, 5, 6],
         "office_clerk":     [1],
-        "field_supervisor": [4],
+        "field_supervisor": [5],
         "field_researcher": [],
         "analyst":          [],
     }

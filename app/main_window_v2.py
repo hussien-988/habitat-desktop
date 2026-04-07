@@ -110,6 +110,8 @@ class MainWindow(QMainWindow):
     _PAGE_ROLE_ACCESS = {
         Pages.FIELD_ASSIGNMENT: {"admin", "data_manager", "field_supervisor"},
         Pages.SYNC_DATA: {"admin", "data_manager", "field_supervisor"},
+        Pages.CASE_MANAGEMENT: {"admin", "data_manager"},
+        Pages.CASE_ENTITY_DETAILS: {"admin", "data_manager"},
         Pages.CLAIM_EDIT: {"admin", "data_manager"},
         Pages.DUPLICATES: {"admin", "data_manager"},
         Pages.CLAIM_COMPARISON: {"admin", "data_manager"},
@@ -128,6 +130,10 @@ class MainWindow(QMainWindow):
 
         # For window dragging
         self._drag_position = QPoint()
+
+        # Contextual back navigation (case entity details → survey/claim details → back)
+        self._back_to_case_entity = False
+        self._case_entity_case_id = None
 
         # Session timeout tracking
         self._session_timer = None
@@ -317,8 +323,18 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.pages[Pages.CLAIMS])
 
         # Cases page (3 sub-tabs: Draft / Finalized / Completed)
-        self.pages[Pages.CASES] = CasesPage(self.db, self.i18n, self)
-        self.stack.addWidget(self.pages[Pages.CASES])
+        self.pages[Pages.SURVEYS] = CasesPage(self.db, self.i18n, self)
+        self.stack.addWidget(self.pages[Pages.SURVEYS])
+
+        # Case Management page (Case entity: Open / Closed)
+        from ui.pages.case_management_page import CaseManagementPage
+        self.pages[Pages.CASE_MANAGEMENT] = CaseManagementPage(self)
+        self.stack.addWidget(self.pages[Pages.CASE_MANAGEMENT])
+
+        # Case Entity Details page
+        from ui.pages.case_entity_details_page import CaseEntityDetailsPage
+        self.pages[Pages.CASE_ENTITY_DETAILS] = CaseEntityDetailsPage(self)
+        self.stack.addWidget(self.pages[Pages.CASE_ENTITY_DETAILS])
 
         # Duplicates page
         self.pages[Pages.DUPLICATES] = DuplicatesPage(self.db, self.i18n, self)
@@ -335,8 +351,8 @@ class MainWindow(QMainWindow):
         self.pages[Pages.FIELD_ASSIGNMENT].completed.connect(self._on_field_work_completed)
 
         # Case Details page — read-only view of survey/claim
-        self.pages[Pages.CASE_DETAILS] = CaseDetailsPage(self)
-        self.stack.addWidget(self.pages[Pages.CASE_DETAILS])
+        self.pages[Pages.SURVEY_DETAILS] = CaseDetailsPage(self)
+        self.stack.addWidget(self.pages[Pages.SURVEY_DETAILS])
 
         # Claim Details page — dedicated view for claims from Claims API
         self.pages[Pages.CLAIM_DETAILS] = ClaimDetailsPage(self)
@@ -378,18 +394,20 @@ class MainWindow(QMainWindow):
 
         # Map tabs to pages
         # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: الحالات (Cases)
-        # Tab 2: الاستيراد (Import)
-        # Tab 3: التكرارات (Duplicates)
-        # Tab 4: تجهيز العمل الميداني (Field Work Preparation)
-        # Tab 5: المباني (Buildings)
+        # Tab 1: المسوحات (Cases/Surveys)
+        # Tab 2: إدارة الحالات (Case Management)
+        # Tab 3: الاستيراد (Import)
+        # Tab 4: التكرارات (Duplicates)
+        # Tab 5: تجهيز العمل الميداني (Field Work Preparation)
+        # Tab 6: المباني (Buildings)
         self.tab_page_mapping = {
             0: Pages.CLAIMS,
-            1: Pages.CASES,
-            2: Pages.IMPORT_PACKAGES,
-            3: Pages.DUPLICATES,
-            4: Pages.FIELD_ASSIGNMENT,
-            5: Pages.BUILDINGS,
+            1: Pages.SURVEYS,
+            2: Pages.CASE_MANAGEMENT,
+            3: Pages.IMPORT_PACKAGES,
+            4: Pages.DUPLICATES,
+            5: Pages.FIELD_ASSIGNMENT,
+            6: Pages.BUILDINGS,
         }
 
     def _setup_layout(self):
@@ -455,24 +473,52 @@ class MainWindow(QMainWindow):
         )
 
         # Case Details - back to source page (draft or finalized)
-        self.pages[Pages.CASE_DETAILS].back_requested.connect(self._on_case_details_back)
+        self.pages[Pages.SURVEY_DETAILS].back_requested.connect(self._on_case_details_back)
+
+        # Case Management - view case details
+        self.pages[Pages.CASE_MANAGEMENT].case_selected.connect(self._on_case_entity_selected)
+
+        # Case Entity Details - back to case management
+        self.pages[Pages.CASE_ENTITY_DETAILS].back_requested.connect(
+            lambda: self.navigate_to(Pages.CASE_MANAGEMENT)
+        )
+
+        # Case Entity Details - view survey (contextual navigation)
+        self.pages[Pages.CASE_ENTITY_DETAILS].survey_clicked.connect(
+            self._on_case_entity_survey_clicked
+        )
+
+        # Case Entity Details - view claim (contextual navigation)
+        self.pages[Pages.CASE_ENTITY_DETAILS].claim_clicked.connect(
+            self._on_case_entity_claim_clicked
+        )
+
+        # Case Entity Details - toggle editable
+        self.pages[Pages.CASE_ENTITY_DETAILS].toggle_editable_requested.connect(
+            self._on_toggle_case_editable
+        )
+
+        # Case Entity Details - revisit
+        self.pages[Pages.CASE_ENTITY_DETAILS].revisit_requested.connect(
+            self._on_case_revisit_requested
+        )
 
         # Cases - view survey details (works for all 3 sub-tabs)
-        self.pages[Pages.CASES].claim_selected.connect(self._on_draft_claim_selected)
+        self.pages[Pages.SURVEYS].claim_selected.connect(self._on_draft_claim_selected)
 
         # Cases - resume draft survey in wizard for editing
-        self.pages[Pages.CASES].resume_survey.connect(self._on_resume_draft_survey)
+        self.pages[Pages.SURVEYS].resume_survey.connect(self._on_resume_draft_survey)
 
         # Cases - finalize survey → stay on cases page (switch to finalized sub-tab)
-        self.pages[Pages.CASES].survey_finalized.connect(
-            lambda _: self.navigate_to(Pages.CASES)
+        self.pages[Pages.SURVEYS].survey_finalized.connect(
+            lambda _: self.navigate_to(Pages.SURVEYS)
         )
 
         # Completed Claims - view claim details
         self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
         # Add Claim button - start new office survey
-        self.pages[Pages.CASES].add_claim_clicked.connect(self._start_new_office_survey)
+        self.pages[Pages.SURVEYS].add_claim_clicked.connect(self._start_new_office_survey)
 
         # Office Survey Wizard signals
         self.office_survey_wizard.survey_completed.connect(self._on_survey_completed)
@@ -480,18 +526,28 @@ class MainWindow(QMainWindow):
         self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
 
         # Resume draft survey from CaseDetailsPage
-        self.pages[Pages.CASE_DETAILS].resume_requested.connect(
+        self.pages[Pages.SURVEY_DETAILS].resume_requested.connect(
             self._on_resume_draft_survey
         )
 
         # Cancel draft survey from CaseDetailsPage
-        self.pages[Pages.CASE_DETAILS].cancel_requested.connect(
+        self.pages[Pages.SURVEY_DETAILS].cancel_requested.connect(
             self._on_cancel_draft_survey
+        )
+
+        # Resume obstructed survey from CaseDetailsPage
+        self.pages[Pages.SURVEY_DETAILS].resume_obstructed_requested.connect(
+            self._on_resume_obstructed_survey
+        )
+
+        # Revert finalized survey to draft from CaseDetailsPage
+        self.pages[Pages.SURVEY_DETAILS].revert_requested.connect(
+            self._on_revert_survey_to_draft
         )
 
         # Claim Details page signals
         self.pages[Pages.CLAIM_DETAILS].back_requested.connect(
-            lambda: self.navigate_to(Pages.CLAIMS)
+            self._on_claim_details_back
         )
         self.pages[Pages.CLAIM_DETAILS].edit_requested.connect(
             self._on_edit_claim_requested
@@ -499,10 +555,10 @@ class MainWindow(QMainWindow):
 
         # Claim Edit - back to case details / save completed
         self.pages[Pages.CLAIM_EDIT].back_requested.connect(
-            lambda: self.navigate_to(Pages.CASES)
+            lambda: self.navigate_to(Pages.SURVEYS)
         )
         self.pages[Pages.CLAIM_EDIT].save_completed.connect(
-            lambda: self.navigate_to(Pages.CASES)
+            lambda: self.navigate_to(Pages.SURVEYS)
         )
 
         # Duplicates page - view comparison
@@ -620,16 +676,22 @@ class MainWindow(QMainWindow):
 
             # Set user context on CasesPage BEFORE configure_for_role,
             # because configure_for_role emits tab_changed which triggers refresh()
-            cases_page = self.pages.get(Pages.CASES)
+            cases_page = self.pages.get(Pages.SURVEYS)
             if cases_page and hasattr(cases_page, 'configure_for_user'):
                 cases_page.configure_for_user(user.role, str(user.user_id))
+
+            # Set user context on CaseManagementPage
+            cm_page = self.pages.get(Pages.CASE_MANAGEMENT)
+            if cm_page and hasattr(cm_page, 'configure_for_user'):
+                cm_page.configure_for_user(user.role)
 
             # Configure tabs based on user role (RBAC)
             self.navbar.configure_for_role(user.role)
 
             # Apply role-based button visibility to content pages
             for page_id in (Pages.BUILDINGS, Pages.BUILDING_DETAILS, Pages.UNITS,
-                            Pages.PERSONS, Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES):
+                            Pages.PERSONS, Pages.IMPORT_WIZARD, Pages.IMPORT_PACKAGES,
+                            Pages.SURVEY_DETAILS, Pages.CASE_ENTITY_DETAILS):
                 page = self.pages.get(page_id)
                 if page and hasattr(page, 'configure_for_role'):
                     page.configure_for_role(user.role)
@@ -1044,18 +1106,17 @@ class MainWindow(QMainWindow):
             logger.info(f"_on_field_work_completed received: {type(workflow_data)}")
             buildings = workflow_data.get('buildings', [])
             researcher = workflow_data.get('researcher', {})
-            revisit_buildings = workflow_data.get('revisit_buildings', [])
+            revisit_reasons = workflow_data.get('revisit_reasons', {})
             researcher_name = researcher.get('name', 'N/A')
             researcher_id = researcher.get('id', '')
             building_count = len(buildings)
 
             if not buildings or not researcher_id:
                 logger.error("Missing buildings or researcher ID for assignment")
-                Toast.show_toast(self, "بيانات غير مكتملة للتعيين", Toast.ERROR)
+                Toast.show_toast(self, "\u0628\u064a\u0627\u0646\u0627\u062a \u063a\u064a\u0631 \u0645\u0643\u062a\u0645\u0644\u0629 \u0644\u0644\u062a\u0639\u064a\u064a\u0646", Toast.ERROR)
                 return
 
-            # Build buildings payload
-            revisit_map = {r['building_id']: r for r in revisit_buildings}
+            # Build buildings payload (assignment is at building level)
             buildings_payload = []
             for b in buildings:
                 b_uuid = getattr(b, 'building_uuid', None) or (
@@ -1065,18 +1126,10 @@ class MainWindow(QMainWindow):
                     b.get('building_id') if isinstance(b, dict) else None
                 )
                 item = {"buildingId": b_uuid}
-                revisit_info = revisit_map.get(b_id)
-                if revisit_info:
-                    item["revisitReason"] = revisit_info.get('reason', '')
+                reason = revisit_reasons.get(b_id)
+                if reason:
+                    item["revisitReason"] = reason
                 buildings_payload.append(item)
-
-            # Build assignment notes
-            assignment_notes = None
-            if revisit_buildings:
-                info_parts = [
-                    f"{r['building_id']}: {r.get('reason', '')}" for r in revisit_buildings
-                ]
-                assignment_notes = "مباني تحتاج إعادة زيارة: " + " | ".join(info_parts)
 
             logger.info(f"Creating API assignment: {building_count} buildings -> {researcher_name} ({researcher_id})")
 
@@ -1085,7 +1138,6 @@ class MainWindow(QMainWindow):
                 api_response = api.create_assignment(
                     buildings=buildings_payload,
                     field_collector_id=researcher_id,
-                    assignment_notes=assignment_notes
                 )
                 logger.info("Assignment created on backend API successfully")
 
@@ -1179,7 +1231,7 @@ class MainWindow(QMainWindow):
         logger.info(f"Search requested: {search_text}")
         # If on draft claims page, search within drafts
         current_page = self.stack.currentWidget()
-        if current_page == self.pages.get(Pages.CASES):
+        if current_page == self.pages.get(Pages.SURVEYS):
             search_mode = getattr(self.navbar, 'search_mode', 'name')
             current_page.search_claims(search_text, search_mode)
             return
@@ -1187,7 +1239,7 @@ class MainWindow(QMainWindow):
     def _on_filter_applied(self, filters: dict):
         """Handle filter applied from navbar filter popup."""
         current_page = self.stack.currentWidget()
-        if current_page == self.pages.get(Pages.CASES):
+        if current_page == self.pages.get(Pages.SURVEYS):
             current_page.apply_filters(filters)
 
     def navigate_to(self, page_id: str, data=None):
@@ -1226,8 +1278,8 @@ class MainWindow(QMainWindow):
                     if draft_id:
                         from ui.components.toast import Toast
                         Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
-                        if Pages.CASES in self.pages:
-                            self.pages[Pages.CASES].refresh()
+                        if Pages.SURVEYS in self.pages:
+                            self.pages[Pages.SURVEYS].refresh()
                     else:
                         logger.warning("Failed to save draft")
                         return
@@ -1385,7 +1437,7 @@ class MainWindow(QMainWindow):
         """Navigate to case details — fetch full survey context from Surveys/office API."""
         logger.info(f"Draft survey selected: {claim_id}")
 
-        claims_page = self.pages[Pages.CASES]
+        claims_page = self.pages[Pages.SURVEYS]
         claim_data = None
         for c in claims_page._all_data:
             if c.get('claim_id') == claim_id:
@@ -1422,7 +1474,7 @@ class MainWindow(QMainWindow):
     def _on_draft_claim_fetched(self, result, claim_id):
         self._hide_login_loading()
         if result and result.success and result.data:
-            self.navigate_to(Pages.CASE_DETAILS, result.data)
+            self.navigate_to(Pages.SURVEY_DETAILS, result.data)
         else:
             from ui.components.toast import Toast
             msg = getattr(result, 'message', '') if result else ''
@@ -1490,13 +1542,163 @@ class MainWindow(QMainWindow):
         self._hide_login_loading()
         logger.error(f"Failed to resume draft {survey_uuid}: {error_msg}")
 
+    def _on_case_entity_selected(self, case_id: str):
+        """Handle case card click from CaseManagementPage — navigate to case entity details."""
+        logger.info(f"Case entity selected: {case_id}")
+        cm_page = self.pages.get(Pages.CASE_MANAGEMENT)
+        if cm_page:
+            cm_page._navigating = False
+            if hasattr(cm_page, '_spinner'):
+                cm_page._spinner.hide_loading()
+        self.navigate_to(Pages.CASE_ENTITY_DETAILS, {"case_id": case_id})
+
+    def _fetch_survey_for_case(self, survey_uuid: str):
+        """Fetch full survey context by UUID and navigate to CaseDetailsPage."""
+        self._show_login_loading_msg(tr("component.loading.default"))
+
+        from services.api_worker import ApiWorker
+
+        def _fetch():
+            from controllers.survey_controller import SurveyController
+            ctrl = SurveyController(self.db)
+            return ctrl.get_survey_full_context(survey_uuid)
+
+        def _on_fetched(result):
+            self._hide_login_loading()
+            if result and result.success and result.data:
+                self.navigate_to(Pages.SURVEY_DETAILS, result.data)
+            else:
+                from ui.components.toast import Toast
+                msg = getattr(result, 'message', '') if result else ''
+                Toast.show_toast(self, msg or tr("page.case_management.load_failed"), Toast.ERROR)
+
+        def _on_err(msg):
+            self._hide_login_loading()
+            logger.error(f"Survey fetch for case failed: {msg}")
+
+        worker = ApiWorker(_fetch)
+        worker.finished.connect(_on_fetched)
+        worker.error.connect(_on_err)
+        self._case_survey_worker = worker
+        worker.start()
+
     def _on_case_details_back(self):
-        """Navigate back to the Cases page from CaseDetailsPage."""
-        self.navigate_to(Pages.CASES)
+        """Navigate back from CaseDetailsPage (survey details).
+        If navigated from case entity details, return there; otherwise go to surveys list."""
+        if self._back_to_case_entity and self._case_entity_case_id:
+            case_id = self._case_entity_case_id
+            self._back_to_case_entity = False
+            self._case_entity_case_id = None
+            self.navigate_to(Pages.CASE_ENTITY_DETAILS, {"case_id": case_id})
+        else:
+            self.navigate_to(Pages.SURVEYS)
+
+    def _on_claim_details_back(self):
+        """Navigate back from ClaimDetailsPage.
+        If navigated from case entity details, return there; otherwise go to claims list."""
+        if self._back_to_case_entity and self._case_entity_case_id:
+            case_id = self._case_entity_case_id
+            self._back_to_case_entity = False
+            self._case_entity_case_id = None
+            self.navigate_to(Pages.CASE_ENTITY_DETAILS, {"case_id": case_id})
+        else:
+            self.navigate_to(Pages.CLAIMS)
+
+    def _on_case_entity_survey_clicked(self, survey_id: str):
+        """Navigate to survey details from case entity details (contextual)."""
+        ce_page = self.pages.get(Pages.CASE_ENTITY_DETAILS)
+        if ce_page and ce_page._case:
+            self._back_to_case_entity = True
+            self._case_entity_case_id = ce_page._case.id
+        self._fetch_survey_for_case(survey_id)
+
+    def _on_case_entity_claim_clicked(self, claim_id: str):
+        """Navigate to claim details from case entity details (contextual)."""
+        ce_page = self.pages.get(Pages.CASE_ENTITY_DETAILS)
+        if ce_page and ce_page._case:
+            self._back_to_case_entity = True
+            self._case_entity_case_id = ce_page._case.id
+        self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
+
+    def _on_toggle_case_editable(self, case_id: str, is_editable: bool):
+        """Toggle the editable flag on a case via API."""
+        from PyQt5.QtWidgets import QMessageBox
+        action_text = (
+            "\u0641\u062a\u062d \u0627\u0644\u062a\u0639\u062f\u064a\u0644" if is_editable
+            else "\u0642\u0641\u0644 \u0627\u0644\u062a\u0639\u062f\u064a\u0644"
+        )
+        reply = QMessageBox.question(
+            self, "\u062a\u0623\u0643\u064a\u062f",
+            f"\u0647\u0644 \u062a\u0631\u064a\u062f {action_text} \u0644\u0647\u0630\u0647 \u0627\u0644\u062d\u0627\u0644\u0629\u061f",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        from services.api_worker import ApiWorker
+
+        def _toggle():
+            from services.api_client import get_api_client
+            api = get_api_client()
+            api.set_case_editable(case_id, is_editable)
+            return is_editable
+
+        def _on_done(new_val):
+            ce_page = self.pages.get(Pages.CASE_ENTITY_DETAILS)
+            if ce_page and hasattr(ce_page, 'update_after_editable_toggle'):
+                ce_page.update_after_editable_toggle(new_val)
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0639\u062f\u064a\u0644", Toast.SUCCESS)
+
+        def _on_err(msg):
+            logger.error(f"Toggle editable failed: {msg}")
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "\u0641\u0634\u0644 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0639\u062f\u064a\u0644", Toast.ERROR)
+
+        worker = ApiWorker(_toggle)
+        worker.finished.connect(_on_done)
+        worker.error.connect(_on_err)
+        self._toggle_editable_worker = worker
+        worker.start()
+
+    def _on_case_revisit_requested(self, revisit_data: dict):
+        """Handle revisit request from case entity details — navigate to field work wizard Step 2."""
+        from services.api_worker import ApiWorker
+        property_unit_id = revisit_data.get("property_unit_id", "")
+
+        def _fetch():
+            from services.api_client import get_api_client
+            return get_api_client().get_property_unit_by_id(property_unit_id)
+
+        def _on_done(unit_dto):
+            from ui.components.toast import Toast
+            if not unit_dto:
+                Toast.show_toast(self, "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062f \u0627\u0644\u0645\u0628\u0646\u0649", Toast.ERROR)
+                return
+            building_id = unit_dto.get("buildingId") or unit_dto.get("building_id") or ""
+            if not building_id:
+                Toast.show_toast(self, "\u062a\u0639\u0630\u0651\u0631 \u062a\u062d\u062f\u064a\u062f \u0627\u0644\u0645\u0628\u0646\u0649", Toast.ERROR)
+                return
+            self.navigate_to(Pages.FIELD_ASSIGNMENT, data={
+                'revisit_mode': True,
+                'building_id': building_id,
+                'unit_id': property_unit_id,
+            })
+
+        def _on_err(msg):
+            logger.error(f"Revisit unit fetch failed: {msg}")
+            from ui.components.toast import Toast
+            Toast.show_toast(self, "\u0641\u0634\u0644 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0642\u0633\u0645", Toast.ERROR)
+
+        worker = ApiWorker(_fetch)
+        worker.finished.connect(_on_done)
+        worker.error.connect(_on_err)
+        self._revisit_fetch_worker = worker
+        worker.start()
 
     def _on_edit_claim_requested(self, claim_id: str):
         """Navigate to ClaimEditPage, passing claim_id + survey_id from current context."""
-        case_page = self.pages.get(Pages.CASE_DETAILS)
+        case_page = self.pages.get(Pages.SURVEY_DETAILS)
         data = {"claim_id": claim_id}
         if case_page and case_page._context:
             survey_id = case_page._context.get_data("survey_id")
@@ -1541,9 +1743,7 @@ class MainWindow(QMainWindow):
     def _on_survey_completed(self, data):
         """Handle survey completion from wizard — navigate to surveys page."""
         logger.info(f"Survey completed: {data}")
-
-        # Always navigate to surveys page (tab 1) so user can start a new survey
-        self.pages[Pages.CASES].refresh()
+        self.pages[Pages.SURVEYS].refresh()
         self.navbar.set_current_tab(1)
         self._on_tab_changed(1)
 
@@ -1563,19 +1763,53 @@ class MainWindow(QMainWindow):
                 api.set_access_token(self._api_token)
             api.cancel_survey(survey_id, reason)
             Toast.show_toast(self, "تم إلغاء المسح بنجاح", Toast.SUCCESS)
-            self.navigate_to(Pages.CASES)
-            if Pages.CASES in self.pages and hasattr(self.pages[Pages.CASES], 'refresh'):
-                self.pages[Pages.CASES].refresh()
+            self.navigate_to(Pages.SURVEYS)
+            if Pages.SURVEYS in self.pages and hasattr(self.pages[Pages.SURVEYS], 'refresh'):
+                self.pages[Pages.SURVEYS].refresh()
         except Exception as e:
             logger.error(f"Failed to cancel survey {survey_id}: {e}", exc_info=True)
             Toast.show_toast(self, f"فشل إلغاء المسح: {e}", Toast.ERROR)
 
+    def _on_resume_obstructed_survey(self, survey_id: str):
+        """Resume an obstructed survey via API (Obstructed → Draft)."""
+        from ui.components.toast import Toast
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if self._api_token:
+                api.set_access_token(self._api_token)
+            api.resume_obstructed_survey(survey_id)
+            Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
+            self.navigate_to(Pages.SURVEYS)
+            if Pages.SURVEYS in self.pages and hasattr(self.pages[Pages.SURVEYS], 'refresh'):
+                self.pages[Pages.SURVEYS].refresh()
+        except Exception as e:
+            logger.error(f"Failed to resume obstructed survey {survey_id}: {e}", exc_info=True)
+            Toast.show_toast(self, f"فشل استئناف المسح: {e}", Toast.ERROR)
+
+    def _on_revert_survey_to_draft(self, survey_id: str, reason: str):
+        """Revert a finalized survey back to Draft via API."""
+        from ui.components.toast import Toast
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if self._api_token:
+                api.set_access_token(self._api_token)
+            api.revert_survey_to_draft(survey_id, reason)
+            Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
+            self.navigate_to(Pages.SURVEYS)
+            if Pages.SURVEYS in self.pages and hasattr(self.pages[Pages.SURVEYS], 'refresh'):
+                self.pages[Pages.SURVEYS].refresh()
+        except Exception as e:
+            logger.error(f"Failed to revert survey {survey_id} to draft: {e}", exc_info=True)
+            Toast.show_toast(self, f"فشل إعادة المسح للمسودة: {e}", Toast.ERROR)
+
     def _on_survey_saved_draft(self, survey_id: str):
         """Handle survey saved as draft."""
         logger.info(f"Survey saved as draft: {survey_id}")
-        if hasattr(self.pages.get(Pages.CASES), 'refresh'):
-            self.pages[Pages.CASES].refresh()
-        self.navigate_to(Pages.CASES)
+        if hasattr(self.pages.get(Pages.SURVEYS), 'refresh'):
+            self.pages[Pages.SURVEYS].refresh()
+        self.navigate_to(Pages.SURVEYS)
 
     def toggle_language(self):
         """Toggle language directly between Arabic and English."""

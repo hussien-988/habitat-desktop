@@ -91,6 +91,36 @@ class ApplicantInfoStep(BaseStep):
 
         # Section 4: ID Photos
         card_layout.addWidget(make_sub_section_header(tr("wizard.section.id_photos")))
+
+        from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel
+        doc_type_row = QHBoxLayout()
+        doc_type_row.setContentsMargins(0, 0, 0, 4)
+        doc_type_lbl = QLabel(tr("wizard.person_dialog.id_document_type"))
+        doc_type_lbl.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
+        self._id_doc_type_combo = QComboBox()
+        from services.display_mappings import get_identification_document_type_options
+        for code, label in get_identification_document_type_options():
+            if code == 0:
+                continue
+            self._id_doc_type_combo.addItem(label, code)
+        self._id_doc_type_combo.setStyleSheet("""
+            QComboBox {
+                border: 1px solid #D0D7E2; border-radius: 8px;
+                padding: 6px 10px; background: #F8FAFF; color: #2C3E50;
+                font-size: 13px; min-height: 28px;
+            }
+            QComboBox:focus { border: 1.5px solid #3890DF; }
+            QComboBox::drop-down { border: none; width: 28px; }
+            QComboBox::down-arrow {
+                image: none; width: 0; height: 0;
+                border-left: 5px solid transparent; border-right: 5px solid transparent;
+                border-top: 5px solid #7F8C9B;
+            }
+        """)
+        doc_type_row.addWidget(doc_type_lbl)
+        doc_type_row.addWidget(self._id_doc_type_combo, 1)
+        card_layout.addLayout(doc_type_row)
+
         self._id_upload_frame = self._create_upload_frame(
             self._browse_files, "id_upload",
             button_text=tr("wizard.person_dialog.attach_id_photos"),
@@ -593,10 +623,12 @@ class ApplicantInfoStep(BaseStep):
                 new_files = [f for f in self.uploaded_files if f not in already_uploaded]
                 for fp in new_files:
                     try:
+                        doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else 1
                         self._api_client.upload_identification_document(
                             survey_id=survey_id,
                             person_id=person_id,
                             file_path=fp,
+                            document_type=doc_type or 1,
                         )
                         already_uploaded.add(fp)
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")

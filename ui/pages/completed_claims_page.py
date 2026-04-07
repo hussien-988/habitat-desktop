@@ -591,6 +591,7 @@ class CompletedClaimsPage(QWidget):
         self._current_page = 1
         self._total_count = 0
         self._page_size = 20
+        self._search_mode = False
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -637,7 +638,7 @@ class CompletedClaimsPage(QWidget):
         self._header.add_tab(self._tab_closed)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
         self._search.setFixedSize(280, 34)
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -664,6 +665,7 @@ class CompletedClaimsPage(QWidget):
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
+        self._search.textChanged.connect(self._on_search_text_changed)
         self._header.set_search_field(self._search)
 
         main.addWidget(self._header)
@@ -708,6 +710,9 @@ class CompletedClaimsPage(QWidget):
         self._empty_state = _EmptyStateAnimated()
         self._stack.addWidget(self._empty_state)
 
+        self._results_bar = self._build_results_bar()
+        content_layout.addWidget(self._results_bar)
+        self._results_bar.hide()
         content_layout.addWidget(self._stack, 1)
 
         self._pagination = self._create_pagination()
@@ -795,11 +800,75 @@ class CompletedClaimsPage(QWidget):
 
     def _on_search_triggered(self):
         self._current_page = 1
-        self._load_claims()
+        search_text = self._search.text().strip()
+        if search_text:
+            self._enter_search_mode()
+            self._load_claims()
+        else:
+            self._exit_search_mode()
 
     def _on_search_changed(self):
         self._current_page = 1
         self._search_timer.start(500)
+
+    def _on_search_text_changed(self, text: str):
+        if not text.strip() and self._search_mode:
+            self._exit_search_mode()
+
+    def _enter_search_mode(self):
+        if self._search_mode:
+            return
+        self._search_mode = True
+        self._tab_open.hide()
+        self._tab_closed.hide()
+        self._results_bar.show()
+
+    def _exit_search_mode(self):
+        if not self._search_mode:
+            return
+        self._search_mode = False
+        self._tab_open.show()
+        self._tab_closed.show()
+        self._results_bar.hide()
+        self._search.blockSignals(True)
+        self._search.clear()
+        self._search.blockSignals(False)
+        self._current_page = 1
+        self._load_claims()
+
+    def _build_results_bar(self):
+        bar = QFrame()
+        bar.setFixedHeight(44)
+        bar.setStyleSheet(
+            "QFrame { background: rgba(56, 144, 223, 0.07);"
+            " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
+            " margin-bottom: 10px; }"
+        )
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(12)
+
+        self._back_btn = QPushButton("رجوع")
+        self._back_btn.setFixedSize(80, 30)
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setStyleSheet(
+            "QPushButton { background: rgba(56, 144, 223, 0.15);"
+            " border: 1px solid rgba(56, 144, 223, 0.3); border-radius: 6px;"
+            " color: #3890DF; font-weight: 600; font-size: 12px; }"
+            " QPushButton:hover { background: rgba(56, 144, 223, 0.25); }"
+        )
+        self._back_btn.clicked.connect(self._exit_search_mode)
+        layout.addWidget(self._back_btn)
+
+        self._results_title = QLabel("نتائج البحث")
+        self._results_title.setStyleSheet(
+            "color: #1E3A5F; font-weight: 700; font-size: 14px;"
+            " background: transparent; border: none;"
+        )
+        layout.addWidget(self._results_title)
+        layout.addStretch()
+
+        return bar
 
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
@@ -825,43 +894,41 @@ class CompletedClaimsPage(QWidget):
         self._spinner.show_loading(tr("page.claims.loading"))
 
         case_status = CASE_STATUS_OPEN if self._active_tab == "open" else CASE_STATUS_CLOSED
-        claim_number = self._search.text().strip()
+        search_text = self._search.text().strip() if self._search_mode else ""
 
         self._worker = ApiWorker(
-            self._fetch_claims_data, case_status, claim_number
+            self._fetch_claims_data, case_status, search_text
         )
         self._worker.finished.connect(self._on_claims_loaded)
         self._worker.error.connect(self._on_claims_error)
         self._worker.start()
 
-    def _fetch_claims_data(self, case_status, claim_number):
+    def _fetch_claims_data(self, case_status, search_text):
         from services.api_client import get_api_client
         from controllers.building_controller import BuildingController
 
         api = get_api_client()
         total_count = 0
 
-        if claim_number:
+        if search_text:
+            normalized = search_text.strip().upper()
+            summaries = []
             try:
-                result = api.get_claim_by_number(claim_number)
-                if result:
-                    summaries = [{
-                        "claimNumber": result.get("claimNumber", claim_number),
-                        "claimId": result.get("id") or result.get("claimId", ""),
-                        "primaryClaimantName": result.get("primaryClaimantName", ""),
-                        "fullNameArabic": result.get("fullNameArabic", ""),
-                        "claimSource": result.get("claimSource", 0),
-                        "caseStatus": result.get("caseStatus", 0),
-                        "buildingCode": result.get("buildingCode", ""),
-                        "claimType": result.get("claimType", ""),
-                        "createdAtUtc": result.get("createdAtUtc", ""),
-                        "surveyDate": result.get("surveyDate", ""),
-                    }]
-                    total_count = 1
-                else:
-                    summaries = []
+                survey_resp = api.get_office_surveys(reference_code=normalized, page_size=1)
+                surveys = survey_resp.get("surveys", []) if isinstance(survey_resp, dict) else []
+                if surveys:
+                    survey_id = surveys[0].get("id", "")
+                    if survey_id:
+                        raw = api._request("GET", "/v2/claims/summaries", params={
+                            "surveyVisitId": survey_id,
+                            "page": self._current_page,
+                            "pageSize": self._page_size,
+                        })
+                        if isinstance(raw, dict):
+                            summaries = raw.get("items", [])
+                            total_count = raw.get("totalCount", len(summaries))
             except Exception as e:
-                logger.warning(f"Search by claim number failed: {e}")
+                logger.warning(f"Reference code search failed: {e}")
                 summaries = []
         else:
             try:
@@ -1121,7 +1188,7 @@ class CompletedClaimsPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("page.claims.subtitle"))
-        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
         self._stat_open.set_label(tr("page.claims.tab_open"))
         self._stat_closed.set_label(tr("page.claims.tab_closed"))
 

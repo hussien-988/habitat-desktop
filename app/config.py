@@ -216,9 +216,12 @@ class Pages:
     PERSON_DETAILS = "person_details"
     CLAIMS = "claims"
     DRAFT_CLAIMS = "draft_claims"  # Draft claims page (kept for backward compat)
-    CASES = "cases"  # Cases page with 3 sub-tabs (Draft / Finalized / Completed)
+    SURVEYS = "surveys"  # Surveys page with 3 sub-tabs (Draft / Finalized / Completed)
+    CASES = "surveys"  # Alias for backward compatibility
     CLAIM_DETAILS = "claim_details"
-    CASE_DETAILS = "case_details"
+    SURVEY_DETAILS = "survey_details"  # Survey context details page
+    CASE_DETAILS = "survey_details"  # Alias for backward compatibility
+    CASE_ENTITY_DETAILS = "case_entity_details"  # Case entity details page
     DOCUMENTS = "documents"
     HOUSEHOLDS = "households"
     RELATIONS = "relations"
@@ -232,6 +235,7 @@ class Pages:
     IMPORT_PACKAGES = "import_packages"
     CLAIM_SEARCH = "claim_search"
     CLAIM_EDIT = "claim_edit"
+    CASE_MANAGEMENT = "case_management"
 
 
 # User roles

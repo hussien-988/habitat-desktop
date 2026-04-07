@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Surveys Page v2 — Dark navy header with constellation, navbar-style tabs,
+Case Management Page -- Dark navy header with constellation, navbar-style tabs,
 animated shimmer cards, pagination, and cohesive blue palette.
-Displays Draft & Finalized office surveys.
+Displays Open & Closed cases for a property registration system.
 """
 
 import logging
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QFrame, QLineEdit, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect, QStackedWidget,
+    QGraphicsOpacityEffect, QStackedWidget, QGridLayout,
 )
 from PyQt5.QtCore import (
     Qt, pyqtSignal, pyqtProperty, QTimer, QRectF, QPoint, QSize,
@@ -29,22 +29,38 @@ from PyQt5.QtGui import (
 from ui.design_system import Colors, PageDimensions, Spacing
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
-from services.translation_manager import tr, get_layout_direction, get_language
-from services.display_mappings import get_survey_type_display
-from services.api_worker import ApiWorker
 from ui.components.toast import Toast
+from services.translation_manager import get_layout_direction
+from services.api_worker import ApiWorker
+from models.case import Case
 
 logger = logging.getLogger(__name__)
 
-_STATUS_STYLES = {
-    "draft":      {"bg": "#FFF7ED", "fg": "#C2410C", "border": "#FDBA74", "glow": "rgba(194, 65, 12, 0.12)"},
-    "finalized":  {"bg": "#EBF5FF", "fg": "#0369A1", "border": "#7DD3FC", "glow": "rgba(3, 105, 161, 0.10)"},
-    "obstructed": {"bg": "#FFFBEB", "fg": "#B45309", "border": "#FCD34D", "glow": "rgba(180, 83, 9, 0.12)"},
+
+# ---------------------------------------------------------------------------
+#  Status style maps
+# ---------------------------------------------------------------------------
+
+_CASE_STATUS_STYLES = {
+    1: {  # Open
+        "bg": "#ECFDF5", "fg": "#059669", "border": "#6EE7B7",
+        "glow": "rgba(5, 150, 105, 0.12)", "label": "\u0645\u0641\u062a\u0648\u062d\u0629",
+        "strip": "#059669",
+    },
+    2: {  # Closed
+        "bg": "#FEF2F2", "fg": "#DC2626", "border": "#FECACA",
+        "glow": "rgba(220, 38, 38, 0.12)", "label": "\u0645\u063a\u0644\u0642\u0629",
+        "strip": "#DC2626",
+    },
 }
+
+
+# ---------------------------------------------------------------------------
+#  Dark input style (matches DarkHeaderZone)
+# ---------------------------------------------------------------------------
 
 _DARK_INPUT_STYLE = """
     QLineEdit {
@@ -52,7 +68,7 @@ _DARK_INPUT_STYLE = """
         color: white;
         border: 1px solid rgba(56, 144, 223, 35);
         border-radius: 8px;
-        padding: 0 12px 0 34px;
+        padding: 0 12px 0 12px;
     }
     QLineEdit:focus {
         border: 1.5px solid rgba(56, 144, 223, 140);
@@ -60,29 +76,6 @@ _DARK_INPUT_STYLE = """
     }
     QLineEdit::placeholder {
         color: rgba(139, 172, 200, 130);
-    }
-"""
-
-_ADD_BTN_STYLE = """
-    QPushButton {
-        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
-            stop:0 #4DA0EF, stop:0.45 #3890DF, stop:1 #2E7BD6);
-        color: white;
-        border: 1px solid rgba(120, 190, 255, 0.35);
-        border-radius: 10px;
-        padding: 0 24px;
-        font-weight: 700;
-        font-size: 13pt;
-    }
-    QPushButton:hover {
-        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
-            stop:0 #5AACFF, stop:0.45 #4DA0EF, stop:1 #3890DF);
-        border: 1px solid rgba(140, 210, 255, 0.55);
-    }
-    QPushButton:pressed {
-        background: qlineargradient(x1:0, y1:0, x2:0.5, y2:1,
-            stop:0 #3890DF, stop:0.5 #2E7BD6, stop:1 #266FC0);
-        border: 1px solid rgba(100, 170, 240, 0.25);
     }
 """
 
@@ -111,14 +104,31 @@ _NAV_BTN_STYLE = """
 
 
 # ---------------------------------------------------------------------------
-#  _SurveyCard — Card with blue tint, animated shimmer, hover lift, chevron
+#  Stat pill helper
 # ---------------------------------------------------------------------------
 
-class _SurveyCard(QFrame):
-    """Survey card with blue-tinted background, animated shimmer sweep,
+def _make_stat_pill(label: str, value: int, bg: str, fg: str, border: str) -> QLabel:
+    pill = QLabel(f"  {label}: {value}  ")
+    pill.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+    pill.setAlignment(Qt.AlignCenter)
+    pill.setFixedHeight(26)
+    pill.setStyleSheet(
+        f"QLabel {{ background: {bg}; color: {fg}; "
+        f"border: 1px solid {border}; border-radius: 13px; "
+        f"padding: 0 12px; }}"
+    )
+    return pill
+
+
+# ---------------------------------------------------------------------------
+#  _CaseCard -- Shimmer card for a single Case
+# ---------------------------------------------------------------------------
+
+class _CaseCard(QFrame):
+    """Case card with blue-tinted background, animated shimmer sweep,
     prominent hover effects, and directional chevron."""
 
-    clicked = pyqtSignal(str)
+    clicked = pyqtSignal(str)  # case_id
 
     _CARD_BG = "#F7FAFF"
     _CARD_BG_HOVER = "#F0F5FF"
@@ -134,28 +144,28 @@ class _SurveyCard(QFrame):
 
     lift = pyqtProperty(float, _get_lift, _set_lift)
 
-    def __init__(self, card_data: Dict, parent=None):
+    def __init__(self, case: Case, parent=None):
         super().__init__(parent)
-        self._claim_id = card_data.get("claim_id", "")
-        self._claim_uuid = card_data.get("claim_uuid", "")
-        self._status = card_data.get("status", "draft")
+        self._case = case
+        self._case_id = case.id
+        self._status = case.status
         self._hovered = False
         self._pressed = False
-        self._badge = None
         self._entrance_anim = None
         self._entrance_effect = None
         self._shimmer_offset = random.uniform(0, math.tau)
         self._lift_value = 0.0
         self._lift_anim = None
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(110)
-        self.setMouseTracking(True)
-        self._build_ui(card_data)
 
-    def _build_ui(self, d: Dict):
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+        self.setFixedHeight(120)
+        self.setMouseTracking(True)
+        self._build_ui()
+
+    def _build_ui(self):
         self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet(f"""
-            _SurveyCard {{
+            _CaseCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {self._CARD_BG}, stop:1 #F0F5FF);
                 border-radius: 14px;
@@ -173,36 +183,39 @@ class _SurveyCard(QFrame):
         outer.setContentsMargins(0, 0, 20, 0)
         outer.setSpacing(0)
 
-        # Left status strip with gradient
-        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
+        # Status strip
+        style = _CASE_STATUS_STYLES.get(self._status, _CASE_STATUS_STYLES[1])
         strip = QFrame()
         strip.setFixedWidth(5)
         is_rtl = get_layout_direction() == Qt.RightToLeft
         if is_rtl:
             strip.setStyleSheet(
                 f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
+                f"stop:0 {style['strip']}, stop:0.5 {style['border']}, "
+                f"stop:1 {style['strip']}); "
                 "border-top-right-radius: 14px; border-bottom-right-radius: 14px;"
             )
         else:
             strip.setStyleSheet(
                 f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['fg']}, stop:0.5 {style['border']}, stop:1 {style['fg']}); "
+                f"stop:0 {style['strip']}, stop:0.5 {style['border']}, "
+                f"stop:1 {style['strip']}); "
                 "border-top-left-radius: 14px; border-bottom-left-radius: 14px;"
             )
         outer.addWidget(strip)
 
-        # Content
+        # Content area
         content = QVBoxLayout()
-        content.setContentsMargins(18, 14, 0, 14)
+        content.setContentsMargins(18, 10, 0, 10)
         content.setSpacing(4)
 
-        # Row 1: contact person name + status badge
+        # Row 1: case number + status badge
         row1 = QHBoxLayout()
         row1.setSpacing(10)
 
-        name_label = QLabel(d.get("claimant_name", "-"))
-        name_label.setFont(create_font(size=13, weight=QFont.Bold))
+        case_number_text = self._case.case_number or self._case.id[:16]
+        name_label = QLabel(case_number_text)
+        name_label.setFont(create_font(size=14, weight=QFont.Bold))
         name_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
@@ -210,8 +223,7 @@ class _SurveyCard(QFrame):
         row1.addWidget(name_label)
         row1.addStretch()
 
-        status_text = self._get_status_text(self._status)
-        badge = QLabel(status_text)
+        badge = QLabel(style["label"])
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
         badge.setFixedHeight(22)
@@ -220,71 +232,82 @@ class _SurveyCard(QFrame):
             f"border: 1px solid {style['border']}; border-radius: 11px; "
             f"padding: 0 10px; }}"
         )
-        self._badge = badge
         row1.addWidget(badge)
         content.addLayout(row1)
 
-        # Row 2: reference code
-        ref_label = QLabel(d.get("claim_id", "N/A"))
-        id_font = create_font(size=9, weight=FontManager.WEIGHT_MEDIUM)
-        id_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.4)
-        ref_label.setFont(id_font)
-        ref_label.setStyleSheet(
+        # Row 2: opened date
+        opened_str = ""
+        if self._case.opened_date:
+            opened_str = self._case.opened_date[:10]
+        if opened_str and not opened_str.startswith("0001"):
+            date_label = QLabel(f"\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0641\u062a\u062d: {opened_str}")
+        else:
+            date_label = QLabel("")
+        date_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        date_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
-        content.addWidget(ref_label)
+        content.addWidget(date_label)
 
         content.addSpacing(4)
 
-        # Row 3: info chips (building, source, date)
+        # Row 3: chips (survey count, claim count, relations count) + lock icon
         chips_row = QHBoxLayout()
         chips_row.setSpacing(6)
 
-        chip_style = (
+        chip_style_tpl = (
             "QLabel {{ background-color: {bg}; color: {fg}; "
             "border: 1px solid {border}; border-radius: 4px; "
             "padding: 2px 8px; }}"
         )
 
-        building_id = d.get("building_id", "")
-        if building_id:
-            chip = QLabel(building_id)
-            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            chip.setStyleSheet(chip_style.format(
-                bg="#F0F4FA", fg="#475569", border="#E2E8F0"
-            ))
-            chips_row.addWidget(chip)
+        # Survey count chip (blue)
+        survey_chip = QLabel(
+            f"\u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a: {self._case.survey_count}"
+        )
+        survey_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+        survey_chip.setStyleSheet(chip_style_tpl.format(
+            bg="#EBF5FF", fg="#0369A1", border="#BAE6FD"
+        ))
+        chips_row.addWidget(survey_chip)
 
-        source_label = d.get("source_label", "")
-        if source_label:
-            chip = QLabel(source_label)
-            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            chip.setStyleSheet(chip_style.format(
-                bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"
-            ))
-            chips_row.addWidget(chip)
+        # Claim count chip (purple)
+        claim_chip = QLabel(
+            f"\u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a: {self._case.claim_count}"
+        )
+        claim_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+        claim_chip.setStyleSheet(chip_style_tpl.format(
+            bg="#F3E8FF", fg="#7C3AED", border="#DDD6FE"
+        ))
+        chips_row.addWidget(claim_chip)
 
-        date_str = d.get("date", "")
-        if date_str and not date_str.startswith("0001"):
-            chip = QLabel(date_str)
-            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            chip.setStyleSheet(chip_style.format(
-                bg="#F0FDF4", fg="#15803D", border="#DCFCE7"
-            ))
-            chips_row.addWidget(chip)
+        # Relations chip (green)
+        relation_chip = QLabel(
+            f"\u0627\u0644\u0639\u0644\u0627\u0642\u0627\u062a: {self._case.person_property_relation_count}"
+        )
+        relation_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+        relation_chip.setStyleSheet(chip_style_tpl.format(
+            bg="#F0FDF4", fg="#15803D", border="#DCFCE7"
+        ))
+        chips_row.addWidget(relation_chip)
 
         chips_row.addStretch()
+
+        # Lock icon if not editable
+        if not self._case.is_editable:
+            lock_label = QLabel("\U0001F512")
+            lock_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            lock_label.setStyleSheet("background: transparent; border: none;")
+            lock_label.setToolTip(
+                "\u063a\u064a\u0631 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u062a\u0639\u062f\u064a\u0644"
+            )
+            chips_row.addWidget(lock_label)
+
         content.addLayout(chips_row)
 
         outer.addLayout(content, 1)
 
-    def _get_status_text(self, status: str) -> str:
-        key_map = {
-            "draft": "page.cases.tab_draft",
-            "finalized": "page.cases.tab_finalized",
-            "obstructed": "page.cases.tab_obstructed",
-        }
-        return tr(key_map.get(status, "page.cases.tab_draft"))
+    # -- Paint: shimmer + top accent + chevron --
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -342,6 +365,8 @@ class _SurveyCard(QFrame):
 
         painter.end()
 
+    # -- Hover / lift animations --
+
     def _animate_lift(self, target):
         if self._lift_anim and self._lift_anim.state() == QPropertyAnimation.Running:
             self._lift_anim.stop()
@@ -355,7 +380,7 @@ class _SurveyCard(QFrame):
     def enterEvent(self, event):
         self._hovered = True
         self.setStyleSheet(f"""
-            _SurveyCard {{
+            _CaseCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {self._CARD_BG_HOVER}, stop:1 #E8F0FE);
                 border-radius: 14px;
@@ -375,7 +400,7 @@ class _SurveyCard(QFrame):
         self._hovered = False
         self._pressed = False
         self.setStyleSheet(f"""
-            _SurveyCard {{
+            _CaseCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {self._CARD_BG}, stop:1 #F0F5FF);
                 border-radius: 14px;
@@ -399,22 +424,20 @@ class _SurveyCard(QFrame):
                 eff.setBlurRadius(8)
                 eff.setOffset(0, 1)
                 eff.setColor(QColor(0, 0, 0, 18))
-            if self._claim_id:
-                self.clicked.emit(self._claim_id)
+            if self._case_id:
+                self.clicked.emit(self._case_id)
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self._pressed:
             self._pressed = False
-            if self._hovered:
-                eff = self.graphicsEffect()
-                if isinstance(eff, QGraphicsDropShadowEffect):
-                    eff.setBlurRadius(32)
+            eff = self.graphicsEffect()
+            if isinstance(eff, QGraphicsDropShadowEffect):
+                if self._hovered:
+                    eff.setBlurRadius(36)
                     eff.setOffset(0, 8)
-                    eff.setColor(QColor(56, 144, 223, 35))
-            else:
-                eff = self.graphicsEffect()
-                if isinstance(eff, QGraphicsDropShadowEffect):
+                    eff.setColor(QColor(56, 144, 223, 40))
+                else:
                     eff.setBlurRadius(20)
                     eff.setOffset(0, 4)
                     eff.setColor(QColor(0, 0, 0, 22))
@@ -422,17 +445,21 @@ class _SurveyCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-#  _EmptyStateAnimated — Dark navy cartographic empty state
+#  _EmptyStateCases -- Dark navy constellation empty state
 # ---------------------------------------------------------------------------
 
-class _EmptyStateAnimated(QWidget):
+class _EmptyStateCases(QWidget):
     """Dark-themed empty state with constellation particles and
     cartographic motifs."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._title_text = tr("page.cases.no_drafts")
-        self._desc_text = tr("page.cases.empty_description")
+        self._title_text = "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
+        self._desc_text = (
+            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
+            "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
+            "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
+        )
 
         self._anim_start = time.time()
 
@@ -520,7 +547,7 @@ class _EmptyStateAnimated(QWidget):
                     painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
                     painter.drawLine(
                         positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1]
+                        positions[j][0], positions[j][1],
                     )
 
         cx, cy = w // 2, int(h * 0.40)
@@ -578,23 +605,23 @@ class _EmptyStateAnimated(QWidget):
         # Documents
         doc_x, doc_y = cx - 18, cy - fh // 2 + 24
         for i in range(2):
-            dx = doc_x + i * 14
-            dy = doc_y + i * 5
+            ddx = doc_x + i * 14
+            ddy = doc_y + i * 5
             painter.setPen(QPen(QColor(56, 144, 223, 30), 1))
             painter.setBrush(QColor(25, 50, 85))
-            painter.drawRoundedRect(QRectF(dx, dy, 30, 38), 3, 3)
+            painter.drawRoundedRect(QRectF(ddx, ddy, 30, 38), 3, 3)
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(56, 144, 223, 25))
             for line_y in range(3):
                 lw = 20 if line_y < 2 else 13
-                painter.drawRect(QRectF(dx + 5, dy + 9 + line_y * 8, lw, 2))
+                painter.drawRect(QRectF(ddx + 5, ddy + 9 + line_y * 8, lw, 2))
 
         # Ground shadow
         painter.setPen(QPen(QColor(56, 144, 223, 20), 1))
         painter.drawLine(cx - fw // 2 + 8, cy + fh // 2 + 3,
                          cx + fw // 2 - 8, cy + fh // 2 + 3)
 
-        # Shimmer sweep
+        # Shimmer sweep on folder
         shimmer_x = int((self._shimmer_pos * 2 - 0.5) * fw + cx - fw // 2)
         sg = QLinearGradient(shimmer_x - 30, 0, shimmer_x + 30, 0)
         sg.setColorAt(0, QColor(56, 144, 223, 0))
@@ -611,13 +638,20 @@ class _EmptyStateAnimated(QWidget):
         # Title
         painter.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold))
         painter.setPen(QColor(255, 255, 255))
-        painter.drawText(QRectF(0, cy + fh // 2 + 28, w, 30), Qt.AlignCenter, self._title_text)
+        painter.drawText(
+            QRectF(0, cy + fh // 2 + 28, w, 30),
+            Qt.AlignCenter, self._title_text
+        )
 
         # Description
-        painter.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        painter.setFont(
+            create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR)
+        )
         painter.setPen(QColor(139, 172, 200, 200))
-        painter.drawText(QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
-                         Qt.AlignCenter | Qt.TextWordWrap, self._desc_text)
+        painter.drawText(
+            QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
+            Qt.AlignCenter | Qt.TextWordWrap, self._desc_text
+        )
 
         painter.end()
 
@@ -638,54 +672,77 @@ class _EmptyStateAnimated(QWidget):
 
 
 # ---------------------------------------------------------------------------
-#  CasesPage — Main page widget
+#  CaseManagementPage -- Main page widget
 # ---------------------------------------------------------------------------
 
-class CasesPage(QWidget):
-    """Surveys listing page with dark header zone, shimmer cards,
+class CaseManagementPage(QWidget):
+    """Case management listing page with dark header zone, shimmer cards,
     pagination, and comprehensive loading states."""
 
-    claim_selected = pyqtSignal(str)
-    add_claim_clicked = pyqtSignal()
-    survey_finalized = pyqtSignal(str)
-    resume_survey = pyqtSignal(str)
+    case_selected = pyqtSignal(str)  # case_id
 
-    def __init__(self, db=None, i18n=None, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.db = db
-        self.i18n = i18n
-        self._all_data: List[Dict] = []
-        self._active_tab = "draft"
-        self._buildings_cache: Dict[str, object] = {}
-        self._last_refresh_ms = 0
-        self._draft_count = 0
-        self._finalized_count = 0
-        self._obstructed_count = 0
-        self._card_widgets: List[_SurveyCard] = []
+        self._api = None
+        self._auth_token = None
+        self._user_role = "admin"
+        self._cases: List[Case] = []
+        self._current_filter: Optional[int] = None  # None=all, 1=Open, 2=Closed
+        self._current_page = 1
+        self._page_size = 20
+        self._total_count = 0
+        self._open_count = 0
+        self._closed_count = 0
+        self._search_text = ""
+        self._card_widgets: List[_CaseCard] = []
         self._loading = False
         self._navigating = False
         self._worker = None
-        self._current_page = 1
-        self._total_count = 0
-        self._page_size = 20
-        self._user_role = None
-        self._user_id = None
-        self._search_mode = False
-        self._tabs_visibility = {}
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self._load_surveys)
+        self._search_timer.timeout.connect(self._load_cases)
 
         self._shimmer_timer = QTimer(self)
         self._shimmer_timer.setInterval(80)
         self._shimmer_timer.timeout.connect(self._update_card_shimmer)
 
-        self._setup_ui()
+        self._build_ui()
+
+    # -- Public API --
+
+    def configure_for_user(self, role: str, token: str = None):
+        """Set user context (role & auth token)."""
+        self._user_role = role
+        if token:
+            self._auth_token = token
+
+    def refresh(self, data=None):
+        """Load/reload data from the API."""
+        self._navigating = False
+        self._load_cases()
+
+    def update_language(self, is_arabic=True):
+        """Re-apply RTL direction and refresh label text."""
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+        self._header.get_title_label().setText(
+            "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u062d\u0627\u0644\u0627\u062a"
+        )
+        self._search.setPlaceholderText(
+            "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649..."
+        )
+        self._scroll.setLayoutDirection(direction)
+        self._scroll_content.setLayoutDirection(direction)
+        self._update_tab_labels()
+        if self._cases:
+            self._populate_cards(self._cases)
+        else:
+            self._update_empty_text()
 
     # -- UI Setup --
 
-    def _setup_ui(self):
+    def _build_ui(self):
         self.setStyleSheet("background: transparent;")
 
         main = QVBoxLayout(self)
@@ -694,58 +751,60 @@ class CasesPage(QWidget):
 
         # Dark header zone
         self._header = DarkHeaderZone(self)
-        self._header.set_title(tr("cases.page.title"))
+        self._header.set_title(
+            "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u062d\u0627\u0644\u0627\u062a"
+        )
 
-        # Add button in header actions
-        self._add_btn = QPushButton(tr("wizard.button.add_case"))
-        self._add_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._add_btn.setFixedHeight(42)
-        self._add_btn.setMinimumWidth(150)
-        self._add_btn.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
-        self._add_btn.setStyleSheet(_ADD_BTN_STYLE)
-        self._add_btn.clicked.connect(self.add_claim_clicked.emit)
-        self._header.add_action_widget(self._add_btn)
+        # Stat pills
+        self._pill_total = _make_stat_pill(
+            "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a", 0,
+            "rgba(255,255,255,0.12)", "#FFFFFF", "rgba(255,255,255,0.20)"
+        )
+        self._pill_open = _make_stat_pill(
+            "\u0645\u0641\u062a\u0648\u062d\u0629", 0,
+            "rgba(5,150,105,0.15)", "#6EE7B7", "rgba(110,231,183,0.30)"
+        )
+        self._pill_closed = _make_stat_pill(
+            "\u0645\u063a\u0644\u0642\u0629", 0,
+            "rgba(220,38,38,0.15)", "#FCA5A5", "rgba(252,165,165,0.30)"
+        )
+        self._header.add_stat_pill(self._pill_total)
+        self._header.add_stat_pill(self._pill_open)
+        self._header.add_stat_pill(self._pill_closed)
 
         # Tabs (row 2)
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
-        self._tab_draft = NavStyleTab(tr("page.cases.tab_draft"))
-        self._tab_draft.setFixedSize(130, 38)
-        self._tab_draft.set_font(tab_font)
-        self._tab_draft.set_active(True)
-        self._tab_draft.clicked.connect(lambda: self._on_tab("draft"))
-        self._header.add_tab(self._tab_draft)
+        self._tab_all = NavStyleTab("\u0627\u0644\u0643\u0644")
+        self._tab_all.setFixedSize(100, 38)
+        self._tab_all.set_font(tab_font)
+        self._tab_all.set_active(True)
+        self._tab_all.clicked.connect(lambda: self._on_tab(None))
+        self._header.add_tab(self._tab_all)
 
-        self._tab_finalized = NavStyleTab(tr("page.cases.tab_finalized"))
-        self._tab_finalized.setFixedSize(130, 38)
-        self._tab_finalized.set_font(tab_font)
-        self._tab_finalized.set_active(False)
-        self._tab_finalized.clicked.connect(lambda: self._on_tab("finalized"))
-        self._header.add_tab(self._tab_finalized)
+        self._tab_open = NavStyleTab("\u0645\u0641\u062a\u0648\u062d\u0629")
+        self._tab_open.setFixedSize(120, 38)
+        self._tab_open.set_font(tab_font)
+        self._tab_open.set_active(False)
+        self._tab_open.clicked.connect(lambda: self._on_tab(1))
+        self._header.add_tab(self._tab_open)
 
-        self._tab_obstructed = NavStyleTab(tr("page.cases.tab_obstructed"))
-        self._tab_obstructed.setFixedSize(130, 38)
-        self._tab_obstructed.set_font(tab_font)
-        self._tab_obstructed.set_active(False)
-        self._tab_obstructed.setVisible(False)
-        self._tab_obstructed.clicked.connect(lambda: self._on_tab("obstructed"))
-        self._header.add_tab(self._tab_obstructed)
+        self._tab_closed = NavStyleTab("\u0645\u063a\u0644\u0642\u0629")
+        self._tab_closed.setFixedSize(120, 38)
+        self._tab_closed.set_font(tab_font)
+        self._tab_closed.set_active(False)
+        self._tab_closed.clicked.connect(lambda: self._on_tab(2))
+        self._header.add_tab(self._tab_closed)
 
         # Search field (row 2)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setPlaceholderText(
+            "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649..."
+        )
         self._search.setFixedSize(280, 34)
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
-        search_icon = Icon.load_pixmap("search", 16)
-        if search_icon and not search_icon.isNull():
-            icon_label = QLabel(self._search)
-            icon_label.setPixmap(search_icon)
-            icon_label.setFixedSize(16, 16)
-            icon_label.move(10, 9)
-            icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.textChanged.connect(self._on_search_changed)
-        self._search.returnPressed.connect(self._on_search_submitted)
         self._header.set_search_field(self._search)
 
         main.addWidget(self._header)
@@ -779,20 +838,18 @@ class CasesPage(QWidget):
 
         self._scroll_content = QWidget()
         self._scroll_content.setStyleSheet("background: transparent;")
-        self._cards_layout = QVBoxLayout(self._scroll_content)
-        self._cards_layout.setContentsMargins(0, 0, 0, 0)
-        self._cards_layout.setSpacing(10)
-        self._cards_layout.addStretch()
+        self._grid_layout = QGridLayout(self._scroll_content)
+        self._grid_layout.setContentsMargins(0, 0, 0, 0)
+        self._grid_layout.setSpacing(16)
+        self._grid_layout.setColumnStretch(0, 1)
+        self._grid_layout.setColumnStretch(1, 1)
 
         self._scroll.setWidget(self._scroll_content)
         self._stack.addWidget(self._scroll)
 
-        self._empty_state = _EmptyStateAnimated()
+        self._empty_state = _EmptyStateCases()
         self._stack.addWidget(self._empty_state)
 
-        self._results_bar = self._build_results_bar()
-        content_layout.addWidget(self._results_bar)
-        self._results_bar.hide()
         content_layout.addWidget(self._stack, 1)
 
         self._pagination = self._create_pagination()
@@ -834,160 +891,35 @@ class CasesPage(QWidget):
 
         return bar
 
-    # -- Role-based configuration --
-
-    def configure_for_user(self, role: str, user_id: str):
-        """Set user context for filtering surveys by ownership."""
-        self._user_role = role
-        self._user_id = user_id
-        self._all_data = []
-        self._buildings_cache = {}
-        self._clear_cards()
-
-        if role == "admin":
-            self._tab_draft.setVisible(False)
-            self._tab_finalized.setVisible(False)
-            self._tab_obstructed.setVisible(True)
-            self._active_tab = "finalized"
-            self._tab_draft.set_active(False)
-            self._tab_finalized.set_active(True)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(False)
-        elif role == "data_manager":
-            self._tab_draft.setVisible(True)
-            self._tab_finalized.setVisible(True)
-            self._tab_obstructed.setVisible(True)
-            self._active_tab = "draft"
-            self._tab_draft.set_active(True)
-            self._tab_finalized.set_active(False)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
-        elif role == "field_supervisor":
-            self._tab_draft.setVisible(True)
-            self._tab_finalized.setVisible(True)
-            self._tab_obstructed.setVisible(True)
-            self._active_tab = "draft"
-            self._tab_draft.set_active(True)
-            self._tab_finalized.set_active(False)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
-        elif role == "office_clerk":
-            self._tab_draft.setVisible(True)
-            self._tab_finalized.setVisible(True)
-            self._tab_obstructed.setVisible(False)
-            self._active_tab = "draft"
-            self._tab_draft.set_active(True)
-            self._tab_finalized.set_active(False)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
-        else:
-            self._tab_draft.setVisible(True)
-            self._tab_finalized.setVisible(True)
-            self._tab_obstructed.setVisible(False)
-            self._tab_draft.set_active(True)
-            self._tab_finalized.set_active(False)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
-
     # -- Tab & filter handlers --
 
-    def _on_tab(self, which: str):
-        if self._loading or which == self._active_tab:
+    def _on_tab(self, status_filter: Optional[int]):
+        if self._loading or status_filter == self._current_filter:
             return
-        self._active_tab = which
+        self._current_filter = status_filter
         self._current_page = 1
-        self._tab_draft.set_active(which == "draft")
-        self._tab_finalized.set_active(which == "finalized")
-        self._tab_obstructed.set_active(which == "obstructed")
+        self._tab_all.set_active(status_filter is None)
+        self._tab_open.set_active(status_filter == 1)
+        self._tab_closed.set_active(status_filter == 2)
         self._accent_line.pulse()
-        self._load_surveys()
+        self._load_cases()
 
     def _on_search_changed(self):
-        # Exit search mode when text is cleared — no auto-search timer
-        if not self._search.text().strip() and self._search_mode:
-            self._exit_search_mode()
-
-    def _on_search_submitted(self):
-        """Triggered on Enter — enters search mode and loads results."""
         self._current_page = 1
-        name = self._search.text().strip()
-        if name:
-            self._enter_search_mode()
-            self._load_surveys()
-        else:
-            self._exit_search_mode()
-
-    def _enter_search_mode(self):
-        if self._search_mode:
-            return
-        self._search_mode = True
-        self._tabs_visibility = {
-            "draft": self._tab_draft.isVisible(),
-            "finalized": self._tab_finalized.isVisible(),
-            "obstructed": self._tab_obstructed.isVisible(),
-        }
-        self._tab_draft.hide()
-        self._tab_finalized.hide()
-        self._tab_obstructed.hide()
-        self._results_bar.show()
-
-    def _exit_search_mode(self):
-        if not self._search_mode:
-            return
-        self._search_mode = False
-        self._tab_draft.setVisible(self._tabs_visibility.get("draft", True))
-        self._tab_finalized.setVisible(self._tabs_visibility.get("finalized", True))
-        self._tab_obstructed.setVisible(self._tabs_visibility.get("obstructed", True))
-        self._results_bar.hide()
-        self._search.blockSignals(True)
-        self._search.clear()
-        self._search.blockSignals(False)
-        self._current_page = 1
-        self._load_surveys()
-
-    def _build_results_bar(self):
-        bar = QFrame()
-        bar.setFixedHeight(44)
-        bar.setStyleSheet(
-            "QFrame { background: rgba(56, 144, 223, 0.07);"
-            " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
-            " margin-bottom: 10px; }"
-        )
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(12)
-        self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(80, 30)
-        self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._back_btn.setStyleSheet(
-            "QPushButton { background: rgba(56, 144, 223, 0.15);"
-            " border: 1px solid rgba(56, 144, 223, 0.3); border-radius: 6px;"
-            " color: #3890DF; font-weight: 600; font-size: 12px; }"
-            " QPushButton:hover { background: rgba(56, 144, 223, 0.25); }"
-        )
-        self._back_btn.clicked.connect(self._exit_search_mode)
-        layout.addWidget(self._back_btn)
-        self._results_title = QLabel("نتائج البحث")
-        self._results_title.setStyleSheet(
-            "color: #1E3A5F; font-weight: 700; font-size: 14px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(self._results_title)
-        layout.addStretch()
-        return bar
+        self._search_timer.start(500)
 
     # -- Pagination --
 
     def _on_prev_page(self):
         if self._current_page > 1:
             self._current_page -= 1
-            self._load_surveys()
+            self._load_cases()
 
     def _on_next_page(self):
         total_pages = max(1, -(-self._total_count // self._page_size))
         if self._current_page < total_pages:
             self._current_page += 1
-            self._load_surveys()
+            self._load_cases()
 
     def _update_pagination(self):
         total = self._total_count
@@ -1003,196 +935,160 @@ class CasesPage(QWidget):
         self._prev_btn.setEnabled(page > 1)
         self._next_btn.setEnabled(page < total_pages)
 
-    # -- Tab labels with counts --
+    # -- Stat pill & tab label updates --
+
+    def _update_stat_pills(self):
+        total = self._open_count + self._closed_count
+        self._pill_total.setText(
+            f"  \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a: {total}  "
+        )
+        self._pill_open.setText(
+            f"  \u0645\u0641\u062a\u0648\u062d\u0629: {self._open_count}  "
+        )
+        self._pill_closed.setText(
+            f"  \u0645\u063a\u0644\u0642\u0629: {self._closed_count}  "
+        )
 
     def _update_tab_labels(self):
-        draft_text = tr("page.cases.tab_draft")
-        finalized_text = tr("page.cases.tab_finalized")
-        obstructed_text = tr("page.cases.tab_obstructed")
-        if self._draft_count > 0:
-            draft_text = f"{draft_text} ({self._draft_count})"
-        if self._finalized_count > 0:
-            finalized_text = f"{finalized_text} ({self._finalized_count})"
-        if self._obstructed_count > 0:
-            obstructed_text = f"{obstructed_text} ({self._obstructed_count})"
-        self._tab_draft.set_text(draft_text)
-        self._tab_finalized.set_text(finalized_text)
-        self._tab_obstructed.set_text(obstructed_text)
+        all_text = "\u0627\u0644\u0643\u0644"
+        open_text = "\u0645\u0641\u062a\u0648\u062d\u0629"
+        closed_text = "\u0645\u063a\u0644\u0642\u0629"
+        total = self._open_count + self._closed_count
+        if total > 0:
+            all_text = f"{all_text} ({total})"
+        if self._open_count > 0:
+            open_text = f"{open_text} ({self._open_count})"
+        if self._closed_count > 0:
+            closed_text = f"{closed_text} ({self._closed_count})"
+        self._tab_all.set_text(all_text)
+        self._tab_open.set_text(open_text)
+        self._tab_closed.set_text(closed_text)
 
     # -- Data loading --
 
-    def refresh(self, data=None):
-        self._navigating = False
-        self._last_refresh_ms = int(time.time() * 1000)
-        self._load_surveys()
-
-    def _load_surveys(self):
+    def _load_cases(self):
         if self._loading:
             return
         self._loading = True
-        self._spinner.show_loading(tr("page.cases.loading"))
-
-        if self._active_tab == "draft":
-            status = "Draft"
-        elif self._active_tab == "obstructed":
-            status = "Obstructed"
-        else:
-            status = "Finalized"
-        name = self._search.text().strip() if self._search_mode else None
-        clerk_id = self._user_id if self._user_role == "office_clerk" else None
-
-        self._worker = ApiWorker(
-            self._fetch_surveys_data, status, name, clerk_id
+        self._spinner.show_loading(
+            "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 "
+            "\u0627\u0644\u062d\u0627\u0644\u0627\u062a..."
         )
-        self._worker.finished.connect(self._on_surveys_loaded)
-        self._worker.error.connect(self._on_surveys_load_error)
+
+        self._worker = ApiWorker(self._fetch_cases_data)
+        self._worker.finished.connect(self._on_cases_loaded)
+        self._worker.error.connect(self._on_cases_load_error)
         self._worker.start()
 
-    def _fetch_surveys_data(self, status, name, clerk_id):
+    def _fetch_cases_data(self):
         from services.api_client import get_api_client
-        from controllers.building_controller import BuildingController
-
         api = get_api_client()
-        total_count = 0
 
-        # Fetch paginated surveys
+        if self._auth_token:
+            api.set_access_token(self._auth_token)
+
+        search_text = self._search.text().strip()
+
+        # Fetch paginated cases
         try:
             params = {
                 "page": self._current_page,
-                "pageSize": self._page_size,
-                "sortBy": "SurveyDate",
-                "sortDirection": "desc",
+                "page_size": self._page_size,
             }
-            if name:
-                params["contactPersonName"] = name
-                # No status filter — search across all statuses
-            else:
-                params["status"] = status
-            if clerk_id:
-                params["clerkId"] = clerk_id
+            if self._current_filter is not None:
+                params["status"] = self._current_filter
+            if search_text:
+                params["building_code"] = search_text
 
-            raw = api._request("GET", "/v1/Surveys/office", params=params)
-            if isinstance(raw, dict):
-                surveys = raw.get("surveys", [])
-                total_count = raw.get("totalCount", len(surveys))
-            else:
-                surveys = raw if isinstance(raw, list) else []
-                total_count = len(surveys)
+            raw = api.get_cases(**params)
         except Exception as e:
-            logger.warning(f"Paginated surveys fetch failed: {e}")
-            surveys = []
+            logger.warning(f"Cases fetch failed: {e}")
+            raw = {}
+
+        if isinstance(raw, dict):
+            items = raw.get("cases", raw.get("items", []))
+            total_count = raw.get("totalCount", len(items))
+        elif isinstance(raw, list):
+            items = raw
+            total_count = len(items)
+        else:
+            items = []
+            total_count = 0
+
+        cases = []
+        for item in items:
+            try:
+                cases.append(Case.from_api_dict(item))
+            except Exception as exc:
+                logger.debug(f"Skipping malformed case item: {exc}")
 
         # Fetch counts for stat pills
-        draft_count = 0
-        finalized_count = 0
-        obstructed_count = 0
-        for st, key in [("Draft", "draft"), ("Finalized", "finalized"), ("Obstructed", "obstructed")]:
+        open_count = 0
+        closed_count = 0
+        for st in [1, 2]:
             try:
-                count_params = {"status": st, "page": 1, "pageSize": 1}
-                if clerk_id:
-                    count_params["clerkId"] = clerk_id
-                raw_count = api._request("GET", "/v1/Surveys/office", params=count_params)
-                count_val = raw_count.get("totalCount", 0) if isinstance(raw_count, dict) else 0
-                if key == "draft":
-                    draft_count = count_val
-                elif key == "finalized":
-                    finalized_count = count_val
+                count_raw = api.get_cases(status=st, page=1, page_size=1)
+                if isinstance(count_raw, dict):
+                    ct = count_raw.get("totalCount", 0)
                 else:
-                    obstructed_count = count_val
-            except Exception:
-                pass
-
-        # Building enrichment
-        new_buildings = {}
-        building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
-        if building_ids:
-            try:
-                bc = BuildingController(self.db)
-                for bid in building_ids:
-                    if not bid or bid in self._buildings_cache:
-                        continue
-                    try:
-                        dto = api.get_building_by_id(bid)
-                        new_buildings[bid] = bc._api_dto_to_building(dto)
-                    except Exception:
-                        pass
+                    ct = 0
+                if st == 1:
+                    open_count = ct
+                else:
+                    closed_count = ct
             except Exception:
                 pass
 
         return {
-            "surveys": surveys,
-            "new_buildings": new_buildings,
-            "status": status,
-            "draft_count": draft_count,
-            "finalized_count": finalized_count,
-            "obstructed_count": obstructed_count,
+            "cases": cases,
             "total_count": total_count,
+            "open_count": open_count,
+            "closed_count": closed_count,
         }
 
-    def _on_surveys_loaded(self, result):
+    def _on_cases_loaded(self, result):
         try:
-            self._buildings_cache.update(result.get("new_buildings", {}))
-            self._draft_count = result.get("draft_count", 0)
-            self._finalized_count = result.get("finalized_count", 0)
-            self._obstructed_count = result.get("obstructed_count", 0)
+            self._cases = result.get("cases", [])
             self._total_count = result.get("total_count", 0)
+            self._open_count = result.get("open_count", 0)
+            self._closed_count = result.get("closed_count", 0)
 
-            surveys = result.get("surveys", [])
-            self._all_data = [self._map_survey(s) for s in surveys]
-
-            logger.info(f"Loaded {len(self._all_data)} surveys (status={result.get('status')})")
-            self._populate_cards(self._all_data)
+            logger.info(
+                f"Loaded {len(self._cases)} cases "
+                f"(filter={self._current_filter}, page={self._current_page})"
+            )
+            self._populate_cards(self._cases)
+            self._update_stat_pills()
             self._update_tab_labels()
             self._update_pagination()
         except Exception as e:
-            logger.error(f"Error processing surveys: {e}")
-            self._all_data = []
-            self._populate_cards(self._all_data)
+            logger.error(f"Error processing cases: {e}")
+            self._cases = []
+            self._populate_cards(self._cases)
         finally:
             self._loading = False
             self._spinner.hide_loading()
 
-    def _on_surveys_load_error(self, error_msg):
+    def _on_cases_load_error(self, error_msg):
         self._loading = False
         self._spinner.hide_loading()
-        Toast.show_toast(self, tr("page.cases.load_error"), Toast.ERROR)
-        logger.warning(f"Error loading surveys: {error_msg}")
-        self._all_data = []
-        self._populate_cards(self._all_data)
-
-    def _map_survey(self, s: Dict) -> Dict:
-        building_id = s.get("buildingId", "")
-        building_obj = self._buildings_cache.get(building_id)
-
-        unit_num = s.get("unitIdentifier", "")
-        unit_obj = None
-        if unit_num:
-            class _NS:
-                def __init__(self, **kw): self.__dict__.update(kw)
-            unit_obj = _NS(unit_number=unit_num)
-
-        return {
-            "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
-            "claim_uuid": s.get("id", ""),
-            "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or tr("page.cases.unspecified"),
-            "date": (s.get("surveyDate") or "")[:10],
-            "status": self._active_tab,
-            "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
-            "unit_number": unit_num,
-            "source_label": get_survey_type_display(s.get("surveyType", 0)),
-            "survey_type": s.get("surveyType"),
-            "building": building_obj,
-            "unit": unit_obj,
-            "unit_id": s.get("propertyUnitId", ""),
-        }
+        Toast.show_toast(
+            self,
+            "\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 "
+            "\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0627\u062a",
+            Toast.ERROR,
+        )
+        logger.warning(f"Error loading cases: {error_msg}")
+        self._cases = []
+        self._populate_cards(self._cases)
 
     # -- Card population --
 
-    def _populate_cards(self, data: List[Dict]):
+    def _populate_cards(self, cases: List[Case]):
         try:
             self._clear_cards()
 
-            if not data:
+            if not cases:
                 self._stack.setCurrentIndex(1)
                 self._update_empty_text()
                 self._update_pagination()
@@ -1200,13 +1096,20 @@ class CasesPage(QWidget):
 
             self._stack.setCurrentIndex(0)
 
-            for item in data:
-                card = _SurveyCard(item)
+            for idx, case in enumerate(cases):
+                card = _CaseCard(case)
                 card.clicked.connect(self._on_card_clicked)
-                self._cards_layout.insertWidget(
-                    self._cards_layout.count() - 1, card
-                )
+                row = idx // 2
+                col = idx % 2
+                self._grid_layout.addWidget(card, row, col)
                 self._card_widgets.append(card)
+
+            # Add vertical spacer at the end
+            spacer = QWidget()
+            spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            spacer.setStyleSheet("background: transparent;")
+            total_rows = (len(cases) + 1) // 2
+            self._grid_layout.addWidget(spacer, total_rows, 0, 1, 2)
 
             self._update_pagination()
             self._animate_card_entrance()
@@ -1214,13 +1117,13 @@ class CasesPage(QWidget):
             if not self._shimmer_timer.isActive():
                 self._shimmer_timer.start()
         except Exception as e:
-            logger.error(f"Error populating cards: {e}")
+            logger.error(f"Error populating case cards: {e}")
             self._stack.setCurrentIndex(1)
             self._update_empty_text()
 
     def _animate_card_entrance(self):
         count = len(self._card_widgets)
-        if count > 20 or count == 0:
+        if count > 30 or count == 0:
             return
 
         for i, card in enumerate(self._card_widgets):
@@ -1253,7 +1156,7 @@ class CasesPage(QWidget):
     def _clear_cards(self):
         self._shimmer_timer.stop()
         for card in self._card_widgets:
-            if hasattr(card, '_entrance_anim') and card._entrance_anim:
+            if hasattr(card, "_entrance_anim") and card._entrance_anim:
                 try:
                     card._entrance_anim.stop()
                 except RuntimeError:
@@ -1266,6 +1169,14 @@ class CasesPage(QWidget):
             card.deleteLater()
         self._card_widgets.clear()
 
+        # Clear grid layout
+        while self._grid_layout.count():
+            item = self._grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
+
     def _update_card_shimmer(self):
         for card in self._card_widgets:
             try:
@@ -1274,46 +1185,34 @@ class CasesPage(QWidget):
                 pass
 
     def _update_empty_text(self):
-        if self._active_tab == "draft":
-            msg = tr("page.cases.no_drafts")
-        elif self._active_tab == "obstructed":
-            msg = tr("page.cases.no_obstructed")
+        if self._current_filter == 1:
+            self._empty_state.set_title(
+                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a "
+                "\u0645\u0641\u062a\u0648\u062d\u0629"
+            )
+        elif self._current_filter == 2:
+            self._empty_state.set_title(
+                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a "
+                "\u0645\u063a\u0644\u0642\u0629"
+            )
         else:
-            msg = tr("page.cases.no_finalized")
-        self._empty_state.set_title(msg)
-        self._empty_state.set_description(tr("page.cases.empty_description"))
+            self._empty_state.set_title(
+                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
+            )
+        self._empty_state.set_description(
+            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
+            "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
+            "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
+        )
 
     # -- Card click --
 
-    def _on_card_clicked(self, claim_id: str):
-        if self._navigating or not claim_id:
+    def _on_card_clicked(self, case_id: str):
+        if self._navigating or not case_id:
             return
         self._navigating = True
-        self._spinner.show_loading(tr("page.cases.loading"))
-        self.claim_selected.emit(claim_id)
-
-    # -- Public interface (backward compatibility) --
-
-    def search_claims(self, query: str, mode: str = "name"):
-        pass
-
-    def apply_filters(self, filters: dict):
-        pass
-
-    def update_language(self, is_arabic=True):
-        direction = get_layout_direction()
-        self.setLayoutDirection(direction)
-
-        self._header.get_title_label().setText(tr("cases.page.title"))
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
-        self._add_btn.setText(tr("wizard.button.add_case"))
-
-        self._update_tab_labels()
-
-        self._scroll.setLayoutDirection(direction)
-        self._scroll_content.setLayoutDirection(direction)
-
-        if self._all_data:
-            self._populate_cards(self._all_data)
-        else:
-            self._update_empty_text()
+        self._spinner.show_loading(
+            "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 "
+            "\u0627\u0644\u062d\u0627\u0644\u0629..."
+        )
+        self.case_selected.emit(case_id)

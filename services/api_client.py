@@ -521,6 +521,7 @@ class TRRCMSApiClient:
         building_code=None,
         building_type=None,
         building_status=None,
+        survey_status=None,
         has_active_assignment=None,
         latitude=None,
         longitude=None,
@@ -552,6 +553,8 @@ class TRRCMSApiClient:
             params["buildingType"] = building_type
         if building_status is not None:
             params["buildingStatus"] = building_status
+        if survey_status is not None:
+            params["surveyStatus"] = survey_status
         if has_active_assignment is not None:
             params["hasActiveAssignment"] = str(has_active_assignment).lower()
         if latitude is not None:
@@ -1113,7 +1116,7 @@ class TRRCMSApiClient:
             return []
 
         logger.info(f"Fetching units for building: {building_id}")
-        result = self._request("GET", f"/v2/property-units/building/{building_id}")
+        result = self._request("GET", f"/v1/PropertyUnits/building/{building_id}")
 
         if isinstance(result, dict):
             units = result.get("items", [])
@@ -1499,9 +1502,18 @@ class TRRCMSApiClient:
         survey_id: str,
         person_id: str,
         file_path: str,
-        description: str = ""
+        description: str = "",
+        document_type: int = 1,
+        document_issued_date: str = "",
+        document_expiry_date: str = "",
+        issuing_authority: str = "",
+        document_reference_number: str = "",
+        notes: str = "",
     ) -> Dict[str, Any]:
-        """Upload an identification document for a person."""
+        """Upload an identification document for a person.
+
+        Returns: EvidenceDto
+        """
         import os
         import mimetypes
 
@@ -1523,9 +1535,22 @@ class TRRCMSApiClient:
         }
 
         form_fields = {
+            "SurveyId": (None, survey_id),
             "PersonId": (None, person_id),
             "Description": (None, description or file_name),
         }
+        if document_issued_date:
+            dt = f"{document_issued_date}T00:00:00Z" if "T" not in document_issued_date else document_issued_date
+            form_fields["DocumentIssuedDate"] = (None, dt)
+        if document_expiry_date:
+            dt = f"{document_expiry_date}T00:00:00Z" if "T" not in document_expiry_date else document_expiry_date
+            form_fields["DocumentExpiryDate"] = (None, dt)
+        if issuing_authority:
+            form_fields["IssuingAuthority"] = (None, issuing_authority)
+        if document_reference_number:
+            form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
+        if notes:
+            form_fields["Notes"] = (None, notes)
 
         logger.info(f"[API REQ] POST {endpoint} File: {file_name} for person {person_id}")
 
@@ -1563,23 +1588,32 @@ class TRRCMSApiClient:
             logger.error(f"Network error during upload: {e}")
             raise NetworkException(message=str(e), original_error=e)
 
-    def update_identification_evidence(
+    def update_identification_document(
         self,
         survey_id: str,
-        evidence_id: str,
-        person_id: str,
+        document_id: str,
+        person_id: str = "",
         file_path: str = None,
         description: str = "",
-        notes: str = ""
+        notes: str = "",
+        document_type: int = None,
+        document_issued_date: str = "",
+        document_expiry_date: str = "",
+        issuing_authority: str = "",
+        document_reference_number: str = "",
     ) -> Dict[str, Any]:
-        """Update an existing identification document."""
+        """Update an existing identification document.
+
+        Endpoint changed in v1.7: /identification-documents/{id} (was /evidence/identification/{id})
+        Returns: IdentificationDocumentDto
+        """
         import os
         import mimetypes
 
-        if not survey_id or not evidence_id:
-            raise ValueError("survey_id and evidence_id are required")
+        if not survey_id or not document_id:
+            raise ValueError("survey_id and document_id are required")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification/{evidence_id}"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents/{document_id}"
         url = f"{self.base_url}{endpoint}"
 
         self._ensure_valid_token()
@@ -1588,14 +1622,25 @@ class TRRCMSApiClient:
             "Accept": "application/json"
         }
 
-        form_fields = {
-            "EvidenceId": (None, evidence_id),
-            "PersonId": (None, person_id),
-        }
+        form_fields = {}
+        if person_id:
+            form_fields["PersonId"] = (None, person_id)
         if description:
             form_fields["Description"] = (None, description)
         if notes:
             form_fields["Notes"] = (None, notes)
+        if document_type is not None:
+            form_fields["DocumentType"] = (None, str(document_type))
+        if document_issued_date:
+            dt = f"{document_issued_date}T00:00:00Z" if "T" not in document_issued_date else document_issued_date
+            form_fields["DocumentIssuedDate"] = (None, dt)
+        if document_expiry_date:
+            dt = f"{document_expiry_date}T00:00:00Z" if "T" not in document_expiry_date else document_expiry_date
+            form_fields["DocumentExpiryDate"] = (None, dt)
+        if issuing_authority:
+            form_fields["IssuingAuthority"] = (None, issuing_authority)
+        if document_reference_number:
+            form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
 
         logger.info(f"[API REQ] PUT {endpoint}")
 
@@ -1614,7 +1659,7 @@ class TRRCMSApiClient:
 
             response.raise_for_status()
             result = response.json() if response.text else {}
-            logger.info(f"Identification evidence {evidence_id} updated")
+            logger.info(f"Identification document {document_id} updated")
             return result
 
         except requests.exceptions.HTTPError as e:
@@ -1627,8 +1672,24 @@ class TRRCMSApiClient:
             logger.error(f"[API ERR] {status_code} PUT {endpoint}: {response_data}")
             raise ApiException(message=str(e), status_code=status_code, response_data=response_data)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            logger.error(f"Network error during evidence update: {e}")
+            logger.error(f"Network error during identification document update: {e}")
             raise NetworkException(message=str(e), original_error=e)
+
+    def get_person_identification_documents(
+        self, person_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get all identification documents for a person.
+
+        Endpoint: GET /v1/Surveys/persons/{personId}/identification-documents
+        Returns: List[IdentificationDocumentDto]
+        """
+        if not person_id:
+            raise ValueError("person_id is required")
+        endpoint = f"/v1/Surveys/persons/{person_id}/identification-documents"
+        result = self._request("GET", endpoint)
+        if isinstance(result, dict):
+            return result.get("items", result.get("$values", []))
+        return result if isinstance(result, list) else []
 
     def update_tenure_evidence(
         self,
@@ -1771,8 +1832,6 @@ class TRRCMSApiClient:
 
         urls = [
             f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download",
-            f"{self.base_url}/v2/surveys/evidence/{evidence_id}/download",
-            f"{self.base_url}/v1/evidence/{evidence_id}/download",
         ]
 
         last_error = None
@@ -2118,6 +2177,109 @@ class TRRCMSApiClient:
         result = self._request("POST", f"/v1/Surveys/{survey_id}/cancel", json_data=payload)
         logger.info(f"Survey {survey_id} cancelled")
         return result
+
+    def revert_survey_to_draft(self, survey_id: str, reason: str) -> Dict[str, Any]:
+        """Revert a Finalized survey back to Draft. Admin/DataManager only.
+
+        Endpoint: POST /v1/Surveys/{id}/revert-to-draft
+        Permission: Surveys_EditAll
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        payload = {"reason": reason}
+        logger.info(f"Reverting survey {survey_id} to draft")
+        result = self._request("POST", f"/v1/Surveys/{survey_id}/revert-to-draft", json_data=payload)
+        logger.info(f"Survey {survey_id} reverted to draft")
+        return result
+
+    def mark_survey_obstructed(self, survey_id: str) -> Dict[str, Any]:
+        """Mark a Draft survey as Obstructed.
+
+        Endpoint: POST /v1/Surveys/{id}/mark-as-obstructed
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        logger.info(f"Marking survey {survey_id} as obstructed")
+        result = self._request("POST", f"/v1/Surveys/{survey_id}/mark-as-obstructed")
+        logger.info(f"Survey {survey_id} marked as obstructed")
+        return result
+
+    def resume_obstructed_survey(self, survey_id: str) -> Dict[str, Any]:
+        """Resume an Obstructed survey back to Draft.
+
+        Endpoint: POST /v1/Surveys/{id}/resume
+        """
+        if not survey_id:
+            raise ValueError("survey_id is required")
+        logger.info(f"Resuming obstructed survey {survey_id}")
+        result = self._request("POST", f"/v1/Surveys/{survey_id}/resume")
+        logger.info(f"Survey {survey_id} resumed")
+        return result
+
+    # ── Case endpoints ──────────────────────────────────────────────
+
+    def get_cases(
+        self,
+        building_code: str = "",
+        unit_identifier: str = "",
+        building_id: str = "",
+        status: int = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        """List cases with filtering.
+
+        Endpoint: GET /v1/Cases
+        Permission: Claims_ViewAll (1000)
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if building_code:
+            params["buildingCode"] = building_code
+        if unit_identifier:
+            params["unitIdentifier"] = unit_identifier
+        if building_id:
+            params["buildingId"] = building_id
+        if status is not None:
+            params["status"] = status
+        return self._request("GET", "/v1/Cases", params=params)
+
+    def get_case_by_id(self, case_id: str) -> Dict[str, Any]:
+        """Get full case details by ID.
+
+        Endpoint: GET /v1/Cases/{id}
+        Returns: Full CaseDto with surveyIds, claimIds, personPropertyRelationCount
+        """
+        if not case_id:
+            raise ValueError("case_id is required")
+        return self._request("GET", f"/v1/Cases/{case_id}")
+
+    def get_case_by_property_unit(self, property_unit_id: str) -> Optional[Dict[str, Any]]:
+        """Get case for a specific property unit.
+
+        Endpoint: GET /v1/Cases/by-property-unit/{propertyUnitId}
+        Returns: CaseDto or None (204 = no case exists yet)
+        """
+        if not property_unit_id:
+            raise ValueError("property_unit_id is required")
+        try:
+            return self._request("GET", f"/v1/Cases/by-property-unit/{property_unit_id}")
+        except ApiException as e:
+            if e.status_code == 204:
+                return None
+            raise
+
+    def set_case_editable(self, case_id: str, is_editable: bool) -> None:
+        """Toggle the editable flag on a case. Admin/DataManager only.
+
+        Endpoint: PUT /v1/Cases/{id}/editable
+        Permission: Claims_Transition (1011)
+        """
+        if not case_id:
+            raise ValueError("case_id is required")
+        self._request("PUT", f"/v1/Cases/{case_id}/editable", json_data={"isEditable": is_editable})
+        logger.info(f"Case {case_id} editable set to {is_editable}")
+
+    # ── End Case endpoints ────────────────────────────────────────
 
     def save_draft_to_backend(self, survey_id: str, draft_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """Save survey progress as draft on backend."""

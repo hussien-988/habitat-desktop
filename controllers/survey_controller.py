@@ -226,6 +226,7 @@ class SurveyController:
 
             context = {
                 "survey_id": detail.get("id", ""),
+                "reference_number": detail.get("referenceCode", ""),
                 "status": status_str,
                 "resume_step": resume_step,
                 "data": {

@@ -692,6 +692,19 @@ class PersonDialog(QDialog):
         grid.addLayout(nid_container, row, 0, 1, 2)
         row += 1
 
+        # ID Document Type selector
+        grid.addWidget(self._label(tr("wizard.person_dialog.id_document_type"), label_style), row, 0, 1, 2)
+        row += 1
+        self.id_doc_type_combo = QComboBox()
+        from services.display_mappings import get_identification_document_type_options
+        for code, label in get_identification_document_type_options():
+            if code == 0:
+                continue
+            self.id_doc_type_combo.addItem(label, code)
+        self.id_doc_type_combo.setStyleSheet(self._input_style())
+        grid.addWidget(self.id_doc_type_combo, row, 0, 1, 2)
+        row += 1
+
         # ID Photos upload
         grid.addWidget(self._label(tr("wizard.person_dialog.attach_id_photos"), label_style), row, 0, 1, 2)
         row += 1
@@ -1796,7 +1809,7 @@ class PersonDialog(QDialog):
 
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, tr("wizard.person_dialog.choose_files"), "",
-            "Images (*.png *.jpg *.jpeg *.pdf)"
+            "Documents (*.png *.jpg *.jpeg *.pdf *.doc *.docx *.mp3 *.wav *.ogg *.m4a)"
         )
         if not file_paths:
             return
@@ -2431,6 +2444,17 @@ class PersonDialog(QDialog):
             return f"{int(y):04d}-{month:02d}-{day:02d}"
         return None
 
+    def _format_phone(self, value: str):
+        """Format phone for API: adds 09 prefix to 8-digit raw input."""
+        if not value:
+            return None
+        digits = ''.join(c for c in value if c.isdigit())
+        if len(digits) == 8:
+            return f"09{digits}"
+        if len(digits) == 10 and digits.startswith("09"):
+            return digits
+        return value or None
+
     def _validate_mobile(self, value: str) -> bool:
         """Validate mobile number: exactly 8 digits (prefix 09 is fixed in UI)."""
         if not value:
@@ -2594,7 +2618,7 @@ class PersonDialog(QDialog):
             # Tab 2
             'person_role': self.person_role.currentData(),
             'relationship_type': self.person_role.currentData(),  # backward compat
-            'phone': self.phone.text().strip() or None,
+            'phone': self._format_phone(self.phone.text().strip()),
             'email': self.email.text().strip() or None,
             'landline': self.landline.text().strip() or None,
             'is_contact_person': False,
@@ -2970,8 +2994,8 @@ class PersonDialog(QDialog):
                         break
                     old_evidence_id = self._pending_id_replacements.pop(0)
                     try:
-                        response = self._api_service.update_identification_evidence(
-                            self._survey_id, old_evidence_id, person_id, file_path)
+                        response = self._api_service.update_identification_document(
+                            self._survey_id, old_evidence_id, person_id, file_path=file_path)
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         self._evidence_ids[os.path.normpath(file_path)] = new_eid
@@ -3061,8 +3085,10 @@ class PersonDialog(QDialog):
 
         for file_path in self.uploaded_files:
             try:
+                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else 1
                 response = self._api_service.upload_identification_document(
-                    self._survey_id, person_id, file_path
+                    self._survey_id, person_id, file_path,
+                    document_type=doc_type or 1,
                 )
                 evidence_id = (
                     response.get("id") or response.get("evidenceId") or

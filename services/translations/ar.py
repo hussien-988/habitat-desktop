@@ -258,6 +258,18 @@ AR_TRANSLATIONS = {
     "mapping.evidence_type.proxy": "وكالة",
     "mapping.evidence_type.acknowledgment": "إقرار",
 
+    # Identification Document Types (IdentificationDocumentType enum - v1.7)
+    "mapping.id_doc_type.personal_id_photo": "صورة الهوية الشخصية",
+    "mapping.id_doc_type.family_record": "إخراج قيد",
+    "mapping.id_doc_type.photo": "صورة",
+
+    # Survey Status (SurveyStatus enum - v1.7 includes Obstructed)
+    "mapping.survey_status.draft": "مسودة",
+    "mapping.survey_status.finalized": "نهائي",
+    "mapping.survey_status.obstructed": "معرقل",
+    "mapping.survey_status.cancelled": "ملغى",
+    "mapping.survey_status.archived": "مؤرشف",
+
     # Occupancy Types (OccupancyType enum)
     "mapping.occupancy_type.owner_occupied": "إشغال مالك",
     "mapping.occupancy_type.tenant_occupied": "إشغال مستأجر",
@@ -460,7 +472,7 @@ AR_TRANSLATIONS = {
     "wizard.household.unit_type_label": "نوع المقسم",
     "wizard.household.unit_status_label": "حالة المقسم",
     "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر",
-    "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد (بدون ذوي الاحتياجات الخاصة)",
+    "wizard.household.members_mismatch": "تأكد من مطابقة عدد الأفراد ",
     "wizard.household.disability_exceeds_total": "عدد ذوي الاحتياجات الخاصة لا يمكن أن يتجاوز عدد أفراد الأسرة",
     "wizard.household.total_members_hint": "بدون احتساب ذوي الاحتياجات الخاصة",
     "wizard.person.card_title": "بيانات الأشخاص",
@@ -621,6 +633,7 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.nationality_syrian": "سوري",
     "wizard.person_dialog.nationality_palestinian": "فلسطيني",
     "wizard.person_dialog.nationality_other": "أخرى",
+    "wizard.person_dialog.id_document_type": "نوع وثيقة الهوية",
     "wizard.person_dialog.attach_id_photos": "ارفق صور الهوية",
     "wizard.person_dialog.person_role": "صفة الفرد",
     "wizard.person_dialog.occupancy_nature": "طبيعة الإشغال",
@@ -795,6 +808,11 @@ AR_TRANSLATIONS = {
     "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.tab.map": "الخريطة",
     "navbar.tab.field_assignment": "تجهيز العمل الميداني",
+    "navbar.tab.case_management": "إدارة الحالات",
+
+    # Case Management Page
+    "page.case_management.no_surveys": "لا توجد مسوحات مرتبطة بهذه الحالة",
+    "page.case_management.load_failed": "فشل تحميل بيانات الحالة",
     "page.case_details.edit_claim": "تعديل المطالبة",
     "navbar.search.default": "ابحث عن الرمز أو الاسم...",
     "navbar.search.by_name": "ابحث عن اسم المستلم...",
@@ -897,12 +915,14 @@ AR_TRANSLATIONS = {
     # Cases page
     "page.cases.tab_draft": "مسودة",
     "page.cases.tab_finalized": "منتهية",
+    "page.cases.tab_obstructed": "معرقلة",
     "page.cases.search_person": "بحث باسم الشخص...",
     "page.cases.loading": "جاري تحميل المسوحات...",
     "page.cases.load_error": "تعذر تحميل المطالبات",
     "page.cases.unspecified": "غير محدد",
     "page.cases.no_drafts": "لا توجد مسودات حالياً",
     "page.cases.no_finalized": "لا توجد مسوحات منتهية بعد",
+    "page.cases.no_obstructed": "لا توجد مسوحات معرقلة",
     "page.cases.empty_description": "ابدأ بإضافة المسوحات للظهور هنا",
 
     # Search page
@@ -1094,6 +1114,10 @@ AR_TRANSLATIONS = {
 
     # Case details page
     "page.case_details.resume": "استئناف التعديل",
+    "page.case_details.resume_obstructed": "استئناف الاستبيان",
+    "page.case_details.revert_to_draft": "إعادة للمسودة",
+    "page.case_details.revert_reason_placeholder": "أدخل سبب الإعادة للمسودة...",
+    "page.case_details.confirm_revert": "تأكيد الإعادة",
     "page.case_details.cancel_survey": "إلغاء المسح",
     "page.case_details.cancel_confirm": "هل أنت متأكد من إلغاء هذا المسح؟\nيرجى إدخال سبب الإلغاء أدناه.",
     "page.case_details.cancel_reason_placeholder": "أدخل سبب الإلغاء هنا...",
@@ -1101,6 +1125,7 @@ AR_TRANSLATIONS = {
     "page.case_details.reason_required": "يجب إدخال سبب الإلغاء",
     "page.case_details.status_draft": "مسودة",
     "page.case_details.status_completed": "مكتملة",
+    "page.case_details.status_obstructed": "معرقل",
     "page.case_details.section_survey": "معلومات المسح",
     "page.case_details.section_survey_sub": "البيانات العامة للمسح وحالته",
     "page.case_details.section_building": "معلومات المبنى",
@@ -1487,7 +1512,7 @@ AR_TRANSLATIONS = {
     "page.claims.docs_info_note": "ملاحظة: لا يمكن استبدال الوثائق، فقط إضافة وثائق جديدة أو إزالة الموجودة",
     "page.claims.document_file": "ملف الوثيقة",
     "page.claims.document_number": "رقم الوثيقة",
-    "page.claims.document_number_placeholder": "رقم الوثيقة (اختياري)",
+    "page.claims.document_number_placeholder": "رقم الوثيقة ",
     "page.claims.document_type": "نوع الوثيقة",
     "page.claims.edit_claim": "تعديل المطالبة",
     "page.claims.empty_closed": "لا توجد مطالبات مغلقة",
@@ -2852,6 +2877,8 @@ AR_TRANSLATIONS = {
     "wizard.step3.revisit": "إعادة زيارة",
     "wizard.step3.revisit_reason_placeholder": "سبب إعادة الزيارة...",
     "wizard.step3.revisit_reason_required": "يجب إدخال سبب إعادة الزيارة",
+    "wizard.step3.survey_done": "تم المسح",
+    "wizard.step3.survey_not_done": "لم يتم المسح",
     "wizard.step3.surveyed": "تم المسح",
     "wizard.step3.type": "النوع",
     "wizard.step3.unavailable": "غير متوفر",
