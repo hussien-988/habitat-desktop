@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QCursor
 
-from ui.design_system import Colors, Spacing, ButtonDimensions
+from ui.design_system import Colors, Spacing, ButtonDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from app.config import (
     load_local_settings, save_local_settings,
@@ -64,7 +64,10 @@ class ServerSettingsDialog(QDialog):
         self._workers = []
 
         self.setModal(True)
-        self.setFixedSize(540, 480)
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(540, int(_scr.width() * 0.45)), min(480, int(_scr.height() * 0.55)))
+        self.setMinimumSize(400, 360)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -108,7 +111,7 @@ class ServerSettingsDialog(QDialog):
         # -- Blue gradient header banner --
         header = QFrame()
         header.setObjectName("headerBanner")
-        header.setFixedHeight(54)
+        header.setFixedHeight(ScreenScale.h(54))
         header.setStyleSheet("""
             QFrame#headerBanner {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -131,7 +134,7 @@ class ServerSettingsDialog(QDialog):
         header_lay.addStretch()
 
         close_btn = QPushButton("\u2715")
-        close_btn.setFixedSize(32, 32)
+        close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         close_btn.setCursor(QCursor(Qt.PointingHandCursor))
         close_btn.setFocusPolicy(Qt.NoFocus)
         close_btn.setStyleSheet("""
@@ -247,7 +250,7 @@ class ServerSettingsDialog(QDialog):
         row.setSpacing(8)
 
         url_input = QLineEdit(value)
-        url_input.setFixedHeight(40)
+        url_input.setFixedHeight(ScreenScale.h(40))
         url_input.setAlignment(Qt.AlignLeft)
         url_input.setLayoutDirection(Qt.LeftToRight)
         url_input.setPlaceholderText(placeholder)

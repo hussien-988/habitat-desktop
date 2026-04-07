@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPainter, QColor
 
-from ..design_system import Colors
+from ..design_system import Colors, ScreenScale
 from ..font_utils import create_font, FontManager
 from ..style_manager import StyleManager
 from services.translation_manager import tr
@@ -37,7 +37,7 @@ class EmptyState(QWidget):
 
         # Icon circle (120px × 120px, soft light blue background)
         icon_container = QWidget()
-        icon_container.setFixedSize(120, 120)
+        icon_container.setFixedSize(ScreenScale.w(120), ScreenScale.h(120))
         icon_container.setStyleSheet("""
             QWidget {
                 background-color: #EBF4FF;
@@ -97,7 +97,7 @@ class EmptyState(QWidget):
         description_label = QLabel(self.description_text)
         description_label.setAlignment(Qt.AlignCenter)
         description_label.setWordWrap(True)
-        description_label.setMaximumWidth(400)
+        description_label.setMaximumWidth(ScreenScale.w(400))
         # Use centralized font utility
         desc_font = create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR)
         description_label.setFont(desc_font)

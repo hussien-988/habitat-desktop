@@ -31,6 +31,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from services.display_mappings import get_relation_type_options, get_contract_type_options, get_evidence_type_options
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -51,7 +52,7 @@ class RelationStep(BaseStep):
     def setup_ui(self):
         """Setup the step's UI - matching person_step styling."""
         from ui.font_utils import FontManager, create_font
-        from ui.design_system import Colors
+        from ui.design_system import Colors, ScreenScale
         from ui.components.icon import Icon
 
         widget = self
@@ -100,7 +101,7 @@ class RelationStep(BaseStep):
 
         # Icon for title
         title_icon = QLabel()
-        title_icon.setFixedSize(40, 40)
+        title_icon.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         title_icon.setAlignment(Qt.AlignCenter)
         title_icon.setStyleSheet("""
             QLabel {
@@ -208,7 +209,7 @@ class RelationStep(BaseStep):
         # Icon - using user.png
         from ui.components.icon import Icon
         icon_label = QLabel()
-        icon_label.setFixedSize(38, 38)
+        icon_label.setFixedSize(ScreenScale.w(38), ScreenScale.h(38))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
@@ -349,7 +350,7 @@ class RelationStep(BaseStep):
         card_layout.addWidget(notes_label)
 
         notes = QTextEdit("-")
-        notes.setMaximumHeight(70)
+        notes.setMaximumHeight(ScreenScale.h(70))
         notes.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #dfe6e9;

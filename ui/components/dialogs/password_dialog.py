@@ -17,7 +17,7 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 
 from ui.components.icon import Icon
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
@@ -143,11 +143,15 @@ class PasswordDialog(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
 
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
         if self._is_dark:
             h = 600 if mode == self.FORCED else 530
-            self.setFixedSize(500, h)
+            self.resize(min(500, int(_scr.width() * 0.40)), min(h, int(_scr.height() * 0.65)))
+            self.setMinimumSize(400, 420)
         else:
-            self.setFixedSize(613, 384)
+            self.resize(min(613, int(_scr.width() * 0.48)), min(384, int(_scr.height() * 0.45)))
+            self.setMinimumSize(450, 320)
 
         self._setup_ui()
 
@@ -176,7 +180,7 @@ class PasswordDialog(QDialog):
         # Frosted glass card
         card = QFrame()
         card.setObjectName("pwdCard")
-        card.setFixedWidth(440)
+        card.setFixedWidth(ScreenScale.w(440))
         card.setStyleSheet("""
             QFrame#pwdCard {
                 background-color: rgba(15, 31, 61, 160);
@@ -325,7 +329,7 @@ class PasswordDialog(QDialog):
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
         field.setEchoMode(QLineEdit.Password)
-        field.setFixedHeight(48)
+        field.setFixedHeight(ScreenScale.h(48))
         field.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         field.setStyleSheet(_INPUT_STYLE_DARK)
 
@@ -341,7 +345,7 @@ class PasswordDialog(QDialog):
 
     def _create_dark_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedHeight(48)
+        btn.setFixedHeight(ScreenScale.h(48))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=11, weight=QFont.Bold))
 
@@ -486,7 +490,7 @@ class PasswordDialog(QDialog):
         field = QLineEdit()
         field.setPlaceholderText(placeholder)
         field.setEchoMode(QLineEdit.Password)
-        field.setFixedHeight(42)
+        field.setFixedHeight(ScreenScale.h(42))
         field.setFont(create_font(
             size=FontManager.SIZE_BODY,
             weight=FontManager.WEIGHT_REGULAR,
@@ -505,7 +509,7 @@ class PasswordDialog(QDialog):
 
     def _create_light_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(ScreenScale.w(170), ScreenScale.h(50))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=QFont.Medium))
 

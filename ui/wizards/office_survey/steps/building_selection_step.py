@@ -33,7 +33,7 @@ from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
 from utils.helpers import build_hierarchical_address
 from ui.font_utils import FontManager, create_font
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from services.translation_manager import tr, get_layout_direction
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -96,7 +96,7 @@ class BuildingSelectionStep(BaseStep):
         """)
 
         # Card dimensions: 151px base + 40px for address row
-        card.setFixedHeight(191)
+        card.setFixedHeight(ScreenScale.h(191))
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         card_layout = QVBoxLayout(card)
@@ -123,7 +123,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Icon: blue.png
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(40, 40)
+        icon_lbl.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
@@ -163,7 +163,7 @@ class BuildingSelectionStep(BaseStep):
         # Height: 42px, padding: 14px left/right & 8px top/bottom
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(42)
+        search_bar.setFixedHeight(ScreenScale.h(42))
         search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -180,7 +180,7 @@ class BuildingSelectionStep(BaseStep):
         # Search icon button
         search_icon_btn = QToolButton()
         search_icon_btn.setCursor(Qt.PointingHandCursor)
-        search_icon_btn.setFixedSize(30, 30)
+        search_icon_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -261,7 +261,7 @@ class BuildingSelectionStep(BaseStep):
         card_layout.addSpacing(8)
 
         self.address_container = QFrame()
-        self.address_container.setFixedHeight(28)
+        self.address_container.setFixedHeight(ScreenScale.h(28))
         self.address_container.setVisible(False)
         self.address_container.setStyleSheet("""
             QFrame {
@@ -311,8 +311,8 @@ class BuildingSelectionStep(BaseStep):
         # Floats above card by 12px (overlaps with card's bottom padding)
         self.buildings_list = QListWidget()
         self.buildings_list.setVisible(False)
-        self.buildings_list.setFixedHeight(179)
-        self.buildings_list.setFixedWidth(1225)
+        self.buildings_list.setFixedHeight(ScreenScale.h(179))
+        self.buildings_list.setFixedWidth(ScreenScale.w(1225))
         # Hide scrollbar but keep scrolling enabled with mouse wheel
         self.buildings_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.buildings_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -360,7 +360,7 @@ class BuildingSelectionStep(BaseStep):
         self.stats_card = QFrame()
         self.stats_card.setObjectName("statsCard")
         self.stats_card.setVisible(False)  # Hidden initially
-        self.stats_card.setFixedHeight(73)  # Height
+        self.stats_card.setFixedHeight(ScreenScale.h(73))  # Height
         # Using Colors constants
         self.stats_card.setStyleSheet(f"""
             QFrame#statsCard {{
@@ -423,7 +423,7 @@ class BuildingSelectionStep(BaseStep):
         self.location_card = QFrame()
         self.location_card.setObjectName("locationCard")
         self.location_card.setVisible(False)  # Hidden initially
-        self.location_card.setFixedHeight(187)  # Height
+        self.location_card.setFixedHeight(ScreenScale.h(187))  # Height
         # Using Colors constants
         self.location_card.setStyleSheet(f"""
             QFrame#locationCard {{
@@ -479,7 +479,7 @@ class BuildingSelectionStep(BaseStep):
 
         # Map container (QLabel to support QPixmap)
         map_container = QLabel()
-        map_container.setFixedSize(400, 130)  # Width: 400px, Height: 130px        map_container.setAlignment(Qt.AlignCenter)
+        map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))  # Width: 400px, Height: 130px        map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("mapContainer")
 
         # Load background map image using Icon component (absolute paths)
@@ -510,7 +510,7 @@ class BuildingSelectionStep(BaseStep):
         # White button in top-left corner (opposite to title)
         # Dimensions: 94×20px, border-radius: 5px, padding: 4px
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)  # Width: 94px, Height: 20px        map_button.move(8, 8)  # Position in top-left corner with small margin
+        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))  # Width: 94px, Height: 20px        map_button.move(8, 8)  # Position in top-left corner with small margin
         map_button.setCursor(Qt.PointingHandCursor)
 
         # Icon: pill.png with PRIMARY_BLUE color using Icon.load_pixmap
@@ -557,7 +557,7 @@ class BuildingSelectionStep(BaseStep):
         location_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
         if location_pixmap and not location_pixmap.isNull():
             location_icon.setPixmap(location_pixmap)
-            location_icon.setFixedSize(56, 56)
+            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
             location_icon.move(172, 37)
 
@@ -572,7 +572,7 @@ class BuildingSelectionStep(BaseStep):
             location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
             location_icon.setStyleSheet("background: transparent;")
             location_icon.setAlignment(Qt.AlignCenter)
-            location_icon.setFixedSize(56, 56)
+            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             location_icon.move(172, 37)
 
         map_section.addWidget(map_container)
@@ -973,7 +973,7 @@ class BuildingSelectionStep(BaseStep):
 
         dialog = QDialog(self)
         dialog.setWindowTitle(tr("wizard.building.select_dialog_title", count=len(buildings)))
-        dialog.setMinimumWidth(500)
+        dialog.setMinimumWidth(ScreenScale.w(500))
         dialog.setLayoutDirection(get_layout_direction())
 
         layout = QVBoxLayout(dialog)
@@ -1026,7 +1026,7 @@ class BuildingSelectionStep(BaseStep):
         buttons_layout.setSpacing(8)
 
         select_btn = QPushButton(f"✓ {tr('wizard.building.select_button')}")
-        select_btn.setMinimumHeight(36)
+        select_btn.setMinimumHeight(ScreenScale.h(36))
         select_btn.setStyleSheet("""
             QPushButton {
                 font-family: 'IBM Plex Sans Arabic';
@@ -1048,7 +1048,7 @@ class BuildingSelectionStep(BaseStep):
         select_btn.setEnabled(False)
 
         cancel_btn = QPushButton(f"✕ {tr('wizard.building.cancel_button')}")
-        cancel_btn.setMinimumHeight(36)
+        cancel_btn.setMinimumHeight(ScreenScale.h(36))
         cancel_btn.setStyleSheet("""
             QPushButton {
                 font-family: 'IBM Plex Sans Arabic';

@@ -25,7 +25,7 @@ from PyQt5.QtGui import (
     QPainterPath, QCursor,
 )
 
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
@@ -145,7 +145,7 @@ class _DetailsHeader(QWidget):
         row1.setSpacing(12)
 
         self._back_btn = QPushButton()
-        self._back_btn.setFixedSize(40, 40)
+        self._back_btn.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._back_btn.setStyleSheet("""
             QPushButton {
@@ -183,7 +183,7 @@ class _DetailsHeader(QWidget):
         self._num_label.setStyleSheet(
             "color: #2A6CB5; background: transparent;"
         )
-        self._num_label.setMinimumWidth(200)
+        self._num_label.setMinimumWidth(ScreenScale.w(200))
         self._num_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._num_label.setLayoutDirection(Qt.LeftToRight)
         self._num_label.setAlignment(
@@ -202,7 +202,7 @@ class _DetailsHeader(QWidget):
 
         # Cancel button (hidden by default)
         self._cancel_btn = QPushButton(tr("page.claim_details.cancel"))
-        self._cancel_btn.setFixedSize(90, 36)
+        self._cancel_btn.setFixedSize(ScreenScale.w(90), ScreenScale.h(36))
         self._cancel_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._cancel_btn.setVisible(False)
         self._cancel_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -230,7 +230,7 @@ class _DetailsHeader(QWidget):
 
         # Edit/Save button
         self._edit_btn = QPushButton(tr("page.claim_details.edit_claim"))
-        self._edit_btn.setFixedSize(160, 38)
+        self._edit_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(38))
         self._edit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._edit_btn.setVisible(False)
         self._edit_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
@@ -293,7 +293,7 @@ class _DetailsHeader(QWidget):
             badge = QLabel(text)
             badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             badge.setAlignment(Qt.AlignCenter)
-            badge.setFixedHeight(22)
+            badge.setFixedHeight(ScreenScale.h(22))
             badge.setStyleSheet(
                 f"QLabel {{ background: {bg}; color: {fg}; "
                 f"border-radius: 11px; padding: 0 10px; border: none; }}"
@@ -617,7 +617,7 @@ class ClaimDetailsPage(QWidget):
         h_layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(28, 28)
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
@@ -670,7 +670,7 @@ class ClaimDetailsPage(QWidget):
         badge = QLabel(str(text))
         badge.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
+        badge.setFixedHeight(ScreenScale.h(26))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {bg_color}; color: {text_color}; "
             f"border: none; border-radius: 13px; padding: 2px 14px; }}"
@@ -887,7 +887,7 @@ class ClaimDetailsPage(QWidget):
 
             addr_bar = QFrame()
             addr_bar.setLayoutDirection(get_layout_direction())
-            addr_bar.setMinimumHeight(28)
+            addr_bar.setMinimumHeight(ScreenScale.h(28))
             addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
             addr_layout = QHBoxLayout(addr_bar)
             addr_layout.setContentsMargins(12, 6, 12, 6)
@@ -972,8 +972,8 @@ class ClaimDetailsPage(QWidget):
 
             if self._is_editing:
                 self._claim_type_combo = QComboBox()
-                self._claim_type_combo.setFixedHeight(36)
-                self._claim_type_combo.setMinimumWidth(160)
+                self._claim_type_combo.setFixedHeight(ScreenScale.h(36))
+                self._claim_type_combo.setMinimumWidth(ScreenScale.w(160))
                 self._claim_type_combo.setStyleSheet(StyleManager.combo_box())
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
@@ -1027,8 +1027,8 @@ class ClaimDetailsPage(QWidget):
                 if self._is_editing:
                     from PyQt5.QtGui import QIntValidator
                     self._ownership_share_input = QLineEdit()
-                    self._ownership_share_input.setFixedHeight(36)
-                    self._ownership_share_input.setMinimumWidth(160)
+                    self._ownership_share_input.setFixedHeight(ScreenScale.h(36))
+                    self._ownership_share_input.setMinimumWidth(ScreenScale.w(160))
                     self._ownership_share_input.setPlaceholderText("0 - 2400")
                     self._ownership_share_input.setValidator(QIntValidator(0, 2400, self._ownership_share_input))
                     self._ownership_share_input.setFocusPolicy(Qt.StrongFocus)
@@ -1088,7 +1088,7 @@ class ClaimDetailsPage(QWidget):
 
             if self._is_editing:
                 upload_btn = QPushButton(tr("page.claim_details.upload_document"))
-                upload_btn.setFixedHeight(32)
+                upload_btn.setFixedHeight(ScreenScale.h(32))
                 upload_btn.setCursor(Qt.PointingHandCursor)
                 upload_btn.setStyleSheet(f"""
                     QPushButton {{
@@ -1202,7 +1202,7 @@ class ClaimDetailsPage(QWidget):
         file_name = str(evidence.get("fileName") or evidence.get("originalFileName") or tr("page.claim_details.document"))
 
         card = QFrame()
-        card.setFixedSize(80, 105)
+        card.setFixedSize(ScreenScale.w(80), ScreenScale.h(105))
         card.setStyleSheet("""
             QFrame { background-color: #ffffff; border: 1px solid #E1E8ED; border-radius: 6px; }
             QFrame:hover { border-color: #3890DF; }
@@ -1214,7 +1214,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.setSpacing(2)
 
         thumb = QLabel()
-        thumb.setFixedSize(70, 70)
+        thumb.setFixedSize(ScreenScale.w(70), ScreenScale.h(70))
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("border: none; background: transparent;")
 
@@ -1240,7 +1240,7 @@ class ClaimDetailsPage(QWidget):
 
         if self._is_editing and ev_id and self._is_claim_open():
             del_btn = QPushButton("\u2715", card)
-            del_btn.setFixedSize(18, 18)
+            del_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
             del_btn.move(60, 2)
             del_btn.setCursor(Qt.PointingHandCursor)
             del_btn.setStyleSheet("""
@@ -1267,7 +1267,7 @@ class ClaimDetailsPage(QWidget):
         file_name = os.path.basename(file_path)
 
         card = QFrame()
-        card.setFixedSize(80, 105)
+        card.setFixedSize(ScreenScale.w(80), ScreenScale.h(105))
         card.setStyleSheet("""
             QFrame { background-color: #ffffff; border: 1px solid #68D391; border-radius: 6px; }
             QFrame:hover { border-color: #38A169; }
@@ -1278,7 +1278,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.setSpacing(2)
 
         thumb = QLabel()
-        thumb.setFixedSize(70, 70)
+        thumb.setFixedSize(ScreenScale.w(70), ScreenScale.h(70))
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("border: none; background: transparent;")
 
@@ -1299,7 +1299,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.addWidget(name_lbl)
 
         del_btn = QPushButton("\u2715", card)
-        del_btn.setFixedSize(18, 18)
+        del_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         del_btn.move(60, 2)
         del_btn.setCursor(Qt.PointingHandCursor)
         del_btn.setStyleSheet("""
@@ -1315,7 +1315,7 @@ class ClaimDetailsPage(QWidget):
         ev_id = str(ev_data.get("id") or ev_data.get("evidenceId") or "")
 
         card = QFrame()
-        card.setFixedSize(80, 105)
+        card.setFixedSize(ScreenScale.w(80), ScreenScale.h(105))
         card.setStyleSheet(f"""
             QFrame {{ background-color: #ffffff; border: 1.5px solid {Colors.PRIMARY_BLUE}; border-radius: 6px; }}
             QFrame:hover {{ border-color: #2A7BC8; }}
@@ -1326,7 +1326,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.setSpacing(2)
 
         thumb = QLabel()
-        thumb.setFixedSize(70, 70)
+        thumb.setFixedSize(ScreenScale.w(70), ScreenScale.h(70))
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("border: none; background: transparent;")
         self._set_file_type_icon(thumb, file_name)
@@ -1341,7 +1341,7 @@ class ClaimDetailsPage(QWidget):
         card_layout.addWidget(name_lbl)
 
         del_btn = QPushButton("\u2715", card)
-        del_btn.setFixedSize(18, 18)
+        del_btn.setFixedSize(ScreenScale.w(18), ScreenScale.h(18))
         del_btn.move(60, 2)
         del_btn.setCursor(Qt.PointingHandCursor)
         del_btn.setStyleSheet("""
@@ -1408,7 +1408,7 @@ class ClaimDetailsPage(QWidget):
             btn_row.addStretch()
 
             cancel_btn = QPushButton(tr("page.claim_details.cancel"))
-            cancel_btn.setFixedSize(100, 36)
+            cancel_btn.setFixedSize(ScreenScale.w(100), ScreenScale.h(36))
             cancel_btn.setCursor(QCursor(Qt.PointingHandCursor))
             cancel_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
             cancel_btn.setStyleSheet("""
@@ -1430,7 +1430,7 @@ class ClaimDetailsPage(QWidget):
             btn_row.addWidget(cancel_btn)
 
             save_btn = QPushButton(tr("page.claim_details.save_changes"))
-            save_btn.setFixedSize(150, 36)
+            save_btn.setFixedSize(ScreenScale.w(150), ScreenScale.h(36))
             save_btn.setCursor(QCursor(Qt.PointingHandCursor))
             save_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
             save_btn.setStyleSheet("""

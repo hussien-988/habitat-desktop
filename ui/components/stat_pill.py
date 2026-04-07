@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QPainterPath
 
 from ui.font_utils import create_font, FontManager
+from ui.design_system import ScreenScale
 
 
 class StatPill(QWidget):
@@ -15,7 +16,7 @@ class StatPill(QWidget):
         super().__init__(parent)
         self._count = 0
         self._label_text = label
-        self.setFixedHeight(28)
+        self.setFixedHeight(ScreenScale.h(28))
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         layout = QHBoxLayout(self)

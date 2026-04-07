@@ -18,6 +18,7 @@ from PyQt5.QtGui import QColor
 
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -126,7 +127,7 @@ class PersonSearchDialog(QDialog):
 
         # Dark header
         hdr = QFrame()
-        hdr.setFixedHeight(48)
+        hdr.setFixedHeight(ScreenScale.h(48))
         hdr.setObjectName("SearchPanelHdr")
         hdr.setStyleSheet("""
             QFrame#SearchPanelHdr {
@@ -141,7 +142,7 @@ class PersonSearchDialog(QDialog):
         hl.setSpacing(10)
         close_btn = QPushButton("\u2715")
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedSize(28, 28)
+        close_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         close_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(255, 255, 255, 0.08);

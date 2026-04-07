@@ -34,6 +34,7 @@ from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -145,7 +146,7 @@ class UnitDialog(QDialog):
 
         # Dark header bar
         header_bar = QFrame()
-        header_bar.setFixedHeight(48)
+        header_bar.setFixedHeight(ScreenScale.h(48))
         header_bar.setObjectName("UnitPanelHeader")
         header_bar.setStyleSheet("""
             QFrame#UnitPanelHeader {
@@ -161,7 +162,7 @@ class UnitDialog(QDialog):
 
         close_btn = QPushButton("\u2715")
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedSize(28, 28)
+        close_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         close_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(255, 255, 255, 0.08);
@@ -248,7 +249,7 @@ class UnitDialog(QDialog):
         # نوع المقسم (يمين في RTL = أول عنصر)
         self.unit_type_combo = RtlCombo()
         self.unit_type_combo.setStyleSheet(self._combo_style())
-        self.unit_type_combo.setFixedHeight(40)
+        self.unit_type_combo.setFixedHeight(ScreenScale.h(40))
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self.unit_type_combo.addItem(label, code)
@@ -257,7 +258,7 @@ class UnitDialog(QDialog):
         # حالة المقسم (يسار في RTL = ثاني عنصر)
         self.unit_status_combo = RtlCombo()
         self.unit_status_combo.setStyleSheet(self._combo_style())
-        self.unit_status_combo.setFixedHeight(40)
+        self.unit_status_combo.setFixedHeight(ScreenScale.h(40))
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self.unit_status_combo.addItem(label, code)
@@ -283,7 +284,7 @@ class UnitDialog(QDialog):
 
         # مساحة المقسم (يسار في RTL = ثاني عنصر)
         self.area_input = QLineEdit()
-        self.area_input.setFixedHeight(40)
+        self.area_input.setFixedHeight(ScreenScale.h(40))
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
 
@@ -305,8 +306,8 @@ class UnitDialog(QDialog):
 
         # Description
         self.description_edit = QTextEdit()
-        self.description_edit.setMinimumHeight(131)
-        self.description_edit.setMaximumHeight(131)
+        self.description_edit.setMinimumHeight(ScreenScale.h(131))
+        self.description_edit.setMaximumHeight(ScreenScale.h(131))
         self.description_edit.setPlaceholderText(
             tr("wizard.unit_dialog.description_placeholder")
         )
@@ -355,7 +356,7 @@ class UnitDialog(QDialog):
 
         # Container frame - يرث RTL من التطبيق (مطابق لـ buildings_page)
         container = QFrame()
-        container.setFixedHeight(40)
+        container.setFixedHeight(ScreenScale.h(40))
         container.setStyleSheet("""
             QFrame {
                 border: 1px solid #E1E8ED;
@@ -393,7 +394,7 @@ class UnitDialog(QDialog):
 
         # Arrow column (RIGHT side) with left border separator
         arrow_container = QFrame()
-        arrow_container.setFixedWidth(30)
+        arrow_container.setFixedWidth(ScreenScale.w(30))
         arrow_container.setStyleSheet("""
             QFrame {
                 border: none;
@@ -409,7 +410,7 @@ class UnitDialog(QDialog):
 
         # Up arrow icon (^.png)
         up_label = QLabel()
-        up_label.setFixedSize(30, 22)
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         up_label.setAlignment(Qt.AlignCenter)
         up_pixmap = Icon.load_pixmap("^", size=10)
         if up_pixmap and not up_pixmap.isNull():
@@ -423,7 +424,7 @@ class UnitDialog(QDialog):
 
         # Down arrow icon (v.png)
         down_label = QLabel()
-        down_label.setFixedSize(30, 22)
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         down_label.setAlignment(Qt.AlignCenter)
         down_pixmap = Icon.load_pixmap("v", size=10)
         if down_pixmap and not down_pixmap.isNull():
@@ -493,7 +494,7 @@ class UnitDialog(QDialog):
             QPushButton configured as save button
         """
         btn = QPushButton(tr("common.save"))
-        btn.setFixedSize(264, 44)
+        btn.setFixedSize(ScreenScale.w(264), ScreenScale.h(44))
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #3890DF;
@@ -524,7 +525,7 @@ class UnitDialog(QDialog):
             QPushButton configured as cancel button
         """
         btn = QPushButton(tr("common.cancel"))
-        btn.setFixedSize(264, 44)
+        btn.setFixedSize(ScreenScale.w(264), ScreenScale.h(44))
         btn.setStyleSheet("""
             QPushButton {
                 background-color: white;

@@ -10,7 +10,7 @@ from PyQt5.QtGui import QColor
 
 from controllers.building_controller import BuildingController
 from services.translation_manager import tr, get_layout_direction
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.components.wizard_header import WizardHeader
 from ui.components.accent_line import AccentLine
 from ui.font_utils import create_font, FontManager
@@ -85,7 +85,7 @@ class FieldWorkPreparationPage(QWidget):
         """Create footer with navigation buttons."""
         footer = QFrame()
         footer.setStyleSheet(StyleManager.nav_footer())
-        footer.setFixedHeight(74)
+        footer.setFixedHeight(ScreenScale.h(74))
 
         layout = QHBoxLayout(footer)
         layout.setContentsMargins(130, 12, 130, 12)
@@ -93,7 +93,7 @@ class FieldWorkPreparationPage(QWidget):
 
         # Back button
         self.btn_back = QPushButton(tr("wizard.field_work.btn_back"))
-        self.btn_back.setFixedSize(252, 50)
+        self.btn_back.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
@@ -105,7 +105,7 @@ class FieldWorkPreparationPage(QWidget):
 
         # Next button
         self.btn_next = QPushButton(tr("wizard.field_work.btn_next"))
-        self.btn_next.setFixedSize(252, 50)
+        self.btn_next.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_next.setStyleSheet(StyleManager.nav_button_primary())

@@ -15,7 +15,7 @@ from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.error_handler import ErrorHandler
-from ui.design_system import PageDimensions
+from ui.design_system import PageDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
@@ -116,7 +116,7 @@ class _PackageCard(AnimatedCard):
         name_label = QLabel(d.get("package_name", "N/A"))
         name_label.setFont(create_font(size=13, weight=QFont.Bold))
         name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        name_label.setMaximumWidth(500)
+        name_label.setMaximumWidth(ScreenScale.w(500))
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -125,7 +125,7 @@ class _PackageCard(AnimatedCard):
         badge = QLabel(status_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -275,7 +275,7 @@ class ImportPackagesPage(QWidget):
 
     def _build_footer(self) -> QFrame:
         footer = QFrame()
-        footer.setFixedHeight(54)
+        footer.setFixedHeight(ScreenScale.h(54))
         footer.setStyleSheet("""
             QFrame {
                 background-color: #F8FAFC;
@@ -291,7 +291,7 @@ class ImportPackagesPage(QWidget):
 
         # Prev button
         self._prev_btn = QPushButton("\u25B7")
-        self._prev_btn.setFixedSize(34, 34)
+        self._prev_btn.setFixedSize(ScreenScale.w(34), ScreenScale.h(34))
         self._prev_btn.setCursor(Qt.PointingHandCursor)
         self._prev_btn.setStyleSheet(
             _NAV_BTN_STYLE.format(bg="#F0F7FF", fg="#3890DF", hover="#E0EFFF")
@@ -307,7 +307,7 @@ class ImportPackagesPage(QWidget):
 
         # Next button
         self._next_btn = QPushButton("\u25C1")
-        self._next_btn.setFixedSize(34, 34)
+        self._next_btn.setFixedSize(ScreenScale.w(34), ScreenScale.h(34))
         self._next_btn.setCursor(Qt.PointingHandCursor)
         self._next_btn.setStyleSheet(
             _NAV_BTN_STYLE.format(bg="#F0F7FF", fg="#3890DF", hover="#E0EFFF")
@@ -324,7 +324,7 @@ class ImportPackagesPage(QWidget):
         layout.addWidget(self._rows_label)
 
         self._rows_btn = QPushButton(str(self._rows_per_page))
-        self._rows_btn.setFixedSize(44, 30)
+        self._rows_btn.setFixedSize(ScreenScale.w(44), ScreenScale.h(30))
         self._rows_btn.setCursor(Qt.PointingHandCursor)
         self._rows_btn.setStyleSheet("""
             QPushButton {

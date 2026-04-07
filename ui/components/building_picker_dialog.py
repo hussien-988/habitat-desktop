@@ -10,6 +10,7 @@ from PyQt5.QtGui import QColor, QIcon
 from app.config import Config
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -143,7 +144,7 @@ class BuildingPickerDialog(QDialog):
         overlay_layout.setContentsMargins(0, 0, 0, 0)
 
         card = QFrame()
-        card.setFixedWidth(440)
+        card.setFixedWidth(ScreenScale.w(440))
         card.setObjectName("BPCard")
         card.setStyleSheet("""
             QFrame#BPCard {
@@ -176,7 +177,7 @@ class BuildingPickerDialog(QDialog):
         header_row.addStretch()
 
         close_btn = QPushButton("×")
-        close_btn.setFixedSize(28, 28)
+        close_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setStyleSheet("""
             QPushButton {
@@ -195,7 +196,7 @@ class BuildingPickerDialog(QDialog):
         # ── Search bar (wizard pattern: map link + input + icon) ──
         self._search_bar = QFrame()
         self._search_bar.setObjectName("searchBar")
-        self._search_bar.setFixedHeight(42)
+        self._search_bar.setFixedHeight(ScreenScale.h(42))
         self._search_bar.setStyleSheet("""
             QFrame#searchBar {
                 background-color: #F8FAFF;
@@ -248,7 +249,7 @@ class BuildingPickerDialog(QDialog):
 
         # Search icon — use real icon if available, fallback to text
         search_icon = QToolButton()
-        search_icon.setFixedSize(26, 26)
+        search_icon.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
         search_icon.setCursor(Qt.PointingHandCursor)
         search_icon.setStyleSheet("""
             QToolButton {

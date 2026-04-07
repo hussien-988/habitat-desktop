@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 
 from ui.components.icon import Icon
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
 
@@ -24,7 +24,10 @@ class LogoutDialog(QDialog):
         self._is_exit = is_exit
 
         self.setModal(True)
-        self.setFixedSize(586, 307)  # 562+24 shadow margin
+        from PyQt5.QtWidgets import QApplication
+        _scr = QApplication.primaryScreen().availableGeometry()
+        self.resize(min(586, int(_scr.width() * 0.45)), min(307, int(_scr.height() * 0.35)))
+        self.setMinimumSize(420, 260)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -64,7 +67,7 @@ class LogoutDialog(QDialog):
 
         # Icon (centered)
         icon_label = QLabel()
-        icon_label.setFixedSize(64, 64)
+        icon_label.setFixedSize(ScreenScale.h(64), ScreenScale.h(64))
         icon_label.setAlignment(Qt.AlignCenter)
         pixmap = Icon.load_pixmap("logout-01", size=64)
         if pixmap and not pixmap.isNull():
@@ -119,7 +122,7 @@ class LogoutDialog(QDialog):
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedSize(170, 50)
+        btn.setFixedSize(ScreenScale.w(170), ScreenScale.h(50))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFont(create_font(size=10, weight=QFont.Medium))
 

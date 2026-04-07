@@ -6,6 +6,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt5.QtCore import QSize, Qt
 
 from .icon import Icon
+from ui.design_system import ScreenScale
 
 
 class ActionButton(QPushButton):
@@ -23,7 +24,7 @@ class ActionButton(QPushButton):
         """Initialize action button."""
         super().__init__(text, parent)
 
-        self.setFixedSize(width, height)
+        self.setFixedSize(ScreenScale.w(width), ScreenScale.h(height))
 
         # Store variant for icon coloring
         self.variant = variant

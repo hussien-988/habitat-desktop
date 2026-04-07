@@ -14,7 +14,7 @@ from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.logger import get_logger
@@ -155,7 +155,7 @@ class FieldWorkPreparationStep3(QWidget):
             lbl = QLabel(label_text)
             lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
-            lbl.setFixedWidth(160)
+            lbl.setFixedWidth(ScreenScale.w(160))
             row.addWidget(lbl)
             self._info_row_labels.append(lbl)
 
@@ -241,7 +241,7 @@ class FieldWorkPreparationStep3(QWidget):
             }
         """)
         header.setCursor(Qt.PointingHandCursor)
-        header.setFixedHeight(52)
+        header.setFixedHeight(ScreenScale.h(52))
 
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 0, 16, 0)
@@ -251,13 +251,13 @@ class FieldWorkPreparationStep3(QWidget):
         arrow = QLabel("\u25B6")
         arrow.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         arrow.setStyleSheet("color: #637381; background: transparent; border: none;")
-        arrow.setFixedWidth(16)
+        arrow.setFixedWidth(ScreenScale.w(16))
         self._accordion_arrows[building_id] = arrow
         header_layout.addWidget(arrow)
 
         # Building icon
         icon_container = QLabel()
-        icon_container.setFixedSize(28, 28)
+        icon_container.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_container.setStyleSheet(
             "QLabel { background-color: #f0f7ff; border-radius: 6px; border: none; }"
         )
@@ -426,7 +426,7 @@ class FieldWorkPreparationStep3(QWidget):
             if i < len(data_points) - 1:
                 sep = QFrame()
                 sep.setFixedWidth(1)
-                sep.setFixedHeight(28)
+                sep.setFixedHeight(ScreenScale.h(28))
                 sep.setStyleSheet("background-color: #F0F0F0; border: none;")
                 grid.addWidget(sep)
 
@@ -483,7 +483,7 @@ class FieldWorkPreparationStep3(QWidget):
 
         self._revisit_reason_input = QLineEdit()
         self._revisit_reason_input.setFont(create_font(size=11))
-        self._revisit_reason_input.setFixedHeight(38)
+        self._revisit_reason_input.setFixedHeight(ScreenScale.h(38))
         self._revisit_reason_input.setPlaceholderText(
             "\u0623\u062f\u062e\u0644 \u0633\u0628\u0628 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0632\u064a\u0627\u0631\u0629..."
         )

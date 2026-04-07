@@ -16,6 +16,7 @@ from services.exceptions import NetworkException, ApiException
 from ui.components.toast import Toast
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -167,7 +168,7 @@ class ImportWizardPage(QWidget):
 
         # Spinner card
         card = QFrame()
-        card.setFixedSize(280, 100)
+        card.setFixedSize(ScreenScale.w(280), ScreenScale.h(100))
         card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
@@ -301,7 +302,7 @@ class ImportWizardPage(QWidget):
         """Create footer with back, cancel, and next buttons."""
         footer = QFrame()
         footer.setStyleSheet(StyleManager.nav_footer())
-        footer.setFixedHeight(74)
+        footer.setFixedHeight(ScreenScale.h(74))
 
         layout = QHBoxLayout(footer)
         layout.setContentsMargins(130, 12, 130, 12)
@@ -309,7 +310,7 @@ class ImportWizardPage(QWidget):
 
         # Back button
         self.btn_back = QPushButton(tr("action.back_arrow"))
-        self.btn_back.setFixedSize(252, 50)
+        self.btn_back.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
@@ -321,7 +322,7 @@ class ImportWizardPage(QWidget):
 
         # Cancel package button (shown on steps 2-4)
         self.btn_cancel = QPushButton(tr("wizard.import.cancel_package"))
-        self.btn_cancel.setFixedSize(252, 50)
+        self.btn_cancel.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_cancel.setCursor(Qt.PointingHandCursor)
         self.btn_cancel.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_cancel.setStyleSheet("""
@@ -354,7 +355,7 @@ class ImportWizardPage(QWidget):
 
         # Next button
         self.btn_next = QPushButton(tr("action.next_arrow"))
-        self.btn_next.setFixedSize(252, 50)
+        self.btn_next.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_next.setStyleSheet(StyleManager.nav_button_primary())

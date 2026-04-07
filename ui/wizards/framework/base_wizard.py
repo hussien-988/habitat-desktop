@@ -19,6 +19,7 @@ from .step_navigator import StepNavigator
 from ui.components.action_button import ActionButton
 from ui.error_handler import ErrorHandler
 from services.translation_manager import tr
+from ui.design_system import ScreenScale
 
 
 # Combine PyQt5 metaclass with ABC metaclass
@@ -152,7 +153,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setFixedHeight(ScreenScale.h(6))
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: none;

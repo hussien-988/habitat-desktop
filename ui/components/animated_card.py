@@ -17,6 +17,7 @@ from PyQt5.QtCore import QRectF, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt5.QtWidgets import QGraphicsOpacityEffect
 
 from services.translation_manager import get_layout_direction
+from ui.design_system import ScreenScale
 
 
 class AnimatedCard(QFrame):
@@ -65,7 +66,7 @@ class AnimatedCard(QFrame):
         self._shimmer_width = kw.get("shimmer_width", 120)
         self._lift_target = kw.get("lift_target", 4.0)
         self._show_chevron = kw.get("show_chevron", True)
-        self._show_strip = kw.get("show_strip", True)
+        self._show_strip = kw.get("show_strip", False)
         self._status_color = kw.get("status_color", "#3890DF")
         self._strip_width = kw.get("strip_width", 5)
         self._clickable = kw.get("clickable", True)
@@ -80,7 +81,7 @@ class AnimatedCard(QFrame):
 
         if self._clickable:
             self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(self._card_height)
+        self.setFixedHeight(ScreenScale.h(self._card_height))
         self.setMouseTracking(True)
 
         self._apply_base_style()

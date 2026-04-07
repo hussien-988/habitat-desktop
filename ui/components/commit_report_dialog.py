@@ -12,6 +12,7 @@ from datetime import datetime
 from app.config import Config
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
+from ui.design_system import ScreenScale
 
 
 class CommitReportDialog(QDialog):
@@ -23,8 +24,8 @@ class CommitReportDialog(QDialog):
         self.import_metadata = import_metadata
 
         self.setWindowTitle(tr("component.commit_report.window_title"))
-        self.setMinimumWidth(900)
-        self.setMinimumHeight(750)
+        self.setMinimumWidth(ScreenScale.w(900))
+        self.setMinimumHeight(ScreenScale.h(750))
         self.resize(1000, 800)  # Set initial size
         self._setup_ui()
 
@@ -189,7 +190,7 @@ class CommitReportDialog(QDialog):
             label = QLabel(label_text)
             label.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
-            label.setMinimumWidth(180)
+            label.setMinimumWidth(ScreenScale.w(180))
             row_layout.addWidget(label)
 
             value = QLabel(str(value_text))
@@ -209,7 +210,7 @@ class CommitReportDialog(QDialog):
         self.report_text = QTextEdit()
         self.report_text.setReadOnly(True)
         self.report_text.setPlainText(self._generate_full_report())
-        self.report_text.setMaximumHeight(200)
+        self.report_text.setMaximumHeight(ScreenScale.h(200))
         self.report_text.setStyleSheet(f"""
             QTextEdit {{
                 background-color: #F9FAFB;
@@ -247,7 +248,7 @@ class CommitReportDialog(QDialog):
 
         # Download Report
         download_btn = QPushButton(tr("component.commit_report.btn_download"))
-        download_btn.setMinimumHeight(45)
+        download_btn.setMinimumHeight(ScreenScale.h(45))
         download_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.SUCCESS_COLOR};
@@ -270,7 +271,7 @@ class CommitReportDialog(QDialog):
 
         # Print Report
         print_btn = QPushButton(tr("component.commit_report.btn_print"))
-        print_btn.setMinimumHeight(45)
+        print_btn.setMinimumHeight(ScreenScale.h(45))
         print_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.INFO_COLOR};
@@ -293,7 +294,7 @@ class CommitReportDialog(QDialog):
 
         # Close
         close_btn = QPushButton(tr("component.commit_report.btn_close"))
-        close_btn.setMinimumHeight(45)
+        close_btn.setMinimumHeight(ScreenScale.h(45))
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Config.TEXT_LIGHT};
@@ -321,7 +322,7 @@ class CommitReportDialog(QDialog):
                       title: str, value: str, color: str):
         """Add a statistics card."""
         card = QFrame()
-        card.setFixedHeight(100)
+        card.setFixedHeight(ScreenScale.h(100))
         card.setStyleSheet(f"""
             QFrame {{
                 background-color: white;

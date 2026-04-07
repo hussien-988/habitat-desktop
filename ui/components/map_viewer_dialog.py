@@ -15,6 +15,7 @@ from app.config import Config
 from ui.constants.map_constants import MapConstants
 from utils.logger import get_logger
 from services.translation_manager import tr
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -61,7 +62,7 @@ class MapViewerDialog(QDialog):
 
         # Web view for map
         self.web_view = QWebEngineView()
-        self.web_view.setMinimumHeight(400)
+        self.web_view.setMinimumHeight(ScreenScale.h(400))
         layout.addWidget(self.web_view)
 
         # Load map

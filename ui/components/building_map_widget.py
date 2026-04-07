@@ -13,7 +13,7 @@ from repositories.database import Database
 from repositories.building_repository import BuildingRepository
 from models.building import Building
 from utils.logger import get_logger
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import FontManager, create_font
 from app.config import Config
 from services.map_service_api import MapServiceAPI
@@ -291,7 +291,7 @@ class BuildingMapWidget(QObject):
     def _create_title_bar(self, dialog: QDialog) -> QWidget:
         """Create title bar with close button."""
         title_bar = QWidget()
-        title_bar.setFixedHeight(32)
+        title_bar.setFixedHeight(ScreenScale.h(32))
         title_bar.setStyleSheet("background: transparent;")
 
         # RTL layout
@@ -311,7 +311,7 @@ class BuildingMapWidget(QObject):
 
         # Close button (X)
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(32, 32)
+        close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.setFont(create_font(size=14, weight=FontManager.WEIGHT_REGULAR))
         close_btn.setStyleSheet(f"""
@@ -341,7 +341,7 @@ class BuildingMapWidget(QObject):
         """Create search bar."""
         search_frame = QFrame()
         search_frame.setObjectName("searchBar")
-        search_frame.setFixedHeight(42)
+        search_frame.setFixedHeight(ScreenScale.h(42))
 
         search_frame.setStyleSheet(f"""
             QFrame#searchBar {{
@@ -384,7 +384,7 @@ class BuildingMapWidget(QObject):
 
         # Search icon (على اليسار - الجهة الأخرى)
         search_icon = QLabel()
-        search_icon.setFixedSize(20, 20)
+        search_icon.setFixedSize(ScreenScale.w(20), ScreenScale.h(20))
         search_icon.setAlignment(Qt.AlignCenter)
 
         # Try to load icon from assets

@@ -14,6 +14,7 @@ from ui.components.toast import Toast
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -122,7 +123,7 @@ class FieldWorkPreparationStep4(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        scroll.setMaximumHeight(350)
+        scroll.setMaximumHeight(ScreenScale.h(350))
 
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background: transparent;")
@@ -153,7 +154,7 @@ class FieldWorkPreparationStep4(QWidget):
     def _create_status_row(self, display_id: str, assignment_id: str) -> QFrame:
         """Create a transfer status row for a building."""
         row = QFrame()
-        row.setFixedHeight(48)
+        row.setFixedHeight(ScreenScale.h(48))
         row.setStyleSheet("""
             QFrame {
                 background-color: white;
@@ -182,8 +183,8 @@ class FieldWorkPreparationStep4(QWidget):
         badge = QLabel(tr("wizard.step4.status_waiting"))
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(26)
-        badge.setMinimumWidth(90)
+        badge.setFixedHeight(ScreenScale.h(26))
+        badge.setMinimumWidth(ScreenScale.w(90))
         badge.setStyleSheet("""
             padding: 2px 12px;
             border-radius: 13px;
@@ -195,7 +196,7 @@ class FieldWorkPreparationStep4(QWidget):
         # Retry button (hidden by default)
         retry_btn = QPushButton(tr("wizard.step4.retry"))
         retry_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        retry_btn.setFixedSize(110, 28)
+        retry_btn.setFixedSize(ScreenScale.w(110), ScreenScale.h(28))
         retry_btn.setCursor(Qt.PointingHandCursor)
         retry_btn.setStyleSheet("""
             QPushButton {

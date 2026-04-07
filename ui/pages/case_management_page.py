@@ -26,13 +26,14 @@ from PyQt5.QtGui import (
     QPainterPath, QCursor,
 )
 
-from ui.design_system import Colors, PageDimensions, Spacing
+from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.toast import Toast
+from ui.components.empty_state import EmptyState
 from services.translation_manager import get_layout_direction
 from services.api_worker import ApiWorker
 from models.case import Case
@@ -111,7 +112,7 @@ def _make_stat_pill(label: str, value: int, bg: str, fg: str, border: str) -> QL
     pill = QLabel(f"  {label}: {value}  ")
     pill.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
     pill.setAlignment(Qt.AlignCenter)
-    pill.setFixedHeight(26)
+    pill.setFixedHeight(ScreenScale.h(26))
     pill.setStyleSheet(
         f"QLabel {{ background: {bg}; color: {fg}; "
         f"border: 1px solid {border}; border-radius: 13px; "
@@ -158,7 +159,7 @@ class _CaseCard(QFrame):
         self._lift_anim = None
 
         self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(120)
+        self.setFixedHeight(ScreenScale.h(120))
         self.setMouseTracking(True)
         self._build_ui()
 
@@ -183,30 +184,9 @@ class _CaseCard(QFrame):
         outer.setContentsMargins(0, 0, 20, 0)
         outer.setSpacing(0)
 
-        # Status strip
-        style = _CASE_STATUS_STYLES.get(self._status, _CASE_STATUS_STYLES[1])
-        strip = QFrame()
-        strip.setFixedWidth(5)
-        is_rtl = get_layout_direction() == Qt.RightToLeft
-        if is_rtl:
-            strip.setStyleSheet(
-                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['strip']}, stop:0.5 {style['border']}, "
-                f"stop:1 {style['strip']}); "
-                "border-top-right-radius: 14px; border-bottom-right-radius: 14px;"
-            )
-        else:
-            strip.setStyleSheet(
-                f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-                f"stop:0 {style['strip']}, stop:0.5 {style['border']}, "
-                f"stop:1 {style['strip']}); "
-                "border-top-left-radius: 14px; border-bottom-left-radius: 14px;"
-            )
-        outer.addWidget(strip)
-
         # Content area
         content = QVBoxLayout()
-        content.setContentsMargins(18, 10, 0, 10)
+        content.setContentsMargins(20, 10, 0, 10)
         content.setSpacing(4)
 
         # Row 1: case number + status badge
@@ -219,14 +199,14 @@ class _CaseCard(QFrame):
         name_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
-        name_label.setMaximumWidth(600)
+        name_label.setMaximumWidth(ScreenScale.w(600))
         row1.addWidget(name_label)
         row1.addStretch()
 
         badge = QLabel(style["label"])
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -445,230 +425,36 @@ class _CaseCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-#  _EmptyStateCases -- Dark navy constellation empty state
+#  _EmptyStateCases -- Light professional empty state
 # ---------------------------------------------------------------------------
 
 class _EmptyStateCases(QWidget):
-    """Dark-themed empty state with constellation particles and
-    cartographic motifs."""
+    """Light-themed institutional empty state."""
+
+    _DEFAULT_TITLE = "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
+    _DEFAULT_DESC = (
+        "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
+        "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
+        "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._title_text = "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
-        self._desc_text = (
-            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
-            "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
-            "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._inner = EmptyState(
+            icon_name="folder",
+            title=self._DEFAULT_TITLE,
+            description=self._DEFAULT_DESC,
         )
-
-        self._anim_start = time.time()
-
-        self._shimmer_pos = 0.0
-        self._shimmer_anim = QPropertyAnimation(self, b"shimmerPos")
-        self._shimmer_anim.setDuration(2500)
-        self._shimmer_anim.setStartValue(0.0)
-        self._shimmer_anim.setEndValue(1.0)
-        self._shimmer_anim.setEasingCurve(QEasingCurve.InOutQuad)
-        self._shimmer_anim.setLoopCount(-1)
-        self._shimmer_anim.start()
-
-        random.seed(77)
-        self._particles = []
-        for _ in range(12):
-            self._particles.append({
-                "x": random.uniform(0.05, 0.95),
-                "y": random.uniform(0.05, 0.95),
-                "phase": random.uniform(0, math.tau),
-                "speed": random.uniform(0.3, 0.8),
-            })
-
-        self._timer = QTimer(self)
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self.update)
-        self._timer.start()
-
-    @pyqtProperty(float)
-    def shimmerPos(self):
-        return self._shimmer_pos
-
-    @shimmerPos.setter
-    def shimmerPos(self, val):
-        self._shimmer_pos = val
-        self.update()
+        layout.addWidget(self._inner, 0, Qt.AlignCenter)
 
     def set_title(self, text: str):
-        self._title_text = text
-        self.update()
+        self._inner.set_title(text)
 
     def set_description(self, text: str):
-        self._desc_text = text
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time() - self._anim_start
-
-        # Dark navy gradient
-        bg_grad = QLinearGradient(0, 0, w, h)
-        bg_grad.setColorAt(0.0, QColor("#0E2035"))
-        bg_grad.setColorAt(0.5, QColor("#132D50"))
-        bg_grad.setColorAt(1.0, QColor("#1A3860"))
-        painter.fillRect(0, 0, w, h, bg_grad)
-
-        # Grid
-        painter.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
-        for x in range(0, w, 60):
-            painter.drawLine(x, 0, x, h)
-        for y in range(0, h, 60):
-            painter.drawLine(0, y, w, y)
-
-        # Particles
-        positions = []
-        for p in self._particles:
-            px = int((p["x"] + 0.012 * math.sin(t * p["speed"] + p["phase"])) * w)
-            py = int((p["y"] + 0.010 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
-            px = max(4, min(w - 4, px))
-            py = max(4, min(h - 4, py))
-            positions.append((px, py))
-            alpha = 35 + int(18 * math.sin(t * 1.5 + p["phase"]))
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(139, 172, 200, alpha))
-            painter.drawEllipse(QPoint(px, py), 2, 2)
-
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                dx = positions[i][0] - positions[j][0]
-                dy = positions[i][1] - positions[j][1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 150:
-                    alpha = int(12 * (1 - dist / 150))
-                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
-                    painter.drawLine(
-                        positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1],
-                    )
-
-        cx, cy = w // 2, int(h * 0.40)
-        fw, fh = 110, 80
-
-        # Breathing glow
-        glow_alpha = 20 + int(12 * math.sin(t * 0.8))
-        glow = QRadialGradient(cx, cy, 100)
-        glow.setColorAt(0, QColor(56, 144, 223, glow_alpha))
-        glow.setColorAt(1, QColor(56, 144, 223, 0))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(glow)
-        painter.drawEllipse(cx - 100, cy - 100, 200, 200)
-
-        # Concentric circles
-        for i, radius in enumerate([40, 65, 90]):
-            alpha = int(15 + 8 * math.sin(t * 0.4 + i * 1.2))
-            painter.setPen(QPen(QColor(56, 144, 223, alpha), 0.8))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
-
-        # Crosshairs
-        cross_alpha = int(12 + 6 * math.sin(t * 0.3))
-        painter.setPen(QPen(QColor(56, 144, 223, cross_alpha), 0.5))
-        painter.drawLine(cx - 100, cy, cx - 55, cy)
-        painter.drawLine(cx + 55, cy, cx + 100, cy)
-        painter.drawLine(cx, cy - 85, cx, cy - 50)
-        painter.drawLine(cx, cy + 50, cx, cy + 85)
-
-        # Folder body
-        folder = QPainterPath()
-        folder.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        folder.lineTo(cx - fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy - fh // 2 + 16)
-        folder.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(15, 31, 61, 180))
-        painter.drawPath(folder)
-
-        # Folder tab
-        tab_path = QPainterPath()
-        tab_path.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        tab_path.lineTo(cx - fw // 2, cy - fh // 2 + 4)
-        tab_path.lineTo(cx - fw // 2 + 4, cy - fh // 2)
-        tab_path.lineTo(cx - 12, cy - fh // 2)
-        tab_path.lineTo(cx - 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 12, cy - fh // 2 + 16)
-        tab_path.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(20, 40, 70, 200))
-        painter.drawPath(tab_path)
-
-        # Documents
-        doc_x, doc_y = cx - 18, cy - fh // 2 + 24
-        for i in range(2):
-            ddx = doc_x + i * 14
-            ddy = doc_y + i * 5
-            painter.setPen(QPen(QColor(56, 144, 223, 30), 1))
-            painter.setBrush(QColor(25, 50, 85))
-            painter.drawRoundedRect(QRectF(ddx, ddy, 30, 38), 3, 3)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(56, 144, 223, 25))
-            for line_y in range(3):
-                lw = 20 if line_y < 2 else 13
-                painter.drawRect(QRectF(ddx + 5, ddy + 9 + line_y * 8, lw, 2))
-
-        # Ground shadow
-        painter.setPen(QPen(QColor(56, 144, 223, 20), 1))
-        painter.drawLine(cx - fw // 2 + 8, cy + fh // 2 + 3,
-                         cx + fw // 2 - 8, cy + fh // 2 + 3)
-
-        # Shimmer sweep on folder
-        shimmer_x = int((self._shimmer_pos * 2 - 0.5) * fw + cx - fw // 2)
-        sg = QLinearGradient(shimmer_x - 30, 0, shimmer_x + 30, 0)
-        sg.setColorAt(0, QColor(56, 144, 223, 0))
-        sg.setColorAt(0.5, QColor(91, 168, 240, 50))
-        sg.setColorAt(1, QColor(56, 144, 223, 0))
-        cp = QPainterPath()
-        cp.addRect(QRectF(cx - fw // 2, cy - fh // 2, fw, fh))
-        painter.setClipPath(cp)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(sg)
-        painter.drawRect(shimmer_x - 30, cy - fh // 2, 60, fh)
-        painter.setClipping(False)
-
-        # Title
-        painter.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(
-            QRectF(0, cy + fh // 2 + 28, w, 30),
-            Qt.AlignCenter, self._title_text
-        )
-
-        # Description
-        painter.setFont(
-            create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR)
-        )
-        painter.setPen(QColor(139, 172, 200, 200))
-        painter.drawText(
-            QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
-            Qt.AlignCenter | Qt.TextWordWrap, self._desc_text
-        )
-
-        painter.end()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._timer.isActive():
-            self._timer.start()
-        if self._shimmer_anim.state() != QPropertyAnimation.Running:
-            self._shimmer_anim.start()
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._timer.stop()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update()
+        self._inner.set_description(text)
 
 
 # ---------------------------------------------------------------------------
@@ -776,21 +562,21 @@ class CaseManagementPage(QWidget):
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
         self._tab_all = NavStyleTab("\u0627\u0644\u0643\u0644")
-        self._tab_all.setFixedSize(100, 38)
+        self._tab_all.setFixedSize(ScreenScale.w(100), ScreenScale.h(38))
         self._tab_all.set_font(tab_font)
         self._tab_all.set_active(True)
         self._tab_all.clicked.connect(lambda: self._on_tab(None))
         self._header.add_tab(self._tab_all)
 
         self._tab_open = NavStyleTab("\u0645\u0641\u062a\u0648\u062d\u0629")
-        self._tab_open.setFixedSize(120, 38)
+        self._tab_open.setFixedSize(ScreenScale.w(120), ScreenScale.h(38))
         self._tab_open.set_font(tab_font)
         self._tab_open.set_active(False)
         self._tab_open.clicked.connect(lambda: self._on_tab(1))
         self._header.add_tab(self._tab_open)
 
         self._tab_closed = NavStyleTab("\u0645\u063a\u0644\u0642\u0629")
-        self._tab_closed.setFixedSize(120, 38)
+        self._tab_closed.setFixedSize(ScreenScale.w(120), ScreenScale.h(38))
         self._tab_closed.set_font(tab_font)
         self._tab_closed.set_active(False)
         self._tab_closed.clicked.connect(lambda: self._on_tab(2))
@@ -801,7 +587,7 @@ class CaseManagementPage(QWidget):
         self._search.setPlaceholderText(
             "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649..."
         )
-        self._search.setFixedSize(280, 34)
+        self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
         self._search.textChanged.connect(self._on_search_changed)
@@ -862,14 +648,14 @@ class CaseManagementPage(QWidget):
 
     def _create_pagination(self):
         bar = QFrame()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(ScreenScale.h(40))
         bar.setStyleSheet("QFrame { background: transparent; border: none; }")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(4, 6, 4, 0)
         layout.addStretch()
 
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._prev_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._prev_btn.clicked.connect(self._on_prev_page)
@@ -879,11 +665,11 @@ class CaseManagementPage(QWidget):
         self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self._page_info.setAlignment(Qt.AlignCenter)
-        self._page_info.setMinimumWidth(80)
+        self._page_info.setMinimumWidth(ScreenScale.w(80))
         layout.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._next_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._next_btn.clicked.connect(self._on_next_page)

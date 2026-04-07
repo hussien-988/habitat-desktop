@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 from repositories.database import Database
 from models.building import Building
 from ui.components.base_map_dialog import BaseMapDialog
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
@@ -94,7 +94,7 @@ class PolygonMapDialog(BaseMapDialog):
 
         # Cancel button
         cancel_btn = QPushButton(tr("button.cancel"))
-        cancel_btn.setFixedSize(100, 40)
+        cancel_btn.setFixedSize(ScreenScale.w(100), ScreenScale.h(40))
         cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         cancel_btn.setStyleSheet(f"""
@@ -115,7 +115,7 @@ class PolygonMapDialog(BaseMapDialog):
 
         # Confirm button
         self.confirm_selection_btn = QPushButton(tr("dialog.map.confirm_selection"))
-        self.confirm_selection_btn.setFixedSize(140, 40)
+        self.confirm_selection_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(40))
         self.confirm_selection_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_selection_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self.confirm_selection_btn.setStyleSheet(f"""

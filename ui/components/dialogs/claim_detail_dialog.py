@@ -21,7 +21,7 @@ from PyQt5.QtGui import (
 )
 
 from ui.font_utils import create_font, FontManager
-from ui.design_system import Colors, Typography
+from ui.design_system import Colors, Typography, ScreenScale
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import (
@@ -68,7 +68,7 @@ class _DialogNavyHeader(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(64)
+        self.setFixedHeight(ScreenScale.h(64))
         self.setStyleSheet("border: none; background: transparent;")
 
         layout = QHBoxLayout(self)
@@ -84,12 +84,12 @@ class _DialogNavyHeader(QFrame):
 
         self._status_badge = QLabel("")
         self._status_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._status_badge.setFixedHeight(26)
+        self._status_badge.setFixedHeight(ScreenScale.h(26))
         self._status_badge.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._status_badge)
 
         self._close_btn = QPushButton("\u2715")
-        self._close_btn.setFixedSize(32, 32)
+        self._close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.setStyleSheet("""
             QPushButton {
@@ -170,7 +170,11 @@ class ClaimDetailDialog(QDialog):
         if parent:
             self.setFixedSize(parent.size())
         else:
-            self.setFixedSize(1200, 800)
+            from PyQt5.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().availableGeometry()
+            w = min(1200, int(screen.width() * 0.88))
+            h = min(800, int(screen.height() * 0.88))
+            self.setFixedSize(w, h)
 
         self._setup_ui()
         self._load_data()
@@ -190,7 +194,7 @@ class ClaimDetailDialog(QDialog):
 
         # Card
         self._card = QFrame()
-        self._card.setFixedWidth(680)
+        self._card.setFixedWidth(ScreenScale.w(680))
         self._card.setMaximumHeight(int(self.height() * 0.85))
         self._card.setStyleSheet("""
             QFrame {
@@ -245,7 +249,7 @@ class ClaimDetailDialog(QDialog):
 
         # Footer
         footer = QFrame()
-        footer.setFixedHeight(56)
+        footer.setFixedHeight(ScreenScale.h(56))
         footer.setStyleSheet("""
             QFrame {
                 background: #FAFBFC;
@@ -262,7 +266,7 @@ class ClaimDetailDialog(QDialog):
 
         self._close_btn = QPushButton(tr("dialog.claim_detail.btn_close"))
         self._close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        self._close_btn.setFixedSize(120, 36)
+        self._close_btn.setFixedSize(ScreenScale.w(120), ScreenScale.h(36))
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.setStyleSheet(StyleManager.button_secondary())
         self._close_btn.clicked.connect(self.close)
@@ -270,7 +274,7 @@ class ClaimDetailDialog(QDialog):
 
         self._edit_btn = QPushButton(tr("dialog.claim_detail.btn_edit"))
         self._edit_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        self._edit_btn.setFixedSize(120, 36)
+        self._edit_btn.setFixedSize(ScreenScale.w(120), ScreenScale.h(36))
         self._edit_btn.setCursor(Qt.PointingHandCursor)
         self._edit_btn.setStyleSheet(StyleManager.button_primary())
         self._edit_btn.clicked.connect(self._on_edit)

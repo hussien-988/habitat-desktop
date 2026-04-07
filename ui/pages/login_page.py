@@ -22,7 +22,7 @@ from app.config import save_language
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.font_utils import create_font, FontManager
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 
 logger = get_logger(__name__)
 
@@ -41,22 +41,11 @@ class _RotatingLogo(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        t = 0.0
-        p = self.parent()
-        while p:
-            if hasattr(p, "_anim_start"):
-                t = time.time() - p._anim_start
-                break
-            p = p.parent()
-        scale_x = abs(math.cos(t * 0.5))
-        scale_x = max(0.08, scale_x)
         cx = self._size / 2
         cy = self._size / 2
         pw = self._pixmap.width()
         ph = self._pixmap.height()
-        painter.translate(cx, cy)
-        painter.scale(scale_x, 1.0)
-        painter.drawPixmap(int(-pw / 2), int(-ph / 2), self._pixmap)
+        painter.drawPixmap(int(cx - pw / 2), int(cy - ph / 2), self._pixmap)
         painter.end()
 
 
@@ -110,17 +99,6 @@ class LoginPage(QWidget):
 
     def _anim_tick(self):
         self.update()
-        if hasattr(self, "_rotating_logo"):
-            self._rotating_logo.update()
-        # Animate titlebar logo sliding left-right within titlebar bounds
-        if hasattr(self, "_tb_logo") and self._tb_logo:
-            t = time.time() - self._anim_start
-            progress = 0.5 + 0.5 * math.sin(t * 0.3)
-            deco_w = int(self.width() * 0.58)
-            min_x = 12
-            max_x = max(min_x + 10, deco_w - 143 - 12)
-            x = int(min_x + progress * (max_x - min_x))
-            self._tb_logo.move(x, self._tb_logo.y())
 
     def _load_fonts(self):
         """Load Noto Kufi Arabic fonts"""
@@ -146,11 +124,11 @@ class LoginPage(QWidget):
         h = self.height()
         t = time.time() - self._anim_start
 
-        # Deep navy gradient (diagonal, slightly brightened)
+        # Institutional navy gradient (lightened for professional look)
         grad = QLinearGradient(0, 0, w, h)
-        grad.setColorAt(0.0, QColor("#0D1B30"))
-        grad.setColorAt(0.5, QColor("#122548"))
-        grad.setColorAt(1.0, QColor("#1A3358"))
+        grad.setColorAt(0.0, QColor("#132640"))
+        grad.setColorAt(0.5, QColor("#1A3358"))
+        grad.setColorAt(1.0, QColor("#224068"))
         painter.fillRect(0, 0, w, h, grad)
 
         # Geometric cadastral grid (decorative area only, left ~58%)
@@ -253,18 +231,14 @@ class LoginPage(QWidget):
         painter.setPen(QPen(div_grad, 1))
         painter.drawLine(div_x, 33, div_x, h)
 
-        # 5a: Orbital ring around rotating logo
+        # Static ring around logo (no rotation)
         if hasattr(self, "_rotating_logo"):
             logo_pos = self._rotating_logo.mapTo(self, QPoint(0, 0))
             ring_cx = logo_pos.x() + 50
             ring_cy = logo_pos.y() + 50
             painter.setPen(QPen(QColor(56, 144, 223, 15), 1))
             painter.setBrush(Qt.NoBrush)
-            painter.save()
-            painter.translate(ring_cx, ring_cy)
-            painter.rotate(t * 8)
-            painter.drawEllipse(-70, -35, 140, 70)
-            painter.restore()
+            painter.drawEllipse(ring_cx - 70, ring_cy - 35, 140, 70)
 
         # 5b: Corner brackets in the right panel
         login_x = deco_w + 40
@@ -309,7 +283,7 @@ class LoginPage(QWidget):
 
         # Spacer for titlebar
         titlebar_spacer = QWidget()
-        titlebar_spacer.setFixedHeight(33)
+        titlebar_spacer.setFixedHeight(ScreenScale.h(33))
         titlebar_spacer.setStyleSheet("background: transparent;")
         main_layout.addWidget(titlebar_spacer)
 
@@ -417,7 +391,7 @@ class LoginPage(QWidget):
 
         # Separator
         sep = QFrame()
-        sep.setFixedSize(1, 18)
+        sep.setFixedSize(1, ScreenScale.h(18))
         sep.setStyleSheet("background: rgba(139,172,200,40);")
         content_lay.addWidget(sep)
         content_lay.addSpacing(8)
@@ -425,7 +399,7 @@ class LoginPage(QWidget):
         # Language toggle button
         self._lang_btn = QPushButton()
         self._lang_btn.setStyleSheet(_BTN_STYLE)
-        self._lang_btn.setFixedHeight(30)
+        self._lang_btn.setFixedHeight(ScreenScale.h(30))
         self._lang_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._lang_btn.setFocusPolicy(Qt.NoFocus)
         self._lang_btn.setFont(create_font(size=9, weight=QFont.DemiBold))
@@ -445,7 +419,7 @@ class LoginPage(QWidget):
 
         # Separator
         sep2 = QFrame()
-        sep2.setFixedSize(1, 18)
+        sep2.setFixedSize(1, ScreenScale.h(18))
         sep2.setStyleSheet("background: rgba(139,172,200,40);")
         content_lay.addWidget(sep2)
         content_lay.addSpacing(4)
@@ -453,7 +427,7 @@ class LoginPage(QWidget):
         server_text = "\u0627\u0644\u062e\u0627\u062f\u0645" if tm_get_language() == "ar" else "Server"
         self._btn_settings = QPushButton("\u25A3  " + server_text)
         self._btn_settings.setStyleSheet(_BTN_STYLE)
-        self._btn_settings.setFixedHeight(30)
+        self._btn_settings.setFixedHeight(ScreenScale.h(30))
         self._btn_settings.setCursor(QCursor(Qt.PointingHandCursor))
         self._btn_settings.setFocusPolicy(Qt.NoFocus)
         self._btn_settings.setFont(create_font(size=9, weight=QFont.DemiBold))
@@ -547,7 +521,7 @@ class LoginPage(QWidget):
         # Separator line
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setFixedWidth(260)
+        sep.setFixedWidth(ScreenScale.w(260))
         sep.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
                           "stop:0 transparent, stop:0.3 #3890DF, stop:0.7 #3890DF, stop:1 transparent);")
         layout.addWidget(sep, 0, Qt.AlignCenter)
@@ -578,12 +552,12 @@ class LoginPage(QWidget):
         """Frosted glass login panel."""
         card = QFrame()
         card.setObjectName("login_panel")
-        card.setMinimumWidth(380)
-        card.setMaximumWidth(520)
+        card.setMinimumWidth(ScreenScale.w(380))
+        card.setMaximumWidth(ScreenScale.w(520))
         card.setStyleSheet("""
             QFrame#login_panel {
-                background-color: rgba(15, 31, 61, 160);
-                border: 1px solid rgba(56, 144, 223, 30);
+                background-color: rgba(20, 42, 78, 175);
+                border: 1px solid rgba(56, 144, 223, 45);
                 border-radius: 16px;
             }
         """)
@@ -616,8 +590,11 @@ class LoginPage(QWidget):
 
         card_layout.addSpacing(20)
 
-        # Username label
-        self._username_label = QLabel(tr("page.login.username"))
+        # Username label (with required indicator)
+        self._username_label = QLabel()
+        self._username_label.setText(
+            f"{tr('page.login.username')} <span style='color:#E74C3C;'>*</span>"
+        )
         lbl_font = create_font(size=10, weight=QFont.DemiBold)
         self._username_label.setFont(lbl_font)
         self._username_label.setStyleSheet("color: #8BACC8; background: transparent;")
@@ -627,7 +604,7 @@ class LoginPage(QWidget):
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText(tr("page.login.username_placeholder"))
         self.username_input.setLayoutDirection(get_layout_direction())
-        self.username_input.setFixedHeight(48)
+        self.username_input.setFixedHeight(ScreenScale.h(48))
         input_font = create_font(size=10, weight=FontManager.WEIGHT_REGULAR)
         self.username_input.setFont(input_font)
         self.username_input.setStyleSheet(self._dark_input_style())
@@ -636,8 +613,11 @@ class LoginPage(QWidget):
 
         card_layout.addSpacing(10)
 
-        # Password label
-        self._password_label = QLabel(tr("page.login.password"))
+        # Password label (with required indicator)
+        self._password_label = QLabel()
+        self._password_label.setText(
+            f"{tr('page.login.password')} <span style='color:#E74C3C;'>*</span>"
+        )
         self._password_label.setFont(lbl_font)
         self._password_label.setStyleSheet("color: #8BACC8; background: transparent;")
         card_layout.addWidget(self._password_label)
@@ -646,7 +626,7 @@ class LoginPage(QWidget):
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setFixedHeight(48)
+        self.password_input.setFixedHeight(ScreenScale.h(48))
         self.password_input.setFont(input_font)
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -681,7 +661,7 @@ class LoginPage(QWidget):
 
         # Login button
         self.login_btn = QPushButton(tr("page.login.sign_in"))
-        self.login_btn.setFixedHeight(52)
+        self.login_btn.setFixedHeight(ScreenScale.h(52))
         self.login_btn.setCursor(Qt.PointingHandCursor)
         button_font = create_font(size=12, weight=QFont.Bold)
         self.login_btn.setFont(button_font)
@@ -720,18 +700,18 @@ class LoginPage(QWidget):
     def _dark_input_style():
         return """
             QLineEdit {
-                background-color: rgba(10, 22, 40, 153);
-                border: 1px solid rgba(56, 144, 223, 51);
+                background-color: rgba(18, 38, 65, 160);
+                border: 1px solid rgba(56, 144, 223, 65);
                 border-radius: 10px;
                 padding: 0 12px;
                 color: white;
             }
             QLineEdit:focus {
-                border: 1px solid rgba(56, 144, 223, 153);
+                border: 1px solid rgba(56, 144, 223, 180);
                 outline: none;
             }
             QLineEdit::placeholder {
-                color: rgba(139, 172, 200, 102);
+                color: rgba(139, 172, 200, 120);
             }
         """
 
@@ -741,12 +721,12 @@ class LoginPage(QWidget):
 
         self.titlebar = DraggableFrame(self)
         self.titlebar.setLayoutDirection(Qt.LeftToRight)
-        self.titlebar.setFixedHeight(33)
+        self.titlebar.setFixedHeight(ScreenScale.h(33))
         self.titlebar.setObjectName("login_titlebar")
         self.titlebar.setStyleSheet("""
             QFrame#login_titlebar {
-                background: #0A1628;
-                border-bottom: 1px solid rgba(56, 144, 223, 38);
+                background: #152D4A;
+                border-bottom: 1px solid rgba(56, 144, 223, 50);
             }
             QPushButton#win_btn, QPushButton#win_close {
                 color: rgba(139, 172, 200, 180);
@@ -782,7 +762,7 @@ class LoginPage(QWidget):
         # Animated logo (absolute-positioned inside titlebar for sliding)
         self._tb_logo = QLabel(self.titlebar)
         self._tb_logo.setStyleSheet("background: transparent;")
-        self._tb_logo.setFixedSize(143, 22)
+        self._tb_logo.setFixedSize(ScreenScale.w(143), ScreenScale.h(22))
 
         logo_path = os.path.join(
             os.path.dirname(__file__), "..", "..",
@@ -825,7 +805,7 @@ class LoginPage(QWidget):
         btn_close.setObjectName("win_close")
 
         for b in (btn_min, btn_max, btn_close):
-            b.setFixedSize(46, 32)
+            b.setFixedSize(ScreenScale.w(46), ScreenScale.h(32))
             b.setCursor(QCursor(Qt.PointingHandCursor))
             b.setFocusPolicy(Qt.NoFocus)
 

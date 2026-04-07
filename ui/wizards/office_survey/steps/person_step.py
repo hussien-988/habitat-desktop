@@ -30,7 +30,7 @@ from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.style_manager import StyleManager
 from ui.font_utils import FontManager, create_font
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
@@ -107,7 +107,7 @@ class PersonStep(BaseStep):
 
         # Icon for title
         title_icon = QLabel()
-        title_icon.setFixedSize(40, 40)
+        title_icon.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         title_icon.setAlignment(Qt.AlignCenter)
         title_icon.setStyleSheet("""
             QLabel {
@@ -221,7 +221,7 @@ class PersonStep(BaseStep):
         """Create a person row card matching the photo design."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
-        card.setFixedHeight(60)
+        card.setFixedHeight(ScreenScale.h(60))
         # Use main window background color - same for all rows
         card.setStyleSheet(f"""
             QFrame {{
@@ -244,7 +244,7 @@ class PersonStep(BaseStep):
 
         # Icon - using user.png
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(32, 32)
+        icon_lbl.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
@@ -295,7 +295,7 @@ class PersonStep(BaseStep):
 
         # 3. Left Side: Menu Button (appears on left in RTL)
         menu_btn = QPushButton("⋮")
-        menu_btn.setFixedSize(36, 36)
+        menu_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
         menu_btn.setStyleSheet("""
             QPushButton {
                 border: none;

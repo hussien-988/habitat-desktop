@@ -26,7 +26,7 @@ from PyQt5.QtGui import (
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.error_handler import ErrorHandler
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, make_step_card, make_icon_header, make_divider,
     DIVIDER_COLOR, ADDRESS_TEXT_COLOR, READONLY_BG,
@@ -387,7 +387,7 @@ class ReviewStep(BaseStep):
         h_layout.setSpacing(10)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(32, 32)
+        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
             "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 8px; }"
@@ -453,7 +453,7 @@ class ReviewStep(BaseStep):
         badge = QLabel(str(text))
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(24)
+        badge.setFixedHeight(ScreenScale.h(24))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {bg_color}; color: {text_color}; "
             f"border: none; border-radius: 12px; padding: 2px 12px; }}"
@@ -472,7 +472,7 @@ class ReviewStep(BaseStep):
         lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
         lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setMinimumHeight(40)
+        lbl.setMinimumHeight(ScreenScale.h(40))
         return lbl
 
     # ── Edit buttons ─────────────────────────────────────────────────
@@ -484,7 +484,7 @@ class ReviewStep(BaseStep):
     def _create_edit_icon_button(self, callback) -> QPushButton:
         """Create a small edit icon button for card headers."""
         btn = QPushButton()
-        btn.setFixedSize(32, 32)
+        btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         btn.setCursor(QCursor(Qt.PointingHandCursor))
         btn.setStyleSheet("""
             QPushButton {
@@ -517,7 +517,7 @@ class ReviewStep(BaseStep):
     def _create_edit_menu_button(self, callback) -> QPushButton:
         """Create a menu button with a single edit action (legacy support)."""
         menu_btn = QPushButton("\u22EE")
-        menu_btn.setFixedSize(36, 36)
+        menu_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
         menu_btn.setStyleSheet(MENU_DOTS_STYLE)
         menu_btn.setCursor(Qt.PointingHandCursor)
 
@@ -538,7 +538,7 @@ class ReviewStep(BaseStep):
     def _create_case_status_banner(self) -> QFrame:
         banner = QFrame()
         banner.setObjectName("caseStatusBanner")
-        banner.setFixedHeight(48)
+        banner.setFixedHeight(ScreenScale.h(48))
         banner.setStyleSheet("""
             QFrame#caseStatusBanner {
                 background-color: #FFF7ED;
@@ -583,7 +583,7 @@ class ReviewStep(BaseStep):
         """Create a person row card with blue left border accent."""
         row = QFrame()
         row.setLayoutDirection(get_layout_direction())
-        row.setFixedHeight(80)
+        row.setFixedHeight(ScreenScale.h(80))
         row.setStyleSheet(PERSON_CARD_STYLE)
 
         card_layout = QHBoxLayout(row)
@@ -594,7 +594,7 @@ class ReviewStep(BaseStep):
         right_group.setSpacing(12)
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
+        icon_lbl.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet("""
             QLabel {
@@ -804,7 +804,7 @@ class ReviewStep(BaseStep):
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
         addr_bar.setLayoutDirection(get_layout_direction())
-        addr_bar.setFixedHeight(32)
+        addr_bar.setFixedHeight(ScreenScale.h(32))
         addr_bar.setStyleSheet("QFrame { background-color: #F0F4FA; border: 1px solid #DBEAFE; border-radius: 10px; }")
         addr_row = QHBoxLayout(addr_bar)
         addr_row.setContentsMargins(12, 0, 12, 0)
@@ -843,7 +843,7 @@ class ReviewStep(BaseStep):
 
         # Map thumbnail
         map_container = QLabel()
-        map_container.setFixedHeight(100)
+        map_container.setFixedHeight(ScreenScale.h(100))
         map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("reviewMapContainer")
         map_container.setStyleSheet("QLabel#reviewMapContainer { background-color: #E8E8E8; border-radius: 8px; }")
@@ -858,7 +858,7 @@ class ReviewStep(BaseStep):
                 map_container.setPixmap(loc_fallback)
 
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)
+        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
         map_button.move(8, 8)
         map_button.setCursor(Qt.PointingHandCursor)
         icon_pixmap = Icon.load_pixmap("pill", size=12)
@@ -978,7 +978,7 @@ class ReviewStep(BaseStep):
             # Unit info container
             unit_info_container = QFrame()
             unit_info_container.setLayoutDirection(get_layout_direction())
-            unit_info_container.setFixedHeight(73)
+            unit_info_container.setFixedHeight(ScreenScale.h(73))
             unit_info_container.setStyleSheet("""
                 QFrame {
                     background-color: #F8FAFF;
@@ -1030,7 +1030,7 @@ class ReviewStep(BaseStep):
             desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
             desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
             desc_text.setWordWrap(True)
-            desc_text.setMaximumHeight(40)
+            desc_text.setMaximumHeight(ScreenScale.h(40))
 
             desc_layout.addWidget(desc_title)
             desc_layout.addWidget(desc_text)
@@ -1396,8 +1396,8 @@ class ReviewStep(BaseStep):
         notes_val = QLabel(notes_text if notes_text else tr("wizard.review.review_notes_placeholder"))
         notes_val.setAlignment(Qt.AlignTop)
         notes_val.setWordWrap(True)
-        notes_val.setMinimumHeight(80)
-        notes_val.setMaximumHeight(100)
+        notes_val.setMinimumHeight(ScreenScale.h(80))
+        notes_val.setMaximumHeight(ScreenScale.h(100))
         notes_val.setStyleSheet(f"""
             QLabel {{
                 background-color: {READONLY_BG};
@@ -1419,7 +1419,7 @@ class ReviewStep(BaseStep):
 
         eval_label = QLabel()
         eval_label.setAlignment(Qt.AlignCenter)
-        eval_label.setFixedHeight(36)
+        eval_label.setFixedHeight(ScreenScale.h(36))
         eval_label.setFont(create_font(size=FontManager.WIZARD_BADGE, weight=FontManager.WEIGHT_SEMIBOLD))
 
         if evidence_count > 0:

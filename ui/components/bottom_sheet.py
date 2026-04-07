@@ -14,7 +14,7 @@ from PyQt5.QtGui import QColor, QPainter
 from ui.design_system import (
     BottomSheetDimensions as BSD, Colors, BorderRadius,
     Typography, AnimationTimings, Spacing
-)
+, ScreenScale, ScreenScale)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 
@@ -188,7 +188,7 @@ class BottomSheet(QWidget):
         for choice_id, choice_text in choices:
             btn = QPushButton(choice_text)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(48)
+            btn.setFixedHeight(ScreenScale.h(48))
             btn.setFont(
                 create_font(size=FontManager.SIZE_BODY,
                             weight=FontManager.WEIGHT_MEDIUM)
@@ -239,10 +239,10 @@ class BottomSheet(QWidget):
 
             if field_type == "multiline":
                 widget = QTextEdit()
-                widget.setFixedHeight(80)
+                widget.setFixedHeight(ScreenScale.h(80))
             else:
                 widget = QLineEdit()
-                widget.setFixedHeight(42)
+                widget.setFixedHeight(ScreenScale.h(42))
 
             widget.setStyleSheet(f"""
                 background: rgba(255, 255, 255, 0.07);

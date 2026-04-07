@@ -15,6 +15,7 @@ from PyQt5.QtGui import QColor
 
 from services.translation_manager import tr
 from utils.logger import get_logger
+from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
@@ -114,7 +115,7 @@ class PolygonEditorWidget(QWidget):
         # Map view
         if HAS_WEBENGINE:
             self.map_view = QWebEngineView()
-            self.map_view.setMinimumHeight(400)
+            self.map_view.setMinimumHeight(ScreenScale.h(400))
 
             # Setup web channel for JS ↔ Python communication
             self.channel = QWebChannel()

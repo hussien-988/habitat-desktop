@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation
 from PyQt5.QtGui import QColor
 
-from ui.design_system import Colors, DialogColors, BorderRadius
+from ui.design_system import Colors, DialogColors, BorderRadius, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 
@@ -66,15 +66,15 @@ class Toast(QFrame):
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
-        self.setMinimumWidth(360)
-        self.setMaximumWidth(520)
+        self.setMinimumWidth(ScreenScale.w(360))
+        self.setMaximumWidth(ScreenScale.w(520))
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
 
         self._icon_lbl = QLabel()
-        self._icon_lbl.setFixedSize(32, 32)
+        self._icon_lbl.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         self._icon_lbl.setAlignment(Qt.AlignCenter)
         self._icon_lbl.setFont(
             create_font(size=14, weight=FontManager.WEIGHT_BOLD)
@@ -99,7 +99,7 @@ class Toast(QFrame):
         layout.addWidget(self._action_btn)
 
         self._close_btn = QPushButton("\u00D7")
-        self._close_btn.setFixedSize(24, 24)
+        self._close_btn.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         self._close_btn.setStyleSheet(f"""

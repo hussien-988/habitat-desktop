@@ -23,7 +23,7 @@ from PyQt5.QtGui import (
     QColor, QPainter, QLinearGradient, QPen, QFont, QCursor,
 )
 
-from ui.design_system import Colors, Spacing, AnimationTimings, BorderRadius
+from ui.design_system import Colors, Spacing, AnimationTimings, BorderRadius, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 
@@ -126,7 +126,7 @@ class SlidePanel(QWidget):
         # Close button
         self._close_btn = QPushButton("\u2715")
         self._close_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._close_btn.setFixedSize(32, 32)
+        self._close_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         self._close_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
         self._close_btn.setStyleSheet("""
             QPushButton {

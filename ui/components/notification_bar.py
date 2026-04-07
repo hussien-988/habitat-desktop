@@ -13,7 +13,7 @@ from PyQt5.QtGui import QColor
 from ui.design_system import (
     NotificationDimensions as ND, Colors, BorderRadius,
     Typography, AnimationTimings
-)
+, ScreenScale, ScreenScale)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 
@@ -95,7 +95,7 @@ class NotificationBar(QFrame):
         content.setSpacing(12)
 
         self._icon_lbl = QLabel()
-        self._icon_lbl.setFixedSize(ND.ICON_SIZE + 12, ND.ICON_SIZE + 12)
+        self._icon_lbl.setFixedSize(ScreenScale.h(ND.ICON_SIZE + 12), ScreenScale.h(ND.ICON_SIZE + 12))
         self._icon_lbl.setAlignment(Qt.AlignCenter)
         self._icon_lbl.setFont(
             create_font(size=12, weight=FontManager.WEIGHT_BOLD)
@@ -122,7 +122,7 @@ class NotificationBar(QFrame):
         content.addWidget(self._action_btn)
 
         self._close_btn = QPushButton("\u00D7")
-        self._close_btn.setFixedSize(28, 28)
+        self._close_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.clicked.connect(self.dismiss)
         self._close_btn.setFont(

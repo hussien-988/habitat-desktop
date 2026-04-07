@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-from ui.design_system import Colors
+from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 
 
@@ -34,8 +34,8 @@ class ValidationErrorDialog(QDialog):
         self.error_details = error_details
 
         self.setWindowTitle(tr("component.validation_error.window_title"))
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(500)
+        self.setMinimumWidth(ScreenScale.w(600))
+        self.setMinimumHeight(ScreenScale.h(500))
         self._setup_ui()
 
     def _setup_ui(self):
@@ -133,7 +133,7 @@ class ValidationErrorDialog(QDialog):
         error_text = QTextEdit()
         error_text.setReadOnly(True)
         error_text.setPlainText(self.error_details.get('full_error', tr("component.validation_error.no_additional_details")))
-        error_text.setMaximumHeight(150)
+        error_text.setMaximumHeight(ScreenScale.h(150))
         error_text.setStyleSheet(f"""
             QTextEdit {{
                 background-color: #F9FAFB;
@@ -236,7 +236,7 @@ class ValidationErrorDialog(QDialog):
             label_widget = QLabel(label)
             label_widget.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             label_widget.setStyleSheet(f"color: {Config.TEXT_LIGHT};")
-            label_widget.setMinimumWidth(150)
+            label_widget.setMinimumWidth(ScreenScale.w(150))
             row_layout.addWidget(label_widget)
 
             value_widget = QLabel(str(value))

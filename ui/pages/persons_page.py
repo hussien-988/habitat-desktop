@@ -29,7 +29,7 @@ from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.style_manager import StyleManager
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.i18n import I18n
 from utils.logger import get_logger
@@ -106,8 +106,8 @@ class PersonDialog(QDialog):
         self._id_document_image_path = None
 
         self.setWindowTitle(tr("dialog.persons.edit_title") if person else tr("dialog.persons.add_title"))
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(650)
+        self.setMinimumWidth(ScreenScale.w(600))
+        self.setMinimumHeight(ScreenScale.h(650))
         self._setup_ui()
 
         if person:
@@ -706,7 +706,7 @@ class _PersonCard(AnimatedCard):
         name_label = QLabel(name or "-")
         name_label.setFont(create_font(size=13, weight=QFont.Bold))
         name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        name_label.setMaximumWidth(500)
+        name_label.setMaximumWidth(ScreenScale.w(500))
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -716,7 +716,7 @@ class _PersonCard(AnimatedCard):
         badge = QLabel(gender_text or "-")
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -823,7 +823,7 @@ class PersonsPage(QWidget):
 
         # Add person button in header
         self.add_btn = QPushButton("+ " + tr("page.persons.add_new"))
-        self.add_btn.setFixedHeight(38)
+        self.add_btn.setFixedHeight(ScreenScale.h(38))
         self.add_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.add_btn.setFont(create_font(size=12, weight=QFont.Bold))
         self.add_btn.setStyleSheet(_ADD_BTN_STYLE)
@@ -833,7 +833,7 @@ class PersonsPage(QWidget):
         # Search field in header row 2
         self.name_search = QLineEdit()
         self.name_search.setPlaceholderText(tr("filter.persons.search_by_name"))
-        self.name_search.setFixedSize(280, 34)
+        self.name_search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self.name_search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self.name_search.setStyleSheet(_DARK_INPUT_STYLE)
         self.name_search.textChanged.connect(self._on_filter_changed)
@@ -901,14 +901,14 @@ class PersonsPage(QWidget):
     def _create_pagination(self):
         """Build the pagination bar."""
         bar = QFrame()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(ScreenScale.h(40))
         bar.setStyleSheet("QFrame { background: transparent; border: none; }")
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(4, 6, 4, 0)
         bar_layout.addStretch()
 
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._prev_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._prev_btn.clicked.connect(self._on_prev_page)
@@ -918,11 +918,11 @@ class PersonsPage(QWidget):
         self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self._page_info.setAlignment(Qt.AlignCenter)
-        self._page_info.setMinimumWidth(80)
+        self._page_info.setMinimumWidth(ScreenScale.w(80))
         bar_layout.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._next_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._next_btn.setStyleSheet(_NAV_BTN_STYLE)
         self._next_btn.clicked.connect(self._on_next_page)

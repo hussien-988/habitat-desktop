@@ -28,7 +28,7 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.components.toast import Toast
 from services.translation_manager import tr, get_layout_direction
 from utils.i18n import I18n
@@ -153,7 +153,7 @@ class _DuplicateCard(AnimatedCard):
             border_radius=12,
             status_color=strip_color,
             show_chevron=True,
-            show_strip=True,
+            show_strip=False,
             strip_width=5,
         )
         self.clicked.connect(lambda: self.card_clicked.emit(self._conflict))
@@ -182,7 +182,7 @@ class _DuplicateCard(AnimatedCard):
         badge = QLabel(pri_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_BOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"color: {pri_cfg['color']}; background: {pri_cfg['bg']};"
             f"border-radius: 6px; padding: 2px 10px; border: none;"
@@ -244,7 +244,7 @@ class _DuplicateCard(AnimatedCard):
         status_chip = QLabel(st_cfg["label"])
         status_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         status_chip.setAlignment(Qt.AlignCenter)
-        status_chip.setFixedHeight(20)
+        status_chip.setFixedHeight(ScreenScale.h(20))
         status_chip.setStyleSheet(
             f"color: {st_cfg['color']}; background: {st_cfg['bg']};"
             f"border-radius: 5px; padding: 1px 8px; border: none;"
@@ -322,8 +322,8 @@ class _GlowCard(QFrame):
         self._setup(title, count, color)
 
     def _setup(self, title: str, count: int, color: str):
-        self.setFixedHeight(86)
-        self.setMinimumWidth(150)
+        self.setFixedHeight(ScreenScale.h(86))
+        self.setMinimumWidth(ScreenScale.w(150))
         self.setCursor(Qt.PointingHandCursor)
         self._apply_inactive_style(color)
 
@@ -607,7 +607,7 @@ class DuplicatesPage(QWidget):
             title=tr("page.duplicates.no_conflicts"),
             description=tr("page.duplicates.no_conflicts_hint"),
         )
-        self._empty_state.setMinimumHeight(280)
+        self._empty_state.setMinimumHeight(ScreenScale.h(280))
         self._content_layout.addWidget(self._empty_state)
         self._empty_state.setVisible(False)
 
@@ -623,7 +623,7 @@ class DuplicatesPage(QWidget):
 
     def _build_import_banner(self) -> QFrame:
         banner = QFrame()
-        banner.setFixedHeight(48)
+        banner.setFixedHeight(ScreenScale.h(48))
         banner.setStyleSheet(f"""
             QFrame {{
                 background-color: {Colors.PRIMARY_BLUE}12;
@@ -649,7 +649,7 @@ class DuplicatesPage(QWidget):
         btn_return = QPushButton(tr("page.duplicates.return_to_import"))
         btn_return.setCursor(Qt.PointingHandCursor)
         btn_return.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        btn_return.setFixedSize(150, 36)
+        btn_return.setFixedSize(ScreenScale.w(150), ScreenScale.h(36))
         btn_return.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};
@@ -711,7 +711,7 @@ class DuplicatesPage(QWidget):
         for _ in range(4):
             row = QFrame()
             row.setStyleSheet("QFrame { background: white; border-radius: 12px; border: none; }")
-            row.setFixedHeight(68)
+            row.setFixedHeight(ScreenScale.h(68))
             rl = QHBoxLayout(row)
             rl.setContentsMargins(16, 12, 16, 12)
             rl.setSpacing(16)
@@ -736,7 +736,7 @@ class DuplicatesPage(QWidget):
 
     def _build_pagination_footer(self) -> QFrame:
         footer = QFrame()
-        footer.setFixedHeight(54)
+        footer.setFixedHeight(ScreenScale.h(54))
         footer.setStyleSheet(
             "QFrame { background: #FAFCFF; border: 1px solid #E2EAF2; border-radius: 12px; }"
         )
@@ -748,7 +748,7 @@ class DuplicatesPage(QWidget):
         self._prev_btn = QPushButton(tr("page.duplicates.previous"))
         self._prev_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._prev_btn.setCursor(Qt.PointingHandCursor)
-        self._prev_btn.setFixedHeight(34)
+        self._prev_btn.setFixedHeight(ScreenScale.h(34))
         self._prev_btn.setStyleSheet(_PAGINATION_BTN_STYLE)
         self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
         fl.addWidget(self._prev_btn)
@@ -762,7 +762,7 @@ class DuplicatesPage(QWidget):
         self._next_btn = QPushButton(tr("page.duplicates.next"))
         self._next_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._next_btn.setCursor(Qt.PointingHandCursor)
-        self._next_btn.setFixedHeight(34)
+        self._next_btn.setFixedHeight(ScreenScale.h(34))
         self._next_btn.setStyleSheet(_PAGINATION_BTN_STYLE)
         self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
         fl.addWidget(self._next_btn)

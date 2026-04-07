@@ -46,7 +46,7 @@ from ui.components.primary_button import PrimaryButton
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
-from ui.design_system import PageDimensions, Colors, ButtonDimensions
+from ui.design_system import PageDimensions, Colors, ButtonDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from services.api_worker import ApiWorker
@@ -211,7 +211,7 @@ class AddBuildingPage(QWidget):
         # Icon FIRST (left side in RTL)
         from ui.components.icon import Icon
         icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)
+        icon_label.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("""
             QLabel {
@@ -287,7 +287,7 @@ class AddBuildingPage(QWidget):
             self.governorate_combo.addItem(f"{code} - {ar}", code)
         self.governorate_combo.setCurrentIndex(1)  # Default: Aleppo
         self.governorate_combo.setStyleSheet(code_combo_style)
-        self.governorate_combo.setFixedHeight(45)
+        self.governorate_combo.setFixedHeight(ScreenScale.h(45))
         self.governorate_combo.setLayoutDirection(get_layout_direction())
         self.governorate_combo.currentIndexChanged.connect(self._on_governorate_changed)
         gov_container.addWidget(gov_label)
@@ -302,7 +302,7 @@ class AddBuildingPage(QWidget):
         dist_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.district_combo = CodeDisplayCombo()
         self.district_combo.setStyleSheet(code_combo_style)
-        self.district_combo.setFixedHeight(45)
+        self.district_combo.setFixedHeight(ScreenScale.h(45))
         self.district_combo.setLayoutDirection(get_layout_direction())
         self.district_combo.currentIndexChanged.connect(self._on_district_changed)
         dist_container.addWidget(dist_label)
@@ -317,7 +317,7 @@ class AddBuildingPage(QWidget):
         sub_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.subdistrict_combo = CodeDisplayCombo()
         self.subdistrict_combo.setStyleSheet(code_combo_style)
-        self.subdistrict_combo.setFixedHeight(45)
+        self.subdistrict_combo.setFixedHeight(ScreenScale.h(45))
         self.subdistrict_combo.setLayoutDirection(get_layout_direction())
         self.subdistrict_combo.currentIndexChanged.connect(self._on_subdistrict_changed)
         sub_container.addWidget(sub_label)
@@ -332,7 +332,7 @@ class AddBuildingPage(QWidget):
         comm_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.community_combo = CodeDisplayCombo()
         self.community_combo.setStyleSheet(code_combo_style)
-        self.community_combo.setFixedHeight(45)
+        self.community_combo.setFixedHeight(ScreenScale.h(45))
         self.community_combo.setLayoutDirection(get_layout_direction())
         self.community_combo.currentIndexChanged.connect(self._update_building_id)
         self.community_combo.currentIndexChanged.connect(self._validate_building_id_realtime)
@@ -350,7 +350,7 @@ class AddBuildingPage(QWidget):
         self.neighborhood_combo = CodeDisplayCombo()
         self.neighborhood_combo.addItem(tr("page.buildings.select_neighborhood"), "")
         self.neighborhood_combo.setStyleSheet(code_combo_style)
-        self.neighborhood_combo.setFixedHeight(45)
+        self.neighborhood_combo.setFixedHeight(ScreenScale.h(45))
         self.neighborhood_combo.setLayoutDirection(get_layout_direction())
 
         self.neighborhood_combo.currentIndexChanged.connect(self._update_building_id)
@@ -371,7 +371,7 @@ class AddBuildingPage(QWidget):
         self.building_number.setPlaceholderText("00001")
         self.building_number.setMaxLength(5)
         self.building_number.setStyleSheet(input_style)
-        self.building_number.setFixedHeight(45)
+        self.building_number.setFixedHeight(ScreenScale.h(45))
         self.building_number.setAlignment(Qt.AlignRight)
         self.building_number.textChanged.connect(self._update_building_id)
         self.building_number.textChanged.connect(self._validate_building_id_realtime)
@@ -402,7 +402,7 @@ class AddBuildingPage(QWidget):
         # شريط الرمز النهائي
         self.building_id_label = QLabel(tr("page.buildings.building_code") + ": 01-001-002-003-0001-01-01")
         self.building_id_label.setAlignment(Qt.AlignCenter)
-        self.building_id_label.setFixedHeight(32)
+        self.building_id_label.setFixedHeight(ScreenScale.h(32))
         self.building_id_label.setStyleSheet("""
             background-color: #f0f7ff; color: #409eff;
             border: 1px solid #d9ecff; border-radius: 4px;
@@ -438,7 +438,7 @@ class AddBuildingPage(QWidget):
         for code, label in vocab_get_options("BuildingStatus"):
             self.status_combo.addItem(label, code)
         self.status_combo.setStyleSheet(combo_style)
-        self.status_combo.setFixedHeight(45)
+        self.status_combo.setFixedHeight(ScreenScale.h(45))
         self.status_combo.setLayoutDirection(get_layout_direction())
         vbox_status.addWidget(self.status_combo)
         card2_layout.addLayout(vbox_status, 1)  # توحيد العرض - stretch factor
@@ -455,7 +455,7 @@ class AddBuildingPage(QWidget):
         for code, label in vocab_get_options("BuildingType"):
             self.type_combo.addItem(label, code)
         self.type_combo.setStyleSheet(combo_style)
-        self.type_combo.setFixedHeight(45)
+        self.type_combo.setFixedHeight(ScreenScale.h(45))
         self.type_combo.setLayoutDirection(get_layout_direction())
         self.type_combo.currentIndexChanged.connect(self._on_building_type_changed)
         vbox_type.addWidget(self.type_combo)
@@ -523,7 +523,7 @@ class AddBuildingPage(QWidget):
         vbox_total.addWidget(lbl_total)
         self.total_units_label = QLabel("0")
         self.total_units_label.setAlignment(Qt.AlignCenter)
-        self.total_units_label.setFixedHeight(45)
+        self.total_units_label.setFixedHeight(ScreenScale.h(45))
         self.total_units_label.setStyleSheet("""
             QLabel {
                 padding: 6px 12px;
@@ -567,12 +567,12 @@ class AddBuildingPage(QWidget):
         # Empty label for alignment (same height as other sections' labels)
         map_label = QLabel("")  # Empty to maintain alignment
         map_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        map_label.setFixedHeight(16)  # Same as label height
+        map_label.setFixedHeight(ScreenScale.h(16))  # Same as label height
         map_section.addWidget(map_label)
 
         # Map container (QLabel to support QPixmap)
         map_container = QLabel()
-        map_container.setFixedSize(400, 130)
+        map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))
         map_container.setAlignment(Qt.AlignCenter)
         map_container.setObjectName("mapContainer")
 
@@ -600,7 +600,7 @@ class AddBuildingPage(QWidget):
 
         # White button in top-left corner
         map_button = QPushButton(map_container)
-        map_button.setFixedSize(94, 20)
+        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
         map_button.move(8, 8)  # Position in top-left corner with small margin
         map_button.setCursor(Qt.PointingHandCursor)
 
@@ -645,7 +645,7 @@ class AddBuildingPage(QWidget):
         location_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
         if location_pixmap and not location_pixmap.isNull():
             location_icon.setPixmap(location_pixmap)
-            location_icon.setFixedSize(56, 56)
+            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
             location_icon.move(172, 37)
             location_icon.setStyleSheet("background: transparent;")
@@ -655,7 +655,7 @@ class AddBuildingPage(QWidget):
             location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
             location_icon.setStyleSheet("background: transparent;")
             location_icon.setAlignment(Qt.AlignCenter)
-            location_icon.setFixedSize(56, 56)
+            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
             location_icon.move(172, 37)
 
         map_section.addWidget(map_container)
@@ -705,7 +705,7 @@ class AddBuildingPage(QWidget):
         docs_section.addWidget(lbl_docs)
 
         self.docs_scroll = QScrollArea()
-        self.docs_scroll.setFixedHeight(130)
+        self.docs_scroll.setFixedHeight(ScreenScale.h(130))
         self.docs_scroll.setWidgetResizable(True)
         self.docs_scroll.setFrameShape(QFrame.NoFrame)
         self.docs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -746,7 +746,7 @@ class AddBuildingPage(QWidget):
         self.general_desc = QTextEdit()
         self.general_desc.setPlaceholderText(tr("page.add_building.no_description"))
         self.general_desc.setReadOnly(True)
-        self.general_desc.setFixedHeight(130)
+        self.general_desc.setFixedHeight(ScreenScale.h(130))
         self.general_desc.setStyleSheet(StyleManager.form_input_light())
 
         section_general.addWidget(lbl_general)
@@ -854,7 +854,7 @@ class AddBuildingPage(QWidget):
         """Create a clickable document thumbnail card (70x90px)."""
         from PyQt5.QtWidgets import QSizePolicy
         card = QFrame()
-        card.setFixedSize(70, 100)
+        card.setFixedSize(ScreenScale.w(70), ScreenScale.h(100))
         card.setStyleSheet("""
             QFrame {
                 background-color: #ffffff;
@@ -874,7 +874,7 @@ class AddBuildingPage(QWidget):
         file_name = doc.get("originalFileName", "")
 
         thumb = QLabel()
-        thumb.setFixedSize(60, 60)
+        thumb.setFixedSize(ScreenScale.w(60), ScreenScale.h(60))
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("border: none; background: transparent;")
 
@@ -956,10 +956,10 @@ class AddBuildingPage(QWidget):
 
         if isinstance(widget, QLineEdit):
             widget.setPlaceholderText(placeholder)
-            widget.setFixedHeight(36)
+            widget.setFixedHeight(ScreenScale.h(36))
             widget.setAlignment(Qt.AlignCenter)
         elif isinstance(widget, QComboBox):
-            widget.setFixedHeight(36)
+            widget.setFixedHeight(ScreenScale.h(36))
 
         layout.addWidget(widget)
         widget._parent_container = container
@@ -1507,7 +1507,7 @@ class AddBuildingPage(QWidget):
         """
         # Container frame - توحيد الحجم 45px height
         container = QFrame()
-        container.setFixedHeight(45)
+        container.setFixedHeight(ScreenScale.h(45))
         container.setStyleSheet("""
             QFrame {
                 border: 1px solid #E1E8ED;
@@ -1535,7 +1535,7 @@ class AddBuildingPage(QWidget):
 
         # Arrow column (RIGHT side) - يمين
         arrow_container = QFrame()
-        arrow_container.setFixedWidth(30)
+        arrow_container.setFixedWidth(ScreenScale.w(30))
         arrow_container.setStyleSheet("""
             QFrame {
                 border: none;
@@ -1554,7 +1554,7 @@ class AddBuildingPage(QWidget):
 
         # Up arrow icon (^.png)
         up_label = QLabel()
-        up_label.setFixedSize(30, 22)
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         up_label.setAlignment(Qt.AlignCenter)
         up_pixmap = Icon.load_pixmap("^", size=10)
         if up_pixmap and not up_pixmap.isNull():
@@ -1569,7 +1569,7 @@ class AddBuildingPage(QWidget):
 
         # Down arrow icon (v.png)
         down_label = QLabel()
-        down_label.setFixedSize(30, 22)
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
         down_label.setAlignment(Qt.AlignCenter)
         down_pixmap = Icon.load_pixmap("v", size=10)
         if down_pixmap and not down_pixmap.isNull():
@@ -2156,7 +2156,7 @@ class _BuildingCard(AnimatedCard):
         code_label = QLabel(b.building_id_formatted or b.building_id or "N/A")
         code_label.setFont(create_font(size=13, weight=QFont.Bold))
         code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        code_label.setMaximumWidth(400)
+        code_label.setMaximumWidth(ScreenScale.w(400))
         row1.addWidget(code_label)
         row1.addStretch()
 
@@ -2167,7 +2167,7 @@ class _BuildingCard(AnimatedCard):
         badge = QLabel(status_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -2334,7 +2334,7 @@ class BuildingsListPage(QWidget):
         self._pagination_bar.addStretch()
 
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(32, 28)
+        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._prev_btn.setStyleSheet(StyleManager.pagination_button())
         self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
         self._pagination_bar.addWidget(self._prev_btn)
@@ -2345,7 +2345,7 @@ class BuildingsListPage(QWidget):
         self._pagination_bar.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(32, 28)
+        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self._next_btn.setStyleSheet(StyleManager.pagination_button())
         self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
         self._pagination_bar.addWidget(self._next_btn)

@@ -36,7 +36,7 @@ from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animat
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
-from ui.design_system import Colors, PageDimensions
+from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 
 logger = get_logger(__name__)
@@ -100,7 +100,7 @@ class _UnitCard(AnimatedCard):
         badge = QLabel(status_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedHeight(22)
+        badge.setFixedHeight(ScreenScale.h(22))
         badge.setStyleSheet(
             f"QLabel {{ background-color: {style['bg']}; color: {style['fg']}; "
             f"border: 1px solid {style['border']}; border-radius: 11px; "
@@ -260,7 +260,7 @@ class UnitsPage(QWidget):
 
     def _create_pagination(self):
         bar = QFrame()
-        bar.setFixedHeight(40)
+        bar.setFixedHeight(ScreenScale.h(40))
         bar.setStyleSheet("QFrame { background: transparent; border: none; }")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(4, 6, 4, 0)
@@ -277,7 +277,7 @@ class UnitsPage(QWidget):
             QPushButton:disabled { color: #B0BEC5; background: transparent; border-color: #E0E0E0; }
         """
         self.prev_btn = QPushButton("\u276E")
-        self.prev_btn.setFixedSize(32, 28)
+        self.prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self.prev_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.prev_btn.setStyleSheet(_NAV_BTN)
         self.prev_btn.clicked.connect(self._on_prev_page)
@@ -287,11 +287,11 @@ class UnitsPage(QWidget):
         self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self._page_info.setAlignment(Qt.AlignCenter)
-        self._page_info.setMinimumWidth(80)
+        self._page_info.setMinimumWidth(ScreenScale.w(80))
         layout.addWidget(self._page_info)
 
         self.next_btn = QPushButton("\u276F")
-        self.next_btn.setFixedSize(32, 28)
+        self.next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
         self.next_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.next_btn.setStyleSheet(_NAV_BTN)
         self.next_btn.clicked.connect(self._on_next_page)
@@ -504,7 +504,7 @@ class UnitsPage(QWidget):
         from ui.components.icon import Icon
 
         menu = QMenu(self)
-        menu.setFixedSize(200, 149)
+        menu.setFixedSize(ScreenScale.w(200), ScreenScale.h(149))
 
         view_icon = Icon.load_qicon("eye-open", size=18)
         view_action = QAction("  " + tr("action.view"), self)

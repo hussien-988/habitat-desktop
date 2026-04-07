@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPainter, QColor, QFont, QCursor
 
-from ..design_system import Colors
+from ..design_system import Colors, ScreenScale
 from ..font_utils import create_font, FontManager
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class UnderlineTabBar(QWidget):
         self._setup_ui(tabs)
 
     def _setup_ui(self, tabs: List[str]):
-        self.setFixedHeight(44)
+        self.setFixedHeight(ScreenScale.h(44))
         self.setStyleSheet(f"background-color: {Colors.BACKGROUND}; border: none;")
 
         layout = QHBoxLayout(self)
