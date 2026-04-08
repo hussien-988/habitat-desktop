@@ -251,8 +251,19 @@ class _PulsingLogo(QWidget):
         self._logo = LogoWidget(height=height, parent=self)
         self._opacity = 1.0
 
+        # Container style matching navbar_pill and IDBadge aesthetic
+        self.setObjectName("pulsing_logo")
+        self.setFixedHeight(ScreenScale.h(36))
+        self.setStyleSheet(f"""
+            QWidget#pulsing_logo {{
+                background: rgba(10, 22, 40, 180);
+                border: 1px solid rgba(56, 144, 223, 40);
+                border-radius: {ScreenScale.h(18)}px;
+            }}
+        """)
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(10, 0, 10, 0)
         layout.setSpacing(0)
         layout.addWidget(self._logo)
 
@@ -506,12 +517,12 @@ class Navbar(QFrame):
         pill.setObjectName("navbar_pill")
         pill.setFixedHeight(ScreenScale.h(36))
         pill.setFixedWidth(self._pill_collapsed_w)
-        pill.setStyleSheet("""
-            QFrame#navbar_pill {
+        pill.setStyleSheet(f"""
+            QFrame#navbar_pill {{
                 background: rgba(10, 22, 40, 180);
                 border: 1px solid rgba(56, 144, 223, 40);
-                border-radius: 18px;
-            }
+                border-radius: {ScreenScale.h(18)}px;
+            }}
         """)
 
         _BTN_STYLE = """
