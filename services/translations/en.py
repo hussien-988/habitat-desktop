@@ -1520,6 +1520,8 @@ EN_TRANSLATIONS = {
     "page.claims.empty_closed": "No closed claims",
     "page.claims.empty_description": "No claims to display",
     "page.claims.empty_open": "No open claims",
+    "page.claims.no_search_results": "No results found",
+    "page.claims.back": "Back",
     "page.claims.err_load_history": "Failed to load history",
     "page.claims.err_reason_required": "Reason is required",
     "page.claims.err_select_person": "Please select a person",

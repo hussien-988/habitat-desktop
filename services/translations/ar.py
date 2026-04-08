@@ -1520,6 +1520,8 @@ AR_TRANSLATIONS = {
     "page.claims.empty_closed": "لا توجد مطالبات ملكية",
     "page.claims.empty_description": "ابدأ بإضافة الحالات للظهور هنا",
     "page.claims.empty_open": "لا توجد مطالبات اشغال",
+    "page.claims.no_search_results": "لا توجد نتائج",
+    "page.claims.back": "رجوع",
     "page.claims.err_load_history": "فشل في تحميل السجل",
     "page.claims.err_reason_required": "السبب مطلوب",
     "page.claims.err_select_person": "يرجى اختيار شخص",

@@ -404,6 +404,38 @@ class CompletedClaimsPage(QWidget):
         self._tab_closed.clicked.connect(lambda: self._on_tab("closed"))
         self._header.add_tab(self._tab_closed)
 
+        # Search context bar (shown when search is active, hidden initially)
+        self._search_context = QWidget()
+        ctx_layout = QHBoxLayout(self._search_context)
+        ctx_layout.setContentsMargins(0, 0, 0, 0)
+        ctx_layout.setSpacing(8)
+
+        self._back_btn = QPushButton(tr("page.claims.back"))
+        self._back_btn.setIcon(Icon.load_icon("arrow-right", 14))
+        self._back_btn.setFixedHeight(ScreenScale.h(28))
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                color: white;
+                font-size: 12px;
+                padding: 0 10px;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 0.2); }
+        """)
+        self._back_btn.clicked.connect(self._exit_search_mode)
+
+        self._search_count_label = QLabel("نتائج البحث")
+        self._search_count_label.setStyleSheet("color: rgba(200, 220, 255, 200); font-size: 13px; background: transparent;")
+
+        ctx_layout.addWidget(self._back_btn)
+        ctx_layout.addWidget(self._search_count_label)
+        ctx_layout.addStretch()
+        self._search_context.hide()
+        self._header.add_row2_widget(self._search_context)
+
         self._search = QLineEdit()
         self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
@@ -433,6 +465,15 @@ class CompletedClaimsPage(QWidget):
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
         self._search.textChanged.connect(self._on_search_text_changed)
+
+        # Clear/X button in search field (hidden initially)
+        self._clear_action = self._search.addAction(
+            Icon.load_icon("x-close", 12) or QIcon(),
+            QLineEdit.TrailingPosition
+        )
+        self._clear_action.setVisible(False)
+        self._clear_action.triggered.connect(self._exit_search_mode)
+
         self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
@@ -481,9 +522,6 @@ class CompletedClaimsPage(QWidget):
         )
         self._stack.addWidget(self._empty_state)
 
-        self._results_bar = self._build_results_bar()
-        content_layout.addWidget(self._results_bar)
-        self._results_bar.hide()
         content_layout.addWidget(self._stack, 1)
 
         self._pagination = self._create_pagination()
@@ -590,7 +628,8 @@ class CompletedClaimsPage(QWidget):
         self._search_mode = True
         self._tab_open.hide()
         self._tab_closed.hide()
-        self._results_bar.show()
+        self._search_context.show()
+        self._clear_action.setVisible(True)
 
     def _exit_search_mode(self):
         if not self._search_mode:
@@ -598,46 +637,13 @@ class CompletedClaimsPage(QWidget):
         self._search_mode = False
         self._tab_open.show()
         self._tab_closed.show()
-        self._results_bar.hide()
+        self._search_context.hide()
+        self._clear_action.setVisible(False)
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
         self._current_page = 1
         self._load_claims()
-
-    def _build_results_bar(self):
-        bar = QFrame()
-        bar.setFixedHeight(ScreenScale.h(44))
-        bar.setStyleSheet(
-            "QFrame { background: rgba(56, 144, 223, 0.07);"
-            " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
-            " margin-bottom: 10px; }"
-        )
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(12)
-
-        self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(30))
-        self._back_btn.setCursor(Qt.PointingHandCursor)
-        self._back_btn.setStyleSheet(
-            "QPushButton { background: rgba(56, 144, 223, 0.15);"
-            " border: 1px solid rgba(56, 144, 223, 0.3); border-radius: 6px;"
-            " color: #3890DF; font-weight: 600; font-size: 12px; }"
-            " QPushButton:hover { background: rgba(56, 144, 223, 0.25); }"
-        )
-        self._back_btn.clicked.connect(self._exit_search_mode)
-        layout.addWidget(self._back_btn)
-
-        self._results_title = QLabel("نتائج البحث")
-        self._results_title.setStyleSheet(
-            "color: #1E3A5F; font-weight: 700; font-size: 14px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(self._results_title)
-        layout.addStretch()
-
-        return bar
 
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
@@ -861,6 +867,14 @@ class CompletedClaimsPage(QWidget):
 
             self._stack.setCurrentIndex(0)
 
+            # Update search result count in header
+            if self._search_mode:
+                total = len(self.claims_data)
+                term = self._search.text().strip()
+                self._search_count_label.setText(
+                    f"\"{term}\" — {total} {'نتيجة' if total == 1 else 'نتائج'}"
+                )
+
             for claim in self.claims_data:
                 card = _ClaimCard(claim)
                 card.clicked.connect(self._on_card_clicked)
@@ -930,9 +944,14 @@ class CompletedClaimsPage(QWidget):
         self._card_widgets.clear()
 
     def _update_empty_text(self):
-        msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
-        self._empty_state.set_title(msg)
-        self._empty_state.set_description(tr("page.claims.empty_description"))
+        if self._search_mode:
+            term = self._search.text().strip()
+            self._empty_state.set_title(tr("page.claims.no_search_results"))
+            self._empty_state.set_description(f"\"{term}\"")
+        else:
+            msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
+            self._empty_state.set_title(msg)
+            self._empty_state.set_description(tr("page.claims.empty_description"))
 
     # -- Interaction --
 
