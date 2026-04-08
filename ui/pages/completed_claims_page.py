@@ -5,6 +5,8 @@ animated shimmer cards, and cohesive blue palette.
 """
 
 import logging
+import math
+import random
 from typing import List, Dict, Optional
 
 from PyQt5.QtWidgets import (
@@ -14,10 +16,10 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect, QStackedWidget,
 )
 from PyQt5.QtCore import (
-    Qt, pyqtSignal,
+    Qt, pyqtSignal, pyqtProperty, QTimer,
 )
 from PyQt5.QtGui import (
-    QCursor,
+    QFont, QColor, QCursor,
 )
 
 from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale
