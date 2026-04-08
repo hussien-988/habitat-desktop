@@ -524,9 +524,9 @@ class CasesPage(QWidget):
         self._tab_obstructed.clicked.connect(lambda: self._on_tab("obstructed"))
         self._header.add_tab(self._tab_obstructed)
 
-        # Search field (row 2)
+        # Search field (row 1)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
@@ -539,7 +539,7 @@ class CasesPage(QWidget):
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.textChanged.connect(self._on_search_changed)
         self._search.returnPressed.connect(self._on_search_submitted)
-        self._header.set_search_field(self._search)
+        self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
 
@@ -549,7 +549,7 @@ class CasesPage(QWidget):
 
         # Light content area
         self._content_wrapper = QWidget()
-        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        self._content_wrapper.setStyleSheet("background-color: white;")
         content_layout = QVBoxLayout(self._content_wrapper)
         content_layout.setContentsMargins(
             PageDimensions.content_padding_h(), 14,
@@ -799,18 +799,9 @@ class CasesPage(QWidget):
     # -- Tab labels with counts --
 
     def _update_tab_labels(self):
-        draft_text = tr("page.cases.tab_draft")
-        finalized_text = tr("page.cases.tab_finalized")
-        obstructed_text = tr("page.cases.tab_obstructed")
-        if self._draft_count > 0:
-            draft_text = f"{draft_text} ({self._draft_count})"
-        if self._finalized_count > 0:
-            finalized_text = f"{finalized_text} ({self._finalized_count})"
-        if self._obstructed_count > 0:
-            obstructed_text = f"{obstructed_text} ({self._obstructed_count})"
-        self._tab_draft.set_text(draft_text)
-        self._tab_finalized.set_text(finalized_text)
-        self._tab_obstructed.set_text(obstructed_text)
+        self._tab_draft.set_text(tr("page.cases.tab_draft"))
+        self._tab_finalized.set_text(tr("page.cases.tab_finalized"))
+        self._tab_obstructed.set_text(tr("page.cases.tab_obstructed"))
 
     # -- Data loading --
 
@@ -857,7 +848,7 @@ class CasesPage(QWidget):
                 "sortDirection": "desc",
             }
             if name:
-                params["contactPersonName"] = name
+                params["referenceCode"] = name
                 # No status filter — search across all statuses
             else:
                 params["status"] = status
@@ -937,6 +928,9 @@ class CasesPage(QWidget):
             self._populate_cards(self._all_data)
             self._update_tab_labels()
             self._update_pagination()
+            if self._search_mode:
+                total = result.get("total_count", 0)
+                self._results_title.setText(f"نتائج البحث ({total} نتيجة)")
         except Exception as e:
             logger.error(f"Error processing surveys: {e}")
             self._all_data = []
@@ -1098,7 +1092,7 @@ class CasesPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("cases.page.title"))
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._add_btn.setText(tr("wizard.button.add_case"))
 
         self._update_tab_labels()

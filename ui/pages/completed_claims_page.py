@@ -623,7 +623,7 @@ class CompletedClaimsPage(QWidget):
         self._header.add_tab(self._tab_closed)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("البحث بالرقم المرجعي")
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -1171,7 +1171,7 @@ class CompletedClaimsPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("page.claims.subtitle"))
-        self._search.setPlaceholderText("البحث بالرقم المرجعي")
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
 
         self._update_tab_labels()
 
