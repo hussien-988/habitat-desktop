@@ -13,7 +13,7 @@ from PyQt5.QtGui import QColor
 from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -125,7 +125,7 @@ class ImportStep2Staging(QWidget):
         self._clean_badge.setFixedHeight(ScreenScale.h(32))
         self._clean_badge.setMinimumWidth(ScreenScale.w(200))
         self._clean_badge.setVisible(False)
-        layout.addWidget(self._clean_badge, alignment=Qt.AlignRight)
+        layout.addWidget(self._clean_badge, alignment=get_text_alignment())
 
         # Stats row
         stats_row = QHBoxLayout()
@@ -222,7 +222,7 @@ class ImportStep2Staging(QWidget):
         # Pre-populate with entity names
         for row_idx, (key, ar_name) in enumerate(entity_sections):
             name_item = QTableWidgetItem(ar_name)
-            name_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            name_item.setTextAlignment(get_text_alignment() | Qt.AlignVCenter)
             self._entity_table.setItem(row_idx, 0, name_item)
             for col in range(1, 7):
                 item = QTableWidgetItem("0")
@@ -315,7 +315,8 @@ class ImportStep2Staging(QWidget):
         self._resolve_dups_btn = QPushButton(tr("wizard.import.step2.resolve_duplicates"))
         self._resolve_dups_btn.setCursor(Qt.PointingHandCursor)
         self._resolve_dups_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._resolve_dups_btn.setFixedSize(ScreenScale.w(180), ScreenScale.h(40))
+        self._resolve_dups_btn.setMinimumWidth(ScreenScale.w(180))
+        self._resolve_dups_btn.setFixedHeight(ScreenScale.h(40))
         self._resolve_dups_btn.setStyleSheet("""
             QPushButton {
                 background-color: #F59E0B;
@@ -420,7 +421,7 @@ class ImportStep2Staging(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
-                border: 1px solid #E2EAF2;
+                border: 1px solid rgba(226, 234, 242, 0.4);
             }
         """
 

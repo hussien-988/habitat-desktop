@@ -881,14 +881,10 @@ class LeafletHTMLGenerator:
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
-                var isLocked = feature.properties.is_locked === true;
                 var isAssigned = feature.properties.is_assigned === true;
 
                 var innerSvg;
-                if (isLocked) {{
-                    color = '#9CA3AF';
-                    innerSvg = '<path d="M9.5 8V7a2.5 2.5 0 015 0v1M9 8h6a1 1 0 011 1v4a1 1 0 01-1 1H9a1 1 0 01-1-1V9a1 1 0 011-1z" fill="none" stroke="#fff" stroke-width="1.5"/>';
-                }} else if (isAssigned) {{
+                if (isAssigned) {{
                     color = '#F59E0B';
                     innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
                 }} else {{

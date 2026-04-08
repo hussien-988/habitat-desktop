@@ -45,7 +45,7 @@ class LogoWidget(QLabel):
             self.setText(self.fallback_text)
 
             # Fallback font styling
-            font = create_font(size=FontManager.SIZE_BODY, weight=QFont.Bold, letter_spacing=0)
+            font = create_font(size=FontManager.SIZE_SMALL, weight=QFont.Normal, letter_spacing=0)
             self.setFont(font)
 
         # Transparent background

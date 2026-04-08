@@ -12,8 +12,8 @@ from PyQt5.QtGui import QColor
 
 from ui.design_system import (
     NotificationDimensions as ND, Colors, BorderRadius,
-    Typography, AnimationTimings
-, ScreenScale, ScreenScale)
+    Typography, AnimationTimings, ScreenScale
+)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 

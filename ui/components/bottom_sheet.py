@@ -7,14 +7,14 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect, QApplication
 )
 from PyQt5.QtCore import (
-    Qt, QPropertyAnimation, QEasingCurve, QPoint, pyqtSignal, QTimer
+    Qt, QPropertyAnimation, QEasingCurve, QPoint, pyqtSignal, pyqtProperty, QTimer
 )
 from PyQt5.QtGui import QColor, QPainter
 
 from ui.design_system import (
     BottomSheetDimensions as BSD, Colors, BorderRadius,
-    Typography, AnimationTimings, Spacing
-, ScreenScale, ScreenScale)
+    Typography, AnimationTimings, Spacing, ScreenScale
+)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction
 
@@ -36,7 +36,7 @@ class _Overlay(QWidget):
     def get_opacity(self):
         return self._opacity
 
-    opacity_val = property(get_opacity, set_opacity)
+    opacity_val = pyqtProperty(float, get_opacity, set_opacity)
 
     def paintEvent(self, event):
         painter = QPainter(self)

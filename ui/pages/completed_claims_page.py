@@ -138,6 +138,7 @@ class _ClaimCard(QFrame):
         row1.addStretch()
 
         status_text = self._get_status_text(self._status)
+        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["open"])
         badge = QLabel(status_text)
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)

@@ -190,10 +190,12 @@ MULTISELECT_JS_TEMPLATE = """
 
                 if (isLocked) {
                     showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0642\u0641\u0644 \u062d\u0627\u0644\u064a\u0627\u064b');
+                    return false;
                 }
 
                 if (isAssigned) {
                     showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b \u0644\u0641\u0631\u064a\u0642 \u0622\u062e\u0631');
+                    return false;
                 }
 
                 toggleBuildingMultiSelect(buildingId, layer, layer.feature);

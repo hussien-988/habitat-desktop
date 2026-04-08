@@ -762,7 +762,9 @@ class LoginPage(QWidget):
         # Animated logo (absolute-positioned inside titlebar for sliding)
         self._tb_logo = QLabel(self.titlebar)
         self._tb_logo.setStyleSheet("background: transparent;")
-        self._tb_logo.setFixedSize(ScreenScale.w(143), ScreenScale.h(22))
+        target_w = ScreenScale.w(143)
+        target_h = ScreenScale.h(22)
+        self._tb_logo.setFixedSize(target_w, target_h)
 
         logo_path = os.path.join(
             os.path.dirname(__file__), "..", "..",
@@ -773,7 +775,7 @@ class LoginPage(QWidget):
         logo_pixmap = QPixmap(logo_path)
         if not logo_pixmap.isNull():
             scaled_logo = logo_pixmap.scaled(
-                143, 22, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+                target_w, target_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
             self._tb_logo.setPixmap(scaled_logo)
         else:
@@ -781,7 +783,7 @@ class LoginPage(QWidget):
             self._tb_logo.setFont(create_font(size=9, weight=QFont.Bold, letter_spacing=0))
             self._tb_logo.setStyleSheet("color: #3890DF; background: transparent;")
 
-        self._tb_logo.move(12, 5)
+        self._tb_logo.move(ScreenScale.w(12), ScreenScale.h(5))
 
         # Spacer to push window controls to the right
         spacer = QWidget()

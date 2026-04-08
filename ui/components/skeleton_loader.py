@@ -12,8 +12,8 @@ from PyQt5.QtGui import QPainter, QLinearGradient, QColor, QBrush
 
 from ui.design_system import (
     SkeletonColors, AnimationTimings, Colors, BorderRadius,
-    Typography, Spacing
-, ScreenScale, ScreenScale)
+    Typography, Spacing, ScreenScale
+)
 from services.translation_manager import get_layout_direction
 
 

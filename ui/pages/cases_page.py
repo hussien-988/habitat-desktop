@@ -193,6 +193,7 @@ class _SurveyCard(QFrame):
         row1.addStretch()
 
         status_text = self._get_status_text(self._status)
+        style = _STATUS_STYLES.get(self._status, _STATUS_STYLES["draft"])
         badge = QLabel(status_text)
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)

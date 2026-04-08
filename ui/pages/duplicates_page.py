@@ -528,6 +528,7 @@ class DuplicatesPage(QWidget):
         self._status_filter.addItem(tr("page.duplicates.status_in_review"), "InReview")
         self._status_filter.addItem(tr("page.duplicates.status_resolved"), "Resolved")
         self._status_filter.addItem(tr("page.duplicates.status_auto_resolved"), "AutoResolved")
+        self._status_filter.addItem(tr("page.duplicates.status_escalated"), "Escalated")
         self._status_filter.currentIndexChanged.connect(self._on_filter_changed)
         self._header.add_row2_widget(self._status_filter)
 
@@ -649,7 +650,8 @@ class DuplicatesPage(QWidget):
         btn_return = QPushButton(tr("page.duplicates.return_to_import"))
         btn_return.setCursor(Qt.PointingHandCursor)
         btn_return.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        btn_return.setFixedSize(ScreenScale.w(150), ScreenScale.h(36))
+        btn_return.setMinimumWidth(ScreenScale.w(150))
+        btn_return.setFixedHeight(ScreenScale.h(36))
         btn_return.setStyleSheet(f"""
             QPushButton {{
                 background-color: {Colors.PRIMARY_BLUE};

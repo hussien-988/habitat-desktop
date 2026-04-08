@@ -163,17 +163,17 @@ class MainWindow(QMainWindow):
 
         screen = self.screen().availableGeometry()
 
-        # Initialize screen scaling for all UI components
-        ScreenScale.initialize(screen)
-
         # Window = 95% of available screen, capped at reference size
         window_width = min(1512, int(screen.width() * 0.95))
         window_height = min(982, int(screen.height() * 0.95))
-        self.setMinimumSize(1024, 680)
 
-        # Center on screen
-        x = (screen.width() - window_width) // 2
-        y = (screen.height() - window_height) // 2
+        # Initialize scaling from actual window size (not screen size)
+        ScreenScale.initialize_from_size(window_width, window_height)
+        self.setMinimumSize(min(1024, window_width), min(680, window_height))
+
+        # Center on screen (use screen.x/y to handle multi-monitor and top taskbar)
+        x = screen.x() + (screen.width() - window_width) // 2
+        y = screen.y() + (screen.height() - window_height) // 2
         self.setGeometry(x, y, window_width, window_height)
         self.setWindowFlag(Qt.FramelessWindowHint, True)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -263,11 +263,6 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(35)
-        shadow.setOffset(0, 0)
-        shadow.setColor(QColor(0, 0, 0, 140))
-        self.window_frame.setGraphicsEffect(shadow)
 
         # مقبض تغيير الحجم (resize) خليّه جوّا الإطار
         self._size_grip = QSizeGrip(self.window_frame)
@@ -1887,34 +1882,36 @@ class MainWindow(QMainWindow):
 
     def _on_screen_geometry_changed(self, _new_geo):
         """Screen resolution/size changed."""
-        ScreenScale.initialize(self.screen().availableGeometry())
         self._adapt_to_screen()
 
     def _on_dpi_changed(self, _new_dpi):
         """Windows DPI scale changed (125%, 150%, etc.)."""
-        ScreenScale.initialize(self.screen().availableGeometry())
         self._adapt_to_screen()
 
     def _on_window_screen_changed(self, new_screen):
         """Window moved to a different monitor."""
+        old_screen = getattr(self, '_current_screen', None)
+        if old_screen:
+            try:
+                old_screen.geometryChanged.disconnect(self._on_screen_geometry_changed)
+                old_screen.logicalDotsPerInchChanged.disconnect(self._on_dpi_changed)
+            except RuntimeError:
+                pass
         if new_screen:
-            ScreenScale.initialize(new_screen.availableGeometry())
-            new_screen.geometryChanged.connect(
-                self._on_screen_geometry_changed
-            )
-            new_screen.logicalDotsPerInchChanged.connect(
-                self._on_dpi_changed
-            )
+            new_screen.geometryChanged.connect(self._on_screen_geometry_changed)
+            new_screen.logicalDotsPerInchChanged.connect(self._on_dpi_changed)
+            self._current_screen = new_screen
             self._adapt_to_screen()
 
     def _adapt_to_screen(self):
-        """Re-adapt window size after screen change."""
+        """Re-adapt window size and scaling after screen change."""
         screen = self.screen().availableGeometry()
         w = min(1512, int(screen.width() * 0.95))
         h = min(982, int(screen.height() * 0.95))
-        self.setMinimumSize(1024, 680)
-        x = (screen.width() - w) // 2
-        y = (screen.height() - h) // 2
+        ScreenScale.initialize_from_size(w, h)
+        self.setMinimumSize(min(1024, w), min(680, h))
+        x = screen.x() + (screen.width() - w) // 2
+        y = screen.y() + (screen.height() - h) // 2
         self.setGeometry(x, y, w, h)
 
     def resizeEvent(self, event):
