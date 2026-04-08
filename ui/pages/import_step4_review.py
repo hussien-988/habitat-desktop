@@ -13,7 +13,7 @@ from ui.components.animated_card import EmptyStateAnimated
 from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
 import re
 
@@ -448,12 +448,12 @@ class ImportStep4Review(QWidget):
 
             # Identifier column
             id_item = QTableWidgetItem(str(identifier))
-            id_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            id_item.setTextAlignment(get_text_alignment() | Qt.AlignVCenter)
             self._table.setItem(row_idx, 1, id_item)
 
             # Display info column
             info_item = QTableWidgetItem(str(display_info))
-            info_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            info_item.setTextAlignment(get_text_alignment() | Qt.AlignVCenter)
             self._table.setItem(row_idx, 2, info_item)
 
             # Validation status column

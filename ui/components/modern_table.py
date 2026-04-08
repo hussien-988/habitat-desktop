@@ -17,8 +17,8 @@ from PyQt5.QtGui import QColor, QPainter, QFont, QIcon, QCursor
 
 from ui.design_system import (
     ModernTableDimensions as MTD, Colors, BorderRadius,
-    Typography, Spacing, AnimationTimings, SkeletonColors
-, ScreenScale, ScreenScale)
+    Typography, Spacing, AnimationTimings, SkeletonColors, ScreenScale
+)
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import get_layout_direction, tr
 

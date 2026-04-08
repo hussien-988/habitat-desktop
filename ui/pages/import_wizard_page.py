@@ -305,7 +305,7 @@ class ImportWizardPage(QWidget):
         footer.setFixedHeight(ScreenScale.h(74))
 
         layout = QHBoxLayout(footer)
-        layout.setContentsMargins(130, 12, 130, 12)
+        layout.setContentsMargins(ScreenScale.w(130), ScreenScale.h(12), ScreenScale.w(130), ScreenScale.h(12))
         layout.setSpacing(0)
 
         # Back button
@@ -332,7 +332,7 @@ class ImportWizardPage(QWidget):
                 color: #DC3545;
                 border: 1px solid rgba(220, 53, 69, 0.25);
                 border-radius: 10px;
-                padding: 12px 32px;
+                padding: 8px 32px;
                 font-weight: 600;
                 font-size: 12pt;
             }
@@ -1118,8 +1118,8 @@ class ImportWizardPage(QWidget):
         from ui.error_handler import ErrorHandler
         confirmed = ErrorHandler.confirm(
             self,
-            "سيتم نقلك إلى صفحة التكرارات لحل التعارضات المكتشفة.\nبعد حل التكرارات، يمكنك العودة لمتابعة الاستيراد.",
-            "حل التكرارات"
+            tr("wizard.import.resolve_duplicates_confirm_msg"),
+            tr("wizard.import.resolve_duplicates_confirm_title")
         )
         if confirmed:
             self.navigate_to_duplicates.emit()

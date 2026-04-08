@@ -204,12 +204,47 @@ class ImportStep1Packages(QWidget):
 
         header_row.addStretch()
 
+        self._upload_btn = QPushButton(tr("wizard.import.step1.upload_btn"))
+        self._upload_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._upload_btn.setFixedHeight(ScreenScale.h(36))
+        self._upload_btn.setMinimumWidth(ScreenScale.w(120))
+        self._upload_btn.setCursor(Qt.PointingHandCursor)
+        self._upload_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4DA0EF, stop:0.5 #3890DF, stop:1 #2E7BD6);
+                color: white;
+                border: 1px solid rgba(120, 190, 255, 0.3);
+                border-radius: 8px;
+                padding: 4px 16px;
+                font-weight: 700;
+            }
+            QPushButton:hover { background: #4DA0EF; }
+            QPushButton:pressed { background: #2E7BD6; }
+            QPushButton:disabled { background: #E8EDF2; color: #B0BEC5; border-color: #DDE3EA; }
+        """)
+        self._upload_btn.clicked.connect(self._on_upload_file)
+        header_row.addWidget(self._upload_btn)
+
         back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
         back_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         back_btn.setFixedHeight(ScreenScale.h(36))
         back_btn.setMinimumWidth(ScreenScale.w(100))
         back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet(StyleManager.nav_button_secondary())
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FAFBFF, stop:1 #F0F4FA);
+                border: 1px solid rgba(56, 144, 223, 0.20);
+                border-radius: 8px;
+                color: #3890DF;
+                padding: 4px 16px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #EBF5FF; border-color: rgba(56, 144, 223, 0.40); }
+            QPushButton:pressed { background: #E0EDFA; }
+            QPushButton:disabled { color: #C0C8D0; background: #F5F7FA; border-color: #E8ECF0; }
+        """)
         back_btn.clicked.connect(self.back_requested.emit)
         header_row.addWidget(back_btn)
 
@@ -478,6 +513,7 @@ class ImportStep1Packages(QWidget):
         self.setLayoutDirection(get_layout_direction())
         self._empty_label.set_title(tr("wizard.import.step1.empty_state"))
         self._loading_label.setText(tr("wizard.import.step1.loading"))
+        self._upload_btn.setText(tr("wizard.import.step1.upload_btn"))
 
     def reset(self):
         """Reset to initial state."""

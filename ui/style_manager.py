@@ -1463,7 +1463,7 @@ class StyleManager:
                 color: white;
                 border: 1px solid rgba(120, 190, 255, 0.3);
                 border-radius: 10px;
-                padding: 12px 32px;
+                padding: 8px 32px;
                 font-weight: 700;
                 font-size: 12pt;
             }}
@@ -1492,7 +1492,7 @@ class StyleManager:
                 border: 1px solid rgba(56, 144, 223, 0.20);
                 border-radius: 10px;
                 color: #3890DF;
-                padding: 12px 32px;
+                padding: 8px 32px;
                 font-weight: 600;
                 font-size: 12pt;
             }

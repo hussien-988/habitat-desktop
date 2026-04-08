@@ -24,6 +24,12 @@ class ScreenScale:
         cls._scale_y = avail_h / cls._ref_height
 
     @classmethod
+    def initialize_from_size(cls, width, height):
+        """Initialize from actual window dimensions (after cap)."""
+        cls._scale_x = width / cls._ref_width
+        cls._scale_y = height / cls._ref_height
+
+    @classmethod
     def w(cls, px):
         """Scale a horizontal pixel value."""
         return max(1, int(px * cls._scale_x))

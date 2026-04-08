@@ -10,7 +10,7 @@ from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
 from ui.design_system import ScreenScale
 
@@ -118,7 +118,7 @@ class ImportStep5Commit(QWidget):
             name_label = QLabel(f"{ar_name}:")
             name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
             name_label.setStyleSheet("color: #637381;")
-            name_label.setFixedWidth(ScreenScale.w(200))
+            name_label.setMinimumWidth(ScreenScale.w(200))
             row.addWidget(name_label)
 
             count_label = QLabel("0")

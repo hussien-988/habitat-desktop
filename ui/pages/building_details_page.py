@@ -29,7 +29,7 @@ from ui.style_manager import StyleManager
 from utils.helpers import format_date, build_hierarchical_address
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -228,9 +228,8 @@ class BuildingDetailsPage(QWidget):
 
         card_layout.addWidget(header)
 
-        # Content container
+        # Content container (inherits direction from card parent)
         content_widget = QWidget()
-        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -252,7 +251,6 @@ class BuildingDetailsPage(QWidget):
         card_layout.setSpacing(12)
 
         content_widget = QWidget()
-        content_widget.setLayoutDirection(get_layout_direction())
         content_widget.setStyleSheet("background: transparent; border: none;")
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -390,6 +388,12 @@ class BuildingDetailsPage(QWidget):
         self._header.set_title(display_id)
         self._populate_cards(building)
 
+        # Sync lock button with refreshed API data
+        is_locked = getattr(building, 'is_locked', False)
+        self._lock_btn.setText(
+            tr("building.action.unlock") if is_locked else tr("building.action.lock")
+        )
+
     def _on_refresh_details_error(self, error_msg):
         """Callback: API fetch failed, keep existing data."""
         self._spinner.hide_loading()
@@ -425,12 +429,11 @@ class BuildingDetailsPage(QWidget):
         num_label = QLabel(building_code)
         num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        num_label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
+        num_label.setAlignment(get_text_alignment())
         self.info_content.addWidget(num_label)
 
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
-        addr_bar.setLayoutDirection(get_layout_direction())
         addr_bar.setFixedHeight(ScreenScale.h(28))
         addr_bar.setStyleSheet("QFrame { background-color: #F8FAFF; border: none; border-radius: 8px; }")
         addr_row = QHBoxLayout(addr_bar)

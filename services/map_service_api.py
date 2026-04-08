@@ -596,7 +596,9 @@ class MapServiceAPI:
                     data.get("numberOfPropertyUnits") or
                     (data.get("numberOfApartments", 0) or 0) + (data.get("numberOfShops", 0) or 0)
                 ),
-                number_of_floors=data.get("numberOfFloors", 0)
+                number_of_floors=data.get("numberOfFloors", 0),
+                is_locked=data.get("isLocked", False),
+                is_assigned=data.get("isAssigned", False),
             )
 
             logger.info(f"Successfully retrieved building {building_id} with polygon")

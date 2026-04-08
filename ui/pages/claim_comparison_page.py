@@ -21,7 +21,7 @@ from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -101,15 +101,17 @@ _TABLE_ROW_VALUE_B = f"""
     }}
 """
 
-_TABLE_DIFF_INDICATOR = f"""
-    QLabel {{
-        color: {Colors.PRIMARY_BLUE};
-        background: #EBF5FF;
-        border-left: 3px solid {Colors.PRIMARY_BLUE};
-        padding: 11px 16px;
-        font-weight: 700;
-    }}
-"""
+def _get_diff_indicator_style(bg_color="#EBF5FF"):
+    border_side = "border-right" if get_layout_direction() == Qt.RightToLeft else "border-left"
+    return f"""
+        QLabel {{
+            color: {Colors.PRIMARY_BLUE};
+            background: {bg_color};
+            {border_side}: 3px solid {Colors.PRIMARY_BLUE};
+            padding: 11px 16px;
+            font-weight: 700;
+        }}
+    """
 
 _DOC_COLUMN_STYLE = """
     QFrame {
@@ -692,7 +694,7 @@ class ClaimComparisonPage(QWidget):
             lbl_a.setWordWrap(True)
             if is_diff:
                 lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
-                lbl_a.setStyleSheet(_TABLE_DIFF_INDICATOR.replace("#EBF5FF", "#E8F2FF"))
+                lbl_a.setStyleSheet(_get_diff_indicator_style("#E8F2FF"))
             else:
                 lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 lbl_a.setStyleSheet(_TABLE_ROW_VALUE_A.replace("#F0F7FF", "#EDF4FF" if is_alt else "#F0F7FF"))
@@ -710,7 +712,7 @@ class ClaimComparisonPage(QWidget):
             lbl_b.setWordWrap(True)
             if is_diff:
                 lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
-                lbl_b.setStyleSheet(_TABLE_DIFF_INDICATOR.replace("#EBF5FF", "#FFF8EB"))
+                lbl_b.setStyleSheet(_get_diff_indicator_style("#FFF8EB"))
             else:
                 lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
                 lbl_b.setStyleSheet(_TABLE_ROW_VALUE_B.replace("#FAFBFF", "#F5F7FF" if is_alt else "#FAFBFF"))

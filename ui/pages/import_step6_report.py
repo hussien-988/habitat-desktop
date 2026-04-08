@@ -11,7 +11,7 @@ from PyQt5.QtGui import QColor
 
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
 from ui.design_system import ScreenScale
 
@@ -263,7 +263,7 @@ class ImportStep6Report(QWidget):
             name = QLabel(f"{tr(tr_key)}:")
             name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             name.setStyleSheet("color: #637381;")
-            name.setFixedWidth(ScreenScale.w(200))
+            name.setMinimumWidth(ScreenScale.w(200))
             row.addWidget(name)
             self._extra_name_labels[key] = name
 
@@ -591,7 +591,7 @@ class ImportStep6Report(QWidget):
         self._breakdown_table.setRowCount(len(rows))
         for row_idx, (name, approved, committed, failed, skipped) in enumerate(rows):
             name_item = QTableWidgetItem(name)
-            name_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            name_item.setTextAlignment(get_text_alignment() | Qt.AlignVCenter)
             self._breakdown_table.setItem(row_idx, 0, name_item)
 
             for col, val in enumerate([approved, committed, failed, skipped], start=1):
@@ -669,7 +669,7 @@ class ImportStep6Report(QWidget):
             entity_label = QLabel(entity_names.get(entity_type, entity_type))
             entity_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             entity_label.setStyleSheet("color: #991B1B;")
-            entity_label.setFixedWidth(ScreenScale.w(140))
+            entity_label.setMinimumWidth(ScreenScale.w(160))
             row_layout.addWidget(entity_label)
 
             original_id = err.get("originalEntityId", "")

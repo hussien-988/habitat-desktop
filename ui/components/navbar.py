@@ -363,7 +363,7 @@ class Navbar(QFrame):
         top_bar.setObjectName("navbar_top")
         top_bar.setAttribute(Qt.WA_StyledBackground, True)
         top_bar.setFixedHeight(NavbarDimensions.top_bar_height())
-        top_bar.setLayoutDirection(Qt.RightToLeft)
+        top_bar.setLayoutDirection(Qt.LeftToRight)
 
         layout = QHBoxLayout(top_bar)
         layout.setContentsMargins(
@@ -372,28 +372,28 @@ class Navbar(QFrame):
         )
         layout.setSpacing(16)
 
-        # Window controls (leftmost visually in RTL)
-        win_controls = self._create_window_controls()
-        layout.addWidget(win_controls)
+        # Settings pill (leftmost)
+        self._settings_pill = self._create_settings_pill()
+        layout.addWidget(self._settings_pill)
+
+        # ID Badge
+        self.id_badge = IDBadgeWidget(user_id=self.user_id)
+        layout.addWidget(self.id_badge)
 
         # Spacer
         layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # Logo (centered via spacers on both sides)
-        self._pulsing_logo = _PulsingLogo(height=28)
+        self._pulsing_logo = _PulsingLogo(height=ScreenScale.h(22))
         self.logo = self._pulsing_logo.logo()
         layout.addWidget(self._pulsing_logo)
 
         # Spacer
         layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        # ID Badge (rightmost visually)
-        self.id_badge = IDBadgeWidget(user_id=self.user_id)
-        layout.addWidget(self.id_badge)
-
-        # Settings pill (next to ID badge)
-        self._settings_pill = self._create_settings_pill()
-        layout.addWidget(self._settings_pill)
+        # Window controls (rightmost)
+        win_controls = self._create_window_controls()
+        layout.addWidget(win_controls)
 
         return top_bar
 
@@ -502,8 +502,8 @@ class Navbar(QFrame):
     def _create_settings_pill(self):
         """Collapsible frosted glass pill: trigger label + expandable content."""
         self._pill_expanded = False
-        self._pill_collapsed_w = 120
-        self._pill_expanded_w = 530
+        self._pill_collapsed_w = ScreenScale.w(120)
+        self._pill_expanded_w = ScreenScale.w(530)
 
         pill = QFrame()
         pill.setObjectName("navbar_pill")
