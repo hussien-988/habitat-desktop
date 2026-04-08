@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QGridLayout, QTextEdit, QTabWidget,
     QRadioButton, QButtonGroup, QSizePolicy
 )
-from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtCore import Qt, QUrl, QTimer
 from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRegExp as QtRegExp
 
@@ -1079,8 +1079,7 @@ class PersonDialog(QDialog):
         from utils.helpers import download_evidence_file
 
         for ev in evidences:
-            ev_id = (ev.get('id') or ev.get('evidenceId')
-                     or ev.get('Id') or ev.get('EvidenceId') or '')
+            ev_id = ev.get('id') or ev.get('Id') or ''
             if not ev_id:
                 continue
 
@@ -1127,12 +1126,19 @@ class PersonDialog(QDialog):
             )
             def _make_open(eid=ev_id, fn=file_name):
                 def _open():
+                    import threading
                     self._refresh_token()
-                    local = download_evidence_file(eid, fn or eid)
-                    if local:
-                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                    else:
-                        Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+                    view_btn.setEnabled(False)
+                    def _download():
+                        local = download_evidence_file(eid, fn or eid)
+                        def _on_done():
+                            view_btn.setEnabled(True)
+                            if local:
+                                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                            else:
+                                Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+                        QTimer.singleShot(0, _on_done)
+                    threading.Thread(target=_download, daemon=True).start()
                 return _open
             view_btn.clicked.connect(_make_open())
             row_lay.addWidget(view_btn)
@@ -1983,12 +1989,19 @@ class PersonDialog(QDialog):
         )
 
         def _open_doc(e, eid=evidence_id, fn=display_name):
+            import threading
             self._refresh_token()
-            local = download_evidence_file(eid, fn or eid)
-            if local:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-            else:
-                Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+            thumb.setEnabled(False)
+            def _download():
+                local = download_evidence_file(eid, fn or eid)
+                def _on_done():
+                    thumb.setEnabled(True)
+                    if local:
+                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                    else:
+                        Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
+                QTimer.singleShot(0, _on_done)
+            threading.Thread(target=_download, daemon=True).start()
         thumb.mousePressEvent = _open_doc
 
         x_btn = QLabel(container)

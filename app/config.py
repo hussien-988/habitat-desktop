@@ -249,7 +249,7 @@ class Roles:
     ANALYST = "analyst"
 
     # Roles that cannot log in to the desktop application
-    NON_LOGIN_ROLES = ("data_collector", "field_researcher", "analyst")
+    NON_LOGIN_ROLES = ("admin", "data_collector", "field_researcher", "analyst")
 
     @classmethod
     def get_display_name(cls, role: str, arabic: bool = False) -> str:

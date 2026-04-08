@@ -469,13 +469,6 @@ def main():
             except Exception as e:
                 print(f"[STARTUP] Vocabularies initialization failed: {e}")
 
-            try:
-                from services.landmark_icon_service import load_landmark_types
-                load_landmark_types()
-                print("[STARTUP] Landmark types loaded")
-            except Exception as e:
-                print(f"[STARTUP] Landmark types loading failed: {e}")
-
         from PyQt5.QtCore import QTimer  # type: ignore
         QTimer.singleShot(0, _init_deferred)
 

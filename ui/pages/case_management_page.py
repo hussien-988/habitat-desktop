@@ -203,6 +203,7 @@ class _CaseCard(QFrame):
         row1.addWidget(name_label)
         row1.addStretch()
 
+        style = _CASE_STATUS_STYLES.get(self._status, _CASE_STATUS_STYLES[1])
         badge = QLabel(style["label"])
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)

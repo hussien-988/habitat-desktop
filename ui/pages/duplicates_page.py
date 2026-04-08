@@ -25,7 +25,8 @@ from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.animated_card import AnimatedCard, animate_card_entrance
+from ui.components.empty_state import EmptyState
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions, ScreenScale
@@ -603,8 +604,9 @@ class DuplicatesPage(QWidget):
         self._content_layout.addWidget(self._pagination_footer)
         self._pagination_footer.setVisible(False)
 
-        # Empty state (reusable EmptyStateAnimated)
-        self._empty_state = EmptyStateAnimated(
+        # Empty state (reusable EmptyState)
+        self._empty_state = EmptyState(
+            icon_name="tdesign_no-result",
             title=tr("page.duplicates.no_conflicts"),
             description=tr("page.duplicates.no_conflicts_hint"),
         )

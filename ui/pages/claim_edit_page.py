@@ -59,7 +59,7 @@ class ClaimEditPage(QWidget):
         self._building_dto = {}
         self._survey_id = None
         self._evidences = []
-        # (evidence_access_denied removed — evidenceIds loaded from claim DTO)
+        self._orphaned_evidence_ids = []
         self._user_role = None
 
         # Original values for change detection
@@ -532,7 +532,7 @@ class ClaimEditPage(QWidget):
                 background-color: #FEF2F2;
             }
         """)
-        evidence_id = ev.get("id") or ev.get("evidenceId") or ""
+        evidence_id = ev.get("id") or ""
         del_btn.clicked.connect(lambda checked, eid=evidence_id: self._on_delete_evidence(eid))
         layout.addWidget(del_btn)
 
@@ -634,25 +634,57 @@ class ClaimEditPage(QWidget):
 
     @staticmethod
     def _fetch_claim_evidences(claim_id):
-        """Fetch claim and all its evidences (runs in worker thread)."""
+        """Fetch claim and all its evidences (runs in worker thread).
+        Returns (evidences, orphaned_ids) tuple.
+        """
         from services.api_client import get_api_client
         api = get_api_client()
         claim = api.get_claim_by_id(claim_id)
-        evidence_ids = claim.get("evidenceIds") or []
+        evidence_ids = set(str(e) for e in (claim.get("evidenceIds") or []))
+        if not evidence_ids:
+            return [], []
+        survey_id = (claim.get("originatingSurveyId") or
+                     claim.get("surveyId") or claim.get("SurveyId"))
+        if survey_id:
+            all_ev = api.get_survey_evidences(survey_id)
+            found_ids = set()
+            evidences = []
+            for ev in all_ev:
+                eid = str(ev.get("id") or ev.get("evidenceId") or "")
+                if eid in evidence_ids:
+                    evidences.append(ev)
+                    found_ids.add(eid)
+            orphaned = list(evidence_ids - found_ids)
+            return evidences, orphaned
+        # Fallback: individual fetch if no survey_id
         evidences = []
+        orphaned = []
         for eid in evidence_ids:
             try:
                 ev = api.get_evidence_by_id(eid)
                 if ev:
                     evidences.append(ev)
+                else:
+                    orphaned.append(eid)
             except Exception:
-                pass
-        return evidences
+                orphaned.append(eid)
+        return evidences, orphaned
 
-    def _on_evidences_reloaded(self, evidences):
+    def _on_evidences_reloaded(self, result):
         """Handle reloaded evidences on main thread."""
         self._spinner.hide_loading()
+        if isinstance(result, tuple):
+            evidences, orphaned = result
+            self._orphaned_evidence_ids = orphaned or []
+        else:
+            evidences = result
+            self._orphaned_evidence_ids = []
         self._evidences = evidences
+        if self._orphaned_evidence_ids:
+            msg = tr("page.claim_edit.orphaned_evidence_warning").format(
+                count=len(self._orphaned_evidence_ids)
+            )
+            Toast.show_toast(self, msg, Toast.WARNING)
         self._refresh_evidence_list()
 
     def _on_evidences_reload_error(self, error_msg):
@@ -664,6 +696,10 @@ class ClaimEditPage(QWidget):
 
     def _on_save(self):
         """Collect changes, show reason dialog, save via API."""
+        if self._orphaned_evidence_ids:
+            Toast.show_toast(self, tr("page.claim_edit.save_blocked_orphaned"), Toast.ERROR)
+            return
+
         changes = self._collect_changes()
 
         if not changes:

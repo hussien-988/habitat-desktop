@@ -9,7 +9,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QCursor
 
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.animated_card import AnimatedCard, animate_card_entrance
+from ui.components.empty_state import EmptyState
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
@@ -256,7 +257,8 @@ class ImportPackagesPage(QWidget):
         self._stack.addWidget(self._scroll)
 
         # Page 1: empty state
-        self._empty_state = EmptyStateAnimated(
+        self._empty_state = EmptyState(
+            icon_name="upload_file",
             title=tr("page.import_packages.no_packages"),
             description=tr("page.import_packages.no_packages_hint"),
         )

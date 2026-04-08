@@ -199,21 +199,16 @@ class SurveyController:
                     "nationality": contact_person_dto.get("nationality"),
                     "birth_date": contact_person_dto.get("dateOfBirth") or "",
                 }
-                # Fetch identification photos
+                # Save identification evidence metadata (download on demand)
                 try:
                     evidences = api.get_survey_evidences(survey_id, evidence_type="identification")
                     if evidences:
-                        from utils.helpers import download_evidence_file
-                        photo_paths = []
-                        for ev in evidences:
-                            local_path = download_evidence_file(
-                                ev.get("id", ""), ev.get("fileName", "photo")
-                            )
-                            if local_path:
-                                photo_paths.append(local_path)
-                        applicant["id_photo_paths"] = photo_paths
+                        applicant["id_photo_evidences"] = [
+                            {"id": ev.get("id", ""), "fileName": ev.get("fileName", "photo")}
+                            for ev in evidences
+                        ]
                 except Exception as e:
-                    logger.warning(f"Could not fetch ID photos: {e}")
+                    logger.warning(f"Could not fetch ID photo metadata: {e}")
 
             resolved_cp_id = contact_person_id or (
                 contact_person_dto.get("id", "") if contact_person_dto else ""

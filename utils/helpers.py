@@ -259,6 +259,7 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
     except Exception as e:
         _logger.warning(f"Metadata download failed for {evidence_id}: {e}")
 
+    _logger.warning(f"All download strategies failed for evidence {evidence_id}")
     return None
 
 

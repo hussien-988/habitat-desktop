@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QGraphicsDropShadowEffect,
     QScrollArea, QWidget, QCheckBox
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QColor, QIcon, QPixmap
 
 from ui.design_system import Colors, ScreenScale
@@ -98,7 +98,7 @@ class EvidencePickerDialog(QDialog):
         # Filter out already linked evidences
         filtered = []
         for ev in self._available:
-            ev_id = str(ev.get("id") or ev.get("evidenceId") or "")
+            ev_id = str(ev.get("id") or "")
             if ev_id and ev_id not in self._already_linked:
                 filtered.append(ev)
 
@@ -150,7 +150,7 @@ class EvidencePickerDialog(QDialog):
         outer.addWidget(container)
 
     def _create_evidence_row(self, ev: dict) -> QFrame:
-        ev_id = str(ev.get("id") or ev.get("evidenceId") or "")
+        ev_id = str(ev.get("id") or "")
         file_name = ev.get("originalFileName") or ev.get("fileName") or tr("dialog.evidence_picker.document")
         ev_type = ev.get("evidenceType") or ev.get("type") or ""
         date_str = str(ev.get("createdAtUtc") or ev.get("uploadedAt") or "")[:10]
@@ -270,24 +270,32 @@ class EvidencePickerDialog(QDialog):
             """)
 
         def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
+            import threading
+            b.setCursor(Qt.WaitCursor)
+            b.setEnabled(False)
             try:
-                b.setCursor(Qt.WaitCursor)
-                b.setEnabled(False)
                 from services.api_client import get_api_client
                 get_api_client()._ensure_valid_token()
-                local = download_evidence_file(eid, fn or eid)
-                if local:
-                    QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                else:
-                    from ui.components.toast import Toast
-                    Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.WARNING)
-            except Exception as e:
-                logger.error(f"View evidence error: {e}")
-                from ui.components.toast import Toast
-                Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.ERROR)
-            finally:
-                b.setCursor(Qt.PointingHandCursor)
-                b.setEnabled(True)
+            except Exception:
+                pass
+
+            def _download():
+                try:
+                    local = download_evidence_file(eid, fn or eid)
+                except Exception as e:
+                    logger.error(f"View evidence error: {e}")
+                    local = None
+
+                def _on_done():
+                    b.setCursor(Qt.PointingHandCursor)
+                    b.setEnabled(True)
+                    if local:
+                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                    else:
+                        from ui.components.toast import Toast
+                        Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.WARNING)
+                QTimer.singleShot(0, _on_done)
+            threading.Thread(target=_download, daemon=True).start()
         btn.clicked.connect(_open)
         return btn
 

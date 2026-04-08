@@ -141,6 +141,9 @@ class MainWindow(QMainWindow):
         self._last_activity = None
         self._session_timeout_ms = 0
 
+        # Proactive token refresh timer
+        self._token_refresh_timer = None
+
         self._setup_window()
         self._setup_shortcuts()
         self._create_widgets()
@@ -611,6 +614,7 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No API token found in user object - API calls may fail with 401")
 
+        self._start_token_refresh_timer()
         self._show_login_loading()
 
         # Configure UI immediately (no blocking on vocab refresh)
@@ -668,6 +672,10 @@ class MainWindow(QMainWindow):
 
             # Update navbar with user info
             self.navbar.set_user_id(str(user.user_id))
+            display_name = (getattr(user, 'full_name_ar', '') or
+                            getattr(user, 'full_name', '') or
+                            getattr(user, 'username', ''))
+            self.navbar.set_username(display_name)
 
             # Set user context on CasesPage BEFORE configure_for_role,
             # because configure_for_role emits tab_changed which triggers refresh()
@@ -904,14 +912,15 @@ class MainWindow(QMainWindow):
     def _start_session_timer(self):
         """Start session inactivity timer based on security settings."""
         from datetime import datetime
-        try:
-            from services.security_service import SecurityService
-            svc = SecurityService(self.db)
-            settings = svc.get_settings()
-            timeout_minutes = settings.session_timeout_minutes
-        except Exception as e:
-            logger.warning(f"Could not load session timeout setting: {e}")
-            timeout_minutes = 30
+        timeout_minutes = 30
+        if self.db:
+            try:
+                from services.security_service import SecurityService
+                svc = SecurityService(self.db)
+                settings = svc.get_settings()
+                timeout_minutes = settings.session_timeout_minutes
+            except Exception as e:
+                logger.warning(f"Could not load session timeout setting: {e}")
 
         self._session_timeout_ms = timeout_minutes * 60 * 1000
         self._last_activity = datetime.now()
@@ -935,6 +944,36 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             app.removeEventFilter(self)
+
+    def _start_token_refresh_timer(self):
+        """Start proactive token refresh every 15 minutes."""
+        self._stop_token_refresh_timer()
+        self._token_refresh_timer = QTimer(self)
+        self._token_refresh_timer.timeout.connect(self._proactive_token_refresh)
+        self._token_refresh_timer.start(15 * 60 * 1000)  # 15 minutes
+        logger.info("Token refresh timer started (every 15 min)")
+
+    def _stop_token_refresh_timer(self):
+        """Stop the proactive token refresh timer."""
+        if self._token_refresh_timer:
+            self._token_refresh_timer.stop()
+            self._token_refresh_timer = None
+
+    def _proactive_token_refresh(self):
+        """Proactively refresh the API token before it expires."""
+        if not self.current_user:
+            self._stop_token_refresh_timer()
+            return
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if api and api.access_token:
+                if api.refresh_access_token():
+                    logger.info("Proactive token refresh succeeded")
+                else:
+                    logger.warning("Proactive token refresh failed")
+        except Exception as e:
+            logger.warning(f"Proactive token refresh error: {e}")
 
     def eventFilter(self, obj, event):
         """Track user activity for session timeout."""
@@ -973,6 +1012,7 @@ class MainWindow(QMainWindow):
                 logger.warning(f"API logout failed: {e}")
             self.current_user = None
             self._stop_session_timer()
+            self._stop_token_refresh_timer()
             self._show_login()
 
     def _set_api_token_for_controllers(self, token: str):
@@ -1043,6 +1083,7 @@ class MainWindow(QMainWindow):
         )
         self.current_user = None
         self._stop_session_timer()
+        self._stop_token_refresh_timer()
         self._show_login()
 
     def _on_password_change_required(self):
@@ -1083,6 +1124,7 @@ class MainWindow(QMainWindow):
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
                 self.current_user = None
                 self._stop_session_timer()
+                self._stop_token_refresh_timer()
                 # Clear login fields for security
                 login_page = self.pages.get(Pages.LOGIN)
                 if login_page:

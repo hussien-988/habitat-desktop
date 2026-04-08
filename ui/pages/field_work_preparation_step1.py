@@ -13,7 +13,8 @@ from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
+from ui.components.animated_card import AnimatedCard
+from ui.components.empty_state import EmptyState
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
@@ -436,7 +437,8 @@ class FieldWorkPreparationStep1(QWidget):
         self._shimmer_timer.timeout.connect(self._update_shimmer)
 
         # Empty state (shown initially with hint)
-        self.empty_label = EmptyStateAnimated(
+        self.empty_label = EmptyState(
+            icon_name="carbon_location-filled",
             title=tr("wizard.step1.select_filters_hint"),
         )
         self.empty_label.setMinimumHeight(ScreenScale.h(179))
