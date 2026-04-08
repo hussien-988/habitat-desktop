@@ -606,12 +606,6 @@ class CompletedClaimsPage(QWidget):
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.claims.subtitle"))
 
-        self._stat_open = StatPill(tr("page.claims.tab_open"))
-        self._header.add_stat_pill(self._stat_open)
-
-        self._stat_closed = StatPill(tr("page.claims.tab_closed"))
-        self._header.add_stat_pill(self._stat_closed)
-
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
         self._tab_open = NavStyleTab(tr("page.claims.tab_open"))
@@ -629,7 +623,7 @@ class CompletedClaimsPage(QWidget):
         self._header.add_tab(self._tab_closed)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
+        self._search.setPlaceholderText("البحث بالرقم المرجعي")
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -657,7 +651,7 @@ class CompletedClaimsPage(QWidget):
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
         self._search.textChanged.connect(self._on_search_text_changed)
-        self._header.set_search_field(self._search)
+        self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
 
@@ -784,8 +778,6 @@ class CompletedClaimsPage(QWidget):
             closed_text = f"{closed_text} ({self._closed_count})"
         self._tab_open.set_text(open_text)
         self._tab_closed.set_text(closed_text)
-        self._stat_open.set_count(self._open_count)
-        self._stat_closed.set_count(self._closed_count)
 
     # -- Events --
 
@@ -1049,7 +1041,7 @@ class CompletedClaimsPage(QWidget):
                     address = " > ".join(parts)
 
             return {
-                "claim_id": s.get("claimNumber", "") or s.get("claimId", "N/A"),
+                "claim_id": s.get("referenceCode") or s.get("claimNumber", "") or s.get("claimId", "N/A"),
                 "claim_uuid": s.get("claimId", "") or s.get("id", ""),
                 "claimant_name": claimant,
                 "date": date_str[:10] if date_str and not date_str.startswith("0001") else "",
@@ -1179,9 +1171,7 @@ class CompletedClaimsPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("page.claims.subtitle"))
-        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
-        self._stat_open.set_label(tr("page.claims.tab_open"))
-        self._stat_closed.set_label(tr("page.claims.tab_closed"))
+        self._search.setPlaceholderText("البحث بالرقم المرجعي")
 
         self._update_tab_labels()
 
