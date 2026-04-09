@@ -703,10 +703,16 @@ EN_TRANSLATIONS = {
     "wizard.unit_dialog.description": "Property Description",
 
     # Common
+    "common.back": "Back",
     "common.cancel": "Cancel",
     "common.save": "Save",
     "common.confirm": "Confirm",
     "common.warning": "Warning",
+
+    # Search
+    "search.results": "Search Results",
+    "search.no_results": "No Results Found",
+
     "page.drafts.title": "Drafts",
     "page.drafts.add_new": "+ Add a Claim",
     "page.drafts.filter": "Filter",
@@ -1695,6 +1701,12 @@ EN_TRANSLATIONS = {
     "page.map.popup_status_label": "Status:",
     "page.map.popup_type_label": "Type:",
     "page.map.popup_units_label": "Units:",
+    "page.map.popup_select_building": "Select This Building",
+    "page.map.popup_previously_assigned": "Previously Assigned",
+    "page.map.popup_locked_building": "Locked Building",
+    "page.map.status_title": "Map Status",
+    "page.map.status_buildings": "Buildings",
+    "page.map.status_tile_server": "Tile Server",
     "page.map.search_landmarks": "Search landmarks...",
     "page.map.search_neighborhoods": "Search neighborhoods...",
     "page.map.search_streets": "Search streets...",

@@ -443,14 +443,15 @@ class BaseMapDialog(QDialog):
         """)
 
         search_layout = QHBoxLayout(search_frame)
-        search_layout.setContentsMargins(14, 8, 14, 8)
+        search_layout.setContentsMargins(14, 6, 14, 6)
         search_layout.setSpacing(8)
         search_layout.setDirection(QHBoxLayout.RightToLeft)
 
         # Search input (disabled until map loads)
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("...")
+        self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
         self.search_input.setEnabled(False)
+        self.search_input.setLayoutDirection(Qt.RightToLeft)
         self.search_input.setAlignment(Qt.AlignRight)
         self.search_input.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         self.search_input.setStyleSheet(f"""
@@ -472,21 +473,33 @@ class BaseMapDialog(QDialog):
 
         search_layout.addWidget(self.search_input, 1)
 
-        # Search icon
-        search_icon = QLabel()
-        search_icon.setFixedSize(ScreenScale.w(20), ScreenScale.h(20))
-        search_icon.setAlignment(Qt.AlignCenter)
+        # Search icon (now clickable)
+        search_icon_btn = QToolButton()
+        search_icon_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+        search_icon_btn.setCursor(Qt.PointingHandCursor)
 
         from ui.components.icon import Icon
+        from PyQt5.QtGui import QIcon
         icon_pixmap = Icon.load_pixmap("search", size=16)
         if icon_pixmap and not icon_pixmap.isNull():
-            search_icon.setPixmap(icon_pixmap)
+            search_icon_btn.setIcon(QIcon(icon_pixmap))
         else:
-            search_icon.setText("🔍")
-            search_icon.setFont(create_font(size=10))
+            search_icon_btn.setText("🔍")
+            search_icon_btn.setFont(create_font(size=10))
 
-        search_icon.setStyleSheet("background: transparent;")
-        search_layout.insertWidget(0, search_icon)
+        search_icon_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }}
+            QToolButton:hover {{
+                background-color: {Colors.LIGHT_GRAY_BG};
+                border-radius: 4px;
+            }}
+        """)
+        search_icon_btn.clicked.connect(self._on_search_submitted)
+        search_layout.insertWidget(0, search_icon_btn)
 
         return search_frame
 

@@ -72,7 +72,9 @@ class LeafletHTMLGenerator:
             Complete HTML string ready for QWebEngineView
         """
         from services.tile_server_manager import get_local_server_url
+        from services.translation_manager import tr as _tr
         local_assets_url = get_local_server_url()
+        _loading_text = _tr('page.map.loading_map')
 
         drawing_css = f'<link rel="stylesheet" href="{local_assets_url}/leaflet-draw.css" />' if enable_drawing else ''
         drawing_js = f'<script src="{local_assets_url}/leaflet-draw.js"></script>' if enable_drawing else ''
@@ -101,7 +103,7 @@ class LeafletHTMLGenerator:
     <div id="map"></div>
     <div id="map-loading-overlay">
         <div class="loading-spinner"></div>
-        <div class="loading-text">جاري تحميل الخريطة...</div>
+        <div class="loading-text">{_loading_text}</div>
     </div>
     {LeafletHTMLGenerator._get_javascript(
         tile_server_url,
@@ -383,21 +385,29 @@ class LeafletHTMLGenerator:
         /* Building Popup */
         .building-popup {{
             min-width: 200px;
+            text-align: right;
+        }}
+        .building-popup[dir="auto"] {{
+            text-align: right;
+            direction: rtl;
         }}
         .building-popup h4 {{
             margin: 0 0 8px 0;
             color: #0072BC;
             font-size: 14px;
             font-weight: 600;
+            text-align: right;
         }}
         .building-popup p {{
             margin: 4px 0;
             font-size: 12px;
             color: #333;
+            text-align: right;
         }}
         .building-popup .label {{
             font-weight: 600;
             color: #666;
+            display: inline-block;
         }}
 
         /* Status Badge */
@@ -498,6 +508,8 @@ class LeafletHTMLGenerator:
             font-family: 'Segoe UI', Tahoma, sans-serif !important;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
             white-space: nowrap !important;
+            margin-top: -6px !important;
+            pointer-events: none !important;
         }}
         .neighborhood-tooltip::before {{
             border-top-color: #0072BC !important;
@@ -673,34 +685,48 @@ class LeafletHTMLGenerator:
 
         initial_bounds_js = json.dumps(initial_bounds) if initial_bounds else 'null'
 
+        # i18n labels — resolved at HTML generation time from current app language
+        from services.translation_manager import tr as _tr
+        _lbl_neighborhood = _tr('page.map.popup_neighborhood_label')
+        _lbl_status       = _tr('page.map.popup_status_label')
+        _lbl_units        = _tr('page.map.popup_units_label')
+        _lbl_type         = _tr('page.map.popup_type_label')
+        _lbl_select       = _tr('page.map.popup_select_building')
+        _lbl_not_found    = _tr('mapping.not_specified')
+        _lbl_assigned     = _tr('page.map.popup_previously_assigned')
+        _lbl_locked       = _tr('page.map.popup_locked_building')
+        _lbl_map_status   = _tr('page.map.status_title')
+        _lbl_buildings    = _tr('page.map.status_buildings')
+        _lbl_tile_server  = _tr('page.map.status_tile_server')
+
         # Build popup JS block - skip popups in multi-select mode (clicking toggles selection)
         if enable_multiselect:
             popup_js_block = '// Multi-select mode: no popups, clicking toggles selection'
         else:
             selection_btn_js = (
                 'if (buildingIdForApi) { popup += "<button class=\\"select-building-btn\\" '
-                'onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\">'
-                '<span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>"; }'
+                f'onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\">'
+                f'<span style=\\"font-size:16px\\">✓</span> {_lbl_select}</button>"; }}'
             ) if enable_selection else '// Selection disabled'
 
             popup_js_block = (
-                "var popup = '<div class=\"building-popup\">' +\n"
+                "var popup = '<div class=\"building-popup\" dir=\"auto\">' +\n"
                 "                    '<h4>' + buildingIdDisplay + ' ' +\n"
                 "                    '<span class=\"geometry-badge\">' + geomType + '</span></h4>' +\n"
-                "                    '<p><span class=\"label\">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +\n"
-                "                    '<p><span class=\"label\">الحالة:</span> ' +\n"
+                f"                    '<p><span class=\"label\">{_lbl_neighborhood}</span> ' + (props.neighborhood || '{_lbl_not_found}') + '</p>' +\n"
+                f"                    '<p><span class=\"label\">{_lbl_status}</span> ' +\n"
                 "                    '<span class=\"status-badge ' + statusClass + '\">' + statusLabel + '</span></p>' +\n"
-                "                    '<p><span class=\"label\">الوحدات:</span> ' + (props.units || 0) + '</p>';\n"
+                f"                    '<p><span class=\"label\">{_lbl_units}</span> ' + (props.units || 0) + '</p>';\n"
                 "\n"
                 "                if (props.type) {\n"
-                "                    popup += '<p><span class=\"label\">النوع:</span> ' + props.type + '</p>';\n"
+                f"                    popup += '<p><span class=\"label\">{_lbl_type}</span> ' + props.type + '</p>';\n"
                 "                }\n"
                 "\n"
                 "                if (props.is_assigned) {\n"
-                "                    popup += '<p><span style=\"background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:12px;\">\\u2713 معيّن مسبقاً</span></p>';\n"
+                f"                    popup += '<p><span style=\"background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:12px;\">\\u2713 {_lbl_assigned}</span></p>';\n"
                 "                }\n"
                 "                if (props.is_locked) {\n"
-                "                    popup += '<p><span style=\"background:#F3F4F6;color:#6B7280;padding:2px 8px;border-radius:4px;font-size:12px;\">\\uD83D\\uDD12 مبنى مقفل</span></p>';\n"
+                f"                    popup += '<p><span style=\"background:#F3F4F6;color:#6B7280;padding:2px 8px;border-radius:4px;font-size:12px;\">\\uD83D\\uDD12 {_lbl_locked}</span></p>';\n"
                 "                }\n"
                 "\n"
                 "                " + selection_btn_js + "\n"
@@ -1021,9 +1047,9 @@ class LeafletHTMLGenerator:
         statusControl.onAdd = function(map) {{
             var div = L.DomUtil.create('div', 'map-status-overlay');
             var buildingCount = buildingsData ? buildingsData.features.length : 0;
-            div.innerHTML = '<strong>حالة الخريطة</strong><br>' +
-                            'المباني: ' + buildingCount + '<br>' +
-                            'خادم Tiles: {tile_status_label}';
+            div.innerHTML = '<strong>{_lbl_map_status}</strong><br>' +
+                            '{_lbl_buildings}: ' + buildingCount + '<br>' +
+                            '{_lbl_tile_server}: {tile_status_label}';
             return div;
         }};
         statusControl.addTo(map);
@@ -1032,7 +1058,7 @@ class LeafletHTMLGenerator:
             var el = document.querySelector('.map-status-overlay');
             if (el) {{
                 var parts = el.innerHTML.split('<br>');
-                parts[1] = '\u0627\u0644\u0645\u0628\u0627\u0646\u064a: ' + count;
+                parts[1] = '{_lbl_buildings}: ' + count;
                 el.innerHTML = parts.join('<br>');
             }}
         }};
@@ -1127,7 +1153,7 @@ class LeafletHTMLGenerator:
                     permanent: true,
                     direction: 'top',
                     className: 'neighborhood-tooltip',
-                    offset: [0, -8]
+                    offset: [0, -12]
                 }});
 
                 neighborhoodPins.addLayer(pin);
@@ -1467,7 +1493,7 @@ class LeafletHTMLGenerator:
                     permanent: false,
                     direction: 'top',
                     className: 'landmark-tooltip',
-                    offset: [0, -30]
+                    offset: [0, -5]
                 }});
             }}
 

@@ -31,6 +31,7 @@ from ui.components.nav_style_tab import NavStyleTab
 from ui.components.empty_state import EmptyState
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.search_context_bar import SearchContextBar
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_source_display, get_claim_type_display
 from services.api_worker import ApiWorker
@@ -405,36 +406,10 @@ class CompletedClaimsPage(QWidget):
         self._header.add_tab(self._tab_closed)
 
         # Search context bar (shown when search is active, hidden initially)
-        self._search_context = QWidget()
-        ctx_layout = QHBoxLayout(self._search_context)
-        ctx_layout.setContentsMargins(0, 0, 0, 0)
-        ctx_layout.setSpacing(8)
-
-        self._back_btn = QPushButton(tr("page.claims.back"))
-        self._back_btn.setIcon(Icon.load_icon("arrow-right", 14))
-        self._back_btn.setFixedHeight(ScreenScale.h(28))
-        self._back_btn.setCursor(Qt.PointingHandCursor)
-        self._back_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.12);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 6px;
-                color: white;
-                font-size: 12px;
-                padding: 0 10px;
-            }
-            QPushButton:hover { background: rgba(255, 255, 255, 0.2); }
-        """)
-        self._back_btn.clicked.connect(self._exit_search_mode)
-
-        self._search_count_label = QLabel("نتائج البحث")
-        self._search_count_label.setStyleSheet("color: rgba(200, 220, 255, 200); font-size: 13px; background: transparent;")
-
-        ctx_layout.addWidget(self._back_btn)
-        ctx_layout.addWidget(self._search_count_label)
-        ctx_layout.addStretch()
-        self._search_context.hide()
-        self._header.add_row2_widget(self._search_context)
+        self._search_bar = SearchContextBar(tabs=[self._tab_open, self._tab_closed])
+        self._search_bar.back_clicked.connect(self._exit_search_mode)
+        self._search_bar.hide()
+        self._header.add_row2_widget(self._search_bar)
 
         self._search = QLineEdit()
         self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
@@ -466,13 +441,8 @@ class CompletedClaimsPage(QWidget):
         self._search.returnPressed.connect(self._on_search_triggered)
         self._search.textChanged.connect(self._on_search_text_changed)
 
-        # Clear/X button in search field (hidden initially)
-        self._clear_action = self._search.addAction(
-            Icon.load_icon("x-close", 12) or QIcon(),
-            QLineEdit.TrailingPosition
-        )
-        self._clear_action.setVisible(False)
-        self._clear_action.triggered.connect(self._exit_search_mode)
+        # Attach clear action to search field
+        self._search_bar.attach_clear_action(self._search)
 
         self._header.add_action_widget(self._search)
 
@@ -626,19 +596,13 @@ class CompletedClaimsPage(QWidget):
         if self._search_mode:
             return
         self._search_mode = True
-        self._tab_open.hide()
-        self._tab_closed.hide()
-        self._search_context.show()
-        self._clear_action.setVisible(True)
+        self._search_bar.enter_search_mode()
 
     def _exit_search_mode(self):
         if not self._search_mode:
             return
         self._search_mode = False
-        self._tab_open.show()
-        self._tab_closed.show()
-        self._search_context.hide()
-        self._clear_action.setVisible(False)
+        self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
@@ -871,9 +835,7 @@ class CompletedClaimsPage(QWidget):
             if self._search_mode:
                 total = len(self.claims_data)
                 term = self._search.text().strip()
-                self._search_count_label.setText(
-                    f"\"{term}\" — {total} {'نتيجة' if total == 1 else 'نتائج'}"
-                )
+                self._search_bar.update_count(term, total)
 
             for claim in self.claims_data:
                 card = _ClaimCard(claim)
@@ -978,6 +940,7 @@ class CompletedClaimsPage(QWidget):
         self._header.get_title_label().setText(tr("page.claims.subtitle"))
         self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
 
+        self._search_bar.update_language()
         self._update_tab_labels()
 
         self._scroll.setLayoutDirection(direction)

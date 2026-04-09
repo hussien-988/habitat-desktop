@@ -95,13 +95,13 @@ class BuildingInfoStep(BaseStep):
             icon_name="blue",
             columns=3,
         )
-        self.f_governorate  = self._add_grid_field(grid, tr("wizard.building_info.governorate_code"), 0, 0)
-        self.f_district     = self._add_grid_field(grid, tr("wizard.building_info.district_code"),  0, 1)
-        self.f_subdistrict  = self._add_grid_field(grid, tr("wizard.building_info.subdistrict_code"),  0, 2)
-        self.f_community    = self._add_grid_field(grid, tr("wizard.building_info.community_code"),  1, 0)
-        self.f_neighborhood = self._add_grid_field(grid, tr("wizard.building_info.neighborhood_code"),     1, 1)
-        self.f_bldg_number  = self._add_grid_field(grid, tr("wizard.building_info.building_number"),   1, 2)
-        self.f_bldg_code    = self._add_grid_field(grid, tr("wizard.building_info.building_code"),   2, 0, col_span=3)
+        self.lbl_governorate,  self.f_governorate  = self._add_grid_field(grid, tr("wizard.building_info.governorate_code"), 0, 0)
+        self.lbl_district,     self.f_district     = self._add_grid_field(grid, tr("wizard.building_info.district_code"),  0, 1)
+        self.lbl_subdistrict,  self.f_subdistrict  = self._add_grid_field(grid, tr("wizard.building_info.subdistrict_code"),  0, 2)
+        self.lbl_community,    self.f_community    = self._add_grid_field(grid, tr("wizard.building_info.community_code"),  1, 0)
+        self.lbl_neighborhood, self.f_neighborhood = self._add_grid_field(grid, tr("wizard.building_info.neighborhood_code"),     1, 1)
+        self.lbl_bldg_number,  self.f_bldg_number  = self._add_grid_field(grid, tr("wizard.building_info.building_number"),   1, 2)
+        self.lbl_bldg_code,    self.f_bldg_code    = self._add_grid_field(grid, tr("wizard.building_info.building_code"),   2, 0, col_span=3)
         return card
 
     # --- Card 2: حالة البناء ------------------------------------------
@@ -113,12 +113,12 @@ class BuildingInfoStep(BaseStep):
             icon_name="blue",
             columns=3,
         )
-        self.f_status     = self._add_grid_field(grid, tr("wizard.building_info.building_status"),         0, 0)
-        self.f_type       = self._add_grid_field(grid, tr("wizard.building_info.building_type"),          0, 1)
-        self.f_apartments = self._add_grid_field(grid, tr("wizard.building_info.apartments_count"),           0, 2)
-        self.f_shops      = self._add_grid_field(grid, tr("wizard.building_info.shops_count"),         1, 0)
-        self.f_floors     = self._add_grid_field(grid, tr("wizard.building_info.floors_count"),         1, 1)
-        self.f_total      = self._add_grid_field(grid, tr("wizard.building_info.total_units"), 1, 2)
+        self.lbl_status,     self.f_status     = self._add_grid_field(grid, tr("wizard.building_info.building_status"),     0, 0)
+        self.lbl_type,       self.f_type       = self._add_grid_field(grid, tr("wizard.building_info.building_type"),      0, 1)
+        self.lbl_apartments, self.f_apartments = self._add_grid_field(grid, tr("wizard.building_info.apartments_count"),  0, 2)
+        self.lbl_shops,      self.f_shops      = self._add_grid_field(grid, tr("wizard.building_info.shops_count"),       1, 0)
+        self.lbl_floors,     self.f_floors     = self._add_grid_field(grid, tr("wizard.building_info.floors_count"),      1, 1)
+        self.lbl_total,      self.f_total      = self._add_grid_field(grid, tr("wizard.building_info.total_units"),       1, 2)
         return card
 
     # --- Card 3: موقع البناء (mirrors AddBuildingPage Card 3) ----------
@@ -135,6 +135,7 @@ class BuildingInfoStep(BaseStep):
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         card_layout.addWidget(header)
+        self._card3_header_lbl = header
         card_layout.addSpacing(12)
 
         content_row = QHBoxLayout()
@@ -234,6 +235,7 @@ class BuildingInfoStep(BaseStep):
         docs_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         docs_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         docs_section.addWidget(docs_lbl)
+        self._docs_title_lbl = docs_lbl
 
         self._docs_btn = QPushButton(tr("wizard.building_info.show_documents"))
         self._docs_btn.setFixedHeight(ScreenScale.h(40))
@@ -264,6 +266,7 @@ class BuildingInfoStep(BaseStep):
         desc_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         desc_section.addWidget(desc_lbl)
+        self._desc_lbl = desc_lbl
 
         self.f_description = QTextEdit()
         self.f_description.setReadOnly(True)
@@ -332,7 +335,7 @@ class BuildingInfoStep(BaseStep):
         vbox.addWidget(field)
 
         grid.addWidget(container, row, col, 1, col_span)
-        return field
+        return lbl, field
     # Data population
 
     def populate_data(self):
@@ -614,8 +617,29 @@ class BuildingInfoStep(BaseStep):
         return result
 
     def update_language(self, is_arabic: bool):
-        """Update layout direction when language changes."""
         self.setLayoutDirection(get_layout_direction())
+        # Card 1 field labels
+        self.lbl_governorate.setText(tr("wizard.building_info.governorate_code"))
+        self.lbl_district.setText(tr("wizard.building_info.district_code"))
+        self.lbl_subdistrict.setText(tr("wizard.building_info.subdistrict_code"))
+        self.lbl_community.setText(tr("wizard.building_info.community_code"))
+        self.lbl_neighborhood.setText(tr("wizard.building_info.neighborhood_code"))
+        self.lbl_bldg_number.setText(tr("wizard.building_info.building_number"))
+        self.lbl_bldg_code.setText(tr("wizard.building_info.building_code"))
+        # Card 2 field labels
+        self.lbl_status.setText(tr("wizard.building_info.building_status"))
+        self.lbl_type.setText(tr("wizard.building_info.building_type"))
+        self.lbl_apartments.setText(tr("wizard.building_info.apartments_count"))
+        self.lbl_shops.setText(tr("wizard.building_info.shops_count"))
+        self.lbl_floors.setText(tr("wizard.building_info.floors_count"))
+        self.lbl_total.setText(tr("wizard.building_info.total_units"))
+        # Card 3
+        self._card3_header_lbl.setText(tr("wizard.building_info.card3_title"))
+        self._docs_title_lbl.setText(tr("wizard.building_info.documents_title"))
+        self._docs_btn.setText(tr("wizard.building_info.show_documents"))
+        self._desc_lbl.setText(tr("wizard.building_info.description_label"))
+        self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))
+        self._map_button.setText(tr("wizard.building_info.open_map"))
 
     def collect_data(self) -> dict:
         return {}

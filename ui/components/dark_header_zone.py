@@ -35,7 +35,7 @@ class DarkHeaderZone(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(ScreenScale.h(140))
+        self.setMinimumHeight(ScreenScale.h(110))
         self.setAttribute(Qt.WA_StyledBackground, False)
 
         self._anim_start = time.time()

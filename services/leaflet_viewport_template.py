@@ -38,7 +38,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         // Viewport loading state
         var viewportLoadingEnabled = true;
         var viewportLoadingDebounceTimer = null;
-        var viewportLoadingDebounceDelay = 500; // ms
+        var viewportLoadingDebounceDelay = 250; // ms - reduced from 500 for faster viewport updates
         var currentBuildingsLayer = null;
         var currentMarkersCluster = null;
         var isLoadingViewport = false;

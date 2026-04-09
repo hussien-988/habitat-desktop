@@ -416,6 +416,7 @@ class BuildingMapDialog(BaseMapDialog):
         self._layers_worker = None
         self._page_loaded = False
         self._pending_layers_data = None
+        self._pending_buildings_data = None
         QTimer.singleShot(50, self._start_map_load)
 
     def _start_map_load(self):
@@ -447,7 +448,7 @@ class BuildingMapDialog(BaseMapDialog):
                 center_lon=center_lon,
                 zoom=zoom,
                 max_zoom=20,
-                show_legend=True,
+                show_legend=False,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),
                 enable_viewport_loading=(not self._is_view_only),
@@ -507,7 +508,15 @@ class BuildingMapDialog(BaseMapDialog):
         ErrorHandler.show_error(self, f"{tr('dialog.map.error_loading_map')}\n{error_msg}", tr("dialog.map.error_title"))
 
     def _on_buildings_ready(self, data):
-        """Inject buildings into the already-visible map."""
+        """Inject buildings into the already-visible map, or buffer if page not loaded."""
+        if not self._page_loaded:
+            self._pending_buildings_data = data
+            logger.info("Buildings data buffered, waiting for page load")
+            return
+        self._inject_buildings(data)
+
+    def _inject_buildings(self, data):
+        """Inject buildings GeoJSON into the map page via JavaScript."""
         try:
             buildings_geojson = data.get('buildings_geojson', '{"type":"FeatureCollection","features":[]}')
 
@@ -608,9 +617,12 @@ class BuildingMapDialog(BaseMapDialog):
             logger.error(f"Error injecting buildings: {e}", exc_info=True)
 
     def _on_page_ready(self, success):
-        """Called when HTML page finishes loading - inject any buffered layers."""
+        """Called when HTML page finishes loading - inject any buffered data."""
         if success:
             self._page_loaded = True
+            if self._pending_buildings_data:
+                self._inject_buildings(self._pending_buildings_data)
+                self._pending_buildings_data = None
             if self._pending_layers_data:
                 self._inject_layers(self._pending_layers_data)
                 self._pending_layers_data = None
@@ -1063,7 +1075,7 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
                 center_lon=center_lon,
                 zoom=zoom,
                 max_zoom=20,
-                show_legend=True,
+                show_legend=False,
                 show_layer_control=False,
                 enable_selection=True,
                 enable_multiselect=True,

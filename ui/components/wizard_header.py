@@ -73,14 +73,14 @@ class WizardHeader(QWidget):
         """Build the dark header UI."""
         self.setAttribute(Qt.WA_StyledBackground, False)
         if self._steps:
-            self.setMinimumHeight(ScreenScale.h(130))
+            self.setMinimumHeight(ScreenScale.h(105))
         else:
-            self.setMinimumHeight(ScreenScale.h(90))
+            self.setMinimumHeight(ScreenScale.h(75))
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(
-            PageDimensions.content_padding_h(), 14,
-            PageDimensions.content_padding_h(), 12
+            PageDimensions.content_padding_h(), 8,
+            PageDimensions.content_padding_h(), 8
         )
         main_layout.setSpacing(0)
 
@@ -107,7 +107,7 @@ class WizardHeader(QWidget):
 
         # Row 2: Step indicator pills (if steps provided)
         if self._steps:
-            main_layout.addSpacing(14)
+            main_layout.addSpacing(8)
             self._build_step_indicator(main_layout)
         else:
             main_layout.addStretch()

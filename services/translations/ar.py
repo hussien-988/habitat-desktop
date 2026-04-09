@@ -703,10 +703,16 @@ AR_TRANSLATIONS = {
     "wizard.unit_dialog.description": "وصف المقسم",
 
     # Common
+    "common.back": "رجوع",
     "common.cancel": "إلغاء",
     "common.save": "حفظ",
     "common.confirm": "تأكيد",
     "common.warning": "تحذير",
+
+    # Search
+    "search.results": "نتائج البحث",
+    "search.no_results": "لا توجد نتائج",
+
     "page.drafts.title": "المسودة",
     "page.drafts.add_new": "+ إضافة ادعاء",
     "page.drafts.filter": "الفلتر",
@@ -1695,6 +1701,12 @@ AR_TRANSLATIONS = {
     "page.map.popup_status_label": "الحالة:",
     "page.map.popup_type_label": "النوع:",
     "page.map.popup_units_label": "الوحدات:",
+    "page.map.popup_select_building": "اختيار هذا المبنى",
+    "page.map.popup_previously_assigned": "معيّن مسبقاً",
+    "page.map.popup_locked_building": "مبنى مقفل",
+    "page.map.status_title": "حالة الخريطة",
+    "page.map.status_buildings": "المباني",
+    "page.map.status_tile_server": "خادم Tiles",
     "page.map.search_landmarks": "بحث المعالم...",
     "page.map.search_neighborhoods": "بحث الأحياء...",
     "page.map.search_streets": "بحث الشوارع...",
