@@ -12,7 +12,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QPoint, QTimer
 from PyQt5.QtGui import QIcon, QColor
 
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated
+from ui.components.animated_card import AnimatedCard
+from ui.components.empty_state import EmptyState
 from ui.components.icon import Icon
 from ui.components.toast import Toast
 from ui.animation_utils import stagger_fade_in
@@ -432,7 +433,8 @@ class FieldWorkPreparationStep2(QWidget):
         cards_layout.addWidget(scroll, 1)
 
         # Empty state label
-        self._empty_label = EmptyStateAnimated(
+        self._empty_label = EmptyState(
+            icon_name="user-group",
             title=tr("wizard.step2.no_matching_collectors"),
         )
         self._empty_label.setMinimumHeight(ScreenScale.h(150))

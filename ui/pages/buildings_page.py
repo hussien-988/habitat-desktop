@@ -46,6 +46,7 @@ from ui.components.primary_button import PrimaryButton
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
+from ui.components.empty_state import EmptyState
 from ui.design_system import PageDimensions, Colors, ButtonDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
@@ -2320,7 +2321,8 @@ class BuildingsListPage(QWidget):
         self._stack.addWidget(scroll)
 
         # Page 1: Empty state
-        self._empty_state = EmptyStateAnimated(
+        self._empty_state = EmptyState(
+            icon_name="building-03",
             title=tr("page.buildings.no_matching_data"),
             description=tr("page.buildings.empty_description") if hasattr(tr, '__call__') else "",
         )

@@ -725,6 +725,7 @@ class ClaimDetailsPage(QWidget):
             self._unit_data = data.get("unit") or {}
             self._building_data = data.get("building") or {}
             self._survey_id = data.get("survey_id")
+            self._survey_ref_code = data.get("survey_ref_code", "")
             self._evidences = data.get("evidences") or []
             self._claim_id = self._claim_data.get("id") or self._claim_data.get("claimId", "")
 
@@ -781,7 +782,7 @@ class ClaimDetailsPage(QWidget):
         """Update the navy header with claim info and badges."""
         try:
             claim = self._claim_data
-            claim_number = str(claim.get("claimNumber") or "N/A")
+            claim_number = self._survey_ref_code or str(claim.get("claimNumber") or "N/A")
             claim_type = get_claim_type_display(claim.get("claimType") or "")
             case_status = claim.get("caseStatus") or claim.get("status") or 1
             status_label = _get_case_status_label(case_status)
@@ -1198,7 +1199,7 @@ class ClaimDetailsPage(QWidget):
     def _create_evidence_thumbnail(self, evidence):
         from PyQt5.QtGui import QPixmap
 
-        ev_id = str(evidence.get("id") or evidence.get("evidenceId") or "")
+        ev_id = str(evidence.get("id") or "")
         file_name = str(evidence.get("fileName") or evidence.get("originalFileName") or tr("page.claim_details.document"))
 
         card = QFrame()
@@ -1218,15 +1219,7 @@ class ClaimDetailsPage(QWidget):
         thumb.setAlignment(Qt.AlignCenter)
         thumb.setStyleSheet("border: none; background: transparent;")
 
-        local_path = self._download_evidence_file(ev_id, file_name)
-        if local_path:
-            px = QPixmap(local_path)
-            if not px.isNull():
-                thumb.setPixmap(px.scaled(66, 66, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            else:
-                self._set_file_type_icon(thumb, file_name)
-        else:
-            self._set_file_type_icon(thumb, file_name)
+        self._set_file_type_icon(thumb, file_name)
 
         card_layout.addWidget(thumb, alignment=Qt.AlignCenter)
 
@@ -1248,16 +1241,10 @@ class ClaimDetailsPage(QWidget):
                 QPushButton:hover { background-color: #C53030; }
             """)
             del_btn.clicked.connect(lambda _, eid=ev_id: self._on_delete_evidence(eid))
-        elif local_path:
-            from PyQt5.QtCore import QUrl
-            from PyQt5.QtGui import QDesktopServices
-            def _open_file(event, fp=local_path):
-                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
-            card.mousePressEvent = _open_file
-        else:
-            def _on_click_unavailable(event, page=self):
-                Toast.show_toast(page, tr("page.claim_details.cannot_download"), Toast.WARNING)
-            card.mousePressEvent = _on_click_unavailable
+        elif ev_id:
+            def _on_click_download(event, eid=ev_id, fn=file_name, page=self):
+                page._download_and_open_evidence(eid, fn)
+            card.mousePressEvent = _on_click_download
 
         return card
 
@@ -1373,8 +1360,31 @@ class ClaimDetailsPage(QWidget):
             from utils.helpers import download_evidence_file
             return download_evidence_file(evidence_id, file_name)
         except Exception as e:
-            logger.debug(f"Evidence download failed: {e}")
+            logger.warning(f"Evidence download failed for {evidence_id}: {e}")
             return None
+
+    def _download_and_open_evidence(self, evidence_id, file_name):
+        """Download evidence file in background thread, then open it."""
+        import threading
+        from PyQt5.QtCore import QTimer
+
+        page_ref = self
+        Toast.show_toast(self, tr("page.claim_details.downloading"), Toast.INFO)
+
+        def _do_download():
+            local_path = page_ref._download_evidence_file(evidence_id, file_name)
+
+            def _open_on_main():
+                if local_path:
+                    from PyQt5.QtCore import QUrl
+                    from PyQt5.QtGui import QDesktopServices
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(local_path))
+                else:
+                    Toast.show_toast(page_ref, tr("page.claim_details.cannot_download"), Toast.ERROR)
+
+            QTimer.singleShot(0, _open_on_main)
+
+        threading.Thread(target=_do_download, daemon=True).start()
 
     # -- Edit mode --
 

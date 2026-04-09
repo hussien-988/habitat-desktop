@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor
 
-from ui.components.animated_card import EmptyStateAnimated
+from ui.components.empty_state import EmptyState
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -280,7 +280,8 @@ class ImportStep1Packages(QWidget):
         self._content_stack.addWidget(self._scroll)
 
         # Page 1: Empty state
-        self._empty_label = EmptyStateAnimated(
+        self._empty_label = EmptyState(
+            icon_name="upload_file",
             title=tr("wizard.import.step1.empty_state"),
         )
         self._content_stack.addWidget(self._empty_label)

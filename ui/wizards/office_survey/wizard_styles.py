@@ -67,7 +67,7 @@ READONLY_FIELD_STYLE = """
         background-color: #F8FAFF;
         border: 1px solid #dcdfe6;
         border-radius: 10px;
-        padding: 8px 14px;
+        padding: 4px 14px;
         color: #606266;
     }
 """

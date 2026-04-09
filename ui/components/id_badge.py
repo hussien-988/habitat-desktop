@@ -17,9 +17,10 @@ class IDBadgeWidget(QWidget):
 
     language_change_requested = pyqtSignal()
 
-    def __init__(self, user_id="12345", parent=None):
+    def __init__(self, user_id="12345", display_name="", parent=None):
         super().__init__(parent)
         self.user_id = user_id
+        self.display_name = display_name
         self._setup_ui()
         self._apply_styling()
 
@@ -49,8 +50,12 @@ class IDBadgeWidget(QWidget):
         """)
         return icon_label
 
-    def _create_id_text_label(self, display_id):
-        id_label = QLabel(f"ID {display_id}")
+    def _create_id_text_label(self, display_id, display_name=""):
+        if display_name:
+            label_text = display_name
+        else:
+            label_text = f"ID {display_id}"
+        id_label = QLabel(label_text)
         font = QFont(Typography.FONT_FAMILY_ARABIC)
         font.setPixelSize(14)
         font.setLetterSpacing(QFont.AbsoluteSpacing, 0.5)
@@ -72,7 +77,7 @@ class IDBadgeWidget(QWidget):
         layout.addWidget(self.icon_label)
 
         # ID text
-        self.id_label = self._create_id_text_label(display_id)
+        self.id_label = self._create_id_text_label(display_id, self.display_name)
         layout.addWidget(self.id_label)
 
         self.setFixedHeight(ScreenScale.h(30))
@@ -98,3 +103,12 @@ class IDBadgeWidget(QWidget):
         display_id = self._format_user_id(user_id)
         if hasattr(self, 'id_label'):
             self.id_label.setText(f"ID {display_id}")
+
+    def set_display_name(self, name: str):
+        self.display_name = name
+        if hasattr(self, 'id_label'):
+            if name:
+                self.id_label.setText(name)
+            else:
+                display_id = self._format_user_id(self.user_id)
+                self.id_label.setText(f"ID {display_id}")

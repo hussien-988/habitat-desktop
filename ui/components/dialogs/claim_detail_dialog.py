@@ -324,6 +324,7 @@ class ClaimDetailDialog(QDialog):
 
         # Update header
         claim_number = (
+            data.get("survey_ref_code") or
             self._claim_data.get("claimNumber", "")
             or self._claim_data.get("claimId", "")
             or self._claim_id

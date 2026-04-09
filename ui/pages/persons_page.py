@@ -24,7 +24,8 @@ from services.api_worker import ApiWorker
 from services.validation_service import ValidationService
 from ui.components.toast import Toast
 from ui.components.base_table_model import BaseTableModel
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.animated_card import AnimatedCard, animate_card_entrance
+from ui.components.empty_state import EmptyState
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
@@ -880,7 +881,8 @@ class PersonsPage(QWidget):
         self._stack.addWidget(self._scroll)  # index 0
 
         # Empty state
-        self._empty_state = EmptyStateAnimated(
+        self._empty_state = EmptyState(
+            icon_name="user-group",
             title=tr("page.persons.no_persons"),
             description=tr("page.persons.empty_description")
         )

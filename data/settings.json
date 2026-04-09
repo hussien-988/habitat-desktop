@@ -1,5 +1,5 @@
 {
   "tile_server_url": "http://localhost:5000",
   "api_server_url": "http://localhost:8080",
-  "language": "ar"
+  "language": "en"
 }

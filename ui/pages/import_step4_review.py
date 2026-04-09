@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 
-from ui.components.animated_card import EmptyStateAnimated
+from ui.components.empty_state import EmptyState
 from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -187,7 +187,8 @@ class ImportStep4Review(QWidget):
         table_layout.addWidget(table_title)
 
         # Empty state label
-        self._empty_label = EmptyStateAnimated(
+        self._empty_label = EmptyState(
+            icon_name="save",
             title=tr("wizard.import.step4.no_staged_entities"),
         )
         self._empty_label.setMinimumHeight(ScreenScale.h(200))

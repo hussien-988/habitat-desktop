@@ -58,6 +58,7 @@ class TRRCMSApiClient:
         self._login_cooldown_until: Optional[datetime] = None
         self._on_session_expired = None
         self._on_password_change_required = None
+        self._session_expired_flag = False
         logger.info(f"API client initialized for {self.base_url}")
 
     def set_session_expired_callback(self, callback):
@@ -89,6 +90,7 @@ class TRRCMSApiClient:
 
             self._login_failures = 0
             self._login_cooldown_until = None
+            self._session_expired_flag = False
             logger.info(f"Logged in as {username}")
             return data
 
@@ -100,6 +102,7 @@ class TRRCMSApiClient:
         """Set access token from external source."""
         self.access_token = token
         self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        self._session_expired_flag = False
         logger.debug(f"Access token updated externally (expires in {expires_in}s)")
 
     def refresh_access_token(self) -> bool:
@@ -158,6 +161,9 @@ class TRRCMSApiClient:
     def _ensure_valid_token(self):
         """التأكد من صلاحية الـ Token قبل الطلب."""
         if not self.access_token:
+            if not self._session_expired_flag:
+                self._session_expired_flag = True
+                logger.warning("Not authenticated — suppressing further warnings")
             raise RuntimeError("Not authenticated")
 
         if self.token_expires_at:
@@ -167,6 +173,7 @@ class TRRCMSApiClient:
                 if not self.refresh_access_token():
                     logger.warning("Token refresh failed — session expired")
                     self.access_token = None
+                    self._session_expired_flag = True
                     if self._on_session_expired:
                         self._on_session_expired()
                     raise RuntimeError("Session expired")
@@ -247,12 +254,17 @@ class TRRCMSApiClient:
                 except Exception:
                     pass
                 if status_code == 401:
+                    if self._session_expired_flag:
+                        raise ApiException(
+                            message=str(e), status_code=401, response_data=response_data
+                        )
                     # Only handle if the token hasn't changed (new login) since our request
                     if self.access_token and self.access_token == token_used:
                         if self.refresh_token and self.refresh_access_token():
                             continue  # Retry with refreshed token
                         logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
                         self.access_token = None
+                        self._session_expired_flag = True
                         if self._on_session_expired:
                             self._on_session_expired()
                     elif self.access_token != token_used:
@@ -1522,7 +1534,7 @@ class TRRCMSApiClient:
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents"
         url = f"{self.base_url}{endpoint}"
 
         file_name = os.path.basename(file_path)
@@ -1788,8 +1800,10 @@ class TRRCMSApiClient:
             params["evidenceType"] = evidence_type
         result = self._request("GET", f"/v2/surveys/{survey_id}/evidence", params=params)
         if isinstance(result, dict):
-            return result.get("items", [])
-        return result if isinstance(result, list) else []
+            items = result.get("items", [])
+        else:
+            items = result if isinstance(result, list) else []
+        return items
 
     def get_relation_evidences(
         self,
@@ -1832,6 +1846,7 @@ class TRRCMSApiClient:
 
         urls = [
             f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download",
+            f"{self.base_url}/v2/surveys/evidence/{evidence_id}/download",
         ]
 
         last_error = None
@@ -1848,7 +1863,12 @@ class TRRCMSApiClient:
                     return save_path
             except requests.exceptions.HTTPError as e:
                 status_code = e.response.status_code if e.response is not None else 0
-                logger.debug(f"[API ERR] {status_code} {url.replace(self.base_url, '')}")
+                body = ""
+                try:
+                    body = e.response.text[:200] if e.response is not None else ""
+                except Exception:
+                    pass
+                logger.warning(f"Download failed {status_code} {url.replace(self.base_url, '')} — {body}")
                 last_error = e
                 continue
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:

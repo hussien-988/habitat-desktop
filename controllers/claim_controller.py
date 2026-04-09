@@ -104,9 +104,14 @@ class ClaimController(BaseController):
             if hasattr(e, 'status_code'):
                 error_msg = f"HTTP {e.status_code}: {error_msg}"
             if hasattr(e, 'response_data') and e.response_data:
-                detail = e.response_data.get('detail') or e.response_data.get('title') or ''
-                if detail:
-                    error_msg = f"{error_msg} — {detail}"
+                backend_msg = (e.response_data.get('message') or
+                               e.response_data.get('detail') or
+                               e.response_data.get('title') or '')
+                if backend_msg:
+                    error_msg = f"{error_msg} — {backend_msg}"
+                # Detect orphaned evidence relation error
+                if 'EvidenceRelation' in backend_msg and 'not found' in backend_msg.lower():
+                    error_msg = "يوجد مستند محذوف مرتبط بهذه المطالبة — يرجى فصله من قائمة المستندات أولاً"
             logger.error(f"Failed to update claim {claim_id}: {error_msg}", exc_info=True)
             return OperationResult.fail(message=error_msg)
 
@@ -407,6 +412,16 @@ class ClaimController(BaseController):
                          or claim_dto.get("survey_id"))
             result["survey_id"] = survey_id
 
+            # Survey reference code — fetch to show in details
+            if survey_id:
+                try:
+                    survey_detail = self._api._request("GET", f"/v1/Surveys/office/{survey_id}")
+                    if isinstance(survey_detail, dict):
+                        result["survey_ref_code"] = survey_detail.get("referenceCode", "")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch survey reference code: {e}")
+                    result["survey_ref_code"] = ""
+
             # Relation enrichment — fetch ownershipShare from relation
             relation_id = hint_relation_id or claim_dto.get("sourceRelationId")
             if relation_id and survey_id and unit_id:
@@ -419,18 +434,17 @@ class ClaimController(BaseController):
                 except Exception as e:
                     logger.warning(f"Failed to fetch relation for ownershipShare: {e}")
 
-            # Evidences — use evidenceIds from claim DTO + get_evidence_by_id()
-            evidence_ids = claim_dto.get("evidenceIds") or []
-            if evidence_ids:
-                evidences = []
-                for eid in evidence_ids:
-                    try:
-                        ev = self._api.get_evidence_by_id(eid)
-                        if ev:
-                            evidences.append(ev)
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch evidence {eid}: {e}")
-                result["evidences"] = evidences
+            # Evidences — bulk fetch from survey, filter by claim evidenceIds
+            evidence_ids = set(claim_dto.get("evidenceIds") or [])
+            if evidence_ids and survey_id:
+                try:
+                    all_ev = self._api.get_survey_evidences(survey_id)
+                    result["evidences"] = [
+                        ev for ev in all_ev
+                        if str(ev.get("id") or ev.get("evidenceId") or "") in evidence_ids
+                    ]
+                except Exception as e:
+                    logger.warning(f"Failed to fetch survey evidences: {e}")
 
             return OperationResult.ok(data=result)
         except Exception as e:

@@ -272,6 +272,10 @@ class OccupancyClaimsStep(BaseStep):
             id_photos = self.context.applicant.get('id_photo_paths', [])
             if id_photos:
                 person_data_copy['_uploaded_files'] = id_photos
+            else:
+                id_ev = self.context.applicant.get('id_photo_evidences', [])
+                if id_ev:
+                    person_data_copy['_id_photo_evidences'] = id_ev
 
         is_finalized = self.context.status == "finalized"
 

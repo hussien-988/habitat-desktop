@@ -17,12 +17,10 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect, QStackedWidget,
 )
 from PyQt5.QtCore import (
-    Qt, pyqtSignal, pyqtProperty, QTimer, QRectF, QPoint, QSize,
-    QPropertyAnimation, QEasingCurve,
+    Qt, pyqtSignal, pyqtProperty, QTimer,
 )
 from PyQt5.QtGui import (
-    QFont, QColor, QPainter, QLinearGradient, QRadialGradient, QPen,
-    QPainterPath, QCursor,
+    QFont, QColor, QCursor,
 )
 
 from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale
@@ -30,9 +28,10 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
-from ui.components.stat_pill import StatPill
+from ui.components.empty_state import EmptyState
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.search_context_bar import SearchContextBar
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_source_display, get_claim_type_display
 from services.api_worker import ApiWorker
@@ -339,222 +338,6 @@ class _ClaimCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-#  _EmptyStateAnimated — Dark navy cartographic empty state
-# ---------------------------------------------------------------------------
-
-class _EmptyStateAnimated(QWidget):
-    """Dark-themed empty state with constellation particles and
-    cartographic motifs."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._title_text = tr("page.claims.empty_open")
-        self._desc_text = tr("page.claims.empty_description")
-
-        self._anim_start = time.time()
-
-        self._shimmer_pos = 0.0
-        self._shimmer_anim = QPropertyAnimation(self, b"shimmerPos")
-        self._shimmer_anim.setDuration(2500)
-        self._shimmer_anim.setStartValue(0.0)
-        self._shimmer_anim.setEndValue(1.0)
-        self._shimmer_anim.setEasingCurve(QEasingCurve.InOutQuad)
-        self._shimmer_anim.setLoopCount(-1)
-        self._shimmer_anim.start()
-
-        random.seed(77)
-        self._particles = []
-        for _ in range(12):
-            self._particles.append({
-                "x": random.uniform(0.05, 0.95),
-                "y": random.uniform(0.05, 0.95),
-                "phase": random.uniform(0, math.tau),
-                "speed": random.uniform(0.3, 0.8),
-            })
-
-        self._timer = QTimer(self)
-        self._timer.setInterval(50)
-        self._timer.timeout.connect(self.update)
-        self._timer.start()
-
-    @pyqtProperty(float)
-    def shimmerPos(self):
-        return self._shimmer_pos
-
-    @shimmerPos.setter
-    def shimmerPos(self, val):
-        self._shimmer_pos = val
-        self.update()
-
-    def set_title(self, text: str):
-        self._title_text = text
-        self.update()
-
-    def set_description(self, text: str):
-        self._desc_text = text
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time() - self._anim_start
-
-        # Dark navy gradient
-        bg_grad = QLinearGradient(0, 0, w, h)
-        bg_grad.setColorAt(0.0, QColor("#0E2035"))
-        bg_grad.setColorAt(0.5, QColor("#132D50"))
-        bg_grad.setColorAt(1.0, QColor("#1A3860"))
-        painter.fillRect(0, 0, w, h, bg_grad)
-
-        # Grid
-        painter.setPen(QPen(QColor(56, 144, 223, 12), 0.5))
-        for x in range(0, w, 60):
-            painter.drawLine(x, 0, x, h)
-        for y in range(0, h, 60):
-            painter.drawLine(0, y, w, y)
-
-        # Particles
-        positions = []
-        for p in self._particles:
-            px = int((p["x"] + 0.012 * math.sin(t * p["speed"] + p["phase"])) * w)
-            py = int((p["y"] + 0.010 * math.cos(t * p["speed"] * 0.7 + p["phase"])) * h)
-            px = max(4, min(w - 4, px))
-            py = max(4, min(h - 4, py))
-            positions.append((px, py))
-            alpha = 35 + int(18 * math.sin(t * 1.5 + p["phase"]))
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(139, 172, 200, alpha))
-            painter.drawEllipse(QPoint(px, py), 2, 2)
-
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                dx = positions[i][0] - positions[j][0]
-                dy = positions[i][1] - positions[j][1]
-                dist = math.sqrt(dx * dx + dy * dy)
-                if dist < 150:
-                    alpha = int(12 * (1 - dist / 150))
-                    painter.setPen(QPen(QColor(139, 172, 200, alpha), 1))
-                    painter.drawLine(
-                        positions[i][0], positions[i][1],
-                        positions[j][0], positions[j][1]
-                    )
-
-        cx, cy = w // 2, int(h * 0.40)
-        fw, fh = 110, 80
-
-        # Breathing glow
-        glow_alpha = 20 + int(12 * math.sin(t * 0.8))
-        glow = QRadialGradient(cx, cy, 100)
-        glow.setColorAt(0, QColor(56, 144, 223, glow_alpha))
-        glow.setColorAt(1, QColor(56, 144, 223, 0))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(glow)
-        painter.drawEllipse(cx - 100, cy - 100, 200, 200)
-
-        # Concentric circles
-        for i, radius in enumerate([40, 65, 90]):
-            alpha = int(15 + 8 * math.sin(t * 0.4 + i * 1.2))
-            painter.setPen(QPen(QColor(56, 144, 223, alpha), 0.8))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
-
-        # Crosshairs
-        cross_alpha = int(12 + 6 * math.sin(t * 0.3))
-        painter.setPen(QPen(QColor(56, 144, 223, cross_alpha), 0.5))
-        painter.drawLine(cx - 100, cy, cx - 55, cy)
-        painter.drawLine(cx + 55, cy, cx + 100, cy)
-        painter.drawLine(cx, cy - 85, cx, cy - 50)
-        painter.drawLine(cx, cy + 50, cx, cy + 85)
-
-        # Folder body
-        folder = QPainterPath()
-        folder.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        folder.lineTo(cx - fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy + fh // 2)
-        folder.lineTo(cx + fw // 2, cy - fh // 2 + 16)
-        folder.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(15, 31, 61, 180))
-        painter.drawPath(folder)
-
-        # Folder tab
-        tab_path = QPainterPath()
-        tab_path.moveTo(cx - fw // 2, cy - fh // 2 + 16)
-        tab_path.lineTo(cx - fw // 2, cy - fh // 2 + 4)
-        tab_path.lineTo(cx - fw // 2 + 4, cy - fh // 2)
-        tab_path.lineTo(cx - 12, cy - fh // 2)
-        tab_path.lineTo(cx - 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 8, cy - fh // 2 + 8)
-        tab_path.lineTo(cx + 12, cy - fh // 2 + 16)
-        tab_path.closeSubpath()
-        painter.setPen(QPen(QColor(56, 144, 223, 40), 1.5))
-        painter.setBrush(QColor(20, 40, 70, 200))
-        painter.drawPath(tab_path)
-
-        # Documents
-        doc_x, doc_y = cx - 18, cy - fh // 2 + 24
-        for i in range(2):
-            dx = doc_x + i * 14
-            dy = doc_y + i * 5
-            painter.setPen(QPen(QColor(56, 144, 223, 30), 1))
-            painter.setBrush(QColor(25, 50, 85))
-            painter.drawRoundedRect(QRectF(dx, dy, 30, 38), 3, 3)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(56, 144, 223, 25))
-            for line_y in range(3):
-                lw = 20 if line_y < 2 else 13
-                painter.drawRect(QRectF(dx + 5, dy + 9 + line_y * 8, lw, 2))
-
-        # Ground shadow
-        painter.setPen(QPen(QColor(56, 144, 223, 20), 1))
-        painter.drawLine(cx - fw // 2 + 8, cy + fh // 2 + 3,
-                         cx + fw // 2 - 8, cy + fh // 2 + 3)
-
-        # Shimmer sweep
-        shimmer_x = int((self._shimmer_pos * 2 - 0.5) * fw + cx - fw // 2)
-        sg = QLinearGradient(shimmer_x - 30, 0, shimmer_x + 30, 0)
-        sg.setColorAt(0, QColor(56, 144, 223, 0))
-        sg.setColorAt(0.5, QColor(91, 168, 240, 50))
-        sg.setColorAt(1, QColor(56, 144, 223, 0))
-        cp = QPainterPath()
-        cp.addRect(QRectF(cx - fw // 2, cy - fh // 2, fw, fh))
-        painter.setClipPath(cp)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(sg)
-        painter.drawRect(shimmer_x - 30, cy - fh // 2, 60, fh)
-        painter.setClipping(False)
-
-        # Title
-        painter.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(QRectF(0, cy + fh // 2 + 28, w, 30), Qt.AlignCenter, self._title_text)
-
-        # Description
-        painter.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
-        painter.setPen(QColor(139, 172, 200, 200))
-        painter.drawText(QRectF(w * 0.2, cy + fh // 2 + 62, w * 0.6, 40),
-                         Qt.AlignCenter | Qt.TextWordWrap, self._desc_text)
-
-        painter.end()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        if not self._timer.isActive():
-            self._timer.start()
-        if self._shimmer_anim.state() != QPropertyAnimation.Running:
-            self._shimmer_anim.start()
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._timer.stop()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update()
-
-
-# ---------------------------------------------------------------------------
 #  CompletedClaimsPage — Main page widget
 # ---------------------------------------------------------------------------
 
@@ -606,12 +389,6 @@ class CompletedClaimsPage(QWidget):
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.claims.subtitle"))
 
-        self._stat_open = StatPill(tr("page.claims.tab_open"))
-        self._header.add_stat_pill(self._stat_open)
-
-        self._stat_closed = StatPill(tr("page.claims.tab_closed"))
-        self._header.add_stat_pill(self._stat_closed)
-
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
         self._tab_open = NavStyleTab(tr("page.claims.tab_open"))
@@ -628,8 +405,14 @@ class CompletedClaimsPage(QWidget):
         self._tab_closed.clicked.connect(lambda: self._on_tab("closed"))
         self._header.add_tab(self._tab_closed)
 
+        # Search context bar (shown when search is active, hidden initially)
+        self._search_bar = SearchContextBar(tabs=[self._tab_open, self._tab_closed])
+        self._search_bar.back_clicked.connect(self._exit_search_mode)
+        self._search_bar.hide()
+        self._header.add_row2_widget(self._search_bar)
+
         self._search = QLineEdit()
-        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -657,7 +440,11 @@ class CompletedClaimsPage(QWidget):
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
         self._search.textChanged.connect(self._on_search_text_changed)
-        self._header.set_search_field(self._search)
+
+        # Attach clear action to search field
+        self._search_bar.attach_clear_action(self._search)
+
+        self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
 
@@ -667,7 +454,7 @@ class CompletedClaimsPage(QWidget):
 
         # Light content area
         self._content_wrapper = QWidget()
-        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        self._content_wrapper.setStyleSheet("background-color: white;")
         content_layout = QVBoxLayout(self._content_wrapper)
         content_layout.setContentsMargins(
             PageDimensions.content_padding_h(), 14,
@@ -698,12 +485,13 @@ class CompletedClaimsPage(QWidget):
         self._scroll.setWidget(self._scroll_content)
         self._stack.addWidget(self._scroll)
 
-        self._empty_state = _EmptyStateAnimated()
+        self._empty_state = EmptyState(
+            icon_name="folder",
+            title=tr("page.claims.empty_open"),
+            description=tr("page.claims.empty_description"),
+        )
         self._stack.addWidget(self._empty_state)
 
-        self._results_bar = self._build_results_bar()
-        content_layout.addWidget(self._results_bar)
-        self._results_bar.hide()
         content_layout.addWidget(self._stack, 1)
 
         self._pagination = self._create_pagination()
@@ -784,8 +572,6 @@ class CompletedClaimsPage(QWidget):
             closed_text = f"{closed_text} ({self._closed_count})"
         self._tab_open.set_text(open_text)
         self._tab_closed.set_text(closed_text)
-        self._stat_open.set_count(self._open_count)
-        self._stat_closed.set_count(self._closed_count)
 
     # -- Events --
 
@@ -810,56 +596,18 @@ class CompletedClaimsPage(QWidget):
         if self._search_mode:
             return
         self._search_mode = True
-        self._tab_open.hide()
-        self._tab_closed.hide()
-        self._results_bar.show()
+        self._search_bar.enter_search_mode()
 
     def _exit_search_mode(self):
         if not self._search_mode:
             return
         self._search_mode = False
-        self._tab_open.show()
-        self._tab_closed.show()
-        self._results_bar.hide()
+        self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
         self._current_page = 1
         self._load_claims()
-
-    def _build_results_bar(self):
-        bar = QFrame()
-        bar.setFixedHeight(ScreenScale.h(44))
-        bar.setStyleSheet(
-            "QFrame { background: rgba(56, 144, 223, 0.07);"
-            " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
-            " margin-bottom: 10px; }"
-        )
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(12)
-
-        self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(30))
-        self._back_btn.setCursor(Qt.PointingHandCursor)
-        self._back_btn.setStyleSheet(
-            "QPushButton { background: rgba(56, 144, 223, 0.15);"
-            " border: 1px solid rgba(56, 144, 223, 0.3); border-radius: 6px;"
-            " color: #3890DF; font-weight: 600; font-size: 12px; }"
-            " QPushButton:hover { background: rgba(56, 144, 223, 0.25); }"
-        )
-        self._back_btn.clicked.connect(self._exit_search_mode)
-        layout.addWidget(self._back_btn)
-
-        self._results_title = QLabel("نتائج البحث")
-        self._results_title.setStyleSheet(
-            "color: #1E3A5F; font-weight: 700; font-size: 14px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(self._results_title)
-        layout.addStretch()
-
-        return bar
 
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
@@ -1049,7 +797,7 @@ class CompletedClaimsPage(QWidget):
                     address = " > ".join(parts)
 
             return {
-                "claim_id": s.get("claimNumber", "") or s.get("claimId", "N/A"),
+                "claim_id": s.get("referenceCode") or s.get("claimNumber", "") or s.get("claimId", "N/A"),
                 "claim_uuid": s.get("claimId", "") or s.get("id", ""),
                 "claimant_name": claimant,
                 "date": date_str[:10] if date_str and not date_str.startswith("0001") else "",
@@ -1082,6 +830,12 @@ class CompletedClaimsPage(QWidget):
                 return
 
             self._stack.setCurrentIndex(0)
+
+            # Update search result count in header
+            if self._search_mode:
+                total = len(self.claims_data)
+                term = self._search.text().strip()
+                self._search_bar.update_count(term, total)
 
             for claim in self.claims_data:
                 card = _ClaimCard(claim)
@@ -1152,9 +906,14 @@ class CompletedClaimsPage(QWidget):
         self._card_widgets.clear()
 
     def _update_empty_text(self):
-        msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
-        self._empty_state.set_title(msg)
-        self._empty_state.set_description(tr("page.claims.empty_description"))
+        if self._search_mode:
+            term = self._search.text().strip()
+            self._empty_state.set_title(tr("page.claims.no_search_results"))
+            self._empty_state.set_description(f"\"{term}\"")
+        else:
+            msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
+            self._empty_state.set_title(msg)
+            self._empty_state.set_description(tr("page.claims.empty_description"))
 
     # -- Interaction --
 
@@ -1179,10 +938,9 @@ class CompletedClaimsPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("page.claims.subtitle"))
-        self._search.setPlaceholderText("بحث برقم مراجعة المسح (OFC-...)")
-        self._stat_open.set_label(tr("page.claims.tab_open"))
-        self._stat_closed.set_label(tr("page.claims.tab_closed"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
 
+        self._search_bar.update_language()
         self._update_tab_labels()
 
         self._scroll.setLayoutDirection(direction)

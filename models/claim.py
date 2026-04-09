@@ -125,7 +125,7 @@ class Claim:
 
     @property
     def case_category_ar(self) -> str:
-        return "مغلقة" if self.claim_type == "ownership" else "مفتوحة"
+        return "ملكية" if self.claim_type == "ownership" else "اشغال"
 
     @property
     def source_display(self) -> str:

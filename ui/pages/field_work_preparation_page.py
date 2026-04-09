@@ -85,15 +85,15 @@ class FieldWorkPreparationPage(QWidget):
         """Create footer with navigation buttons."""
         footer = QFrame()
         footer.setStyleSheet(StyleManager.nav_footer())
-        footer.setFixedHeight(ScreenScale.h(74))
+        footer.setFixedHeight(ScreenScale.h(58))
 
         layout = QHBoxLayout(footer)
-        layout.setContentsMargins(130, 12, 130, 12)
+        layout.setContentsMargins(130, 8, 130, 8)
         layout.setSpacing(0)
 
         # Back button
         self.btn_back = QPushButton(tr("wizard.field_work.btn_back"))
-        self.btn_back.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
+        self.btn_back.setFixedSize(ScreenScale.w(252), ScreenScale.h(42))
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
@@ -105,7 +105,7 @@ class FieldWorkPreparationPage(QWidget):
 
         # Next button
         self.btn_next = QPushButton(tr("wizard.field_work.btn_next"))
-        self.btn_next.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
+        self.btn_next.setFixedSize(ScreenScale.w(252), ScreenScale.h(42))
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_next.setStyleSheet(StyleManager.nav_button_primary())

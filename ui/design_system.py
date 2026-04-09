@@ -335,10 +335,10 @@ class NavbarDimensions:
     """Navbar dimension constants."""
     # Container dimensions
     CONTAINER_WIDTH = 1512
-    CONTAINER_HEIGHT = 150
+    CONTAINER_HEIGHT = 138
 
     # Top bar dimensions
-    TOP_BAR_HEIGHT = 80
+    TOP_BAR_HEIGHT = 68
 
     # Logo dimensions
     LOGO_WIDTH = 142.77
@@ -534,22 +534,22 @@ class ButtonDimensions:
 
     # Step Tab/Indicator
     STEP_TAB_WIDTH = 111
-    STEP_TAB_HEIGHT = 35
+    STEP_TAB_HEIGHT = 28
     STEP_TAB_BORDER_RADIUS = 14
     STEP_TAB_PADDING_H = 16
-    STEP_TAB_PADDING_V = 10
+    STEP_TAB_PADDING_V = 6
     STEP_TAB_GAP = 20
     STEP_TAB_FONT_SIZE = 9
 
     # Footer Card
     FOOTER_WIDTH = 1512
-    FOOTER_HEIGHT = 74
+    FOOTER_HEIGHT = 58
     FOOTER_PADDING_H = 130
-    FOOTER_PADDING_V = 12
+    FOOTER_PADDING_V = 8
 
     # Footer Navigation Buttons
     NAV_BUTTON_WIDTH = 252
-    NAV_BUTTON_HEIGHT = 50
+    NAV_BUTTON_HEIGHT = 42
     NAV_BUTTON_GAP = 748
     NAV_BUTTON_BORDER_RADIUS = 8
     NAV_BUTTON_FONT_SIZE = 12

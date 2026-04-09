@@ -33,6 +33,7 @@ from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from ui.components.search_context_bar import SearchContextBar
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_survey_type_display
 from services.api_worker import ApiWorker
@@ -464,7 +465,6 @@ class CasesPage(QWidget):
         self._user_role = None
         self._user_id = None
         self._search_mode = False
-        self._tabs_visibility = {}
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -524,9 +524,17 @@ class CasesPage(QWidget):
         self._tab_obstructed.clicked.connect(lambda: self._on_tab("obstructed"))
         self._header.add_tab(self._tab_obstructed)
 
-        # Search field (row 2)
+        # Search context bar (shown when search is active, hidden initially)
+        self._search_bar = SearchContextBar(
+            tabs=[self._tab_draft, self._tab_finalized, self._tab_obstructed]
+        )
+        self._search_bar.back_clicked.connect(self._exit_search_mode)
+        self._search_bar.hide()
+        self._header.add_row2_widget(self._search_bar)
+
+        # Search field (row 1)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
@@ -539,7 +547,11 @@ class CasesPage(QWidget):
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.textChanged.connect(self._on_search_changed)
         self._search.returnPressed.connect(self._on_search_submitted)
-        self._header.set_search_field(self._search)
+
+        # Attach clear action to search field
+        self._search_bar.attach_clear_action(self._search)
+
+        self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
 
@@ -549,7 +561,7 @@ class CasesPage(QWidget):
 
         # Light content area
         self._content_wrapper = QWidget()
-        self._content_wrapper.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        self._content_wrapper.setStyleSheet("background-color: white;")
         content_layout = QVBoxLayout(self._content_wrapper)
         content_layout.setContentsMargins(
             PageDimensions.content_padding_h(), 14,
@@ -583,9 +595,6 @@ class CasesPage(QWidget):
         self._empty_state = _EmptyStateAnimated()
         self._stack.addWidget(self._empty_state)
 
-        self._results_bar = self._build_results_bar()
-        content_layout.addWidget(self._results_bar)
-        self._results_bar.hide()
         content_layout.addWidget(self._stack, 1)
 
         self._pagination = self._create_pagination()
@@ -714,60 +723,18 @@ class CasesPage(QWidget):
         if self._search_mode:
             return
         self._search_mode = True
-        self._tabs_visibility = {
-            "draft": self._tab_draft.isVisible(),
-            "finalized": self._tab_finalized.isVisible(),
-            "obstructed": self._tab_obstructed.isVisible(),
-        }
-        self._tab_draft.hide()
-        self._tab_finalized.hide()
-        self._tab_obstructed.hide()
-        self._results_bar.show()
+        self._search_bar.enter_search_mode()
 
     def _exit_search_mode(self):
         if not self._search_mode:
             return
         self._search_mode = False
-        self._tab_draft.setVisible(self._tabs_visibility.get("draft", True))
-        self._tab_finalized.setVisible(self._tabs_visibility.get("finalized", True))
-        self._tab_obstructed.setVisible(self._tabs_visibility.get("obstructed", True))
-        self._results_bar.hide()
+        self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
         self._current_page = 1
         self._load_surveys()
-
-    def _build_results_bar(self):
-        bar = QFrame()
-        bar.setFixedHeight(ScreenScale.h(44))
-        bar.setStyleSheet(
-            "QFrame { background: rgba(56, 144, 223, 0.07);"
-            " border-radius: 8px; border: 1px solid rgba(56, 144, 223, 0.15);"
-            " margin-bottom: 10px; }"
-        )
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 0, 12, 0)
-        layout.setSpacing(12)
-        self._back_btn = QPushButton("رجوع")
-        self._back_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(30))
-        self._back_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._back_btn.setStyleSheet(
-            "QPushButton { background: rgba(56, 144, 223, 0.15);"
-            " border: 1px solid rgba(56, 144, 223, 0.3); border-radius: 6px;"
-            " color: #3890DF; font-weight: 600; font-size: 12px; }"
-            " QPushButton:hover { background: rgba(56, 144, 223, 0.25); }"
-        )
-        self._back_btn.clicked.connect(self._exit_search_mode)
-        layout.addWidget(self._back_btn)
-        self._results_title = QLabel("نتائج البحث")
-        self._results_title.setStyleSheet(
-            "color: #1E3A5F; font-weight: 700; font-size: 14px;"
-            " background: transparent; border: none;"
-        )
-        layout.addWidget(self._results_title)
-        layout.addStretch()
-        return bar
 
     # -- Pagination --
 
@@ -799,18 +766,9 @@ class CasesPage(QWidget):
     # -- Tab labels with counts --
 
     def _update_tab_labels(self):
-        draft_text = tr("page.cases.tab_draft")
-        finalized_text = tr("page.cases.tab_finalized")
-        obstructed_text = tr("page.cases.tab_obstructed")
-        if self._draft_count > 0:
-            draft_text = f"{draft_text} ({self._draft_count})"
-        if self._finalized_count > 0:
-            finalized_text = f"{finalized_text} ({self._finalized_count})"
-        if self._obstructed_count > 0:
-            obstructed_text = f"{obstructed_text} ({self._obstructed_count})"
-        self._tab_draft.set_text(draft_text)
-        self._tab_finalized.set_text(finalized_text)
-        self._tab_obstructed.set_text(obstructed_text)
+        self._tab_draft.set_text(tr("page.cases.tab_draft"))
+        self._tab_finalized.set_text(tr("page.cases.tab_finalized"))
+        self._tab_obstructed.set_text(tr("page.cases.tab_obstructed"))
 
     # -- Data loading --
 
@@ -857,7 +815,7 @@ class CasesPage(QWidget):
                 "sortDirection": "desc",
             }
             if name:
-                params["contactPersonName"] = name
+                params["referenceCode"] = name
                 # No status filter — search across all statuses
             else:
                 params["status"] = status
@@ -937,6 +895,10 @@ class CasesPage(QWidget):
             self._populate_cards(self._all_data)
             self._update_tab_labels()
             self._update_pagination()
+            if self._search_mode:
+                total = result.get("total_count", 0)
+                term = self._search.text().strip()
+                self._search_bar.update_count(term, total)
         except Exception as e:
             logger.error(f"Error processing surveys: {e}")
             self._all_data = []
@@ -1098,9 +1060,10 @@ class CasesPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("cases.page.title"))
-        self._search.setPlaceholderText(tr("page.cases.search_person"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._add_btn.setText(tr("wizard.button.add_case"))
 
+        self._search_bar.update_language()
         self._update_tab_labels()
 
         self._scroll.setLayoutDirection(direction)

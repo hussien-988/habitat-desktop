@@ -32,7 +32,8 @@ from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
-from ui.components.animated_card import AnimatedCard, EmptyStateAnimated, animate_card_entrance
+from ui.components.animated_card import AnimatedCard, animate_card_entrance
+from ui.components.empty_state import EmptyState
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
@@ -240,7 +241,8 @@ class UnitsPage(QWidget):
         self._scroll.setWidget(self._scroll_content)
         self._stack.addWidget(self._scroll)
 
-        self._empty_state = EmptyStateAnimated(
+        self._empty_state = EmptyState(
+            icon_name="elements",
             title=tr("page.units.no_units"),
             description=tr("page.units.empty_description") if hasattr(tr, '__call__') else "",
         )

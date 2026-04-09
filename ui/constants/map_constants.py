@@ -72,8 +72,8 @@ class MapConstants:
     MAX_MARKERS_PER_VIEWPORT = 2000
     CLUSTER_MAX_RADIUS = 60
     DISABLE_CLUSTERING_AT_ZOOM = 15
-    CHUNK_INTERVAL = 100  # Chunk loading interval (ms)
-    CHUNK_DELAY = 10  # Delay between chunks (ms)
+    CHUNK_INTERVAL = 50  # Chunk loading interval (ms) - reduced from 100 for faster rendering
+    CHUNK_DELAY = 5  # Delay between chunks (ms) - reduced from 10 for faster rendering
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف
     TITLE_BAR_HEIGHT = 32  # px
     SEARCH_BAR_HEIGHT = 42  # px

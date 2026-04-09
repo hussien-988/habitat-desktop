@@ -92,9 +92,6 @@ class DraggableFrame(QFrame):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
-        navbar = self.parent()
-        if hasattr(navbar, '_toggle_maximize'):
-            navbar._toggle_maximize()
         event.accept()
 
 
@@ -254,8 +251,19 @@ class _PulsingLogo(QWidget):
         self._logo = LogoWidget(height=height, parent=self)
         self._opacity = 1.0
 
+        # Container style matching navbar_pill and IDBadge aesthetic
+        self.setObjectName("pulsing_logo")
+        self.setFixedHeight(ScreenScale.h(36))
+        self.setStyleSheet(f"""
+            QWidget#pulsing_logo {{
+                background: rgba(10, 22, 40, 180);
+                border: 1px solid rgba(56, 144, 223, 40);
+                border-radius: {ScreenScale.h(18)}px;
+            }}
+        """)
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(10, 0, 10, 0)
         layout.setSpacing(0)
         layout.addWidget(self._logo)
 
@@ -310,10 +318,11 @@ class Navbar(QFrame):
     password_change_requested = pyqtSignal()
     import_requested = pyqtSignal()
 
-    def __init__(self, user_id=None, parent=None):
+    def __init__(self, user_id=None, username="", parent=None):
         super().__init__(parent)
 
         self.user_id = user_id or "12345"
+        self.username = username
         self.setObjectName("navbar")
         self.current_tab_index = 0
         self.tab_buttons = []
@@ -377,14 +386,14 @@ class Navbar(QFrame):
         layout.addWidget(self._settings_pill)
 
         # ID Badge
-        self.id_badge = IDBadgeWidget(user_id=self.user_id)
+        self.id_badge = IDBadgeWidget(user_id=self.user_id, display_name=self.username)
         layout.addWidget(self.id_badge)
 
         # Spacer
         layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         # Logo (centered via spacers on both sides)
-        self._pulsing_logo = _PulsingLogo(height=ScreenScale.h(22))
+        self._pulsing_logo = _PulsingLogo(height=ScreenScale.h(30))
         self.logo = self._pulsing_logo.logo()
         layout.addWidget(self._pulsing_logo)
 
@@ -426,7 +435,6 @@ class Navbar(QFrame):
         btn_close.clicked.connect(lambda: self.window().close())
 
         lay.addWidget(btn_min)
-        lay.addWidget(btn_max)
         lay.addWidget(btn_close)
 
         return box
@@ -509,12 +517,12 @@ class Navbar(QFrame):
         pill.setObjectName("navbar_pill")
         pill.setFixedHeight(ScreenScale.h(36))
         pill.setFixedWidth(self._pill_collapsed_w)
-        pill.setStyleSheet("""
-            QFrame#navbar_pill {
+        pill.setStyleSheet(f"""
+            QFrame#navbar_pill {{
                 background: rgba(10, 22, 40, 180);
                 border: 1px solid rgba(56, 144, 223, 40);
-                border-radius: 18px;
-            }
+                border-radius: {ScreenScale.h(18)}px;
+            }}
         """)
 
         _BTN_STYLE = """
@@ -850,6 +858,11 @@ class Navbar(QFrame):
         self.user_id = user_id
         if hasattr(self, 'id_badge'):
             self.id_badge.set_user_id(user_id)
+
+    def set_username(self, name: str):
+        self.username = name
+        if hasattr(self, 'id_badge'):
+            self.id_badge.set_display_name(name)
 
     def update_language(self, is_arabic: bool):
         # Update tab titles
