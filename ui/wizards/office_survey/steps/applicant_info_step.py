@@ -70,33 +70,44 @@ class ApplicantInfoStep(BaseStep):
         card_layout.setSpacing(20)
 
         # Icon header
-        card_layout.addLayout(make_icon_header(
+        header_layout, self.app_title_lbl, self.app_subtitle_lbl = make_icon_header(
             title=tr("wizard.step.applicant_info"),
             subtitle=tr("wizard.applicant.card_subtitle"),
             icon_name="user",
-        ))
+)
+
+        card_layout.addLayout(header_layout)
+
         card_layout.addWidget(make_divider())
 
         # Section 1: Personal Information
-        card_layout.addWidget(make_sub_section_header(tr("wizard.section.personal_info")))
+        
+        self.section_personal_header = make_sub_section_header(tr("wizard.section.personal_info"))
+        card_layout.addWidget(self.section_personal_header)
         card_layout.addLayout(self._build_personal_section())
 
         # Section 2: Contact Details
-        card_layout.addWidget(make_sub_section_header(tr("wizard.section.contact_details")))
+        
+        self.section_contact_header = make_sub_section_header(tr("wizard.section.contact_details"))
+        card_layout.addWidget(self.section_contact_header)
         card_layout.addLayout(self._build_contact_section())
 
         # Section 3: Visit Type
-        card_layout.addWidget(make_sub_section_header(tr("wizard.section.visit_type")))
+        
+        self.section_visit_header = make_sub_section_header(tr("wizard.section.visit_type"))
+        card_layout.addWidget(self.section_visit_header)
         card_layout.addLayout(self._build_visit_section())
 
         # Section 4: ID Photos
-        card_layout.addWidget(make_sub_section_header(tr("wizard.section.id_photos")))
+        
+        self.section_id_header = make_sub_section_header(tr("wizard.section.id_photos"))
+        card_layout.addWidget(self.section_id_header)
 
         from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel
         doc_type_row = QHBoxLayout()
         doc_type_row.setContentsMargins(0, 0, 0, 4)
-        doc_type_lbl = QLabel(tr("wizard.person_dialog.id_document_type"))
-        doc_type_lbl.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
+        self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
+        self.lbl_id_doc_type.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
         self._id_doc_type_combo = QComboBox()
         from services.display_mappings import get_identification_document_type_options
         for code, label in get_identification_document_type_options():
@@ -117,7 +128,7 @@ class ApplicantInfoStep(BaseStep):
                 border-top: 5px solid #7F8C9B;
             }
         """)
-        doc_type_row.addWidget(doc_type_lbl)
+        doc_type_row.addWidget(self.lbl_id_doc_type)
         doc_type_row.addWidget(self._id_doc_type_combo, 1)
         card_layout.addLayout(doc_type_row)
 
@@ -150,9 +161,11 @@ class ApplicantInfoStep(BaseStep):
         _name_v = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
         row = 0
 
-        # Row 1: First Name | Father Name
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.first_name") + " *"), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.father_name") + " *"), row, 1)
+    # Row 1: First Name | Father Name
+        self.lbl_first_name = self._lbl(tr("wizard.person_dialog.first_name") + " *")
+        self.lbl_father_name = self._lbl(tr("wizard.person_dialog.father_name") + " *")
+        grid.addWidget(self.lbl_first_name, row, 0)
+        grid.addWidget(self.lbl_father_name, row, 1)
         row += 1
 
         self.first_name = self._field(tr("wizard.person_dialog.first_name_placeholder"), _name_v)
@@ -164,9 +177,11 @@ class ApplicantInfoStep(BaseStep):
         grid.addLayout(self._field_box(self.father_name, self._father_name_error), row, 1)
         row += 1
 
-        # Row 2: Last Name | Mother Name
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.last_name") + " *"), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.mother_name") + " *"), row, 1)
+    # Row 2: Last Name | Mother Name
+        self.lbl_last_name = self._lbl(tr("wizard.person_dialog.last_name") + " *")
+        self.lbl_mother_name = self._lbl(tr("wizard.person_dialog.mother_name") + " *")
+        grid.addWidget(self.lbl_last_name, row, 0)
+        grid.addWidget(self.lbl_mother_name, row, 1)
         row += 1
 
         self.last_name = self._field(tr("wizard.person_dialog.last_name_placeholder"), _name_v)
@@ -178,9 +193,11 @@ class ApplicantInfoStep(BaseStep):
         grid.addLayout(self._field_box(self.mother_name, self._mother_name_error), row, 1)
         row += 1
 
-        # Row 3: Birth Date | Gender
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.birth_date")), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.gender")), row, 1)
+    # Row 3: Birth Date | Gender
+        self.lbl_birth_date = self._lbl(tr("wizard.person_dialog.birth_date"))
+        self.lbl_gender = self._lbl(tr("wizard.person_dialog.gender"))
+        grid.addWidget(self.lbl_birth_date, row, 0)
+        grid.addWidget(self.lbl_gender, row, 1)
         row += 1
 
         birth_layout = QHBoxLayout()
@@ -224,9 +241,11 @@ class ApplicantInfoStep(BaseStep):
         grid.addWidget(self.gender, row, 1)
         row += 1
 
-        # Row 4: Nationality | National ID
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.nationality")), row, 0)
-        grid.addWidget(self._lbl(tr("wizard.person_dialog.national_id")), row, 1)
+    # Row 4: Nationality | National ID
+        self.lbl_nationality = self._lbl(tr("wizard.person_dialog.nationality"))
+        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id"))
+        grid.addWidget(self.lbl_nationality, row, 0)
+        grid.addWidget(self.lbl_national_id, row, 1)
         row += 1
 
         self.nationality = RtlCombo()
@@ -240,7 +259,7 @@ class ApplicantInfoStep(BaseStep):
         self._nid_error = self._err_lbl()
         grid.addLayout(self._field_box(self.national_id, self._nid_error), row, 1)
 
-        # Connect clear-error signals
+    # Connect clear-error signals
         self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
         self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
@@ -249,13 +268,16 @@ class ApplicantInfoStep(BaseStep):
 
         return grid
 
+
     def _build_contact_section(self) -> QVBoxLayout:
         layout = QVBoxLayout()
         layout.setSpacing(12)
         layout.setContentsMargins(0, 0, 0, 0)
 
         # Mobile number
-        layout.addWidget(self._lbl(tr("wizard.person_dialog.mobile")))
+        
+        self.lbl_mobile = self._lbl(tr("wizard.person_dialog.mobile"))
+        layout.addWidget(self.lbl_mobile)
         mobile_container = QFrame()
         mobile_container.setStyleSheet(f"""
             QFrame {{
@@ -269,10 +291,10 @@ class ApplicantInfoStep(BaseStep):
         mob_layout.setContentsMargins(0, 0, 0, 0)
         mob_layout.setSpacing(0)
         mob_layout.setDirection(QHBoxLayout.RightToLeft)
-        prefix_lbl = QLabel("+963 | 09")
-        prefix_lbl.setFixedWidth(ScreenScale.w(90))
-        prefix_lbl.setAlignment(Qt.AlignCenter)
-        prefix_lbl.setStyleSheet(f"""
+        self.lbl_mobile_prefix = QLabel("+963 | 09")
+        self.lbl_mobile_prefix.setFixedWidth(ScreenScale.w(90))
+        self.lbl_mobile_prefix.setAlignment(Qt.AlignCenter)
+        self.lbl_mobile_prefix.setStyleSheet(f"""
             QLabel {{
                 color: {Colors.WIZARD_SUBTITLE};
                 font-size: 10pt;
@@ -282,7 +304,7 @@ class ApplicantInfoStep(BaseStep):
             }}
         """)
         self.phone = QLineEdit()
-        self.phone.setPlaceholderText("00000000")
+        self.phone.setPlaceholderText("xxxxxxxx")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
         self.phone.setStyleSheet("""
             QLineEdit {
@@ -291,7 +313,7 @@ class ApplicantInfoStep(BaseStep):
                 min-height: 30px;
             }
         """)
-        mob_layout.addWidget(prefix_lbl)
+        mob_layout.addWidget(self.lbl_mobile_prefix)
         mob_layout.addWidget(self.phone)
         self._mobile_error = self._err_lbl()
         mob_outer = QVBoxLayout()
@@ -302,8 +324,10 @@ class ApplicantInfoStep(BaseStep):
         layout.addLayout(mob_outer)
 
         # Landline
-        layout.addWidget(self._lbl(tr("wizard.person_dialog.phone")))
-        self.landline = self._field("0000000", QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        
+        self.lbl_phone = self._lbl(tr("wizard.person_dialog.phone"))
+        layout.addWidget(self.lbl_phone)
+        self.landline = self._field("0000000", QRegExpValidator(QtRegExp(r"^\d{10}$")))
         self._landline_error = self._err_lbl()
         land_box = self._field_box(self.landline, self._landline_error)
         layout.addLayout(land_box)
@@ -558,7 +582,7 @@ class ApplicantInfoStep(BaseStep):
             result.add_error(tr("wizard.applicant.mobile_8_digits"))
 
         landline_text = self.landline.text().strip()
-        if landline_text and len(landline_text) != 7:
+        if landline_text and len(landline_text) != 10:
             self._set_err(self.landline, self._landline_error)
             result.add_error(tr("wizard.applicant.landline_7_digits"))
 
@@ -682,11 +706,12 @@ class ApplicantInfoStep(BaseStep):
             month = m if m else 1
             day = d if d else 1
             birth_date = f"{y:04d}-{month:02d}-{day:02d}"
+        raw = self.phone.text().strip()
 
-        # Format phone with 09 prefix for API
-        phone_raw = self.phone.text().strip()
-        phone_formatted = f"09{phone_raw}" if phone_raw and len(phone_raw) == 8 else ""
-
+        if raw:
+            full_mobile = f"09{raw}"
+        else:
+            full_mobile = ""
         data = {
             "first_name_ar":  fn,
             "father_name_ar": fat,
@@ -696,15 +721,18 @@ class ApplicantInfoStep(BaseStep):
             "gender":         self.gender.currentData(),
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
-            "phone":          phone_formatted,
-            "landline":       self.landline.text().strip(),
+
+        
+            "phone":          full_mobile,      
+            "landline":       self.landline.text().strip(),   
+
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": list(self.uploaded_files),
             "full_name": " ".join(p for p in [fn, fat, ln] if p),
         }
+
         self.context.applicant = data
         return data
-
     def reset(self):
         """Clear all applicant UI fields for a new wizard session."""
         if not self._is_initialized:
@@ -786,8 +814,90 @@ class ApplicantInfoStep(BaseStep):
             self._update_upload_thumbnails("id_upload", photos)
 
     def update_language(self, is_arabic: bool):
-        """Update layout direction when language changes."""
         self.setLayoutDirection(get_layout_direction())
+
+    # Card header
+        self.app_title_lbl.setText(tr("wizard.step.applicant_info"))
+        self.app_subtitle_lbl.setText(tr("wizard.applicant.card_subtitle"))
+
+    # Section headers
+        self.section_personal_header.setText(tr("wizard.section.personal_info"))
+        self.section_contact_header.setText(tr("wizard.section.contact_details"))
+        self.section_visit_header.setText(tr("wizard.section.visit_type"))
+        self.section_id_header.setText(tr("wizard.section.id_photos"))
+
+    # Personal section labels
+        self.lbl_first_name.setText(tr("wizard.person_dialog.first_name") + " *")
+        self.lbl_father_name.setText(tr("wizard.person_dialog.father_name") + " *")
+        self.lbl_last_name.setText(tr("wizard.person_dialog.last_name") + " *")
+        self.lbl_mother_name.setText(tr("wizard.person_dialog.mother_name") + " *")
+        self.lbl_birth_date.setText(tr("wizard.person_dialog.birth_date"))
+        self.lbl_gender.setText(tr("wizard.person_dialog.gender"))
+        self.lbl_nationality.setText(tr("wizard.person_dialog.nationality"))
+        self.lbl_national_id.setText(tr("wizard.person_dialog.national_id"))
+
+    # Personal placeholders
+        self.first_name.setPlaceholderText(tr("wizard.person_dialog.first_name_placeholder"))
+        self.father_name.setPlaceholderText(tr("wizard.person_dialog.father_name_placeholder"))
+        self.last_name.setPlaceholderText(tr("wizard.person_dialog.last_name_placeholder"))
+        self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
+        self.national_id.setPlaceholderText("00000000000")
+
+    # Contact section labels
+        
+        self.lbl_mobile.setText(tr("wizard.person_dialog.mobile"))
+        self.lbl_phone.setText(tr("wizard.person_dialog.phone"))
+
+        self.phone.setPlaceholderText("00000000")
+        self.landline.setPlaceholderText("0000000")
+
+    # Visit section
+        
+        self.section_visit_header.setText(tr("wizard.section.visit_type"))
+        self.in_person_check.setText(tr("wizard.applicant.in_person"))
+
+    # ID Photos section
+        
+        self.section_id_header.setText(tr("wizard.section.id_photos"))
+        self.lbl_id_doc_type.setText(tr("wizard.person_dialog.id_document_type"))
+        self._id_upload_frame._text_btn.setText(tr("wizard.person_dialog.attach_id_photos"))
+
+    # Refill ID document type combo
+        self._id_doc_type_combo.clear()
+
+        from services.display_mappings import get_identification_document_type_options
+        for code, label in get_identification_document_type_options():
+            if code == 0:
+                continue
+            self._id_doc_type_combo.addItem(label, code)
+    # Refill gender combo
+        current_gender = self.gender.currentData()  # حفظ القيمة الحالية
+        self.gender.clear()
+        self.gender.addItem(tr("wizard.person_dialog.select"), None)
+
+        from services.display_mappings import get_gender_options
+        for code, label in get_gender_options():
+            self.gender.addItem(label, code)
+
+        # إعادة اختيار القيمة السابقة إذا كانت موجودة
+        if current_gender is not None:
+            index = self.gender.findData(current_gender)
+            if index >= 0:
+                self.gender.setCurrentIndex(index)
+        # Refill nationality combo
+        current_nat = self.nationality.currentData()
+        self.nationality.clear()
+        self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+
+        from services.display_mappings import get_nationality_options
+        for code, label in get_nationality_options():
+            self.nationality.addItem(label, code)
+
+        if current_nat is not None:
+            index = self.nationality.findData(current_nat)
+            if index >= 0:
+                self.nationality.setCurrentIndex(index)
+
 
     def get_name(self) -> str:
         return tr("wizard.step.applicant_info")

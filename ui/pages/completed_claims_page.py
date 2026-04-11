@@ -17,10 +17,10 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect, QStackedWidget,
 )
 from PyQt5.QtCore import (
-    Qt, pyqtSignal, pyqtProperty, QTimer,
+    QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtSignal, pyqtProperty, QTimer,
 )
 from PyQt5.QtGui import (
-    QFont, QColor, QCursor,
+    QFont, QColor, QCursor, QLinearGradient, QPainter, QPainterPath, QPen,
 )
 
 from ui.design_system import Colors, PageDimensions, Spacing, ScreenScale

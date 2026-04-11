@@ -1203,6 +1203,13 @@ class MainWindow(QMainWindow):
                 Toast.SUCCESS
             )
 
+            # Invalidate building cache so map reflects new assignment status
+            try:
+                from services.building_cache_service import BuildingCacheService
+                BuildingCacheService.get_instance().invalidate_cache()
+            except Exception:
+                pass
+
             effective_ids = api_assignment_ids
 
             # Reset wizard and navigate to sync data page

@@ -687,7 +687,7 @@ class BuildingController(BaseController):
 
         logger.debug(f"API DTO: building={building_id}, gov='{gov_name}', dist='{dist_name}', subdist='{subdist_name}', neighborhood='{neighborhood_name}'")
 
-        return Building(
+        building = Building(
             building_uuid=building_uuid,
             building_id=building_id,
             building_id_formatted=dto.get("buildingIdFormatted", ""),
@@ -722,9 +722,14 @@ class BuildingController(BaseController):
             geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation"),
             location_description=dto.get("locationDescription") or dto.get("location_description"),
             general_description=dto.get("generalDescription") or dto.get("general_description"),
-            is_assigned=dto.get("isAssigned", False),
+            is_assigned=(
+                dto["hasActiveAssignment"] if "hasActiveAssignment" in dto
+                else dto.get("isAssigned", False)
+            ),
             is_locked=dto.get("isLocked", False),
         )
+        building.has_active_assignment = dto.get("hasActiveAssignment", False)
+        return building
 
     def toggle_building_lock(self, building_id: str, lock: bool) -> "OperationResult":
         """Toggle building lock state via API."""

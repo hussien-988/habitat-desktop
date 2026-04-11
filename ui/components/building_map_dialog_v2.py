@@ -591,6 +591,16 @@ class BuildingMapDialog(BaseMapDialog):
                     }}).addTo(map);
                 }}
                 console.log('Buildings injected: ' + (geojsonData.features ? geojsonData.features.length : 0));
+
+                // Attach multiselect handlers to newly injected buildings
+                if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {{
+                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
+                        buildingsLayer.eachLayer(function(layer) {{
+                            window.attachMultiselectHandler(layer);
+                        }});
+                    }}
+                    console.log('Multi-select handlers attached to injected buildings');
+                }}
             }})();
             """
             if self.web_view:
@@ -1031,6 +1041,14 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         self._initial_center_lat = center_lat
         self._initial_center_lon = center_lon
         self._initial_zoom = initial_zoom
+
+        # Invalidate building cache on open so is_assigned status is fresh from API
+        try:
+            from services.building_cache_service import BuildingCacheService
+            BuildingCacheService.get_instance().invalidate_cache()
+        except Exception:
+            pass
+
         super().__init__(
             db=db,
             selected_building_id=None,
@@ -1178,13 +1196,21 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
             if b.building_id == building_id:
                 return b
 
-        # Check viewport cache
-        if self._viewport_loader:
-            cache = getattr(self._viewport_loader, 'building_cache', None)
-            if cache:
-                cached = cache.get(building_id)
-                if cached:
-                    return cached
+        # Check viewport cache (populated by _on_viewport_buildings_cached)
+        viewport_cache = getattr(self, '_viewport_buildings_cache', {})
+        cached = viewport_cache.get(building_id)
+        if cached:
+            return cached
+
+        # Check application-wide building cache (always populated by viewport loading)
+        try:
+            from services.building_cache_service import BuildingCacheService
+            cache_service = BuildingCacheService.get_instance()
+            global_cached = cache_service.get_building_by_id(building_id)
+            if global_cached:
+                return global_cached
+        except Exception:
+            pass
 
         # Fallback: fetch from API
         try:

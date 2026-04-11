@@ -398,7 +398,7 @@ class GeoJSONConverter:
             "units": building.number_of_units or 0,
             "type": building.building_type or "",
             "geometry_type": geometry_type.value if geometry_type else "Point",
-            "is_assigned": getattr(building, 'is_assigned', False),
+            "is_assigned": getattr(building, 'has_active_assignment', False) or getattr(building, 'is_assigned', False),
             "is_locked": getattr(building, 'is_locked', False),
         }
 

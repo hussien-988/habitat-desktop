@@ -88,7 +88,7 @@ class BuildingCacheService(metaclass=BuildingCacheServiceMeta):
     # Configuration
     INITIAL_CACHE_SIZE = 150      # Load on startup (fast startup!)
     MAX_CACHE_SIZE = 1000         # LRU eviction beyond this
-    CACHE_TTL_HOURS = 24          # Cache invalidation time
+    CACHE_TTL_HOURS = 1           # Cache invalidation time (assignment status is mutable)
 
     _instance: Optional['BuildingCacheService'] = None
 

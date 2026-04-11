@@ -591,6 +591,26 @@ class TRRCMSApiClient:
 
         return response
 
+    def search_buildings_in_bbox(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        page: int = 1,
+        page_size: int = 500
+    ) -> Dict[str, Any]:
+        """Search buildings in bounding box via BuildingAssignments API (live hasActiveAssignment)."""
+        coordinates = [
+            [south_west_lng, south_west_lat],
+            [north_east_lng, south_west_lat],
+            [north_east_lng, north_east_lat],
+            [south_west_lng, north_east_lat],
+            [south_west_lng, south_west_lat],
+        ]
+        payload = {"coordinates": coordinates, "page": page, "pageSize": page_size}
+        return self._request("POST", "/v1/BuildingAssignments/buildings/search", json_data=payload)
+
     def get_building_by_id(self, building_id: str) -> Dict[str, Any]:
         """Get building details by ID."""
         return self._request("GET", f"/v1/Buildings/{building_id}")
@@ -1534,7 +1554,7 @@ class TRRCMSApiClient:
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
 
-        endpoint = f"/v1/Surveys/{survey_id}/identification-documents"
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
         url = f"{self.base_url}{endpoint}"
 
         file_name = os.path.basename(file_path)
@@ -1625,7 +1645,7 @@ class TRRCMSApiClient:
         if not survey_id or not document_id:
             raise ValueError("survey_id and document_id are required")
 
-        endpoint = f"/v1/Surveys/{survey_id}/identification-documents/{document_id}"
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification/{document_id}"
         url = f"{self.base_url}{endpoint}"
 
         self._ensure_valid_token()

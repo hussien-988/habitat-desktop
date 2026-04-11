@@ -139,6 +139,11 @@ class _AssignmentCard(AnimatedCard):
         self._status_str = self._resolve_status(assignment)
         strip_color = _STATUS_STRIP_COLOR.get(self._status_str, '#9CA3AF')
 
+        self._status_badge = None
+        self._meta_lbl = None
+        self._chip_transferred = None
+        self._chip_pending = None
+
         super().__init__(
             parent,
             card_height=100,
@@ -150,7 +155,6 @@ class _AssignmentCard(AnimatedCard):
             clickable=True,
         )
 
-        self._status_badge = None
         self._assignment_id = self._resolve_id(assignment)
 
     @staticmethod
@@ -277,6 +281,7 @@ class _AssignmentCard(AnimatedCard):
         meta_lbl = QLabel(meta_text)
         meta_lbl.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=FontManager.WEIGHT_REGULAR))
         meta_lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
+        self._meta_lbl = meta_lbl
         row2.addWidget(meta_lbl)
         row2.addStretch()
         layout.addLayout(row2)
@@ -292,12 +297,14 @@ class _AssignmentCard(AnimatedCard):
             chip_transferred = QLabel(f"{tr('page.sync.status_synced')}: {transferred_count}")
             chip_transferred.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             chip_transferred.setStyleSheet(StyleManager.status_badge('#10B981', '#ECFDF5'))
+            self._chip_transferred = chip_transferred
             row3.addWidget(chip_transferred)
 
         if pending_count:
             chip_pending = QLabel(f"{tr('page.sync.status_pending')}: {pending_count}")
             chip_pending.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
             chip_pending.setStyleSheet(StyleManager.status_badge('#9CA3AF', '#F3F4F6'))
+            self._chip_pending = chip_pending
             row3.addWidget(chip_pending)
 
         row3.addStretch()
@@ -343,6 +350,33 @@ class _AssignmentCard(AnimatedCard):
             self._status_badge.setFixedHeight(ScreenScale.h(22))
             self._status_badge.setMinimumWidth(ScreenScale.w(80))
             self._status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
+
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        self.update_status(self._assignment, self._status_str)
+        a = self._assignment
+        parts = []
+        researcher_name = (
+            a.get("fieldCollectorName") or a.get("fieldCollectorNameAr")
+            or a.get("assignedTo") or a.get("field_team_name") or ""
+        )
+        if researcher_name:
+            parts.append(researcher_name)
+        units_count = a.get("propertyUnitsCount") or a.get("unitsCount") or 0
+        if units_count:
+            parts.append(tr("page.sync.units_count", count=units_count))
+        assigned_date = a.get("assignedDate") or a.get("created_at") or ""
+        if assigned_date:
+            parts.append(str(assigned_date)[:10])
+        if self._meta_lbl:
+            self._meta_lbl.setText("  \u00B7  ".join(parts) if parts else "")
+        if self._chip_transferred:
+            transferred_count = a.get("transferredCount") or a.get("syncedCount") or 0
+            self._chip_transferred.setText(f"{tr('page.sync.status_synced')}: {transferred_count}")
+        if self._chip_pending:
+            pending_count = a.get("pendingCount") or a.get("notTransferredCount") or 0
+            self._chip_pending.setText(f"{tr('page.sync.status_pending')}: {pending_count}")
+        self.update()
 
 
 class SyncDataPage(QWidget):
@@ -1086,8 +1120,39 @@ class SyncDataPage(QWidget):
     def _on_unassign_success(self):
         """Handle successful unassign."""
         from ui.components.toast import Toast
+
+        # رسالة نجاح
         Toast.show_toast(self.window(), tr("page.sync.unassign_success"), Toast.SUCCESS)
+
+        # Invalidate building cache so map reflects updated assignment status
+        try:
+            from services.building_cache_service import BuildingCacheService
+            BuildingCacheService.get_instance().invalidate_cache()
+        except Exception:
+            pass
+
+        building_id = getattr(self, "_current_building_id", None)
+
+        if building_id:
+        
+            if hasattr(self, "_already_selected_ids") and building_id in self._already_selected_ids:
+                self._already_selected_ids.remove(building_id)
+
+            if hasattr(self, "_selected_building_ids") and building_id in self._selected_building_ids:
+                self._selected_building_ids.remove(building_id)
+
+            if hasattr(self, "_confirmed_building_ids") and building_id in self._confirmed_building_ids:
+                self._confirmed_building_ids.remove(building_id)
+
+            if hasattr(self, "_selected_buildings") and building_id in self._selected_buildings:
+                del self._selected_buildings[building_id]
+
+
+            if hasattr(self, "_clear_cards"):
+                self._clear_cards()
+
         self._load_assignments()
+
 
     def _on_unassign_error(self, error_msg):
         """Handle failed unassign."""
@@ -1176,6 +1241,10 @@ class SyncDataPage(QWidget):
         self._stat_failed.set_label(tr("page.sync.status_failed"))
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
+        if self._collector_combo and self._collector_combo.count() > 0:
+            self._collector_combo.setItemText(0, tr("page.sync.all_collectors"))
+        for card in self._card_widgets:
+            card.update_language(is_arabic)
 
     def hideEvent(self, event):
         super().hideEvent(event)

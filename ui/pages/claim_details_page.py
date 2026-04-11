@@ -8,7 +8,7 @@ import math
 import time
 
 from utils.logger import get_logger
-
+from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QScrollArea, QLineEdit,
@@ -1243,7 +1243,11 @@ class ClaimDetailsPage(QWidget):
             del_btn.clicked.connect(lambda _, eid=ev_id: self._on_delete_evidence(eid))
         elif ev_id:
             def _on_click_download(event, eid=ev_id, fn=file_name, page=self):
+                print(">>> CLICKED EVIDENCE CARD")
                 page._download_and_open_evidence(eid, fn)
+            card.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            thumb.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            name_lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
             card.mousePressEvent = _on_click_download
 
         return card
@@ -1364,27 +1368,44 @@ class ClaimDetailsPage(QWidget):
             return None
 
     def _download_and_open_evidence(self, evidence_id, file_name):
-        """Download evidence file in background thread, then open it."""
         import threading
-        from PyQt5.QtCore import QTimer
+        from PyQt5.QtCore import QMetaObject, Qt
+
+        
 
         page_ref = self
         Toast.show_toast(self, tr("page.claim_details.downloading"), Toast.INFO)
 
         def _do_download():
+            
+
             local_path = page_ref._download_evidence_file(evidence_id, file_name)
+            
 
-            def _open_on_main():
-                if local_path:
-                    from PyQt5.QtCore import QUrl
-                    from PyQt5.QtGui import QDesktopServices
-                    QDesktopServices.openUrl(QUrl.fromLocalFile(local_path))
-                else:
-                    Toast.show_toast(page_ref, tr("page.claim_details.cannot_download"), Toast.ERROR)
+        # تخزين المسار
+            page_ref._last_downloaded_path = local_path
 
-            QTimer.singleShot(0, _open_on_main)
+        # نفّذ الفتح ـ 
+            QMetaObject.invokeMethod(
+                page_ref,
+                "_open_file_direct",
+                Qt.QueuedConnection
+            )
 
         threading.Thread(target=_do_download, daemon=True).start()
+    @pyqtSlot()
+    def _open_file_direct(self):
+        local_path = getattr(self, "_last_downloaded_path", None)
+        if not local_path:
+            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
+            return
+        import os
+        
+        if not os.path.exists(local_path):
+            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
+            return
+
+        os.startfile(local_path)
 
     # -- Edit mode --
 

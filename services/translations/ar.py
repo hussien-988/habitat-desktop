@@ -3099,6 +3099,9 @@ AR_TRANSLATIONS = {
     "wizard.step1.all": "الكل",
     "wizard.step1.buildings_load_failed": "تعذر تحميل بيانات المباني",
     "wizard.step1.building_unit": "بناء",
+    "wizard.step1.map_open_error": "حدث خطأ أثناء فتح الخريطة:\n{error}",
+    "wizard.step1.already_selected": "هذا المبنى مختار مسبقاً",
+    "wizard.step1.building_already_assigned": "هذا المبنى معيّن مسبقاً لفريق ميداني",
 
     # component.building_map
     "component.building_map.search_on_map": "بحث على الخريطة",

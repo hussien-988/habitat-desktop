@@ -1038,21 +1038,8 @@ class LeafletHTMLGenerator:
 
         {LeafletHTMLGenerator._get_multiselect_js() if enable_multiselect else '// Multi-select disabled'}
 
-        {LeafletHTMLGenerator._get_assignment_legend_js() if enable_multiselect else '// Legend disabled (not in multiselect mode)'}
 
         {LeafletHTMLGenerator._get_viewport_loading_js() if enable_viewport_loading else '// Viewport loading disabled'}
-
-        // Status confirmation overlay (bottom-left)
-        var statusControl = L.control({{position: 'bottomleft'}});
-        statusControl.onAdd = function(map) {{
-            var div = L.DomUtil.create('div', 'map-status-overlay');
-            var buildingCount = buildingsData ? buildingsData.features.length : 0;
-            div.innerHTML = '<strong>{_lbl_map_status}</strong><br>' +
-                            '{_lbl_buildings}: ' + buildingCount + '<br>' +
-                            '{_lbl_tile_server}: {tile_status_label}';
-            return div;
-        }};
-        statusControl.addTo(map);
 
         window.updateBuildingCount = function(count) {{
             var el = document.querySelector('.map-status-overlay');

@@ -79,19 +79,26 @@ class OccupancyClaimsStep(BaseStep):
         table_layout.setSpacing(14)
 
         # Header: icon + title + add button
-        header = make_icon_header(
+        header_layout, header_title, header_subtitle = make_icon_header(
             tr("wizard.occupancy_claims.title"),
             tr("wizard.occupancy_claims.subtitle"),
             "user"
         )
+
+        # إعادة تطبيق الترجمة (مهم جداً)
+        header_title.setText(tr("wizard.occupancy_claims.title"))
+        header_subtitle.setText(tr("wizard.occupancy_claims.subtitle"))
+
         self._add_person_btn = QPushButton(tr("wizard.occupancy_claims.add_person"))
         self._add_person_btn.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._add_person_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
         self._add_person_btn.clicked.connect(self._add_person)
-        header.addWidget(self._add_person_btn)
+        header_layout.addWidget(self._add_person_btn)
 
-        table_layout.addLayout(header)
+
+        table_layout.addLayout(header_layout)
+
         table_layout.addSpacing(12)
 
         # Scroll area for person cards

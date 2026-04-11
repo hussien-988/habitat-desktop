@@ -30,6 +30,7 @@ from models.building import Building
 from services.map_service_api import MapServiceAPI
 from services.building_cache_service import BuildingCacheService, get_building_cache
 from services.spatial_sampler import SpatialSampler
+from services.api_client import get_api_client
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -179,51 +180,49 @@ class ViewportMapLoader:
                 self.map_service.set_auth_token(auth_token)
                 logger.debug("Auth token synchronized with MapServiceAPI (before cache check)")
 
-            # Use application-wide cache (singleton)
             buildings = []
 
-            if self.building_cache:
-                buildings = self.building_cache.get_buildings_for_viewport(
+            bounds = ViewportBounds(
+                north_east_lat=north_east_lat,
+                north_east_lng=north_east_lng,
+                south_west_lat=south_west_lat,
+                south_west_lng=south_west_lng
+            )
+
+            if self.cache_enabled and not force_refresh:
+                cached = self._get_from_cache(bounds)
+                if cached:
+                    buildings = cached.buildings
+                    logger.debug(f"Loaded {len(buildings)} buildings from viewport cache")
+                else:
+                    api = get_api_client()
+                    response = api.search_buildings_in_bbox(
+                        north_east_lat=north_east_lat,
+                        north_east_lng=north_east_lng,
+                        south_west_lat=south_west_lat,
+                        south_west_lng=south_west_lng,
+                        page_size=max_markers
+                    )
+                    buildings = [
+                        self._dto_to_building(item)
+                        for item in response.get("items", [])
+                    ]
+                    self._store_in_cache(bounds, buildings)
+                    logger.debug(f"Loaded {len(buildings)} buildings from BuildingAssignments API")
+            else:
+                api = get_api_client()
+                response = api.search_buildings_in_bbox(
                     north_east_lat=north_east_lat,
                     north_east_lng=north_east_lng,
                     south_west_lat=south_west_lat,
                     south_west_lng=south_west_lng,
-                    max_count=max_markers,
-                    auth_token=auth_token
+                    page_size=max_markers
                 )
-                logger.debug(f"Loaded {len(buildings)} buildings from cache service")
-            else:
-                bounds = ViewportBounds(
-                    north_east_lat=north_east_lat,
-                    north_east_lng=north_east_lng,
-                    south_west_lat=south_west_lat,
-                    south_west_lng=south_west_lng
-                )
-
-                if self.cache_enabled and not force_refresh:
-                    cached = self._get_from_cache(bounds)
-                    if cached:
-                        buildings = cached.buildings
-                    else:
-                        buildings = self.map_service.get_buildings_in_bbox(
-                            north_east_lat=north_east_lat,
-                            north_east_lng=north_east_lng,
-                            south_west_lat=south_west_lat,
-                            south_west_lng=south_west_lng,
-                            status_filter=status_filter,
-                            page_size=max_markers
-                        )
-                        self._store_in_cache(bounds, buildings)
-
-            # Fallback to local DB if API returned nothing
-            if not buildings and self.db:
-                try:
-                    from repositories.building_repository import BuildingRepository
-                    repo = BuildingRepository(self.db)
-                    buildings = repo.get_all(limit=max_markers)
-                    logger.info(f"Viewport: loaded {len(buildings)} buildings from local DB fallback")
-                except Exception as db_e:
-                    logger.error(f"Local DB viewport fallback failed: {db_e}")
+                buildings = [
+                    self._dto_to_building(item)
+                    for item in response.get("items", [])
+                ]
+                logger.debug(f"Loaded {len(buildings)} buildings from BuildingAssignments API (no cache)")
 
             # Spatial Sampling (Grid-based distribution)
             if self.use_spatial_sampling and zoom_level is not None and len(buildings) > 0:
@@ -303,3 +302,19 @@ class ViewportMapLoader:
             "max_age_minutes": self.cache_max_age_minutes,
             "total_buildings_cached": sum(len(c.buildings) for c in self._cache.values())
         }
+
+    def _dto_to_building(self, dto: dict) -> Building:
+        """Convert BuildingAssignments API DTO to Building for map display."""
+        building = Building(
+            building_id=dto.get("buildingCode", ""),
+            building_uuid=dto.get("id", ""),
+            building_type=dto.get("buildingType", 1),
+            building_status=dto.get("buildingStatus") or dto.get("status", 1),
+            latitude=dto.get("latitude"),
+            longitude=dto.get("longitude"),
+            number_of_units=dto.get("numberOfPropertyUnits", 0),
+            is_assigned=dto.get("hasActiveAssignment", False),
+            is_locked=dto.get("isLocked", False),
+        )
+        building.has_active_assignment = dto.get("hasActiveAssignment", False)
+        return building
