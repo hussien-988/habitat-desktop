@@ -171,10 +171,6 @@ class OfficeSurveyWizard(BaseWizard):
 
             draft_id = self.on_save_draft()
             if draft_id:
-                claim_number = self.context.reference_number or draft_id
-                Toast.show_toast(
-                    self, tr("wizard.success.description"), Toast.SUCCESS
-                )
                 self._finalization_complete = True
                 return True
             return False
@@ -188,13 +184,19 @@ class OfficeSurveyWizard(BaseWizard):
             )
             return False
 
-    def _show_finalized_success_popup(self, ref_code: str = ""):
+    def _show_finalized_success_popup(self, ref_code: str = "", is_draft: bool = False):
         """Show success dialog with survey reference code."""
         from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
             QFrame, QGraphicsDropShadowEffect, QLineEdit,
         )
         from PyQt5.QtGui import QColor
+
+        accent_color = "#3890DF" if is_draft else "#4ADE80"
+        accent_bg = "rgba(56, 144, 223, 0.12)" if is_draft else "rgba(74, 222, 128, 0.12)"
+        accent_border = "rgba(56, 144, 223, 0.4)" if is_draft else "rgba(74, 222, 128, 0.4)"
+        accent_field_bg = "rgba(56, 144, 223, 0.1)" if is_draft else "rgba(74, 222, 128, 0.1)"
+        title_key = "wizard.draft.saved_title" if is_draft else "wizard.success.finalized_title"
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -231,8 +233,8 @@ class OfficeSurveyWizard(BaseWizard):
         icon_lbl = QLabel("\u2714")
         icon_lbl.setAlignment(Qt.AlignCenter)
         icon_lbl.setStyleSheet(
-            "color: #4ADE80; font-size: 42px; font-weight: bold;"
-            "background: rgba(74, 222, 128, 0.12); border-radius: 30px;"
+            f"color: {accent_color}; font-size: 42px; font-weight: bold;"
+            f"background: {accent_bg}; border-radius: 30px;"
             "min-width: 60px; max-width: 60px; min-height: 60px; max-height: 60px;"
         )
         icon_row = QHBoxLayout()
@@ -241,14 +243,14 @@ class OfficeSurveyWizard(BaseWizard):
         icon_row.addStretch()
         card_layout.addLayout(icon_row)
 
-        title = QLabel(tr("wizard.success.finalized_title"))
+        title = QLabel(tr(title_key))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("color: rgba(240, 248, 255, 0.95); font-size: 18px; font-weight: 700;")
         title.setWordWrap(True)
         card_layout.addWidget(title)
 
         if ref_code:
-            hint_lbl = QLabel("رقم المراجعة")
+            hint_lbl = QLabel(tr("wizard.success.ref_code_label"))
             hint_lbl.setAlignment(Qt.AlignCenter)
             hint_lbl.setStyleSheet("color: rgba(140, 190, 240, 0.7); font-size: 12px;")
             card_layout.addWidget(hint_lbl)
@@ -257,11 +259,11 @@ class OfficeSurveyWizard(BaseWizard):
             ref_field.setReadOnly(True)
             ref_field.setAlignment(Qt.AlignCenter)
             ref_field.setStyleSheet(
-                "QLineEdit {"
-                "    background: rgba(74, 222, 128, 0.1);"
-                "    border: 1px solid rgba(74, 222, 128, 0.4);"
-                "    border-radius: 8px;"
-                "    color: #4ADE80;"
+                f"QLineEdit {{"
+                f"    background: {accent_field_bg};"
+                f"    border: 1px solid {accent_border};"
+                f"    border-radius: 8px;"
+                f"    color: {accent_color};"
                 "    font-size: 20px;"
                 "    font-weight: 700;"
                 "    padding: 10px 16px;"
@@ -368,6 +370,14 @@ class OfficeSurveyWizard(BaseWizard):
         def _on_saved(_result):
             self._spinner.hide_loading()
             logger.info(f"Draft saved to backend: {survey_id}")
+            ref = (
+                (getattr(self.context, 'finalize_response', None) or {})
+                .get("survey", {})
+                .get("referenceCode", "")
+                or self.context.reference_number
+                or survey_id
+            )
+            self._show_finalized_success_popup(ref, is_draft=True)
 
         def _on_save_error(msg):
             self._spinner.hide_loading()
@@ -397,13 +407,130 @@ class OfficeSurveyWizard(BaseWizard):
             self._handle_save_draft()
 
     def _handle_save_draft(self):
-        """Override base class to prevent duplicate notifications."""
+        """Override base class: save draft and show reference popup on completion."""
         draft_id = self.on_save_draft()
-        if draft_id:
-            self._finalization_complete = True
-            self.draft_saved.emit(draft_id)
-            from ui.components.toast import Toast
-            Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
+        if not draft_id:
+            return
+        self._finalization_complete = True
+        self.draft_saved.emit(draft_id)
+        ref_code = self.context.reference_number or draft_id
+
+        def _show_popup(_result=None):
+            self._show_draft_saved_popup(ref_code)
+
+        if hasattr(self, '_save_draft_worker') and self._save_draft_worker:
+            self._save_draft_worker.finished.connect(_show_popup)
+        else:
+            _show_popup()
+
+    def _show_draft_saved_popup(self, ref_code: str = ""):
+        """Show a popup dialog confirming draft was saved, displaying the reference number."""
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+            QFrame, QGraphicsDropShadowEffect, QLineEdit,
+        )
+        from PyQt5.QtGui import QColor
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        dlg.setModal(True)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.resize(self.width(), self.height())
+        dlg.move(self.mapToGlobal(self.rect().topLeft()))
+
+        overlay = QFrame(dlg)
+        overlay.setStyleSheet("background-color: rgba(10, 20, 35, 0.50);")
+        overlay.setGeometry(0, 0, dlg.width(), dlg.height())
+
+        card_w = min(440, self.width() - 40)
+        card = QFrame(dlg)
+        card.setFixedWidth(card_w)
+        card.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #F0F5FB, stop:1 #E8EFF8);
+                border-radius: 20px;
+                border: 1px solid rgba(56, 144, 223, 0.15);
+            }
+            QLabel { background: transparent; }
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(40)
+        shadow.setYOffset(6)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 28, 28, 24)
+        card_layout.setSpacing(14)
+
+        icon_lbl = QLabel("\u2714")
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet(
+            "color: #3890DF; font-size: 38px; font-weight: bold;"
+            "background: rgba(56, 144, 223, 0.1); border-radius: 28px;"
+            "min-width: 56px; max-width: 56px; min-height: 56px; max-height: 56px;"
+        )
+        icon_row = QHBoxLayout()
+        icon_row.addStretch()
+        icon_row.addWidget(icon_lbl)
+        icon_row.addStretch()
+        card_layout.addLayout(icon_row)
+
+        title = QLabel(tr("wizard.draft.saved_title"))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("color: #1A365D; font-size: 18px; font-weight: 700;")
+        title.setWordWrap(True)
+        card_layout.addWidget(title)
+
+        if ref_code:
+            hint_lbl = QLabel(tr("wizard.success.ref_code_label"))
+            hint_lbl.setAlignment(Qt.AlignCenter)
+            hint_lbl.setStyleSheet("color: #4A6FA5; font-size: 12px;")
+            card_layout.addWidget(hint_lbl)
+
+            ref_field = QLineEdit(ref_code)
+            ref_field.setReadOnly(True)
+            ref_field.setAlignment(Qt.AlignCenter)
+            ref_field.setStyleSheet(
+                "QLineEdit {"
+                "    background: rgba(56, 144, 223, 0.08);"
+                "    border: 1px solid rgba(56, 144, 223, 0.4);"
+                "    border-radius: 8px;"
+                "    color: #1E5FA8;"
+                "    font-size: 20px;"
+                "    font-weight: 700;"
+                "    padding: 10px 16px;"
+                "    letter-spacing: 2px;"
+                "}"
+            )
+            card_layout.addWidget(ref_field)
+
+        ok_btn = QPushButton(tr("button.ok"))
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setFixedHeight(ScreenScale.h(44))
+        ok_btn.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #3890DF; color: white; border: none;"
+            "    border-radius: 10px; font-size: 15px; font-weight: 600;"
+            "    padding: 0 32px;"
+            "}"
+            "QPushButton:hover { background-color: #2A7BC8; }"
+            "QPushButton:pressed { background-color: #1E6CB3; }"
+        )
+        ok_btn.clicked.connect(dlg.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.addStretch()
+        card_layout.addLayout(btn_row)
+
+        card.adjustSize()
+        card_x = (dlg.width() - card_w) // 2
+        card_y = (dlg.height() - card.sizeHint().height()) // 2
+        card.move(card_x, card_y)
+
+        dlg.exec_()
 
     def _handle_close(self):
         """Handle close button click - offers save draft before closing."""

@@ -111,12 +111,18 @@ class PersonController(BaseController):
 
         except Exception as e:
             from services.exceptions import ApiException
-            if isinstance(e, ApiException) and e.status_code == 409:
-                from services.error_mapper import build_duplicate_person_message
-                msg = build_duplicate_person_message(e.response_data)
+            from services.error_mapper import build_duplicate_person_message, _extract_validation_details, map_exception
+            if isinstance(e, ApiException):
+                if e.status_code == 409:
+                    msg = build_duplicate_person_message(e.response_data)
+                else:
+                    detail = _extract_validation_details(e.response_data)
+                    if not detail:
+                        detail = (e.response_data or {}).get("detail") or (e.response_data or {}).get("message") or ""
+                    msg = detail if detail else map_exception(e)
                 self._emit_error("create_person", msg)
                 return OperationResult.fail(message=msg)
-            error_msg = f"Error creating person: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("create_person", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -161,12 +167,18 @@ class PersonController(BaseController):
 
         except Exception as e:
             from services.exceptions import ApiException
-            if isinstance(e, ApiException) and e.status_code == 409:
-                from services.error_mapper import build_duplicate_person_message
-                msg = build_duplicate_person_message(e.response_data)
+            from services.error_mapper import build_duplicate_person_message, _extract_validation_details, map_exception
+            if isinstance(e, ApiException):
+                if e.status_code == 409:
+                    msg = build_duplicate_person_message(e.response_data)
+                else:
+                    detail = _extract_validation_details(e.response_data)
+                    if not detail:
+                        detail = (e.response_data or {}).get("detail") or (e.response_data or {}).get("message") or ""
+                    msg = detail if detail else map_exception(e)
                 self._emit_error("update_person", msg)
                 return OperationResult.fail(message=msg)
-            error_msg = f"Error updating person: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("update_person", error_msg)
             return OperationResult.fail(message=error_msg)
 

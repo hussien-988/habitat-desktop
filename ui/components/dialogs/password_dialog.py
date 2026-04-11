@@ -129,12 +129,13 @@ class PasswordDialog(QDialog):
     CHANGE = "change"
     FORCED = "forced"
 
-    def __init__(self, mode: str = SET, parent=None, username: str = ""):
+    def __init__(self, mode: str = SET, parent=None, username: str = "", username_en: str = ""):
         super().__init__(parent)
         self.password = None
         self.current_password = None
         self._mode = mode
         self._username = username
+        self._username_en = username_en
         self._visibility = {}
         self._is_dark = mode in (self.CHANGE, self.FORCED)
 
@@ -260,7 +261,11 @@ class PasswordDialog(QDialog):
 
     def _build_forced_header(self, layout: QVBoxLayout):
         """Welcome message + reason for forced password change."""
-        name = self._username or ""
+        from services.translation_manager import get_language
+        if get_language() == 'ar':
+            name = self._username or self._username_en or ""
+        else:
+            name = self._username_en or self._username or ""
         welcome_text = tr("dialog.password.forced_welcome").replace("{name}", name)
         title = QLabel(welcome_text)
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
@@ -642,10 +647,11 @@ class PasswordDialog(QDialog):
         return None
 
     @staticmethod
-    def forced_change_password(parent=None, username: str = "") -> Optional[tuple]:
+    def forced_change_password(parent=None, username: str = "", username_en: str = "") -> Optional[tuple]:
         """Show FORCED dialog (dark theme + welcome) — first login."""
         dialog = PasswordDialog(
-            mode=PasswordDialog.FORCED, parent=parent, username=username
+            mode=PasswordDialog.FORCED, parent=parent,
+            username=username, username_en=username_en
         )
         if dialog.exec_() == QDialog.Accepted:
             return (dialog.current_password, dialog.password)

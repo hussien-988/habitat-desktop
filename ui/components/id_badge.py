@@ -17,10 +17,12 @@ class IDBadgeWidget(QWidget):
 
     language_change_requested = pyqtSignal()
 
-    def __init__(self, user_id="12345", display_name="", parent=None):
+    def __init__(self, user_id="12345", display_name="", display_name_en="", parent=None):
         super().__init__(parent)
         self.user_id = user_id
         self.display_name = display_name
+        self.display_name_ar = display_name
+        self.display_name_en = display_name_en
         self._setup_ui()
         self._apply_styling()
 
@@ -35,19 +37,17 @@ class IDBadgeWidget(QWidget):
 
     def _create_user_icon(self):
         icon_label = QLabel()
-        icon_label.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+        sz = ScreenScale.w(22)
+        icon_label.setFixedSize(sz, sz)
         icon_label.setAlignment(Qt.AlignCenter)
 
         vector_pixmap = Icon.load_pixmap("Vector", size=11)
         if vector_pixmap and not vector_pixmap.isNull():
             icon_label.setPixmap(vector_pixmap)
 
-        icon_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {Colors.PRIMARY_BLUE};
-                border-radius: 11px;
-            }}
-        """)
+        icon_label.setStyleSheet(
+            f"QLabel {{ background-color: {Colors.PRIMARY_BLUE}; border-radius: {sz // 2}px; }}"
+        )
         return icon_label
 
     def _create_id_text_label(self, display_id, display_name=""):
@@ -95,8 +95,23 @@ class IDBadgeWidget(QWidget):
         """)
 
     def update_language(self, is_arabic: bool):
-        """No-op (language toggle moved to settings pill)."""
-        pass
+        if is_arabic:
+            name = self.display_name_ar or self.display_name_en
+        else:
+            name = self.display_name_en or self.display_name_ar
+        if not name:
+            name = f"ID {self._format_user_id(self.user_id)}"
+        if hasattr(self, 'id_label'):
+            self.id_label.setText(name)
+
+    def set_display_name_bilingual(self, name_ar: str, name_en: str):
+        self.display_name_ar = name_ar or ""
+        self.display_name_en = name_en or ""
+        from services.translation_manager import get_language
+        is_arabic = get_language() == 'ar'
+        name = (self.display_name_ar if is_arabic else self.display_name_en) or name_ar or name_en
+        if hasattr(self, 'id_label'):
+            self.id_label.setText(name or f"ID {self._format_user_id(self.user_id)}")
 
     def set_user_id(self, user_id):
         self.user_id = user_id

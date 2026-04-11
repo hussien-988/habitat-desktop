@@ -812,6 +812,54 @@ class ApplicantInfoStep(BaseStep):
         self.uploaded_files = list(photos)
         if photos:
             self._update_upload_thumbnails("id_upload", photos)
+        else:
+            self._download_id_photos_from_api()
+
+    def _download_id_photos_from_api(self):
+        """Download ID photos from server when resuming a draft (local paths gone)."""
+        import tempfile
+        from services.api_worker import ApiWorker
+
+        person_id = self.context.get_data("contact_person_id")
+        if not person_id:
+            return
+
+        self._set_auth_token()
+
+        def _do_fetch():
+            docs = self._api_client.get_person_identification_documents(person_id)
+            if not docs:
+                return []
+            tmp_dir = tempfile.mkdtemp(prefix="id_photos_")
+            downloaded = []
+            for doc in docs:
+                ev_id = doc.get("id") or doc.get("evidenceId", "")
+                if not ev_id:
+                    continue
+                file_name = doc.get("fileName") or doc.get("originalFileName") or f"{ev_id}.jpg"
+                save_path = os.path.join(tmp_dir, f"{ev_id}_{file_name}")
+                try:
+                    self._api_client.download_evidence(ev_id, save_path)
+                    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                        downloaded.append(save_path)
+                except Exception as e:
+                    logger.warning(f"Failed to download ID photo {ev_id}: {e}")
+            return downloaded
+
+        def _on_done(downloaded):
+            if downloaded:
+                self.uploaded_files = downloaded
+                self.context.update_data("uploaded_id_photos", list(set(downloaded)))
+                self._update_upload_thumbnails("id_upload", downloaded)
+                logger.info(f"Downloaded {len(downloaded)} ID photos from server")
+
+        def _on_error(msg):
+            logger.warning(f"Could not download ID photos from API: {msg}")
+
+        self._id_photo_worker = ApiWorker(_do_fetch)
+        self._id_photo_worker.finished.connect(_on_done)
+        self._id_photo_worker.error.connect(_on_error)
+        self._id_photo_worker.start()
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())

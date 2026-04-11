@@ -165,12 +165,12 @@ class PersonDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1B3555, stop:1 #152A42);
+                    stop:0 #F0F5FB, stop:1 #E8EFF8);
                 border-top-left-radius: 20px;
                 border-top-right-radius: 20px;
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
-                border-top: 1px solid rgba(56, 144, 223, 0.25);
+                border-top: 1px solid rgba(56, 144, 223, 0.15);
             }
             QFrame#ContentFrame QLabel,
             QFrame#ContentFrame QRadioButton {
@@ -198,7 +198,7 @@ class PersonDialog(QDialog):
         header_bar.setStyleSheet("""
             QFrame#PanelHeader {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #0E2035, stop:0.5 #122C49, stop:1 #152F4E);
+                    stop:0 #EBF5FF, stop:0.5 #E0EEFB, stop:1 #D6E8F7);
                 border-top-left-radius: 20px;
                 border-top-right-radius: 20px;
                 border-bottom-left-radius: 0px;
@@ -216,14 +216,14 @@ class PersonDialog(QDialog):
         close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         close_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                color: rgba(200, 220, 255, 0.85);
+                background: rgba(30, 64, 100, 0.08);
+                color: #3B82F6;
                 border: 1px solid rgba(56, 144, 223, 0.15);
                 border-radius: 8px;
             }
             QPushButton:hover {
-                background: rgba(255, 255, 255, 0.15);
-                color: white;
+                background: rgba(30, 64, 100, 0.15);
+                color: #1E40AF;
             }
         """)
         close_btn.clicked.connect(self.reject)
@@ -240,7 +240,7 @@ class PersonDialog(QDialog):
             title_text = tr("wizard.person_dialog.title_add")
         self._dialog_title = QLabel(title_text)
         self._dialog_title.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._dialog_title.setStyleSheet("color: white; background: transparent; border: none;")
+        self._dialog_title.setStyleSheet("color: #1A365D; background: transparent; border: none;")
         header_layout.addWidget(self._dialog_title, 1)
 
         frame_layout.addWidget(header_bar)
@@ -285,8 +285,8 @@ class PersonDialog(QDialog):
         content_inner = QWidget()
         content_inner.setStyleSheet("background: transparent;")
         main_layout = QVBoxLayout(content_inner)
-        main_layout.setSpacing(14)
-        main_layout.setContentsMargins(24, 18, 24, 18)
+        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(20, 12, 20, 14)
 
         scroll.setWidget(content_inner)
         frame_layout.addWidget(scroll, 1)
@@ -435,7 +435,7 @@ class PersonDialog(QDialog):
             bar = QFrame()
             bar.setFixedHeight(ScreenScale.h(5))
             bar.setLayoutDirection(Qt.LeftToRight)  # Prevent RTL from flipping gradient
-            bar.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; }")
+            bar.setStyleSheet("QFrame { background-color: rgba(56, 144, 223, 0.12); border-radius: 2px; }")
             self._progress_bars.append(bar)
             progress_layout.addWidget(bar)
         layout.addLayout(progress_layout)
@@ -508,7 +508,7 @@ class PersonDialog(QDialog):
     def _update_bar_style(self, bar: QFrame, fill_pct: float):
         """Update a single progress bar with gradient fill."""
         if fill_pct <= 0:
-            bar.setStyleSheet("QFrame { background-color: rgba(255, 255, 255, 0.1); border-radius: 2px; }")
+            bar.setStyleSheet("QFrame { background-color: rgba(56, 144, 223, 0.12); border-radius: 2px; }")
         elif fill_pct >= 1.0:
             bar.setStyleSheet("QFrame { background-color: #3890DF; border-radius: 2px; }")
         else:
@@ -543,13 +543,13 @@ class PersonDialog(QDialog):
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
-        tab_layout.setSpacing(10)
+        tab_layout.setSpacing(6)
 
-        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(14)
+        grid.setVerticalSpacing(8)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -723,13 +723,13 @@ class PersonDialog(QDialog):
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
-        tab_layout.setSpacing(10)
+        tab_layout.setSpacing(6)
 
-        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(14)
+        grid.setVerticalSpacing(8)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -772,8 +772,8 @@ class PersonDialog(QDialog):
             QFrame {
                 border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.07);
-                min-height: 40px; max-height: 40px;
+                background-color: #FFFFFF;
+                min-height: 36px; max-height: 36px;
             }
         """)
         mobile_layout = QHBoxLayout(mobile_container)
@@ -785,7 +785,7 @@ class PersonDialog(QDialog):
         prefix_label.setFixedWidth(ScreenScale.w(90))
         prefix_label.setAlignment(Qt.AlignCenter)
         prefix_label.setStyleSheet("""
-            color: rgba(180, 210, 240, 0.7);
+            color: #6B7280;
             font-size: 14px; font-weight: 500;
             border: none; border-left: 1px solid rgba(56,144,223,0.2);
             background: transparent; padding: 0 8px;
@@ -797,7 +797,7 @@ class PersonDialog(QDialog):
         self.phone.setStyleSheet("""
             QLineEdit {
                 border: none; background: transparent;
-                color: rgba(240, 248, 255, 0.95);
+                color: #2C3E50;
                 font-size: 14px; padding: 0 10px;
             }
         """)
@@ -845,13 +845,13 @@ class PersonDialog(QDialog):
         tab.setStyleSheet("background-color: transparent;")
         tab_layout = QVBoxLayout(tab)
         tab_layout.setContentsMargins(0, 0, 0, 0)
-        tab_layout.setSpacing(10)
+        tab_layout.setSpacing(6)
 
-        label_style = "color: rgba(180, 210, 240, 0.85); font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(14)
+        grid.setVerticalSpacing(8)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
@@ -949,8 +949,8 @@ class PersonDialog(QDialog):
                 border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
                 padding: 10px;
-                background-color: rgba(255, 255, 255, 0.07);
-                color: rgba(240, 248, 255, 0.95);
+                background-color: #FFFFFF;
+                color: #2C3E50;
                 font-size: 16px;
             }
             QTextEdit:focus {
@@ -983,11 +983,6 @@ class PersonDialog(QDialog):
         grid.addWidget(radio_widget, row, 0, 1, 2)
         row += 1
 
-        # Existing survey documents section
-        self._existing_docs_frame = self._build_existing_docs_section()
-        grid.addWidget(self._existing_docs_frame, row, 0, 1, 2)
-        row += 1
-
         # Upload frame for relation documents
         self._rel_upload_frame = self._create_upload_frame(self._browse_relation_files, "rel_upload", button_text=tr("wizard.person_dialog.attach_document"))
         # Add "Choose Existing Document" link to the upload frame
@@ -1017,143 +1012,6 @@ class PersonDialog(QDialog):
         tab_layout.addLayout(grid)
 
         self.tab_widget.addTab(tab, "")
-
-    # Existing Documents Section
-
-    def _build_existing_docs_section(self) -> QFrame:
-        """Build a collapsible section showing existing survey documents."""
-        frame = QFrame()
-        frame.setObjectName("ExistingDocsFrame")
-        frame.setStyleSheet("""
-            QFrame#ExistingDocsFrame {
-                background-color: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(56, 144, 223, 0.15);
-                border-radius: 8px;
-            }
-            QFrame#ExistingDocsFrame QLabel { background: transparent; color: rgba(200, 220, 240, 0.85); }
-            QFrame#ExistingDocsFrame QCheckBox { background: transparent; color: rgba(200, 220, 240, 0.85); }
-        """)
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
-
-        header = QLabel(tr("wizard.person_dialog.existing_docs_header"))
-        header.setStyleSheet("font-size: 11px; font-weight: 700; color: rgba(140, 190, 240, 0.8);")
-        header.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addWidget(header)
-
-        self._existing_docs_container = QVBoxLayout()
-        self._existing_docs_container.setSpacing(4)
-        layout.addLayout(self._existing_docs_container)
-
-        self._existing_docs_checkboxes = []
-
-        # Load docs asynchronously
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(200, self._load_existing_docs)
-
-        frame.setVisible(False)
-        return frame
-
-    def _load_existing_docs(self):
-        """Fetch existing survey evidences and populate checkboxes."""
-        if not self._survey_id:
-            return
-        if self.relation_uploaded_files:
-            return
-        if not self._api_relation_id:
-            return
-        try:
-            self._refresh_token()
-            evidences = self._api_service.get_survey_evidences(self._survey_id)
-        except Exception as e:
-            logger.warning(f"Could not load existing docs: {e}")
-            return
-
-        if not evidences:
-            return
-
-        from PyQt5.QtWidgets import QCheckBox
-        from PyQt5.QtGui import QDesktopServices
-        from utils.helpers import download_evidence_file
-
-        for ev in evidences:
-            ev_id = ev.get('id') or ev.get('Id') or ''
-            if not ev_id:
-                continue
-
-            ev_type = ev.get('evidenceType') or ev.get('EvidenceType') or ''
-            issue_date = (ev.get('documentIssuedDate')
-                          or ev.get('DocumentIssuedDate') or '')
-            file_name = ev.get('originalFileName') or ev.get('OriginalFileName') or ''
-
-            display_parts = []
-            if file_name:
-                display_parts.append(file_name)
-            if issue_date:
-                date_part = str(issue_date)[:10]
-                display_parts.append(date_part)
-            label_text = " - ".join(display_parts) if display_parts else tr("wizard.person_dialog.document_label", doc_id=ev_id[:8])
-
-            row_w = QWidget()
-            row_w.setStyleSheet("background: transparent;")
-            row_lay = QHBoxLayout(row_w)
-            row_lay.setContentsMargins(0, 0, 0, 0)
-            row_lay.setSpacing(6)
-
-            cb = QCheckBox(label_text)
-            cb.setStyleSheet("font-size: 12px; color: rgba(200, 220, 240, 0.85);")
-            cb.setLayoutDirection(get_layout_direction())
-            cb._evidence_data = {
-                'evidence_id': ev_id,
-                'issue_date': issue_date,
-                'path': '',
-                '_selected_existing': True,
-            }
-            self._existing_docs_checkboxes.append(cb)
-            row_lay.addWidget(cb, 1)
-
-            # View button
-            view_btn = QPushButton("\u29c9")
-            view_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
-            view_btn.setCursor(Qt.PointingHandCursor)
-            view_btn.setToolTip(tr("wizard.person_dialog.view_document"))
-            view_btn.setStyleSheet(
-                "QPushButton { background: rgba(255,255,255,0.08); color: #3890DF;"
-                "border: 1px solid rgba(56,144,223,0.3); border-radius: 6px; font-size: 13px; }"
-                "QPushButton:hover { background: rgba(255,255,255,0.14); }"
-            )
-            def _make_open(eid=ev_id, fn=file_name):
-                def _open():
-                    import threading
-                    self._refresh_token()
-                    view_btn.setEnabled(False)
-                    def _download():
-                        local = download_evidence_file(eid, fn or eid)
-                        def _on_done():
-                            view_btn.setEnabled(True)
-                            if local:
-                                QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                            else:
-                                Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
-                        QTimer.singleShot(0, _on_done)
-                    threading.Thread(target=_download, daemon=True).start()
-                return _open
-            view_btn.clicked.connect(_make_open())
-            row_lay.addWidget(view_btn)
-
-            self._existing_docs_container.addWidget(row_w)
-
-        if self._existing_docs_checkboxes:
-            self._existing_docs_frame.setVisible(True)
-
-    def _get_selected_existing_docs(self) -> list:
-        """Return list of evidence entries for checked existing documents."""
-        selected = []
-        for cb in self._existing_docs_checkboxes:
-            if cb.isChecked():
-                selected.append(dict(cb._evidence_data))
-        return selected
 
     # UI Helpers
 
@@ -1186,15 +1044,15 @@ class PersonDialog(QDialog):
         else:
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: rgba(255, 255, 255, 0.08);
-                    color: rgba(200, 220, 240, 0.9);
+                    background-color: #FFFFFF;
+                    color: #374151;
                     border: 1px solid rgba(56, 144, 223, 0.2);
                     border-radius: 8px;
                     font-weight: bold;
                     font-size: 14px;
                 }
                 QPushButton:hover {
-                    background-color: rgba(255, 255, 255, 0.12);
+                    background-color: #EBF5FF;
                     border-color: rgba(56, 144, 223, 0.4);
                 }
             """)
@@ -1407,17 +1265,17 @@ class PersonDialog(QDialog):
         self._refresh_relation_thumbnails()
 
     def _input_style(self) -> str:
-        """Custom input style with light blue background."""
+        """Custom input style with light background."""
         return """
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
                 border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
-                padding: 10px;
-                background-color: rgba(255, 255, 255, 0.07);
-                color: rgba(240, 248, 255, 0.95);
+                padding: 6px;
+                background-color: #FFFFFF;
+                color: #2C3E50;
                 font-size: 14px;
-                min-height: 20px;
-                max-height: 20px;
+                min-height: 18px;
+                max-height: 18px;
             }
             QComboBox {
                 padding-left: 4px;
@@ -1425,10 +1283,10 @@ class PersonDialog(QDialog):
             QComboBox QLineEdit {
                 border: none;
                 background: transparent;
-                color: rgba(240, 248, 255, 0.95);
+                color: #2C3E50;
                 padding: 0px 4px;
-                min-height: 20px;
-                max-height: 20px;
+                min-height: 18px;
+                max-height: 18px;
             }
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
                 border: 1px solid rgba(56, 144, 223, 0.5);
@@ -1443,27 +1301,27 @@ class PersonDialog(QDialog):
                 width: 0; height: 0;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 5px solid rgba(200, 220, 240, 0.6);
+                border-top: 5px solid #9CA3AF;
             }
             QComboBox QAbstractItemView {
-                background-color: #1B3555;
-                border: 1px solid rgba(56, 144, 223, 0.3);
+                background-color: #FFFFFF;
+                border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 0px;
                 border-bottom-left-radius: 10px;
                 border-bottom-right-radius: 10px;
                 padding: 4px;
-                selection-background-color: rgba(56, 144, 223, 0.3);
-                selection-color: white;
+                selection-background-color: #EBF5FF;
+                selection-color: #1E293B;
                 outline: none;
             }
             QComboBox QAbstractItemView::item {
                 min-height: 32px;
                 padding: 6px 10px;
                 border-radius: 6px;
-                color: rgba(220, 235, 250, 0.9);
+                color: #1E293B;
             }
             QComboBox QAbstractItemView::item:hover {
-                background-color: rgba(56, 144, 223, 0.2);
+                background-color: #EBF5FF;
             }
             QComboBox QAbstractItemView QScrollBar:vertical {
                 background: transparent;
@@ -1500,12 +1358,12 @@ class PersonDialog(QDialog):
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
                 border: 2px solid #e74c3c;
                 border-radius: 8px;
-                padding: 10px;
-                background-color: rgba(231, 76, 60, 0.1);
-                color: rgba(240, 248, 255, 0.95);
+                padding: 6px;
+                background-color: rgba(231, 76, 60, 0.06);
+                color: #2C3E50;
                 font-size: 14px;
-                min-height: 20px;
-                max-height: 20px;
+                min-height: 18px;
+                max-height: 18px;
             }
             QComboBox {
                 padding-left: 4px;
@@ -1513,10 +1371,10 @@ class PersonDialog(QDialog):
             QComboBox QLineEdit {
                 border: none;
                 background: transparent;
-                color: rgba(240, 248, 255, 0.95);
+                color: #2C3E50;
                 padding: 0px 4px;
-                min-height: 20px;
-                max-height: 20px;
+                min-height: 18px;
+                max-height: 18px;
             }
             QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
                 border: 2px solid #e74c3c;
@@ -2642,10 +2500,7 @@ class PersonDialog(QDialog):
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
-                'has_documents': bool(self.relation_uploaded_files) or (
-                    any(cb.isChecked() for cb in self._existing_docs_checkboxes)
-                    if self._existing_docs_checkboxes else False
-                ),
+                'has_documents': bool(self.relation_uploaded_files),
             },
             # Document files (internal, for same-session persistence)
             '_uploaded_files': list(self.uploaded_files),
@@ -2789,11 +2644,7 @@ class PersonDialog(QDialog):
 
         # Documents: required for Owner (rel_type=1)
         if is_owner:
-            has_uploaded = bool(self.relation_uploaded_files)
-            has_selected_existing = any(
-                cb.isChecked() for cb in self._existing_docs_checkboxes
-            ) if self._existing_docs_checkboxes else False
-            if not has_uploaded and not has_selected_existing:
+            if not self.relation_uploaded_files:
                 from ui.error_handler import ErrorHandler as _EH
                 _EH.show_error(
                     self,
@@ -2856,17 +2707,6 @@ class PersonDialog(QDialog):
                         self._upload_tenure_files(relation_id)
                         self.relation_uploaded_files = saved
 
-                    # Link any selected existing evidence to the new relation
-                    if relation_id and self._survey_id:
-                        for ev in self._get_selected_existing_docs():
-                            try:
-                                self._api_service.link_evidence_to_relation(
-                                    self._survey_id, ev['evidence_id'], relation_id
-                                )
-                                self.relation_uploaded_files.append(ev)
-                                logger.info(f"Linked existing evidence {ev['evidence_id']} to relation {relation_id}")
-                            except Exception as ev_err:
-                                logger.warning(f"Failed to link evidence {ev['evidence_id']}: {ev_err}")
                 except Exception as e:
                     link_success = False
                     logger.error(f"Failed to link existing person to unit: {e}")
@@ -2958,18 +2798,6 @@ class PersonDialog(QDialog):
 
                     if relation_id and self.relation_uploaded_files:
                         self._upload_tenure_files(relation_id)
-
-                    # Link any selected existing evidence to the new relation
-                    if relation_id and self._survey_id:
-                        for ev in self._get_selected_existing_docs():
-                            try:
-                                self._api_service.link_evidence_to_relation(
-                                    self._survey_id, ev['evidence_id'], relation_id
-                                )
-                                self.relation_uploaded_files.append(ev)
-                                logger.info(f"Linked existing evidence {ev['evidence_id']} to relation {relation_id}")
-                            except Exception as ev_err:
-                                logger.warning(f"Failed to link evidence {ev['evidence_id']}: {ev_err}")
 
                 except Exception as e:
                     link_success = False

@@ -25,6 +25,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     MINI_CARD_STYLE, MINI_CARD_SELECTED_STYLE,
     make_step_card, make_icon_header, make_divider, DIVIDER_COLOR,
+    FORM_FIELD_STYLE, FOOTER_PRIMARY_STYLE, FOOTER_SECONDARY_STYLE,
 )
 from controllers.unit_controller import UnitController
 from models.unit import PropertyUnit as Unit
@@ -172,14 +173,14 @@ class UnitSelectionStep(BaseStep):
             section_layout.addWidget(label)
             section_layout.addWidget(value)
 
-            return section, value
+            return section, value, label
 
         # Create 5 stat sections - hardcoded Arabic matching Step 1
-        section_status, self.ui_building_status = _create_stat_section(tr("wizard.building.status"))
-        section_type, self.ui_building_type = _create_stat_section(tr("wizard.building.type"))
-        section_units, self.ui_units_count = _create_stat_section(tr("wizard.building.units_count"))
-        section_parcels, self.ui_parcels_count = _create_stat_section(tr("wizard.building.parcels_count"))
-        section_shops, self.ui_shops_count = _create_stat_section(tr("wizard.building.shops_count"))
+        section_status, self.ui_building_status, self._lbl_status = _create_stat_section(tr("wizard.building.status"))
+        section_type, self.ui_building_type, self._lbl_type = _create_stat_section(tr("wizard.building.type"))
+        section_units, self.ui_units_count, self._lbl_units = _create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count, self._lbl_parcels = _create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count, self._lbl_shops = _create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing - status first, then type (matching Step 1 order)
         sections = [section_status, section_type, section_units, section_parcels, section_shops]
@@ -209,6 +210,8 @@ class UnitSelectionStep(BaseStep):
         # إعادة تطبيق الترجمة (مهم جداً)
         header_title.setText(tr("wizard.unit.select_title"))
         header_subtitle.setText(tr("wizard.unit.select_subtitle"))
+        self._units_header_title = header_title
+        self._units_header_subtitle = header_subtitle
 
         self.add_unit_btn = ActionButton(
             text=tr("wizard.unit.add_button"),
@@ -718,141 +721,85 @@ class UnitSelectionStep(BaseStep):
     def _build_unit_form_widget(self) -> QWidget:
         """Build the unit form fields widget for BottomSheet."""
         form = QWidget()
-        form.setStyleSheet("QLabel { background: transparent; border: none; }")
+        form.setStyleSheet("background: transparent; QLabel { background: transparent; border: none; }")
         form_layout = QVBoxLayout(form)
         form_layout.setContentsMargins(0, 0, 0, 0)
-        form_layout.setSpacing(16)
+        form_layout.setSpacing(12)
 
-        # Dark-theme field style for BottomSheet
-        bs_field_style = """
-            background: rgba(255, 255, 255, 0.07);
-            border: 1px solid rgba(56, 144, 223, 0.2);
-            border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 13px;
-            color: rgba(240, 248, 255, 0.95);
-        """
-        bs_spin_style = """
-            QSpinBox {
-                background: rgba(255, 255, 255, 0.07);
-                border: 1px solid rgba(56, 144, 223, 0.2);
-                border-radius: 8px;
-                padding: 6px 12px;
-                font-size: 13px;
-                color: rgba(240, 248, 255, 0.95);
-            }
-            QSpinBox::up-button {
-                subcontrol-origin: border;
-                subcontrol-position: top right;
-                width: 28px;
-                border: none;
-                border-left: 1px solid rgba(56, 144, 223, 0.15);
-                border-top-right-radius: 8px;
-                background: rgba(255, 255, 255, 0.05);
-            }
-            QSpinBox::down-button {
-                subcontrol-origin: border;
-                subcontrol-position: bottom right;
-                width: 28px;
-                border: none;
-                border-left: 1px solid rgba(56, 144, 223, 0.15);
-                border-bottom-right-radius: 8px;
-                background: rgba(255, 255, 255, 0.05);
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: rgba(56, 144, 223, 0.15);
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 5px solid rgba(200, 220, 240, 0.7);
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid rgba(200, 220, 240, 0.7);
-            }
-        """
-        bs_combo_style = bs_field_style + """
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: center left;
-                width: 24px;
-                border: none;
-            }
-        """
-        bs_label_style = "color: rgba(180, 210, 240, 0.85);"
+        label_style = "color: #64748B; background: transparent; border: none;"
 
         # Row 1: Floor number | Unit number
         row1 = QHBoxLayout()
         row1.setSpacing(16)
+
         self._if_floor = QSpinBox()
         self._if_floor.setRange(-3, 100)
         self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_floor.setStyleSheet(bs_spin_style)
-        self._if_floor.setMinimumHeight(ScreenScale.h(44))
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), self._if_floor, bs_label_style), 1)
+        self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_floor.setFixedHeight(ScreenScale.h(40))
+        self._if_floor.setStyleSheet(FORM_FIELD_STYLE)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), self._if_floor, label_style), 1)
 
         self._if_unit_num = QSpinBox()
         self._if_unit_num.setRange(0, 9999)
         self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_unit_num.setStyleSheet(bs_spin_style)
-        self._if_unit_num.setMinimumHeight(ScreenScale.h(44))
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num, bs_label_style), 1)
+        self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_unit_num.setFixedHeight(ScreenScale.h(40))
+        self._if_unit_num.setStyleSheet(FORM_FIELD_STYLE)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num, label_style), 1)
         form_layout.addLayout(row1)
 
         # Row 2: Unit type | Unit status
         row2 = QHBoxLayout()
         row2.setSpacing(16)
+
         self._if_type = RtlCombo()
-        self._if_type.setStyleSheet(bs_combo_style)
-        self._if_type.setMinimumHeight(ScreenScale.h(44))
+        self._if_type.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_type.setFixedHeight(ScreenScale.h(40))
         self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self._if_type.addItem(label, code)
-        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_type"), self._if_type, bs_label_style), 1)
+        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_type"), self._if_type, label_style), 1)
 
         self._if_status = RtlCombo()
-        self._if_status.setStyleSheet(bs_combo_style)
-        self._if_status.setMinimumHeight(ScreenScale.h(44))
+        self._if_status.setStyleSheet(FORM_FIELD_STYLE)
+        self._if_status.setFixedHeight(ScreenScale.h(40))
         self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self._if_status.addItem(label, code)
-        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_status"), self._if_status, bs_label_style), 1)
+        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_status"), self._if_status, label_style), 1)
         form_layout.addLayout(row2)
 
         # Row 3: Rooms | Area
         row3 = QHBoxLayout()
         row3.setSpacing(16)
+
         self._if_rooms = QSpinBox()
         self._if_rooms.setRange(0, 20)
         self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_rooms.setStyleSheet(bs_spin_style)
-        self._if_rooms.setMinimumHeight(ScreenScale.h(44))
-        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), self._if_rooms, bs_label_style), 1)
+        self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
+        self._if_rooms.setFixedHeight(ScreenScale.h(40))
+        self._if_rooms.setStyleSheet(FORM_FIELD_STYLE)
+        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), self._if_rooms, label_style), 1)
 
         self._if_area = QLineEdit()
         self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
-        self._if_area.setStyleSheet(bs_field_style)
-        self._if_area.setMinimumHeight(ScreenScale.h(44))
+        self._if_area.setFixedHeight(ScreenScale.h(40))
+        self._if_area.setStyleSheet(FORM_FIELD_STYLE)
         area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         area_validator.setNotation(QDoubleValidator.StandardNotation)
         self._if_area.setValidator(area_validator)
-        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.area"), self._if_area, bs_label_style), 1)
+        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.area"), self._if_area, label_style), 1)
         form_layout.addLayout(row3)
 
-        # Row 4: Description (full width)
+        # Description (full width)
         self._if_desc = QTextEdit()
-        self._if_desc.setMinimumHeight(ScreenScale.h(80))
-        self._if_desc.setMaximumHeight(ScreenScale.h(100))
+        self._if_desc.setMinimumHeight(ScreenScale.h(90))
+        self._if_desc.setMaximumHeight(ScreenScale.h(110))
         self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
-        self._if_desc.setStyleSheet(bs_field_style)
-        form_layout.addLayout(self._make_bs_field(tr("wizard.unit_dialog.description"), self._if_desc, bs_label_style))
+        self._if_desc.setStyleSheet(FORM_FIELD_STYLE)
+        form_layout.addLayout(self._make_bs_field(tr("wizard.unit_dialog.description"), self._if_desc, label_style))
 
         # Buttons row
         btn_row = QHBoxLayout()
@@ -860,38 +807,17 @@ class UnitSelectionStep(BaseStep):
 
         cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setFixedHeight(ScreenScale.h(48))
+        cancel_btn.setFixedHeight(ScreenScale.h(44))
         cancel_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.08);
-                color: rgba(200, 220, 240, 0.9);
-                border: 1px solid rgba(56, 144, 223, 0.2);
-                border-radius: 12px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.12);
-                border-color: rgba(56, 144, 223, 0.4);
-            }
-        """)
+        cancel_btn.setStyleSheet(FOOTER_SECONDARY_STYLE)
         cancel_btn.clicked.connect(self._cancel_inline_unit)
         btn_row.addWidget(cancel_btn, 1)
 
         save_btn = QPushButton(tr("common.save"))
         save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setFixedHeight(ScreenScale.h(48))
+        save_btn.setFixedHeight(ScreenScale.h(44))
         save_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.PRIMARY_BLUE};
-                color: white;
-                border: none;
-                border-radius: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: #2A7BC9;
-            }}
-        """)
+        save_btn.setStyleSheet(FOOTER_PRIMARY_STYLE)
         save_btn.clicked.connect(self._save_inline_unit)
         btn_row.addWidget(save_btn, 1)
 
@@ -902,10 +828,10 @@ class UnitSelectionStep(BaseStep):
     def _make_bs_field(self, label_text: str, widget, label_style: str = "") -> QVBoxLayout:
         """Create a labeled form field for the BottomSheet form."""
         col = QVBoxLayout()
-        col.setSpacing(6)
+        col.setSpacing(4)
         lbl = QLabel(label_text)
-        lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_MEDIUM))
-        lbl.setStyleSheet(label_style or "color: rgba(180, 210, 240, 0.85);")
+        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(label_style or "color: #64748B; background: transparent; border: none;")
         col.addWidget(lbl)
         col.addWidget(widget)
         return col
@@ -1034,6 +960,15 @@ class UnitSelectionStep(BaseStep):
         self.setLayoutDirection(get_layout_direction())
         if hasattr(self, 'add_unit_btn'):
             self.add_unit_btn.setText(tr("wizard.unit.add_button"))
+        if hasattr(self, '_units_header_title'):
+            self._units_header_title.setText(tr("wizard.unit.select_title"))
+            self._units_header_subtitle.setText(tr("wizard.unit.select_subtitle"))
+        if hasattr(self, '_lbl_status'):
+            self._lbl_status.setText(tr("wizard.building.status"))
+            self._lbl_type.setText(tr("wizard.building.type"))
+            self._lbl_units.setText(tr("wizard.building.units_count"))
+            self._lbl_parcels.setText(tr("wizard.building.parcels_count"))
+            self._lbl_shops.setText(tr("wizard.building.shops_count"))
         # Reload unit cards with new language
         if self.context.building:
             self._loaded_building_uuid = None  # Force re-render with new language

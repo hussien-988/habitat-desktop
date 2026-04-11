@@ -80,14 +80,19 @@ class ImportController(BaseController):
             logger.error(f"Upload API error: {e}")
             if e.status_code == 409:
                 msg_ar = "هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى"
+            elif e.status_code == 400:
+                detail = (e.response_data or {}).get("detail") or (e.response_data or {}).get("message") or ""
+                msg_ar = detail if detail else "طلب غير صالح"
             else:
-                msg_ar = f"فشل رفع الملف: خطأ من الخادم ({e.status_code})"
+                msg_ar = self._api_error_msg(e, f"فشل رفع الملف: خطأ من الخادم ({e.status_code})")
             return OperationResult.fail(str(e), message_ar=msg_ar)
         except NetworkException as e:
             logger.error(f"Upload network error: {e}")
             return OperationResult.fail(str(e), message_ar="فشل رفع الملف: خطأ في الاتصال بالخادم")
         except Exception as e:
             logger.error(f"Upload failed: {e}")
+            if isinstance(e, ApiException) and e.status_code == 409:
+                return OperationResult.fail(str(e), message_ar="هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى")
             return OperationResult.fail(str(e), message_ar="فشل رفع الملف")
 
     def get_packages(

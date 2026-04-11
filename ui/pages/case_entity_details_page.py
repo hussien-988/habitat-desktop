@@ -45,12 +45,12 @@ logger = get_logger(__name__)
 _CASE_STATUS_STYLES = {
     1: {  # Open
         "bg": "#ECFDF5", "fg": "#059669", "border": "#6EE7B7",
-        "glow": "rgba(5, 150, 105, 0.12)", "label": "\u0645\u0641\u062a\u0648\u062d\u0629",
+        "glow": "rgba(5, 150, 105, 0.12)", "label_key": "page.case_entity.status_open",
         "strip": "#059669",
     },
     2: {  # Closed
         "bg": "#FEF2F2", "fg": "#DC2626", "border": "#FECACA",
-        "glow": "rgba(220, 38, 38, 0.12)", "label": "\u0645\u063a\u0644\u0642\u0629",
+        "glow": "rgba(220, 38, 38, 0.12)", "label_key": "page.case_entity.status_closed",
         "strip": "#DC2626",
     },
 }
@@ -333,7 +333,7 @@ class _CaseEntityHeader(QWidget):
         row1.addStretch()
 
         # Toggle editable button (admin/data_manager only)
-        self._toggle_editable_btn = QPushButton("\u0642\u0641\u0644 \u0627\u0644\u062a\u0639\u062f\u064a\u0644")
+        self._toggle_editable_btn = QPushButton(tr("page.case_entity.lock_editing"))
         self._toggle_editable_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
         self._toggle_editable_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._toggle_editable_btn.setVisible(False)
@@ -363,7 +363,7 @@ class _CaseEntityHeader(QWidget):
         row1.addWidget(self._toggle_editable_btn)
 
         # Revisit button (admin/data_manager only)
-        self._revisit_btn = QPushButton("\u0625\u0639\u0627\u062f\u0629 \u0632\u064a\u0627\u0631\u0629")
+        self._revisit_btn = QPushButton(tr("page.case_entity.revisit"))
         self._revisit_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
         self._revisit_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._revisit_btn.setVisible(False)
@@ -437,19 +437,19 @@ class _CaseEntityHeader(QWidget):
     def update_editable_state(self, is_editable: bool):
         """Update toggle button text based on current editable state."""
         if is_editable:
-            self._toggle_editable_btn.setText(
-                "\u0642\u0641\u0644 \u0627\u0644\u062a\u0639\u062f\u064a\u0644"
-            )
+            self._toggle_editable_btn.setText(tr("page.case_entity.lock_editing"))
         else:
-            self._toggle_editable_btn.setText(
-                "\u0641\u062a\u062d \u0627\u0644\u062a\u0639\u062f\u064a\u0644"
-            )
+            self._toggle_editable_btn.setText(tr("page.case_entity.unlock_editing"))
         self._revisit_btn.setEnabled(is_editable)
 
     def set_actions_visible(self, visible: bool):
         """Show/hide action buttons based on role."""
         self._toggle_editable_btn.setVisible(visible)
         self._revisit_btn.setVisible(visible)
+
+    def update_texts(self):
+        """Update button texts for language change."""
+        self._revisit_btn.setText(tr("page.case_entity.revisit"))
 
     def pulse_accent(self):
         self._accent_line.pulse()
@@ -1136,9 +1136,7 @@ class CaseEntityDetailsPage(QWidget):
             return
         self._loading = True
         self._case_id = case_id
-        self._spinner.show_loading(
-            "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0629..."
-        )
+        self._spinner.show_loading(tr("page.case_entity.loading"))
 
         def _fetch(cid):
             from services.api_client import get_api_client
@@ -1161,7 +1159,7 @@ class CaseEntityDetailsPage(QWidget):
         else:
             Toast.show_toast(
                 self,
-                "\u0641\u0634\u0644 \u062a\u062d\u0645\u064a\u0644 \u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0629",
+                tr("page.case_entity.load_error"),
                 Toast.ERROR,
             )
             logger.warning("Failed to load case data — empty result")
@@ -1171,7 +1169,7 @@ class CaseEntityDetailsPage(QWidget):
         self._spinner.hide_loading()
         Toast.show_toast(
             self,
-            "\u0641\u0634\u0644 \u062a\u062d\u0645\u064a\u0644 \u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0629",
+            tr("page.case_entity.load_error"),
             Toast.ERROR,
         )
         logger.warning(f"Failed to load case data: {error_msg}")
@@ -1246,16 +1244,16 @@ class CaseEntityDetailsPage(QWidget):
         status_style = _CASE_STATUS_STYLES.get(self._case.status, _CASE_STATUS_STYLES[1])
 
         badges = []
-        badges.append((status_style["label"], status_style["bg"], status_style["fg"]))
+        badges.append((tr(status_style["label_key"]), status_style["bg"], status_style["fg"]))
 
         if not self._case.is_editable:
             badges.append((
-                "\u063a\u064a\u0631 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u062a\u0639\u062f\u064a\u0644",
+                tr("page.case_entity.not_editable"),
                 "#FEF2F2", "#DC2626",
             ))
         else:
             badges.append((
-                "\u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u062a\u0639\u062f\u064a\u0644",
+                tr("page.case_entity.editable"),
                 "#ECFDF5", "#059669",
             ))
 
@@ -1274,8 +1272,8 @@ class CaseEntityDetailsPage(QWidget):
 
         self._add_section_header(
             self._case_info_content, "blue",
-            "\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u062d\u0627\u0644\u0629",
-            "\u0628\u064a\u0627\u0646\u0627\u062a \u0643\u064a\u0627\u0646 \u0627\u0644\u062d\u0627\u0644\u0629",
+            tr("page.case_entity.section_case_info"),
+            tr("page.case_entity.section_case_info_sub"),
         )
 
         grid = QGridLayout()
@@ -1294,17 +1292,17 @@ class CaseEntityDetailsPage(QWidget):
             closed = "-"
 
         fields = [
-            ("\u0631\u0642\u0645 \u0627\u0644\u062d\u0627\u0644\u0629",
+            (tr("page.case_entity.field_case_number"),
              self._case.case_number or "-"),
-            ("\u0627\u0644\u062d\u0627\u0644\u0629",
-             status_style["label"]),
-            ("\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0641\u062a\u062d",
+            (tr("page.case_entity.field_status"),
+             tr(status_style["label_key"])),
+            (tr("page.case_entity.field_open_date"),
              opened),
-            ("\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
+            (tr("page.case_entity.field_close_date"),
              closed),
-            ("\u0639\u062f\u062f \u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a",
+            (tr("page.case_entity.field_survey_count"),
              str(self._case.survey_count)),
-            ("\u0639\u062f\u062f \u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a",
+            (tr("page.case_entity.field_claim_count"),
              str(self._case.claim_count)),
         ]
 
@@ -1322,8 +1320,8 @@ class CaseEntityDetailsPage(QWidget):
 
         self._add_section_header(
             self._property_content, "blue",
-            "\u0627\u0644\u0648\u062d\u062f\u0629 \u0627\u0644\u0639\u0642\u0627\u0631\u064a\u0629",
-            "\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0627\u0644\u0648\u062d\u062f\u0629 \u0627\u0644\u0645\u0631\u062a\u0628\u0637\u0629",
+            tr("page.case_entity.section_property"),
+            tr("page.case_entity.section_property_sub"),
         )
 
         grid = QGridLayout()
@@ -1335,9 +1333,9 @@ class CaseEntityDetailsPage(QWidget):
         unit_id = self._case.property_unit_id or "-"
 
         fields = [
-            ("\u0645\u0639\u0631\u0641 \u0627\u0644\u0648\u062d\u062f\u0629",
+            (tr("page.case_entity.field_unit_id"),
              unit_id[:16] + "..." if len(unit_id) > 16 else unit_id),
-            ("\u0639\u062f\u062f \u0627\u0644\u0639\u0644\u0627\u0642\u0627\u062a",
+            (tr("page.case_entity.field_relations_count"),
              str(self._case.person_property_relation_count)),
         ]
 
@@ -1354,8 +1352,8 @@ class CaseEntityDetailsPage(QWidget):
         count = self._case.survey_count if self._case else 0
         self._add_section_header(
             self._surveys_content, "blue",
-            f"\u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a ({count})",
-            "\u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a \u0627\u0644\u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u0627\u0644\u062d\u0627\u0644\u0629",
+            tr("page.case_entity.section_surveys", count=count),
+            tr("page.case_entity.section_surveys_sub"),
         )
 
         if self._survey_details:
@@ -1364,17 +1362,13 @@ class CaseEntityDetailsPage(QWidget):
                 card.clicked.connect(self.survey_clicked.emit)
                 self._surveys_content.addWidget(card)
         elif self._case and self._case.survey_ids:
-            loading_lbl = QLabel(
-                "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a..."
-            )
+            loading_lbl = QLabel(tr("page.case_entity.loading_surveys"))
             loading_lbl.setFont(create_font(size=10))
             loading_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             loading_lbl.setAlignment(Qt.AlignCenter)
             self._surveys_content.addWidget(loading_lbl)
         else:
-            empty_lbl = QLabel(
-                "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0633\u0648\u062d\u0627\u062a \u0645\u0631\u062a\u0628\u0637\u0629"
-            )
+            empty_lbl = QLabel(tr("page.case_entity.empty_surveys"))
             empty_lbl.setFont(create_font(size=10))
             empty_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             empty_lbl.setAlignment(Qt.AlignCenter)
@@ -1386,8 +1380,8 @@ class CaseEntityDetailsPage(QWidget):
         count = self._case.claim_count if self._case else 0
         self._add_section_header(
             self._claims_content, "blue",
-            f"\u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a ({count})",
-            "\u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a \u0627\u0644\u0645\u0631\u062a\u0628\u0637\u0629 \u0628\u0627\u0644\u062d\u0627\u0644\u0629",
+            tr("page.case_entity.section_claims", count=count),
+            tr("page.case_entity.section_claims_sub"),
         )
 
         if self._claim_details:
@@ -1396,17 +1390,13 @@ class CaseEntityDetailsPage(QWidget):
                 card.clicked.connect(self.claim_clicked.emit)
                 self._claims_content.addWidget(card)
         elif self._case and self._case.claim_ids:
-            loading_lbl = QLabel(
-                "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a..."
-            )
+            loading_lbl = QLabel(tr("page.case_entity.loading_claims"))
             loading_lbl.setFont(create_font(size=10))
             loading_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             loading_lbl.setAlignment(Qt.AlignCenter)
             self._claims_content.addWidget(loading_lbl)
         else:
-            empty_lbl = QLabel(
-                "\u0644\u0627 \u062a\u0648\u062c\u062f \u0645\u0637\u0627\u0644\u0628\u0627\u062a \u0645\u0631\u062a\u0628\u0637\u0629"
-            )
+            empty_lbl = QLabel(tr("page.case_entity.empty_claims"))
             empty_lbl.setFont(create_font(size=10))
             empty_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             empty_lbl.setAlignment(Qt.AlignCenter)
@@ -1422,7 +1412,7 @@ class CaseEntityDetailsPage(QWidget):
         self._notes_card.setVisible(True)
         self._add_section_header(
             self._notes_content, "blue",
-            "\u0645\u0644\u0627\u062d\u0638\u0627\u062a",
+            tr("page.case_entity.section_notes"),
         )
 
         notes_lbl = QLabel(self._case.notes)
@@ -1448,13 +1438,13 @@ class CaseEntityDetailsPage(QWidget):
         if not self._case.is_editable:
             Toast.show_toast(
                 self,
-                "\u0627\u0644\u062d\u0627\u0644\u0629 \u063a\u064a\u0631 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u062a\u0639\u062f\u064a\u0644",
+                tr("page.case_entity.case_not_editable"),
                 Toast.WARNING,
             )
             return
         property_unit_id = getattr(self._case, 'property_unit_id', None) or ''
         if not property_unit_id:
-            Toast.show_toast(self, "\u0644\u0627 \u064a\u0648\u062c\u062f \u0645\u0642\u0633\u0645 \u0645\u0631\u062a\u0628\u0637 \u0628\u0647\u0630\u0647 \u0627\u0644\u062d\u0627\u0644\u0629", Toast.WARNING)
+            Toast.show_toast(self, tr("page.case_entity.no_unit_linked"), Toast.WARNING)
             return
         self.revisit_requested.emit({
             'case_id': self._case.id,
@@ -1466,3 +1456,11 @@ class CaseEntityDetailsPage(QWidget):
         if self._case:
             self._case.is_editable = is_editable
             self._populate_header()
+
+    def update_language(self, is_arabic=True):
+        """Re-apply RTL direction and refresh all text for language change."""
+        direction = get_layout_direction()
+        self.setLayoutDirection(direction)
+        self._header.update_texts()
+        if self._case:
+            self._populate_all()

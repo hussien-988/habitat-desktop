@@ -34,8 +34,9 @@ from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.toast import Toast
 from ui.components.empty_state import EmptyState
-from services.translation_manager import get_layout_direction
+from services.translation_manager import get_layout_direction, tr
 from services.api_worker import ApiWorker
+from ui.components.icon import Icon
 from models.case import Case
 
 logger = logging.getLogger(__name__)
@@ -48,12 +49,12 @@ logger = logging.getLogger(__name__)
 _CASE_STATUS_STYLES = {
     1: {  # Open
         "bg": "#ECFDF5", "fg": "#059669", "border": "#6EE7B7",
-        "glow": "rgba(5, 150, 105, 0.12)", "label": "\u0645\u0641\u062a\u0648\u062d\u0629",
+        "glow": "rgba(5, 150, 105, 0.12)", "label_key": "page.case_mgmt.status_open",
         "strip": "#059669",
     },
     2: {  # Closed
         "bg": "#FEF2F2", "fg": "#DC2626", "border": "#FECACA",
-        "glow": "rgba(220, 38, 38, 0.12)", "label": "\u0645\u063a\u0644\u0642\u0629",
+        "glow": "rgba(220, 38, 38, 0.12)", "label_key": "page.case_mgmt.status_closed",
         "strip": "#DC2626",
     },
 }
@@ -204,7 +205,7 @@ class _CaseCard(QFrame):
         row1.addStretch()
 
         style = _CASE_STATUS_STYLES.get(self._status, _CASE_STATUS_STYLES[1])
-        badge = QLabel(style["label"])
+        badge = QLabel(tr(style["label_key"]))
         badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
         badge.setFixedHeight(ScreenScale.h(22))
@@ -221,7 +222,7 @@ class _CaseCard(QFrame):
         if self._case.opened_date:
             opened_str = self._case.opened_date[:10]
         if opened_str and not opened_str.startswith("0001"):
-            date_label = QLabel(f"\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0641\u062a\u062d: {opened_str}")
+            date_label = QLabel(tr("page.case_mgmt.opened_date", date=opened_str))
         else:
             date_label = QLabel("")
         date_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
@@ -232,7 +233,7 @@ class _CaseCard(QFrame):
 
         content.addSpacing(4)
 
-        # Row 3: chips (survey count, claim count, relations count) + lock icon
+        # Row 3: chips (survey count, claim count) + lock icon
         chips_row = QHBoxLayout()
         chips_row.setSpacing(6)
 
@@ -243,9 +244,7 @@ class _CaseCard(QFrame):
         )
 
         # Survey count chip (blue)
-        survey_chip = QLabel(
-            f"\u0627\u0644\u0645\u0633\u0648\u062d\u0627\u062a: {self._case.survey_count}"
-        )
+        survey_chip = QLabel(tr("page.case_mgmt.chip_surveys", count=self._case.survey_count))
         survey_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
         survey_chip.setStyleSheet(chip_style_tpl.format(
             bg="#EBF5FF", fg="#0369A1", border="#BAE6FD"
@@ -253,24 +252,12 @@ class _CaseCard(QFrame):
         chips_row.addWidget(survey_chip)
 
         # Claim count chip (purple)
-        claim_chip = QLabel(
-            f"\u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0627\u062a: {self._case.claim_count}"
-        )
+        claim_chip = QLabel(tr("page.case_mgmt.chip_claims", count=self._case.claim_count))
         claim_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
         claim_chip.setStyleSheet(chip_style_tpl.format(
             bg="#F3E8FF", fg="#7C3AED", border="#DDD6FE"
         ))
         chips_row.addWidget(claim_chip)
-
-        # Relations chip (green)
-        relation_chip = QLabel(
-            f"\u0627\u0644\u0639\u0644\u0627\u0642\u0627\u062a: {self._case.person_property_relation_count}"
-        )
-        relation_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-        relation_chip.setStyleSheet(chip_style_tpl.format(
-            bg="#F0FDF4", fg="#15803D", border="#DCFCE7"
-        ))
-        chips_row.addWidget(relation_chip)
 
         chips_row.addStretch()
 
@@ -279,9 +266,7 @@ class _CaseCard(QFrame):
             lock_label = QLabel("\U0001F512")
             lock_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             lock_label.setStyleSheet("background: transparent; border: none;")
-            lock_label.setToolTip(
-                "\u063a\u064a\u0631 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u062a\u0639\u062f\u064a\u0644"
-            )
+            lock_label.setToolTip(tr("page.case_mgmt.not_editable"))
             chips_row.addWidget(lock_label)
 
         content.addLayout(chips_row)
@@ -432,13 +417,6 @@ class _CaseCard(QFrame):
 class _EmptyStateCases(QWidget):
     """Light-themed institutional empty state."""
 
-    _DEFAULT_TITLE = "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
-    _DEFAULT_DESC = (
-        "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
-        "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
-        "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
-    )
-
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -446,8 +424,8 @@ class _EmptyStateCases(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self._inner = EmptyState(
             icon_name="folder",
-            title=self._DEFAULT_TITLE,
-            description=self._DEFAULT_DESC,
+            title=tr("page.case_mgmt.empty_title"),
+            description=tr("page.case_mgmt.empty_desc"),
         )
         layout.addWidget(self._inner, 0, Qt.AlignCenter)
 
@@ -486,10 +464,6 @@ class CaseManagementPage(QWidget):
         self._navigating = False
         self._worker = None
 
-        self._search_timer = QTimer(self)
-        self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self._load_cases)
-
         self._shimmer_timer = QTimer(self)
         self._shimmer_timer.setInterval(80)
         self._shimmer_timer.timeout.connect(self._update_card_shimmer)
@@ -513,12 +487,8 @@ class CaseManagementPage(QWidget):
         """Re-apply RTL direction and refresh label text."""
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
-        self._header.get_title_label().setText(
-            "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u062d\u0627\u0644\u0627\u062a"
-        )
-        self._search.setPlaceholderText(
-            "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649..."
-        )
+        self._header.get_title_label().setText(tr("page.case_mgmt.title"))
+        self._search.setPlaceholderText(tr("page.case_mgmt.search_placeholder"))
         self._scroll.setLayoutDirection(direction)
         self._scroll_content.setLayoutDirection(direction)
         self._update_tab_labels()
@@ -538,21 +508,19 @@ class CaseManagementPage(QWidget):
 
         # Dark header zone
         self._header = DarkHeaderZone(self)
-        self._header.set_title(
-            "\u0625\u062f\u0627\u0631\u0629 \u0627\u0644\u062d\u0627\u0644\u0627\u062a"
-        )
+        self._header.set_title(tr("page.case_mgmt.title"))
 
         # Stat pills
         self._pill_total = _make_stat_pill(
-            "\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a", 0,
+            tr("page.case_mgmt.pill_total"), 0,
             "rgba(255,255,255,0.12)", "#FFFFFF", "rgba(255,255,255,0.20)"
         )
         self._pill_open = _make_stat_pill(
-            "\u0645\u0641\u062a\u0648\u062d\u0629", 0,
+            tr("page.case_mgmt.pill_open"), 0,
             "rgba(5,150,105,0.15)", "#6EE7B7", "rgba(110,231,183,0.30)"
         )
         self._pill_closed = _make_stat_pill(
-            "\u0645\u063a\u0644\u0642\u0629", 0,
+            tr("page.case_mgmt.pill_closed"), 0,
             "rgba(220,38,38,0.15)", "#FCA5A5", "rgba(252,165,165,0.30)"
         )
         self._header.add_stat_pill(self._pill_total)
@@ -562,37 +530,42 @@ class CaseManagementPage(QWidget):
         # Tabs (row 2)
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
-        self._tab_all = NavStyleTab("\u0627\u0644\u0643\u0644")
+        self._tab_all = NavStyleTab(tr("page.case_mgmt.tab_all"))
         self._tab_all.setFixedSize(ScreenScale.w(100), ScreenScale.h(38))
         self._tab_all.set_font(tab_font)
         self._tab_all.set_active(True)
         self._tab_all.clicked.connect(lambda: self._on_tab(None))
         self._header.add_tab(self._tab_all)
 
-        self._tab_open = NavStyleTab("\u0645\u0641\u062a\u0648\u062d\u0629")
+        self._tab_open = NavStyleTab(tr("page.case_mgmt.tab_open"))
         self._tab_open.setFixedSize(ScreenScale.w(120), ScreenScale.h(38))
         self._tab_open.set_font(tab_font)
         self._tab_open.set_active(False)
         self._tab_open.clicked.connect(lambda: self._on_tab(1))
         self._header.add_tab(self._tab_open)
 
-        self._tab_closed = NavStyleTab("\u0645\u063a\u0644\u0642\u0629")
+        self._tab_closed = NavStyleTab(tr("page.case_mgmt.tab_closed"))
         self._tab_closed.setFixedSize(ScreenScale.w(120), ScreenScale.h(38))
         self._tab_closed.set_font(tab_font)
         self._tab_closed.set_active(False)
         self._tab_closed.clicked.connect(lambda: self._on_tab(2))
         self._header.add_tab(self._tab_closed)
 
-        # Search field (row 2)
+        # Search field (row 1, matches cases_page style)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(
-            "\u0627\u0628\u062d\u062b \u0628\u0631\u0642\u0645 \u0627\u0644\u0645\u0628\u0646\u0649..."
-        )
+        self._search.setPlaceholderText(tr("page.case_mgmt.search_placeholder"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
-        self._search.textChanged.connect(self._on_search_changed)
-        self._header.set_search_field(self._search)
+        search_icon = Icon.load_pixmap("search", 16)
+        if search_icon and not search_icon.isNull():
+            icon_label = QLabel(self._search)
+            icon_label.setPixmap(search_icon)
+            icon_label.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
+            icon_label.move(10, 9)
+            icon_label.setStyleSheet("background: transparent; border: none;")
+        self._search.returnPressed.connect(self._on_search_changed)
+        self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
 
@@ -693,7 +666,7 @@ class CaseManagementPage(QWidget):
 
     def _on_search_changed(self):
         self._current_page = 1
-        self._search_timer.start(500)
+        self._load_cases()
 
     # -- Pagination --
 
@@ -726,30 +699,14 @@ class CaseManagementPage(QWidget):
 
     def _update_stat_pills(self):
         total = self._open_count + self._closed_count
-        self._pill_total.setText(
-            f"  \u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a: {total}  "
-        )
-        self._pill_open.setText(
-            f"  \u0645\u0641\u062a\u0648\u062d\u0629: {self._open_count}  "
-        )
-        self._pill_closed.setText(
-            f"  \u0645\u063a\u0644\u0642\u0629: {self._closed_count}  "
-        )
+        self._pill_total.setText(f"  {tr('page.case_mgmt.pill_total_count', count=total)}  ")
+        self._pill_open.setText(f"  {tr('page.case_mgmt.pill_open_count', count=self._open_count)}  ")
+        self._pill_closed.setText(f"  {tr('page.case_mgmt.pill_closed_count', count=self._closed_count)}  ")
 
     def _update_tab_labels(self):
-        all_text = "\u0627\u0644\u0643\u0644"
-        open_text = "\u0645\u0641\u062a\u0648\u062d\u0629"
-        closed_text = "\u0645\u063a\u0644\u0642\u0629"
-        total = self._open_count + self._closed_count
-        if total > 0:
-            all_text = f"{all_text} ({total})"
-        if self._open_count > 0:
-            open_text = f"{open_text} ({self._open_count})"
-        if self._closed_count > 0:
-            closed_text = f"{closed_text} ({self._closed_count})"
-        self._tab_all.set_text(all_text)
-        self._tab_open.set_text(open_text)
-        self._tab_closed.set_text(closed_text)
+        self._tab_all.set_text(tr("page.case_mgmt.tab_all"))
+        self._tab_open.set_text(tr("page.case_mgmt.tab_open"))
+        self._tab_closed.set_text(tr("page.case_mgmt.tab_closed"))
 
     # -- Data loading --
 
@@ -757,10 +714,7 @@ class CaseManagementPage(QWidget):
         if self._loading:
             return
         self._loading = True
-        self._spinner.show_loading(
-            "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 "
-            "\u0627\u0644\u062d\u0627\u0644\u0627\u062a..."
-        )
+        self._spinner.show_loading(tr("page.case_mgmt.loading"))
 
         self._worker = ApiWorker(self._fetch_cases_data)
         self._worker.finished.connect(self._on_cases_loaded)
@@ -859,12 +813,7 @@ class CaseManagementPage(QWidget):
     def _on_cases_load_error(self, error_msg):
         self._loading = False
         self._spinner.hide_loading()
-        Toast.show_toast(
-            self,
-            "\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 "
-            "\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u0627\u062a",
-            Toast.ERROR,
-        )
+        Toast.show_toast(self, tr("page.case_mgmt.load_error"), Toast.ERROR)
         logger.warning(f"Error loading cases: {error_msg}")
         self._cases = []
         self._populate_cards(self._cases)
@@ -973,24 +922,12 @@ class CaseManagementPage(QWidget):
 
     def _update_empty_text(self):
         if self._current_filter == 1:
-            self._empty_state.set_title(
-                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a "
-                "\u0645\u0641\u062a\u0648\u062d\u0629"
-            )
+            self._empty_state.set_title(tr("page.case_mgmt.empty_open"))
         elif self._current_filter == 2:
-            self._empty_state.set_title(
-                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a "
-                "\u0645\u063a\u0644\u0642\u0629"
-            )
+            self._empty_state.set_title(tr("page.case_mgmt.empty_closed"))
         else:
-            self._empty_state.set_title(
-                "\u0644\u0627 \u062a\u0648\u062c\u062f \u062d\u0627\u0644\u0627\u062a"
-            )
-        self._empty_state.set_description(
-            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u0639\u062b\u0648\u0631 "
-            "\u0639\u0644\u0649 \u062d\u0627\u0644\u0627\u062a "
-            "\u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0644\u0628\u062d\u062b"
-        )
+            self._empty_state.set_title(tr("page.case_mgmt.empty_all"))
+        self._empty_state.set_description(tr("page.case_mgmt.empty_desc"))
 
     # -- Card click --
 
@@ -998,8 +935,5 @@ class CaseManagementPage(QWidget):
         if self._navigating or not case_id:
             return
         self._navigating = True
-        self._spinner.show_loading(
-            "\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 "
-            "\u0627\u0644\u062d\u0627\u0644\u0629..."
-        )
+        self._spinner.show_loading(tr("page.case_mgmt.loading_case"))
         self.case_selected.emit(case_id)

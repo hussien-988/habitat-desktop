@@ -35,6 +35,7 @@ from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 from ui.design_system import ScreenScale
+from ui.wizards.office_survey.wizard_styles import FORM_FIELD_STYLE, FOOTER_PRIMARY_STYLE, FOOTER_SECONDARY_STYLE
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ class UnitDialog(QDialog):
             self._api_service.set_access_token(auth_token)
             self.unit_controller.set_auth_token(auth_token)
 
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog | Qt.WindowStaysOnTopHint)
         self.setLayoutDirection(get_layout_direction())
         self.setAttribute(Qt.WA_TranslucentBackground)
 
@@ -89,9 +90,8 @@ class UnitDialog(QDialog):
         if unit_data:
             self._load_unit_data(unit_data)
 
-    def showEvent(self, event):
-        """Position as side panel with slide-in."""
-        super().showEvent(event)
+    def _do_slide_in(self):
+        """Position as side panel with slide-in animation."""
         parent = self.parent()
         if not parent:
             return
@@ -119,6 +119,11 @@ class UnitDialog(QDialog):
 
     def _setup_ui(self):
         """Setup the dialog UI as side panel."""
+        from ui.font_utils import create_font, FontManager
+        from PyQt5.QtWidgets import QScrollArea
+
+        self.setLayoutDirection(get_layout_direction())
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(0)
@@ -128,32 +133,42 @@ class UnitDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border: 1px solid rgba(56, 144, 223, 0.10);
-                border-radius: 16px;
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+                border-top: 1px solid rgba(56, 144, 223, 0.20);
+            }
+            QFrame#ContentFrame QLabel,
+            QFrame#ContentFrame QRadioButton {
+                background-color: transparent;
             }
         """)
 
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(40)
-        shadow.setXOffset(-4)
-        shadow.setYOffset(4)
-        shadow.setColor(QColor(10, 22, 40, 50))
+        shadow = QGraphicsDropShadowEffect(content_frame)
+        shadow.setBlurRadius(60)
+        shadow.setOffset(0, -6)
+        shadow.setColor(QColor(0, 0, 0, 100))
         content_frame.setGraphicsEffect(shadow)
+
+        main_layout.addWidget(content_frame)
 
         frame_layout = QVBoxLayout(content_frame)
         frame_layout.setSpacing(0)
         frame_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Dark header bar
+        # Header bar
         header_bar = QFrame()
-        header_bar.setFixedHeight(ScreenScale.h(48))
-        header_bar.setObjectName("UnitPanelHeader")
+        header_bar.setFixedHeight(ScreenScale.h(50))
+        header_bar.setObjectName("PanelHeader")
         header_bar.setStyleSheet("""
-            QFrame#UnitPanelHeader {
+            QFrame#PanelHeader {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #0E2035, stop:0.5 #122C49, stop:1 #152F4E);
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
+                    stop:0 #EBF5FF, stop:0.5 #E0EEFB, stop:1 #D6E8F7);
+                border-top-left-radius: 20px;
+                border-top-right-radius: 20px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
             }
         """)
         hdr_layout = QHBoxLayout(header_bar)
@@ -162,27 +177,27 @@ class UnitDialog(QDialog):
 
         close_btn = QPushButton("\u2715")
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        close_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
+        close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         close_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                color: rgba(200, 220, 255, 0.85);
+                background: rgba(30, 64, 100, 0.08);
+                color: #3B82F6;
                 border: 1px solid rgba(56, 144, 223, 0.15);
-                border-radius: 7px;
+                border-radius: 8px;
             }
             QPushButton:hover {
-                background: rgba(255, 255, 255, 0.15);
-                color: white;
+                background: rgba(30, 64, 100, 0.15);
+                color: #1E40AF;
             }
         """)
         close_btn.clicked.connect(self.reject)
         hdr_layout.addWidget(close_btn)
 
         header_title = tr("wizard.unit_dialog.title_add") if not self.unit_data else tr("wizard.unit_dialog.title_edit")
-        from ui.font_utils import create_font, FontManager
         hdr_lbl = QLabel(header_title)
-        hdr_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        hdr_lbl.setStyleSheet("color: white; background: transparent; border: none;")
+        hdr_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
+        hdr_lbl.setStyleSheet("color: #1A365D; background: transparent; border: none;")
         hdr_layout.addWidget(hdr_lbl, 1)
 
         frame_layout.addWidget(header_bar)
@@ -194,31 +209,48 @@ class UnitDialog(QDialog):
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 rgba(56, 144, 223, 0),
-                    stop:0.3 rgba(56, 144, 223, 100),
-                    stop:0.5 rgba(91, 168, 240, 160),
-                    stop:0.7 rgba(56, 144, 223, 100),
+                    stop:0.2 rgba(56, 144, 223, 120),
+                    stop:0.5 rgba(91, 168, 240, 180),
+                    stop:0.8 rgba(56, 144, 223, 120),
                     stop:1 rgba(56, 144, 223, 0));
             }
         """)
         frame_layout.addWidget(accent)
 
-        # Content area
-        content_area = QWidget()
-        content_area.setStyleSheet("background: #FAFBFD;")
-        layout = QVBoxLayout(content_area)
-        layout.setSpacing(0)
-        layout.setContentsMargins(24, 16, 24, 16)
+        # Scrollable content area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical {
+                background: transparent; width: 6px; margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(56, 144, 223, 0.30);
+                border-radius: 3px; min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(56, 144, 223, 0.50);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
-        frame_layout.addWidget(content_area, 1)
+        content_inner = QWidget()
+        content_inner.setStyleSheet("background-color: #FFFFFF;")
+        layout = QVBoxLayout(content_inner)
+        layout.setSpacing(8)
+        layout.setContentsMargins(20, 12, 20, 14)
 
-        layout.addSpacing(32)
+        scroll.setWidget(content_inner)
+        frame_layout.addWidget(scroll, 1)
 
-        # Row 1: رقم الطابق (يمين) | رقم المقسم (يسار)
-        # في RTL: أول عنصر يُضاف → يظهر يميناً
+        # Row 1: رقم الطابق | رقم المقسم
         row1 = QHBoxLayout()
         row1.setSpacing(16)
 
-        # رقم الطابق (يمين في RTL = أول عنصر)
         self.floor_spin = QSpinBox()
         self.floor_spin.setRange(-3, 100)
         self.floor_spin.setValue(0)
@@ -228,7 +260,6 @@ class UnitDialog(QDialog):
         floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
         row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.floor_number"), floor_widget), 1)
 
-        # رقم المقسم (يسار في RTL = ثاني عنصر)
         self.unit_number_spin = QSpinBox()
         self.unit_number_spin.setRange(0, 9999)
         self.unit_number_spin.setValue(0)
@@ -240,13 +271,10 @@ class UnitDialog(QDialog):
 
         layout.addLayout(row1)
 
-        layout.addSpacing(16)
-
-        # Row 2: نوع المقسم (يمين) | حالة المقسم (يسار)
+        # Row 2: نوع المقسم | حالة المقسم
         row2 = QHBoxLayout()
         row2.setSpacing(16)
 
-        # نوع المقسم (يمين في RTL = أول عنصر)
         self.unit_type_combo = RtlCombo()
         self.unit_type_combo.setStyleSheet(self._combo_style())
         self.unit_type_combo.setFixedHeight(ScreenScale.h(40))
@@ -255,7 +283,6 @@ class UnitDialog(QDialog):
             self.unit_type_combo.addItem(label, code)
         row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_type"), self.unit_type_combo), 1)
 
-        # حالة المقسم (يسار في RTL = ثاني عنصر)
         self.unit_status_combo = RtlCombo()
         self.unit_status_combo.setStyleSheet(self._combo_style())
         self.unit_status_combo.setFixedHeight(ScreenScale.h(40))
@@ -266,13 +293,10 @@ class UnitDialog(QDialog):
 
         layout.addLayout(row2)
 
-        layout.addSpacing(16)
-
-        # Row 3: عدد الغرف (يمين) | مساحة المقسم (يسار)
+        # Row 3: عدد الغرف | مساحة المقسم
         row3 = QHBoxLayout()
         row3.setSpacing(16)
 
-        # عدد الغرف (يمين في RTL = أول عنصر)
         self.rooms_spin = QSpinBox()
         self.rooms_spin.setRange(0, 20)
         self.rooms_spin.setValue(0)
@@ -282,7 +306,6 @@ class UnitDialog(QDialog):
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
         row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
 
-        # مساحة المقسم (يسار في RTL = ثاني عنصر)
         self.area_input = QLineEdit()
         self.area_input.setFixedHeight(ScreenScale.h(40))
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
@@ -294,7 +317,7 @@ class UnitDialog(QDialog):
         self.area_input.setValidator(area_validator)
 
         self.area_error_label = QLabel("")
-        self.area_error_label.setStyleSheet("color: #e74c3c; font-size: 11px; background: transparent;")
+        self.area_error_label.setStyleSheet("color: #e74c3c; font-size: 9pt; background: transparent;")
         self.area_error_label.setVisible(False)
         self.area_input.textChanged.connect(self._validate_area_input)
 
@@ -302,50 +325,27 @@ class UnitDialog(QDialog):
 
         layout.addLayout(row3)
 
-        layout.addSpacing(16)
-
         # Description
         self.description_edit = QTextEdit()
-        self.description_edit.setMinimumHeight(ScreenScale.h(131))
-        self.description_edit.setMaximumHeight(ScreenScale.h(131))
-        self.description_edit.setPlaceholderText(
-            tr("wizard.unit_dialog.description_placeholder")
-        )
-        self.description_edit.setStyleSheet("""
-            QTextEdit {
-                padding: 8px 12px;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 14px;
-                color: #6B7280;
-            }
-            QTextEdit:focus {
-                border-color: #3890DF;
-                border-width: 2px;
-            }
-        """)
-        # Center-align placeholder and text
-        from PyQt5.QtGui import QTextCursor, QTextBlockFormat
-        self.description_edit.setAlignment(Qt.AlignCenter)
+        self.description_edit.setMinimumHeight(ScreenScale.h(110))
+        self.description_edit.setMaximumHeight(ScreenScale.h(110))
+        self.description_edit.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
+        self.description_edit.setStyleSheet(FORM_FIELD_STYLE)
         layout.addLayout(self._create_field_container(tr("wizard.unit_dialog.description"), self.description_edit))
 
-        layout.addSpacing(40)
+        layout.addStretch(1)
 
-        # Buttons: في RTL أول عنصر → يمين
+        # Buttons
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(16)
 
         self.save_btn = self._create_save_button()
         cancel_btn = self._create_cancel_button()
 
-        # الغاء يمين (أول) | حفظ يسار (ثاني) - تناسب اتجاه القراءة العربية
         buttons_layout.addWidget(cancel_btn)
         buttons_layout.addWidget(self.save_btn)
 
         layout.addLayout(buttons_layout)
-
-        main_layout.addWidget(content_frame)
 
         # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
@@ -359,9 +359,9 @@ class UnitDialog(QDialog):
         container.setFixedHeight(ScreenScale.h(40))
         container.setStyleSheet("""
             QFrame {
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
+                border: 1.5px solid #D0D7E2;
+                border-radius: 10px;
+                background-color: #FFFFFF;
             }
         """)
 
@@ -372,14 +372,14 @@ class UnitDialog(QDialog):
         # Spinbox (no border since container has border)
         spinbox.setStyleSheet("""
             QSpinBox {
-                padding: 6px 12px;
-                padding-right: 35px;
+                padding: 8px 14px;
                 border: none;
                 background: transparent;
                 font-size: 10pt;
-                color: #606266;
+                color: #2C3E50;
+                min-height: 30px;
                 selection-background-color: transparent;
-                selection-color: #606266;
+                selection-color: #2C3E50;
             }
             QSpinBox:focus {
                 border: none;
@@ -398,10 +398,10 @@ class UnitDialog(QDialog):
         arrow_container.setStyleSheet("""
             QFrame {
                 border: none;
-                border-left: 1px solid #E1E8ED;
+                border-left: 1.5px solid #D0D7E2;
                 background: transparent;
-                border-top-right-radius: 8px;
-                border-bottom-right-radius: 8px;
+                border-top-right-radius: 10px;
+                border-bottom-right-radius: 10px;
             }
         """)
         arrow_layout = QVBoxLayout(arrow_container)
@@ -451,11 +451,13 @@ class UnitDialog(QDialog):
         Returns:
             QVBoxLayout with label and widget
         """
+        from ui.font_utils import create_font, FontManager
         container = QVBoxLayout()
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151; background: transparent;")
+        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        label.setStyleSheet("color: #64748B; background: transparent; border: none;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -474,11 +476,13 @@ class UnitDialog(QDialog):
         Returns:
             QVBoxLayout with label, widget, and validation label
         """
+        from ui.font_utils import create_font, FontManager
         container = QVBoxLayout()
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #374151; background: transparent;")
+        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        label.setStyleSheet("color: #64748B; background: transparent; border: none;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -494,26 +498,8 @@ class UnitDialog(QDialog):
             QPushButton configured as save button
         """
         btn = QPushButton(tr("common.save"))
-        btn.setFixedSize(ScreenScale.w(264), ScreenScale.h(44))
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3890DF;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: 700;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #2A7BC9;
-            }
-            QPushButton:pressed {
-                background-color: #1E6BB8;
-            }
-            QPushButton:disabled {
-                background-color: #9CA3AF;
-            }
-        """)
+        btn.setFixedHeight(ScreenScale.h(44))
+        btn.setStyleSheet(FOOTER_PRIMARY_STYLE)
         btn.clicked.connect(self._on_save)
         return btn
 
@@ -525,79 +511,18 @@ class UnitDialog(QDialog):
             QPushButton configured as cancel button
         """
         btn = QPushButton(tr("common.cancel"))
-        btn.setFixedSize(ScreenScale.w(264), ScreenScale.h(44))
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                border: 1px solid #A9B2BC;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: 700;
-                color: #374151;
-            }
-            QPushButton:hover {
-                background-color: #F8FAFF;
-            }
-            QPushButton:pressed {
-                background-color: #E8ECEF;
-            }
-        """)
+        btn.setFixedHeight(ScreenScale.h(44))
+        btn.setStyleSheet(FOOTER_SECONDARY_STYLE)
         btn.clicked.connect(self.reject)
         return btn
 
     def _combo_style(self) -> str:
-        """Get combobox stylesheet - same pattern as buildings_page."""
-        arrow_img = str(Config.IMAGES_DIR / "v.png").replace("\\", "/")
-        return f"""
-            QComboBox {{
-                padding: 6px 12px;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 14px;
-                font-weight: 600;
-                color: #9CA3AF;
-            }}
-            QComboBox:focus {{
-                border-color: #3890DF;
-                border-width: 2px;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: border;
-                subcontrol-position: center right;
-                width: 35px;
-                border: none;
-                margin-right: 5px;
-            }}
-            QComboBox::down-arrow {{
-                image: url({arrow_img});
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox QAbstractItemView {{
-                font-size: 14px;
-                background-color: white;
-                selection-background-color: #3890DF;
-                selection-color: white;
-            }}
-        """
-
+        """Get combobox stylesheet - matches person_dialog (FORM_FIELD_STYLE)."""
+        return FORM_FIELD_STYLE
 
     def _input_style(self) -> str:
-        """Get input stylesheet with consistent dimensions."""
-        return """
-            QLineEdit {
-                padding: 6px 12px;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                background-color: #F8FAFF;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border-color: #3890DF;
-                border-width: 2px;
-            }
-        """
+        """Get input stylesheet - matches person_dialog (FORM_FIELD_STYLE)."""
+        return FORM_FIELD_STYLE
 
     def _input_error_style(self) -> str:
         """Get input stylesheet for error state (red border)."""
@@ -833,17 +758,18 @@ class UnitDialog(QDialog):
     # ── Overlay for floating appearance ──
 
     def showEvent(self, event):
-        """Show dark overlay behind dialog when it opens."""
+        """Show dark overlay and slide-in animation."""
         super().showEvent(event)
         if self.parent():
             top_window = self.parent().window()
             self._overlay = QWidget(top_window)
             self._overlay.setGeometry(0, 0, top_window.width(), top_window.height())
-            self._overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.4);")
+            self._overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.25);")
             self._overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             self._overlay.show()
             self._overlay.raise_()
             self.raise_()  # Keep dialog above overlay
+        self._do_slide_in()
 
     def _cleanup_overlay(self):
         """Remove the dark overlay."""

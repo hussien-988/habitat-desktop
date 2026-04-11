@@ -148,6 +148,20 @@ class SurveyController:
                 except Exception as e:
                     logger.warning(f"Failed to fetch household persons: {e}")
 
+            if not person_map:
+                person_ids = {
+                    rel.get("personId")
+                    for rel in (detail.get("relations") or [])
+                    if rel.get("personId")
+                }
+                for pid in person_ids:
+                    try:
+                        person_dto = api.get_person_by_id(pid)
+                        if person_dto:
+                            person_map[pid] = person_dto
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch person {pid}: {e}")
+
             if 'claim' in futures:
                 try:
                     claim_dto = futures['claim'].result()

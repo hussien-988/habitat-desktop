@@ -653,19 +653,14 @@ class CompletedClaimsPage(QWidget):
             normalized = search_text.strip().upper()
             summaries = []
             try:
-                survey_resp = api.get_office_surveys(reference_code=normalized, page_size=1)
-                surveys = survey_resp.get("surveys", []) if isinstance(survey_resp, dict) else []
-                if surveys:
-                    survey_id = surveys[0].get("id", "")
-                    if survey_id:
-                        raw = api._request("GET", "/v2/claims/summaries", params={
-                            "surveyVisitId": survey_id,
-                            "page": self._current_page,
-                            "pageSize": self._page_size,
-                        })
-                        if isinstance(raw, dict):
-                            summaries = raw.get("items", [])
-                            total_count = raw.get("totalCount", len(summaries))
+                raw = api._request("GET", "/v2/claims/summaries", params={
+                    "referenceCode": normalized,
+                    "page": self._current_page,
+                    "pageSize": self._page_size,
+                })
+                if isinstance(raw, dict):
+                    summaries = raw.get("items", [])
+                    total_count = raw.get("totalCount", len(summaries))
             except Exception as e:
                 logger.warning(f"Reference code search failed: {e}")
                 summaries = []

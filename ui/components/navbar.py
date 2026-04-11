@@ -864,6 +864,10 @@ class Navbar(QFrame):
         if hasattr(self, 'id_badge'):
             self.id_badge.set_display_name(name)
 
+    def set_username_bilingual(self, name_ar: str, name_en: str):
+        if hasattr(self, 'id_badge'):
+            self.id_badge.set_display_name_bilingual(name_ar, name_en)
+
     def update_language(self, is_arabic: bool):
         # Update tab titles
         for i, key in enumerate(self._tab_keys):

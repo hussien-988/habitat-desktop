@@ -88,6 +88,8 @@ class OccupancyClaimsStep(BaseStep):
         # إعادة تطبيق الترجمة (مهم جداً)
         header_title.setText(tr("wizard.occupancy_claims.title"))
         header_subtitle.setText(tr("wizard.occupancy_claims.subtitle"))
+        self._header_title = header_title
+        self._header_subtitle = header_subtitle
 
         self._add_person_btn = QPushButton(tr("wizard.occupancy_claims.add_person"))
         self._add_person_btn.setLayoutDirection(get_layout_direction())
@@ -179,6 +181,9 @@ class OccupancyClaimsStep(BaseStep):
         desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setFont(create_font(size=FontManager.WIZARD_EMPTY_DESC, weight=FontManager.WEIGHT_REGULAR))
         desc_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+
+        self._empty_title_label = title_label
+        self._empty_desc_label = desc_label
 
         center_layout.addWidget(icon_container, alignment=Qt.AlignCenter)
         center_layout.addWidget(title_label)
@@ -682,6 +687,12 @@ class OccupancyClaimsStep(BaseStep):
         """Update translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))
+        if hasattr(self, '_header_title'):
+            self._header_title.setText(tr("wizard.occupancy_claims.title"))
+            self._header_subtitle.setText(tr("wizard.occupancy_claims.subtitle"))
+        if hasattr(self, '_empty_title_label'):
+            self._empty_title_label.setText(tr("wizard.occupancy_claims.empty_title"))
+            self._empty_desc_label.setText(tr("wizard.occupancy_claims.empty_desc"))
         self._refresh_persons_list()
 
     def validate(self) -> StepValidationResult:

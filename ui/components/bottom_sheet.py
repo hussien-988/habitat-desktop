@@ -74,13 +74,13 @@ class BottomSheet(QWidget):
             QFrame#bottom_sheet_panel {{
                 background: qlineargradient(
                     x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1B3555, stop:1 {BSD.BG}
+                    stop:0 #F0F5FB, stop:1 #E8EFF8
                 );
                 border-top-left-radius: {BSD.BORDER_RADIUS}px;
                 border-top-right-radius: {BSD.BORDER_RADIUS}px;
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
-                border-top: 1px solid rgba(56, 144, 223, 0.25);
+                border-top: 1px solid rgba(56, 144, 223, 0.20);
             }}
         """)
         self._panel_layout = QVBoxLayout(self._panel)
@@ -103,7 +103,7 @@ class BottomSheet(QWidget):
             create_font(size=FontManager.SIZE_HEADING,
                         weight=FontManager.WEIGHT_SEMIBOLD)
         )
-        self._title_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.95);")
+        self._title_lbl.setStyleSheet("color: #1A365D;")
         self._panel_layout.addWidget(self._title_lbl)
 
         self._message_lbl = QLabel()
@@ -113,7 +113,7 @@ class BottomSheet(QWidget):
             create_font(size=FontManager.SIZE_BODY,
                         weight=FontManager.WEIGHT_REGULAR)
         )
-        self._message_lbl.setStyleSheet("color: rgba(180, 205, 230, 0.85);")
+        self._message_lbl.setStyleSheet("color: #4A6FA5;")
         self._panel_layout.addWidget(self._message_lbl)
 
         self._choices_container = QVBoxLayout()
@@ -195,17 +195,17 @@ class BottomSheet(QWidget):
             )
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: rgba(255, 255, 255, 0.08);
-                    color: rgba(220, 235, 250, 0.9);
-                    border: 1px solid rgba(56, 144, 223, 0.2);
+                    background-color: rgba(56, 144, 223, 0.06);
+                    color: #1A365D;
+                    border: 1px solid rgba(56, 144, 223, 0.25);
                     border-radius: {BSD.BUTTON_RADIUS}px;
                     padding: 0 {Spacing.MD}px;
                     text-align: center;
                 }}
                 QPushButton:hover {{
-                    background-color: rgba(56, 144, 223, 0.15);
-                    border-color: rgba(56, 144, 223, 0.5);
-                    color: white;
+                    background-color: rgba(56, 144, 223, 0.12);
+                    border-color: rgba(56, 144, 223, 0.50);
+                    color: #1A365D;
                 }}
             """)
             btn.clicked.connect(lambda checked, cid=choice_id: self._on_choice(cid))
@@ -234,7 +234,7 @@ class BottomSheet(QWidget):
                 create_font(size=FontManager.SIZE_BODY,
                             weight=FontManager.WEIGHT_MEDIUM)
             )
-            lbl.setStyleSheet("color: rgba(180, 210, 240, 0.85);")
+            lbl.setStyleSheet("color: #2C5282;")
             row.addWidget(lbl)
 
             if field_type == "multiline":
@@ -245,12 +245,12 @@ class BottomSheet(QWidget):
                 widget.setFixedHeight(ScreenScale.h(42))
 
             widget.setStyleSheet(f"""
-                background: rgba(255, 255, 255, 0.07);
-                border: 1px solid rgba(56, 144, 223, 0.2);
+                background: #FFFFFF;
+                border: 1px solid rgba(56, 144, 223, 0.30);
                 border-radius: {BorderRadius.SM}px;
                 padding: {Spacing.SM}px {Spacing.MD}px;
                 font-size: {Typography.SIZE_BODY}px;
-                color: rgba(240, 248, 255, 0.95);
+                color: #1A365D;
             """)
             row.addWidget(widget)
             self._form_container.addLayout(row)
@@ -312,14 +312,14 @@ class BottomSheet(QWidget):
         else:
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: rgba(255, 255, 255, 0.08);
-                    color: rgba(200, 220, 240, 0.9);
-                    border: 1px solid rgba(56, 144, 223, 0.2);
+                    background-color: rgba(56, 144, 223, 0.06);
+                    color: #2C5282;
+                    border: 1px solid rgba(56, 144, 223, 0.25);
                     border-radius: {BSD.BUTTON_RADIUS}px;
                 }}
                 QPushButton:hover {{
-                    background-color: rgba(255, 255, 255, 0.12);
-                    border-color: rgba(56, 144, 223, 0.4);
+                    background-color: rgba(56, 144, 223, 0.12);
+                    border-color: rgba(56, 144, 223, 0.45);
                 }}
             """)
         return btn
