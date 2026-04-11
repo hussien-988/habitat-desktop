@@ -8,18 +8,44 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _get_api_response_message(error: ApiException) -> str:
+    """Extract the API's localized message from response_data, if available."""
+    rd = error.response_data or {}
+    detail = rd.get("detail", "")
+    if detail:
+        logger.debug(f"API error detail (dev): {detail}")
+    msg = rd.get("message", "")
+    return msg if isinstance(msg, str) else ""
+
+
 def map_api_error(error: ApiException) -> str:
-    """Map API exception to a user-friendly translated message based on HTTP status."""
+    """Map API exception to a user-friendly translated message.
+
+    Prefers the API's localized 'message' when available,
+    falling back to status-code-based tr() mapping.
+    """
     status = error.status_code
+    api_msg = _get_api_response_message(error)
 
     if status == 400:
         details = _extract_validation_details(error.response_data)
         if details:
             logger.warning(f"API validation error (400): {details}")
+            if api_msg:
+                return f"{api_msg.strip()}\n{details}"
             return tr("error.api.validation", details=details)
+        if api_msg:
+            logger.warning(f"API error (400): {api_msg}")
+            return api_msg
         logger.warning(f"API error (400): {error}")
         return tr("error.api.validation", details=str(error))
 
+    # For all other status codes: prefer API localized message
+    if api_msg:
+        logger.warning(f"API error ({status}): {api_msg}")
+        return api_msg
+
+    # Fallback to status-code-based tr() mapping
     if status == 401:
         logger.warning(f"API unauthorized (401): {error}")
         return tr("error.api.unauthorized")

@@ -476,16 +476,17 @@ class FieldWorkPreparationStep3(QWidget):
         reason_layout.setContentsMargins(24, 16, 24, 16)
         reason_layout.setSpacing(8)
 
-        label = QLabel("\u0633\u0628\u0628 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0632\u064a\u0627\u0631\u0629 *")
+        label = QLabel(tr("wizard.step3.revisit_reason_label") + " *")
         label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         reason_layout.addWidget(label)
+        self._revisit_reason_label = label
 
         self._revisit_reason_input = QLineEdit()
         self._revisit_reason_input.setFont(create_font(size=11))
         self._revisit_reason_input.setFixedHeight(ScreenScale.h(38))
         self._revisit_reason_input.setPlaceholderText(
-            "\u0623\u062f\u062e\u0644 \u0633\u0628\u0628 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0632\u064a\u0627\u0631\u0629..."
+            tr("wizard.step3.revisit_reason_placeholder")
         )
         self._revisit_reason_input.setStyleSheet("""
             QLineEdit {
@@ -536,10 +537,15 @@ class FieldWorkPreparationStep3(QWidget):
         for building_id in self._units_labels:
             self._units_labels[building_id].setText(tr("wizard.step3.units_label"))
 
+        if hasattr(self, '_revisit_reason_label') and self._revisit_reason_label:
+            self._revisit_reason_label.setText(tr("wizard.step3.revisit_reason_label") + " *")
+        if hasattr(self, '_revisit_reason_input') and self._revisit_reason_input:
+            self._revisit_reason_input.setPlaceholderText(tr("wizard.step3.revisit_reason_placeholder"))
+
     def validate(self) -> bool:
         if self._revisit_unit_id and self._revisit_reason_input is not None:
             if not self._revisit_reason_input.text().strip():
-                Toast.show_toast(self, "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0633\u0628\u0628 \u0625\u0639\u0627\u062f\u0629 \u0627\u0644\u0632\u064a\u0627\u0631\u0629", Toast.WARNING)
+                Toast.show_toast(self, tr("wizard.step3.revisit_reason_required"), Toast.WARNING)
                 return False
         return True
 

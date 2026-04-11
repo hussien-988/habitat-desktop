@@ -16,7 +16,7 @@ from ui.design_system import (
     Typography, AnimationTimings, Spacing, ScreenScale
 )
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import get_layout_direction
+from services.translation_manager import get_layout_direction, tr
 
 
 class _Overlay(QWidget):
@@ -163,9 +163,9 @@ class BottomSheet(QWidget):
         self._message_lbl.setVisible(True)
 
         if not confirm_text:
-            confirm_text = "\u062A\u0623\u0643\u064A\u062F"
+            confirm_text = tr("button.confirm")
         if not cancel_text:
-            cancel_text = "\u0625\u0644\u063A\u0627\u0621"
+            cancel_text = tr("button.cancel")
 
         cancel_btn = self._make_button(cancel_text, "secondary")
         cancel_btn.clicked.connect(self._on_cancel)
