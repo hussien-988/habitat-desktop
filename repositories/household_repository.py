@@ -26,7 +26,7 @@ class HouseholdRepository:
             INSERT INTO households (
                 household_id, unit_id, main_occupant_id, main_occupant_name,
                 occupancy_size, male_count, female_count,
-                child_count, adults_count, elderly_count, disabled_count,
+                child_count, adult_count, elderly_count, disabled_count,
                 occupancy_nature, occupancy_start_date,
                 monthly_rent, notes,
                 created_at, updated_at, created_by, updated_by
@@ -36,7 +36,7 @@ class HouseholdRepository:
             household.household_id, household.unit_id,
             household.main_occupant_id, household.main_occupant_name,
             household.occupancy_size, household.male_count, household.female_count,
-            household.child_count, household.adults_count, household.elderly_count,
+            household.child_count, household.adult_count, household.elderly_count,
             household.disabled_count,
             household.occupancy_nature,
             household.occupancy_start_date.isoformat() if household.occupancy_start_date else None,
@@ -112,7 +112,7 @@ class HouseholdRepository:
                 COALESCE(SUM(male_count), 0) as total_males,
                 COALESCE(SUM(female_count), 0) as total_females,
                 COALESCE(SUM(child_count), 0) as total_children,
-                COALESCE(SUM(adults_count), 0) as total_adults,
+                COALESCE(SUM(adult_count), 0) as total_adults,
                 COALESCE(SUM(elderly_count), 0) as total_elderly,
                 COALESCE(SUM(disabled_count), 0) as total_disabled
             FROM households WHERE unit_id = ?
@@ -138,7 +138,7 @@ class HouseholdRepository:
             UPDATE households SET
                 unit_id = ?, main_occupant_id = ?, main_occupant_name = ?,
                 occupancy_size = ?, male_count = ?, female_count = ?,
-                child_count = ?, adults_count = ?, elderly_count = ?,
+                child_count = ?, adult_count = ?, elderly_count = ?,
                 disabled_count = ?,
                 occupancy_nature = ?,
                 occupancy_start_date = ?, monthly_rent = ?, notes = ?,
@@ -148,7 +148,7 @@ class HouseholdRepository:
         params = (
             household.unit_id, household.main_occupant_id, household.main_occupant_name,
             household.occupancy_size, household.male_count, household.female_count,
-            household.child_count, household.adults_count, household.elderly_count,
+            household.child_count, household.adult_count, household.elderly_count,
             household.disabled_count,
             household.occupancy_nature,
             household.occupancy_start_date.isoformat() if household.occupancy_start_date else None,

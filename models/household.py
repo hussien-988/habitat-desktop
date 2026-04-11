@@ -30,7 +30,7 @@ class Household:
     male_count: int = 0  # Total males (all ages)
     female_count: int = 0  # Total females (all ages)
     child_count: int = 0  # Under 18
-    adults_count: int = 0  # 18-59
+    adult_count: int = 0  # 18-59
     elderly_count: int = 0  # 60+
     disabled_count: int = 0
 
@@ -91,7 +91,7 @@ class Household:
             errors.append("عدد الإناث لا يمكن أن يكون سالباً")
         if self.child_count < 0:
             errors.append("عدد الأطفال لا يمكن أن يكون سالباً")
-        if self.adults_count < 0:
+        if self.adult_count < 0:
             errors.append("عدد البالغين لا يمكن أن يكون سالباً")
         if self.elderly_count < 0:
             errors.append("عدد كبار السن لا يمكن أن يكون سالباً")
@@ -104,7 +104,7 @@ class Household:
             errors.append(f"مجموع الذكور والإناث ({gender_sum}) يتجاوز حجم الأسرة ({self.occupancy_size})")
 
         # Age group sum validation
-        age_sum = self.child_count + self.adults_count + self.elderly_count
+        age_sum = self.child_count + self.adult_count + self.elderly_count
         if age_sum > self.occupancy_size:
             errors.append(f"مجموع الفئات العمرية ({age_sum}) يتجاوز حجم الأسرة ({self.occupancy_size})")
 
@@ -133,7 +133,7 @@ class Household:
             "male_count": self.male_count,
             "female_count": self.female_count,
             "child_count": self.child_count,
-            "adults_count": self.adults_count,
+            "adult_count": self.adult_count,
             "elderly_count": self.elderly_count,
             "disabled_count": self.disabled_count,
             "occupancy_nature": self.occupancy_nature,

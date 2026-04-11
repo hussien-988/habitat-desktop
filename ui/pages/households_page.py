@@ -62,7 +62,7 @@ class HouseholdsTableModel(BaseTableModel):
             if col == 3:
                 return f"{tr('page.households.males')}: {household.male_count}, {tr('page.households.females')}: {household.female_count}"
             elif col == 4:
-                return f"{tr('page.households.children')}: {household.child_count}, {tr('page.households.adults')}: {household.adults_count}, {tr('page.households.elderly')}: {household.elderly_count}"
+                return f"{tr('page.households.children')}: {household.child_count}, {tr('page.households.adults')}: {household.adult_count}, {tr('page.households.elderly')}: {household.elderly_count}"
         return super().data(index, role)
 
     def get_item_value(self, item, field_name: str):
@@ -77,7 +77,7 @@ class HouseholdsTableModel(BaseTableModel):
         elif field_name == 'gender_dist':
             return f"{item.male_count}/{item.female_count}"
         elif field_name == 'age_groups':
-            return f"{item.child_count}/{item.adults_count}/{item.elderly_count}"
+            return f"{item.child_count}/{item.adult_count}/{item.elderly_count}"
         elif field_name == 'nature':
             return item.occupancy_nature_display_ar if self._is_arabic else item.occupancy_nature_display
         return "-"
@@ -398,7 +398,7 @@ class HouseholdDialog(QDialog):
         self.male_spin.setValue(self.household.male_count)
         self.female_spin.setValue(self.household.female_count)
         self.children_spin.setValue(self.household.child_count)
-        self.adults_spin.setValue(self.household.adults_count)
+        self.adults_spin.setValue(self.household.adult_count)
         self.elderly_spin.setValue(self.household.elderly_count)
         self.disability_spin.setValue(self.household.disabled_count)
 
@@ -458,7 +458,7 @@ class HouseholdDialog(QDialog):
             "male_count": self.male_spin.value(),
             "female_count": self.female_spin.value(),
             "child_count": self.children_spin.value(),
-            "adults_count": self.adults_spin.value(),
+            "adult_count": self.adults_spin.value(),
             "elderly_count": self.elderly_spin.value(),
             "disabled_count": self.disability_spin.value(),
             "occupancy_nature": self.nature_combo.currentData() or None,
@@ -547,16 +547,6 @@ class HouseholdsPage(QWidget):
         self.unit_filter.addItem(tr("all"), "")
         self.unit_filter.currentIndexChanged.connect(self._on_filter_changed)
         filters_layout.addWidget(self.unit_filter)
-
-        # Occupancy type filter
-        self._type_filter_label = QLabel(tr("page.households.occupancy_type_filter"))
-        filters_layout.addWidget(self._type_filter_label)
-        self.type_filter = QComboBox()
-        self.type_filter.addItem(tr("all"), "")
-        for code, tr_key, en in HouseholdDialog.OCCUPANCY_TYPES:
-            self.type_filter.addItem(tr(tr_key), code)
-        self.type_filter.currentIndexChanged.connect(self._on_filter_changed)
-        filters_layout.addWidget(self.type_filter)
 
         # Occupancy nature filter
         self._nature_filter_label = QLabel(tr("page.households.occupancy_nature_filter"))
@@ -716,12 +706,10 @@ class HouseholdsPage(QWidget):
         if not self.db:
             return
         unit_id = self.unit_filter.currentData()
-        occupancy_type = self.type_filter.currentData()
         occupancy_nature = self.nature_filter.currentData()
 
         households = self.household_repo.search(
             unit_id=unit_id or None,
-            occupancy_type=occupancy_type or None,
             occupancy_nature=occupancy_nature or None,
             limit=500
         )
@@ -793,7 +781,6 @@ class HouseholdsPage(QWidget):
         self._title.setText(tr("households"))
         self.add_btn.setText("+ " + tr("add_household"))
         self._unit_filter_label.setText(tr("page.households.unit_filter"))
-        self._type_filter_label.setText(tr("page.households.occupancy_type_filter"))
         self._nature_filter_label.setText(tr("page.households.occupancy_nature_filter"))
         self._rebuild_filter_combos()
         self.table_model.set_language(is_arabic)
@@ -802,17 +789,7 @@ class HouseholdsPage(QWidget):
     def _rebuild_filter_combos(self):
         """Rebuild filter combo box items with current language."""
         # Preserve current selections
-        current_type = self.type_filter.currentData()
         current_nature = self.nature_filter.currentData()
-
-        self.type_filter.clear()
-        self.type_filter.addItem(tr("all"), "")
-        for code, tr_key, en in HouseholdDialog.OCCUPANCY_TYPES:
-            self.type_filter.addItem(tr(tr_key), code)
-        if current_type:
-            idx = self.type_filter.findData(current_type)
-            if idx >= 0:
-                self.type_filter.setCurrentIndex(idx)
 
         self.nature_filter.clear()
         self.nature_filter.addItem(tr("all"), "")

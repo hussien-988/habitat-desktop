@@ -655,7 +655,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 male_count INTEGER DEFAULT 0,
                 female_count INTEGER DEFAULT 0,
                 child_count INTEGER DEFAULT 0,
-                adults_count INTEGER DEFAULT 0,
+                adult_count INTEGER DEFAULT 0,
                 elderly_count INTEGER DEFAULT 0,
                 disabled_count INTEGER DEFAULT 0,
                 occupancy_nature TEXT,
@@ -685,6 +685,16 @@ class SQLiteAdapter(DatabaseAdapter):
         try:
             cursor.execute("UPDATE households SET child_count = minors_count WHERE child_count = 0 AND minors_count > 0")
             cursor.execute("UPDATE households SET disabled_count = with_disability_count WHERE disabled_count = 0 AND with_disability_count > 0")
+        except Exception:
+            pass
+
+        # Migration: rename adults_count -> adult_count
+        try:
+            cursor.execute("ALTER TABLE households ADD COLUMN adult_count INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            cursor.execute("UPDATE households SET adult_count = adults_count WHERE adult_count = 0 AND adults_count > 0")
         except Exception:
             pass
 

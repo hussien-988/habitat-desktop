@@ -218,7 +218,11 @@ class SurveyController:
                     evidences = api.get_survey_evidences(survey_id, evidence_type="identification")
                     if evidences:
                         applicant["id_photo_evidences"] = [
-                            {"id": ev.get("id", ""), "fileName": ev.get("fileName", "photo")}
+                            {
+                                "id": ev.get("id", ""),
+                                "fileName": ev.get("fileName") or ev.get("originalFileName") or "",
+                                "mimeType": ev.get("mimeType") or "",
+                            }
                             for ev in evidences
                         ]
                 except Exception as e:

@@ -203,7 +203,8 @@ class TRRCMSApiClient:
         method: str,
         endpoint: str,
         json_data: Optional[Dict] = None,
-        params: Optional[Dict] = None
+        params: Optional[Dict] = None,
+        headers_override: Optional[Dict] = None,
     ) -> Any:
         """Execute HTTP request with error handling and automatic retry."""
         url = f"{self.base_url}{endpoint}"
@@ -222,12 +223,15 @@ class TRRCMSApiClient:
         for attempt in range(self._MAX_RETRIES + 1):
             try:
                 token_used = self.access_token
+                headers = self._headers()
+                if headers_override:
+                    headers.update(headers_override)
                 response = requests.request(
                     method=method,
                     url=url,
                     json=json_data,
                     params=params,
-                    headers=self._headers(),
+                    headers=headers,
                     timeout=self.config.timeout,
                     verify=False
                 )
@@ -525,7 +529,11 @@ class TRRCMSApiClient:
             payload["subdistrictCode"] = subdistrict_code
 
         logger.debug(f"Searching buildings for assignment: governorateCode=01, page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}")
-        response = self._request("POST", "/v1/BuildingAssignments/buildings/search", json_data=payload)
+        response = self._request(
+            "POST", "/v1/BuildingAssignments/buildings/search",
+            json_data=payload,
+            headers_override={"Accept-Language": "en"},
+        )
 
         # API returns paginated response
         items = response.get("items", [])
@@ -603,6 +611,13 @@ class TRRCMSApiClient:
 
         return response
 
+    @staticmethod
+    def _safe_coord(v) -> float:
+        """Ensure coordinate uses ASCII decimal point regardless of system locale."""
+        if isinstance(v, str):
+            v = v.replace('\u066b', '.').replace(',', '.')
+        return float(v)
+
     def search_buildings_in_bbox(
         self,
         north_east_lat: float,
@@ -613,15 +628,23 @@ class TRRCMSApiClient:
         page_size: int = 500
     ) -> Dict[str, Any]:
         """Search buildings in bounding box via BuildingAssignments API (live hasActiveAssignment)."""
+        ne_lat = self._safe_coord(north_east_lat)
+        ne_lng = self._safe_coord(north_east_lng)
+        sw_lat = self._safe_coord(south_west_lat)
+        sw_lng = self._safe_coord(south_west_lng)
         coordinates = [
-            [south_west_lng, south_west_lat],
-            [north_east_lng, south_west_lat],
-            [north_east_lng, north_east_lat],
-            [south_west_lng, north_east_lat],
-            [south_west_lng, south_west_lat],
+            [sw_lng, sw_lat],
+            [ne_lng, sw_lat],
+            [ne_lng, ne_lat],
+            [sw_lng, ne_lat],
+            [sw_lng, sw_lat],
         ]
         payload = {"coordinates": coordinates, "page": page, "pageSize": page_size}
-        return self._request("POST", "/v1/BuildingAssignments/buildings/search", json_data=payload)
+        return self._request(
+            "POST", "/v1/BuildingAssignments/buildings/search",
+            json_data=payload,
+            headers_override={"Accept-Language": "en"},
+        )
 
     def get_building_by_id(self, building_id: str) -> Dict[str, Any]:
         """Get building details by ID."""

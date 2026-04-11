@@ -283,7 +283,7 @@ class ApplicantInfoStep(BaseStep):
             QFrame {{
                 border: 1.5px solid #D0D7E2;
                 border-radius: 10px;
-                background-color: #FFFFFF;
+                background-color: #f0f7ff;
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
         """)
@@ -298,7 +298,7 @@ class ApplicantInfoStep(BaseStep):
             QLabel {{
                 color: {Colors.WIZARD_SUBTITLE};
                 font-size: 10pt;
-                border-left: 1px solid #D0D7E2;
+                border-left: 1px solid rgba(56,144,223,0.25);
                 padding: 0 10px;
                 background: transparent;
             }}
@@ -306,6 +306,7 @@ class ApplicantInfoStep(BaseStep):
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("xxxxxxxx")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
+        self.phone.setLayoutDirection(Qt.LeftToRight)
         self.phone.setStyleSheet("""
             QLineEdit {
                 border: none; background: transparent;
@@ -324,16 +325,85 @@ class ApplicantInfoStep(BaseStep):
         layout.addLayout(mob_outer)
 
         # Landline
-        
+        _area_codes = [
+            ("011", "011 - دمشق"), ("012", "012 - حمص"), ("013", "013 - حماة"),
+            ("014", "014 - القنيطرة"), ("015", "015 - درعا"), ("016", "016 - السويداء"),
+            ("017", "017 - اللاذقية"), ("018", "018 - طرطوس"), ("021", "021 - حلب"),
+            ("022", "022 - الرقة"), ("023", "023 - إدلب"), ("024", "024 - دير الزور"),
+            ("052", "052 - الحسكة"),
+        ]
         self.lbl_phone = self._lbl(tr("wizard.person_dialog.phone"))
         layout.addWidget(self.lbl_phone)
-        self.landline = self._field("0000000", QRegExpValidator(QtRegExp(r"^\d{10}$")))
+        landline_container = QFrame()
+        landline_container.setStyleSheet(f"""
+            QFrame {{
+                border: 1.5px solid #D0D7E2;
+                border-radius: 10px;
+                background-color: #f0f7ff;
+            }}
+            QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
+        """)
+        land_layout = QHBoxLayout(landline_container)
+        land_layout.setContentsMargins(0, 0, 0, 0)
+        land_layout.setSpacing(0)
+        land_layout.setDirection(QHBoxLayout.RightToLeft)
+        self.landline_prefix = RtlCombo()
+        self.landline_prefix.setFixedWidth(ScreenScale.w(130))
+        for _code, _display in _area_codes:
+            self.landline_prefix.addItem(_display, _code)
+        self.landline_prefix.setStyleSheet(f"""
+            QComboBox {{
+                border: none;
+                background: transparent;
+                padding: 0 4px 0 8px;
+                font-size: 10pt;
+                color: {Colors.WIZARD_SUBTITLE};
+            }}
+            QComboBox QLineEdit {{
+                border: none;
+                background: transparent;
+                padding: 0;
+                font-size: 10pt;
+                color: {Colors.WIZARD_SUBTITLE};
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: right center;
+                border: none;
+                width: 18px;
+            }}
+            QComboBox::down-arrow {{
+                width: 8px; height: 8px;
+            }}
+        """)
+        _land_sep = QFrame()
+        _land_sep.setFrameShape(QFrame.VLine)
+        _land_sep.setFixedWidth(1)
+        _land_sep.setStyleSheet("background-color: rgba(56,144,223,0.3); border: none; margin: 7px 0;")
+        self.landline_digits = QLineEdit()
+        self.landline_digits.setPlaceholderText("xxxxxxx")
+        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        self.landline_digits.setLayoutDirection(Qt.LeftToRight)
+        self.landline_digits.setStyleSheet("""
+            QLineEdit {
+                border: none; background: transparent;
+                padding: 10px 14px; font-size: 10pt; color: #2C3E50;
+                min-height: 30px;
+            }
+        """)
+        land_layout.addWidget(self.landline_prefix)
+        land_layout.addWidget(_land_sep)
+        land_layout.addWidget(self.landline_digits)
         self._landline_error = self._err_lbl()
-        land_box = self._field_box(self.landline, self._landline_error)
-        layout.addLayout(land_box)
+        land_outer = QVBoxLayout()
+        land_outer.setSpacing(2)
+        land_outer.setContentsMargins(0, 0, 0, 0)
+        land_outer.addWidget(landline_container)
+        land_outer.addWidget(self._landline_error)
+        layout.addLayout(land_outer)
 
         self.phone.textChanged.connect(lambda: self._clear_err(self.phone, self._mobile_error))
-        self.landline.textChanged.connect(lambda: self._clear_err(self.landline, self._landline_error))
+        self.landline_digits.textChanged.connect(lambda: self._clear_err(self.landline_digits, self._landline_error))
 
         return layout
 
@@ -581,9 +651,9 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.phone, self._mobile_error)
             result.add_error(tr("wizard.applicant.mobile_8_digits"))
 
-        landline_text = self.landline.text().strip()
-        if landline_text and len(landline_text) != 10:
-            self._set_err(self.landline, self._landline_error)
+        landline_digits = self.landline_digits.text().strip()
+        if landline_digits and len(landline_digits) != 7:
+            self._set_err(self.landline_digits, self._landline_error)
             result.add_error(tr("wizard.applicant.landline_7_digits"))
 
         nid_text = self.national_id.text().strip()
@@ -724,7 +794,7 @@ class ApplicantInfoStep(BaseStep):
 
         
             "phone":          full_mobile,      
-            "landline":       self.landline.text().strip(),   
+            "landline":       (self.landline_prefix.currentData() + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else "",
 
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": list(self.uploaded_files),
@@ -738,9 +808,10 @@ class ApplicantInfoStep(BaseStep):
         if not self._is_initialized:
             return
         for field in [self.first_name, self.father_name, self.last_name,
-                      self.mother_name, self.national_id, self.phone,
-                      self.landline]:
+                      self.mother_name, self.national_id, self.phone]:
             field.clear()
+        self.landline_digits.clear()
+        self.landline_prefix.setCurrentIndex(0)
         self.birth_year_combo.setCurrentIndex(0)
         self.birth_month_combo.setCurrentIndex(0)
         self.birth_day_combo.setCurrentIndex(0)
@@ -805,7 +876,13 @@ class ApplicantInfoStep(BaseStep):
         elif phone_val.startswith("+963"):
             phone_val = phone_val[4:]
         self.phone.setText(phone_val)
-        self.landline.setText(a.get("landline", ""))
+        _land_val = a.get("landline", "")
+        if len(_land_val) == 10 and _land_val[0] == '0':
+            _idx = self.landline_prefix.findData(_land_val[:3])
+            self.landline_prefix.setCurrentIndex(_idx if _idx >= 0 else 0)
+            self.landline_digits.setText(_land_val[3:])
+        else:
+            self.landline_digits.setText(_land_val)
         self.in_person_check.setChecked(a.get("in_person", True))
 
         photos = a.get("id_photo_paths", [])
@@ -820,14 +897,20 @@ class ApplicantInfoStep(BaseStep):
         import tempfile
         from services.api_worker import ApiWorker
 
+        # Use evidence metadata already fetched by the controller (primary source)
+        applicant = self.context.applicant or {}
+        evidences = applicant.get("id_photo_evidences", [])
+
         person_id = self.context.get_data("contact_person_id")
-        if not person_id:
+        if not evidences and not person_id:
             return
 
         self._set_auth_token()
 
         def _do_fetch():
-            docs = self._api_client.get_person_identification_documents(person_id)
+            docs = evidences
+            if not docs and person_id:
+                docs = self._api_client.get_person_identification_documents(person_id)
             if not docs:
                 return []
             tmp_dir = tempfile.mkdtemp(prefix="id_photos_")
@@ -841,6 +924,34 @@ class ApplicantInfoStep(BaseStep):
                 try:
                     self._api_client.download_evidence(ev_id, save_path)
                     if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                        # Ensure a file extension exists so QDesktopServices can open it
+                        _, existing_ext = os.path.splitext(save_path)
+                        if not existing_ext:
+                            mime_ext = {
+                                "image/jpeg": ".jpg", "image/jpg": ".jpg",
+                                "image/png": ".png", "image/gif": ".gif",
+                                "image/bmp": ".bmp", "image/webp": ".webp",
+                                "application/pdf": ".pdf",
+                            }.get((doc.get("mimeType") or "").lower(), "")
+                            if not mime_ext:
+                                with open(save_path, 'rb') as _f:
+                                    magic = _f.read(12)
+                                if magic[:3] == b'\xff\xd8\xff':
+                                    mime_ext = ".jpg"
+                                elif magic[:8] == b'\x89PNG\r\n\x1a\n':
+                                    mime_ext = ".png"
+                                elif magic[:4] in (b'GIF8', b'GIF9'):
+                                    mime_ext = ".gif"
+                                elif magic[:2] == b'BM':
+                                    mime_ext = ".bmp"
+                                elif magic[:4] == b'%PDF':
+                                    mime_ext = ".pdf"
+                                elif magic[8:12] == b'WEBP':
+                                    mime_ext = ".webp"
+                            if mime_ext:
+                                new_path = save_path + mime_ext
+                                os.rename(save_path, new_path)
+                                save_path = new_path
                         downloaded.append(save_path)
                 except Exception as e:
                     logger.warning(f"Failed to download ID photo {ev_id}: {e}")
@@ -897,7 +1008,7 @@ class ApplicantInfoStep(BaseStep):
         self.lbl_phone.setText(tr("wizard.person_dialog.phone"))
 
         self.phone.setPlaceholderText("00000000")
-        self.landline.setPlaceholderText("0000000")
+        self.landline_digits.setPlaceholderText("xxxxxxx")
 
     # Visit section
         
