@@ -926,12 +926,20 @@ class CasesPage(QWidget):
                 def __init__(self, **kw): self.__dict__.update(kw)
             unit_obj = _NS(unit_number=unit_num)
 
+        _raw = s.get("status") or s.get("surveyStatus") or ""
+        if isinstance(_raw, int):
+            _int_map = {1: "draft", 2: "draft", 3: "finalized", 4: "obstructed"}
+            computed_status = _int_map.get(_raw, self._active_tab)
+        else:
+            _str_map = {"draft": "draft", "finalized": "finalized", "obstructed": "obstructed"}
+            computed_status = _str_map.get(str(_raw).lower(), self._active_tab)
+
         return {
             "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
             "claim_uuid": s.get("id", ""),
             "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or tr("page.cases.unspecified"),
             "date": (s.get("surveyDate") or "")[:10],
-            "status": self._active_tab,
+            "status": computed_status,
             "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),
             "unit_number": unit_num,
             "source_label": get_survey_type_display(s.get("surveyType", 0)),

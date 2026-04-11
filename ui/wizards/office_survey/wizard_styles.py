@@ -10,7 +10,8 @@ from PyQt5.QtGui import QColor
 from ui.design_system import ScreenScale
 
 
-# -- Step card (white rounded container with blue accent left border) --
+# -- Step card (white rounded container with blue accent border) --
+# Base style without the directional border — applied statically when needed
 STEP_CARD_STYLE = """
     QFrame#StepCard {
         background-color: #FFFFFF;
@@ -21,6 +22,22 @@ STEP_CARD_STYLE = """
     QFrame#StepCard QLabel { background: transparent; border: none; }
     QFrame#StepCard QCheckBox { background: transparent; }
 """
+
+
+def get_step_card_style(object_name: str = "StepCard") -> str:
+    """Return STEP_CARD_STYLE with the accent border on the correct side for the current language."""
+    from services.translation_manager import is_rtl
+    border_side = "border-right" if is_rtl() else "border-left"
+    return f"""
+        QFrame#{object_name} {{
+            background-color: #FFFFFF;
+            border-radius: 14px;
+            border: 1px solid #E2EAF2;
+            {border_side}: 3px solid #3890DF;
+        }}
+        QFrame#{object_name} QLabel {{ background: transparent; border: none; }}
+        QFrame#{object_name} QCheckBox {{ background: transparent; }}
+    """
 
 # -- Step container background --
 STEP_CONTAINER_STYLE = """
@@ -443,10 +460,10 @@ BADGE_GRAY = "background-color: #F1F5F9; color: #475569; border-radius: 12px; pa
 
 
 def make_step_card(object_name: str = "StepCard") -> QFrame:
-    """Create a white rounded card frame with drop shadow and blue left accent."""
+    """Create a white rounded card frame with drop shadow and directional blue accent border."""
     card = QFrame()
     card.setObjectName(object_name)
-    card.setStyleSheet(STEP_CARD_STYLE)
+    card.setStyleSheet(get_step_card_style(object_name))
     shadow = QGraphicsDropShadowEffect()
     shadow.setBlurRadius(24)
     shadow.setOffset(0, 4)

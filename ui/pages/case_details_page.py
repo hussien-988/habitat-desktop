@@ -1017,11 +1017,6 @@ class CaseDetailsPage(QWidget):
 
         card_layout.addStretch()
 
-        if claim_status:
-            status_text = get_claim_status_display(claim_status) if claim_status else "-"
-            status_badge = self._create_badge(status_text, "#EFF6FF", "#1E40AF")
-            card_layout.addWidget(status_badge)
-
         self._unit_content.addWidget(card)
 
     # -- Household Card --

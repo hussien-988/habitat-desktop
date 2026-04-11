@@ -672,10 +672,9 @@ class MainWindow(QMainWindow):
 
             # Update navbar with user info
             self.navbar.set_user_id(str(user.user_id))
-            display_name = (getattr(user, 'full_name_ar', '') or
-                            getattr(user, 'full_name', '') or
-                            getattr(user, 'username', ''))
-            self.navbar.set_username(display_name)
+            name_ar = getattr(user, 'full_name_ar', '') or ''
+            name_en = getattr(user, 'full_name', '') or getattr(user, 'username', '')
+            self.navbar.set_username_bilingual(name_ar, name_en)
 
             # Set user context on CasesPage BEFORE configure_for_role,
             # because configure_for_role emits tab_changed which triggers refresh()
@@ -722,17 +721,10 @@ class MainWindow(QMainWindow):
         from ui.components.dialogs.password_dialog import PasswordDialog
         from ui.components.toast import Toast
 
-        from services.translation_manager import get_language as _get_lang
-        if _get_lang() == 'ar':
-            display_name = (getattr(user, 'full_name_ar', '') or
-                            getattr(user, 'full_name', '') or
-                            getattr(user, 'username', ''))
-        else:
-            display_name = (getattr(user, 'full_name', '') or
-                            getattr(user, 'full_name_ar', '') or
-                            getattr(user, 'username', ''))
+        name_ar = getattr(user, 'full_name_ar', '') or ''
+        name_en = getattr(user, 'full_name', '') or getattr(user, 'username', '')
         result = PasswordDialog.forced_change_password(
-            parent=self, username=display_name
+            parent=self, username=name_ar, username_en=name_en
         )
         if result is None:
             Toast.show_toast(self, tr("dialog.password.change_cancelled"), Toast.WARNING)
@@ -1320,8 +1312,6 @@ class MainWindow(QMainWindow):
                 if choice_result[0] == "save":
                     draft_id = self.office_survey_wizard.on_save_draft()
                     if draft_id:
-                        from ui.components.toast import Toast
-                        Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
                         if Pages.SURVEYS in self.pages:
                             self.pages[Pages.SURVEYS].refresh()
                     else:

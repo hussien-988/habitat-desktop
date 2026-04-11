@@ -78,11 +78,11 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
     def get_wizard_title(self) -> str:
         """Get wizard title. Override to customize."""
-        return "معالج"
+        return tr("component.base_wizard.title")
 
     def get_submit_button_text(self) -> str:
         """Get submit button text. Override to customize."""
-        return "إنهاء"
+        return tr("component.base_wizard.submit")
 
     def on_cancel(self) -> bool:
         """Handle wizard cancellation."""
@@ -146,7 +146,7 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         progress_layout = QHBoxLayout()
         progress_layout.setSpacing(8)
 
-        self.progress_label = QLabel("الخطوة 1 من {}".format(len(self.steps)))
+        self.progress_label = QLabel(tr("component.base_wizard.step_of", step=1, total=len(self.steps)))
         progress_layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -187,15 +187,15 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
 
         # Use ActionButton component for all footer buttons
         # Left buttons (Cancel, Save Draft)
-        self.btn_cancel = ActionButton("إلغاء", variant="secondary", width=114, height=44)
+        self.btn_cancel = ActionButton(tr("button.cancel"), variant="secondary", width=114, height=44)
         self.btn_cancel.clicked.connect(self._handle_cancel)
         layout.addWidget(self.btn_cancel)
 
         self.btn_save_draft = ActionButton(
-            text="حفظ كمسودة",
+            text=tr("wizard.button.save_draft"),
             variant="secondary",
             icon_name="save",
-            width=140,  # Wider to accommodate text
+            width=140,
             height=44
         )
         self.btn_save_draft.clicked.connect(self._handle_save_draft)
@@ -204,12 +204,12 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
         layout.addStretch()
 
         # Right buttons (Previous, Next/Finish)
-        self.btn_previous = ActionButton("السابق", variant="secondary", width=114, height=44)
+        self.btn_previous = ActionButton(tr("wizard.button.previous"), variant="secondary", width=114, height=44)
         self.btn_previous.clicked.connect(self._handle_previous)
         layout.addWidget(self.btn_previous)
 
         self.btn_next = ActionButton(
-            text="التالي",
+            text=tr("wizard.button.next"),
             variant="primary",
             icon_name="icon",
             width=114,

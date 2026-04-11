@@ -266,6 +266,8 @@ class ClaimStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._claim_cards = []
+        self._empty_title_label = None
+        self._empty_desc_label = None
 
     def setup_ui(self):
         """Setup the step's UI with GlowingCard claim cards."""
@@ -370,6 +372,11 @@ class ClaimStep(BaseStep):
         center_layout.addWidget(desc_label)
 
         main_layout.addWidget(center_container)
+
+        # Store references for language updates
+        self._empty_title_label = title_label
+        self._empty_desc_label = desc_label
+
         return container
 
     def _add_section_header(self, layout, icon_name, title, subtitle=""):
@@ -432,15 +439,19 @@ class ClaimStep(BaseStep):
         for i in range(4):
             grid.setColumnStretch(i, 1)
 
-        def add_field(label_text, field_widget, row, col):
+        # Store field labels keyed by translation key for later retranslation
+        card._field_labels = {}
+
+        def add_field(tr_key, field_widget, row, col):
             v = QVBoxLayout()
             v.setSpacing(4)
-            lbl = QLabel(label_text)
+            lbl = QLabel(tr(tr_key))
             lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
             v.addWidget(lbl)
             v.addWidget(field_widget)
             grid.addLayout(v, row, col)
+            card._field_labels[tr_key] = lbl
 
         ro_input_style = f"""
             QLineEdit {{
@@ -460,40 +471,40 @@ class ClaimStep(BaseStep):
         claim_person_search.setPlaceholderText(tr("wizard.claim.person_name_placeholder"))
         claim_person_search.setStyleSheet(ro_input_style)
         claim_person_search.setReadOnly(True)
-        add_field(tr("wizard.claim.claimant_id"), claim_person_search, 0, 0)
+        add_field("wizard.claim.claimant_id", claim_person_search, 0, 0)
 
         claim_unit_search = QLineEdit()
         claim_unit_search.setPlaceholderText(tr("wizard.claim.unit_number_placeholder"))
         claim_unit_search.setStyleSheet(ro_input_style)
         claim_unit_search.setReadOnly(True)
         claim_unit_search.setAlignment(Qt.AlignRight)
-        add_field(tr("wizard.claim.claimed_unit_id"), claim_unit_search, 0, 1)
+        add_field("wizard.claim.claimed_unit_id", claim_unit_search, 0, 1)
 
         claim_type_field = QLineEdit()
         claim_type_field.setReadOnly(True)
         claim_type_field.setStyleSheet(ro_input_style)
-        add_field(tr("wizard.claim.case_type"), claim_type_field, 0, 2)
+        add_field("wizard.claim.case_type", claim_type_field, 0, 2)
 
         case_category_field = QLineEdit()
         case_category_field.setReadOnly(True)
         case_category_field.setStyleSheet(ro_input_style)
-        add_field(tr("wizard.claim.case_category"), case_category_field, 0, 3)
+        add_field("wizard.claim.case_category", case_category_field, 0, 3)
 
         # Row 2: status | source | survey date
         claim_status_field = QLineEdit()
         claim_status_field.setReadOnly(True)
         claim_status_field.setStyleSheet(ro_input_style)
-        add_field(tr("wizard.claim.case_status"), claim_status_field, 1, 0)
+        add_field("wizard.claim.case_status", claim_status_field, 1, 0)
 
         claim_source_field = QLineEdit()
         claim_source_field.setReadOnly(True)
         claim_source_field.setStyleSheet(ro_input_style)
-        add_field(tr("wizard.claim.source"), claim_source_field, 1, 1)
+        add_field("wizard.claim.source", claim_source_field, 1, 1)
 
         claim_survey_date = QLineEdit()
         claim_survey_date.setReadOnly(True)
         claim_survey_date.setStyleSheet(ro_input_style)
-        add_field(tr("wizard.claim.survey_date"), claim_survey_date, 1, 2)
+        add_field("wizard.claim.survey_date", claim_survey_date, 1, 2)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
@@ -503,6 +514,7 @@ class ClaimStep(BaseStep):
         notes_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         card_layout.addWidget(notes_label)
+        card._notes_label = notes_label
 
         claim_notes = CenteredTextEdit()
         claim_notes.setPlaceholderText(tr("wizard.claim.additional_notes_placeholder"))
@@ -731,7 +743,8 @@ class ClaimStep(BaseStep):
             self.context.update_data("claims_count", claims_count)
             self.context.update_data("created_claims", created_claims)
         else:
-            self._populate_first_card_from_context(survey_data, data_summary, response)
+            self._populate_from_context()
+            return
 
         self._accent_line.pulse()
 
@@ -804,59 +817,109 @@ class ClaimStep(BaseStep):
         self.empty_state_widget.hide()
         self.scroll_area.show()
 
-        first_card = self._claim_cards[0]
+        # Remove extra cards from previous run, keep only the first placeholder
+        while len(self._claim_cards) > 1:
+            card = self._claim_cards.pop()
+            self.cards_layout.removeWidget(card)
+            card.deleteLater()
 
-        owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
-        tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
-        occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+        # Build claim list: use context.claims if available (built by OccupancyClaimsStep),
+        # otherwise fall back to grouping relations by type.
+        claims_preview = list(self.context.claims) if self.context.claims else []
 
-        if self.context.unit:
-            unit = self.context.unit
-            unit_num = unit.unit_number or unit.apartment_number or "?"
-            first_card.claim_unit_search.setText(str(unit_num))
+        if not claims_preview:
+            # Fallback: one entry per person who has a relation
+            owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
+            tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
+            occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+            unit_num = ""
+            if self.context.unit:
+                u = self.context.unit
+                unit_num = str(u.unit_number or u.apartment_number or "")
+            for r in owners_or_heirs:
+                claims_preview.append({'claim_type': 'owner', 'person_name': r.get('person_name', ''), 'unit_display_id': unit_num})
+            for r in tenants:
+                claims_preview.append({'claim_type': 'tenant', 'person_name': r.get('person_name', ''), 'unit_display_id': unit_num})
+            for r in occupants:
+                claims_preview.append({'claim_type': 'occupant', 'person_name': r.get('person_name', ''), 'unit_display_id': unit_num})
 
-        if self.context.persons:
-            first_person = self.context.persons[0]
-            full_name = f"{first_person.get('first_name', '')} {first_person.get('last_name', '')}"
-            first_card.claim_person_search.setText(full_name.strip())
-
-        _TYPE_FB = {"Ownership": tr("wizard.claim.type_ownership"), "Tenancy": tr("wizard.claim.type_tenancy"), "Occupancy": tr("wizard.claim.type_occupancy")}
-        claim_type_english = None
-        if owners_or_heirs:
-            claim_type_english = "Ownership"
-        elif tenants:
-            claim_type_english = "Tenancy"
-        elif occupants:
-            claim_type_english = "Occupancy"
-        else:
-            claim_type_english = "Ownership"
-
-        code = _find_combo_code_by_english("ClaimType", claim_type_english)
-        first_card.claim_type_field.setText(
-            get_claim_type_display(code) if code else _TYPE_FB[claim_type_english]
-        )
-
-        if owners_or_heirs:
-            first_card.case_category_field.setText(tr("wizard.claim.case_closed"))
-            first_card.case_category_field.setStyleSheet(CASE_CLOSED_FIELD_STYLE)
-        else:
-            first_card.case_category_field.setText(tr("wizard.claim.case_open"))
-            first_card.case_category_field.setStyleSheet(CASE_OPEN_FIELD_STYLE)
-
-        status_code = _find_combo_code_by_english("ClaimStatus", "New")
-        first_card.claim_status_field.setText(get_claim_status_display(status_code))
-
-        source_code = _find_combo_code_by_english("ClaimSource", "Office Submission")
-        first_card.claim_source_field.setText(get_source_display(source_code))
+        if not claims_preview:
+            # No relations at all — show single card with basic context data
+            claims_preview = [{'claim_type': 'owner', 'person_name': '', 'unit_display_id': ''}]
 
         from datetime import datetime
-        first_card.claim_survey_date.setText(datetime.now().strftime("%Y-%m-%d"))
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        status_code = _find_combo_code_by_english("ClaimStatus", "New")
+        source_code = _find_combo_code_by_english("ClaimSource", "Office Submission")
+        _TYPE_FB = {
+            "Ownership": tr("wizard.claim.type_ownership"),
+            "Tenancy": tr("wizard.claim.type_tenancy"),
+            "Occupancy": tr("wizard.claim.type_occupancy"),
+        }
 
-        first_card._claim_raw_data = {'from_context': True}
+        def _fill_card(card, claim):
+            person_name = claim.get('claimant_name') or claim.get('person_name', '')
+            if not person_name and self.context.persons:
+                fp = self.context.persons[0]
+                person_name = f"{fp.get('first_name', '')} {fp.get('last_name', '')}".strip()
+            card.claim_person_search.setText(person_name)
 
-        self._fetch_evidence_count(
-            callback=lambda c: self._update_evidence_label(first_card.claim_eval_label, c)
-        )
+            unit_display = claim.get('unit_display_id', '')
+            if not unit_display and self.context.unit:
+                u = self.context.unit
+                unit_display = str(u.unit_number or u.apartment_number or "")
+            card.claim_unit_search.setText(unit_display)
+
+            role = claim.get('claim_type', 'owner')
+            is_owner = _is_owner_relation(role)
+            if is_owner:
+                claim_type_en = "Ownership"
+            elif role in ('tenant', 3, 'tenancy'):
+                claim_type_en = "Tenancy"
+            elif role in ('occupant', 2, 'occupancy'):
+                claim_type_en = "Occupancy"
+            else:
+                claim_type_en = "Ownership"
+                is_owner = True
+
+            code = _find_combo_code_by_english("ClaimType", claim_type_en)
+            card.claim_type_field.setText(get_claim_type_display(code) if code else _TYPE_FB[claim_type_en])
+
+            if is_owner:
+                card.case_category_field.setText(tr("wizard.claim.case_closed"))
+                card.case_category_field.setStyleSheet(CASE_CLOSED_FIELD_STYLE)
+            else:
+                card.case_category_field.setText(tr("wizard.claim.case_open"))
+                card.case_category_field.setStyleSheet(CASE_OPEN_FIELD_STYLE)
+
+            card.claim_status_field.setText(get_claim_status_display(status_code))
+            card.claim_source_field.setText(get_source_display(source_code))
+
+            survey_date = claim.get('survey_date') or today_str
+            card.claim_survey_date.setText(str(survey_date)[:10])
+
+            notes = claim.get('notes', '')
+            if notes:
+                card.claim_notes.setText(notes)
+
+            card._claim_raw_data = {'from_context': True, 'claim_preview': claim}
+
+        # Fill first card
+        _fill_card(self._claim_cards[0], claims_preview[0])
+
+        # Create additional cards for remaining claims
+        for claim in claims_preview[1:]:
+            new_card = self._create_claim_card_widget()
+            _fill_card(new_card, claim)
+            self.cards_layout.insertWidget(self.cards_layout.count() - 1, new_card)
+            self._claim_cards.append(new_card)
+
+        # Fetch evidence count and apply to all cards
+        def _apply_evidence(count):
+            for c in self._claim_cards:
+                self._update_evidence_label(c.claim_eval_label, count)
+
+        self._fetch_evidence_count(callback=_apply_evidence)
 
         self._accent_line.pulse()
 
@@ -945,6 +1008,44 @@ class ClaimStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
+        self.scroll_area.setLayoutDirection(get_layout_direction())
+
+        for card in self._claim_cards:
+            card.setLayoutDirection(get_layout_direction())
+            # Retranslate field labels
+            for tr_key, lbl in getattr(card, '_field_labels', {}).items():
+                lbl.setText(tr(tr_key))
+            # Retranslate notes label
+            notes_lbl = getattr(card, '_notes_label', None)
+            if notes_lbl:
+                notes_lbl.setText(tr("wizard.claim.review_notes"))
+            # Update placeholder texts
+            card.claim_person_search.setPlaceholderText(tr("wizard.claim.person_name_placeholder"))
+            card.claim_unit_search.setPlaceholderText(tr("wizard.claim.unit_number_placeholder"))
+            card.claim_notes.setPlaceholderText(tr("wizard.claim.additional_notes_placeholder"))
+            # Retranslate dynamic value fields (evidence pill, case category)
+            eval_lbl = card.claim_eval_label
+            if eval_lbl.styleSheet() == EVIDENCE_AVAILABLE_STYLE:
+                text = eval_lbl.text()
+                # Keep count if present: "نص (N)" → update prefix only
+                import re as _re
+                m = _re.search(r'\((\d+)\)', text)
+                if m:
+                    eval_lbl.setText(f"{tr('wizard.claim.evidence_available')} ({m.group(1)})")
+                else:
+                    eval_lbl.setText(tr("wizard.claim.evidence_available"))
+            else:
+                current = eval_lbl.text()
+                # Only update if it's one of the known translatable strings (not a custom reason)
+                _known = {tr("wizard.claim.awaiting_documents"), "awaiting_documents"}
+                if not current or current in _known:
+                    eval_lbl.setText(tr("wizard.claim.awaiting_documents"))
+
+        # Retranslate empty state labels
+        if hasattr(self, '_empty_title_label') and self._empty_title_label:
+            self._empty_title_label.setText(tr("wizard.claim.empty_title"))
+        if hasattr(self, '_empty_desc_label') and self._empty_desc_label:
+            self._empty_desc_label.setText(tr("wizard.claim.empty_desc"))
 
     def get_step_title(self) -> str:
         return tr("wizard.claim.step_title")

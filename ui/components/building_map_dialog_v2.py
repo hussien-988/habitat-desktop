@@ -434,9 +434,9 @@ class BuildingMapDialog(BaseMapDialog):
         # For view-only with fallback building, center on it
         if self._is_view_only and self._fallback_building:
             fb = self._fallback_building
-            if fb.latitude and fb.longitude:
+            if fb.latitude is not None and fb.longitude is not None:
                 center_lat, center_lon = fb.latitude, fb.longitude
-                zoom = 20
+                zoom = 18
 
         # Show map immediately with empty buildings
         empty_geojson = '{"type":"FeatureCollection","features":[]}'
@@ -551,7 +551,7 @@ class BuildingMapDialog(BaseMapDialog):
                     focus_building = self._fallback_building
 
                 if focus_building:
-                    if focus_building.latitude and focus_building.longitude:
+                    if focus_building.latitude is not None and focus_building.longitude is not None:
                         center_lat, center_lon = focus_building.latitude, focus_building.longitude
                     elif focus_building.geo_location:
                         geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
@@ -619,7 +619,7 @@ class BuildingMapDialog(BaseMapDialog):
                 QTimer.singleShot(500, lambda: self.web_view.page().runJavaScript(update_count_js))
 
             if self._is_view_only and focus_building_id and center_lat and center_lon:
-                self._fly_to(center_lat, center_lon, 20)
+                self._fly_to(center_lat, center_lon, 18)
                 QTimer.singleShot(2500, lambda: self._open_building_popup_immediate(
                     focus_building_id, center_lat, center_lon))
 

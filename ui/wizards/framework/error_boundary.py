@@ -12,6 +12,7 @@ from PyQt5.QtCore import pyqtSignal, QObject
 
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
+from services.translation_manager import tr
 
 logger = get_logger(__name__)
 
@@ -63,11 +64,12 @@ class ErrorBoundary(QObject):
         if not self.parent_widget:
             return
 
-        error_title = f"خطأ في {self.step_name}"
-        error_message = (
-            f"حدث خطأ أثناء {operation}:\n\n"
-            f"{type(error).__name__}: {str(error)}\n\n"
-            f"يمكنك المحاولة مرة أخرى أو الاتصال بالدعم الفني."
+        error_title = tr("error_boundary.step_error", step_name=self.step_name)
+        error_message = tr(
+            "error_boundary.operation_error",
+            operation=operation,
+            error_type=type(error).__name__,
+            error_msg=str(error),
         )
 
         ErrorHandler.show_error(
@@ -111,11 +113,11 @@ def with_error_boundary(step_name: str, operation_name: str = "operation"):
                     parent_window = None
 
                 if parent_window:
+                    from services.translation_manager import tr as _tr
                     ErrorHandler.show_error(
                         parent_window,
-                        f"حدث خطأ أثناء {operation_name}:\n\n{str(e)}\n\n"
-                        f"يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.",
-                        f"خطأ في {step_name}"
+                        _tr("error_boundary.operation_error_simple", operation=operation_name, error_msg=str(e)),
+                        _tr("error_boundary.step_error", step_name=step_name),
                     )
 
                 # Re-raise if critical
@@ -139,24 +141,25 @@ class StepErrorRecovery:
     @staticmethod
     def get_recovery_options(error: Exception) -> list:
         """Get available recovery options for an error."""
+        from services.translation_manager import tr as _tr
         # Network errors - retry makes sense
         if "Network" in type(error).__name__ or "Connection" in type(error).__name__:
             return [
-                ("retry", "إعادة المحاولة"),
-                ("skip", "تخطي"),
-                ("exit", "خروج")
+                ("retry", _tr("error_boundary.retry")),
+                ("skip", _tr("error_boundary.skip")),
+                ("exit", _tr("error_boundary.exit")),
             ]
 
         # Validation errors - usually require user action
         if "Validation" in type(error).__name__:
             return [
-                ("reset", "إعادة تعيين"),
-                ("exit", "خروج")
+                ("reset", _tr("error_boundary.reset")),
+                ("exit", _tr("error_boundary.exit")),
             ]
 
         # Default options
         return [
-            ("retry", "إعادة المحاولة"),
-            ("reset", "إعادة تعيين"),
-            ("exit", "خروج")
+            ("retry", _tr("error_boundary.retry")),
+            ("reset", _tr("error_boundary.reset")),
+            ("exit", _tr("error_boundary.exit")),
         ]
