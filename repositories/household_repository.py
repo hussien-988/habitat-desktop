@@ -26,19 +26,19 @@ class HouseholdRepository:
             INSERT INTO households (
                 household_id, unit_id, main_occupant_id, main_occupant_name,
                 occupancy_size, male_count, female_count,
-                minors_count, adults_count, elderly_count, with_disability_count,
-                occupancy_type, occupancy_nature, occupancy_start_date,
+                child_count, adults_count, elderly_count, disabled_count,
+                occupancy_nature, occupancy_start_date,
                 monthly_rent, notes,
                 created_at, updated_at, created_by, updated_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             household.household_id, household.unit_id,
             household.main_occupant_id, household.main_occupant_name,
             household.occupancy_size, household.male_count, household.female_count,
-            household.minors_count, household.adults_count, household.elderly_count,
-            household.with_disability_count,
-            household.occupancy_type, household.occupancy_nature,
+            household.child_count, household.adults_count, household.elderly_count,
+            household.disabled_count,
+            household.occupancy_nature,
             household.occupancy_start_date.isoformat() if household.occupancy_start_date else None,
             float(household.monthly_rent) if household.monthly_rent else None,
             household.notes,
@@ -70,7 +70,7 @@ class HouseholdRepository:
         rows = self.db.fetch_all(query, (limit, offset))
         return [self._row_to_household(row) for row in rows]
 
-    def search(self, unit_id: str = None, occupancy_type: str = None,
+    def search(self, unit_id: str = None,
                occupancy_nature: str = None, limit: int = 100) -> List[Household]:
         """Search households with filters."""
         query = "SELECT * FROM households WHERE 1=1"
@@ -79,10 +79,6 @@ class HouseholdRepository:
         if unit_id:
             query += " AND unit_id = ?"
             params.append(unit_id)
-
-        if occupancy_type:
-            query += " AND occupancy_type = ?"
-            params.append(occupancy_type)
 
         if occupancy_nature:
             query += " AND occupancy_nature = ?"
@@ -115,10 +111,10 @@ class HouseholdRepository:
                 COALESCE(SUM(occupancy_size), 0) as total_occupants,
                 COALESCE(SUM(male_count), 0) as total_males,
                 COALESCE(SUM(female_count), 0) as total_females,
-                COALESCE(SUM(minors_count), 0) as total_minors,
+                COALESCE(SUM(child_count), 0) as total_children,
                 COALESCE(SUM(adults_count), 0) as total_adults,
                 COALESCE(SUM(elderly_count), 0) as total_elderly,
-                COALESCE(SUM(with_disability_count), 0) as total_with_disability
+                COALESCE(SUM(disabled_count), 0) as total_disabled
             FROM households WHERE unit_id = ?
         """
         result = self.db.fetch_one(query, (unit_id,))
@@ -129,10 +125,10 @@ class HouseholdRepository:
             "total_occupants": 0,
             "total_males": 0,
             "total_females": 0,
-            "total_minors": 0,
+            "total_children": 0,
             "total_adults": 0,
             "total_elderly": 0,
-            "total_with_disability": 0,
+            "total_disabled": 0,
         }
 
     def update(self, household: Household) -> Household:
@@ -142,9 +138,9 @@ class HouseholdRepository:
             UPDATE households SET
                 unit_id = ?, main_occupant_id = ?, main_occupant_name = ?,
                 occupancy_size = ?, male_count = ?, female_count = ?,
-                minors_count = ?, adults_count = ?, elderly_count = ?,
-                with_disability_count = ?,
-                occupancy_type = ?, occupancy_nature = ?,
+                child_count = ?, adults_count = ?, elderly_count = ?,
+                disabled_count = ?,
+                occupancy_nature = ?,
                 occupancy_start_date = ?, monthly_rent = ?, notes = ?,
                 updated_at = ?, updated_by = ?
             WHERE household_id = ?
@@ -152,9 +148,9 @@ class HouseholdRepository:
         params = (
             household.unit_id, household.main_occupant_id, household.main_occupant_name,
             household.occupancy_size, household.male_count, household.female_count,
-            household.minors_count, household.adults_count, household.elderly_count,
-            household.with_disability_count,
-            household.occupancy_type, household.occupancy_nature,
+            household.child_count, household.adults_count, household.elderly_count,
+            household.disabled_count,
+            household.occupancy_nature,
             household.occupancy_start_date.isoformat() if household.occupancy_start_date else None,
             float(household.monthly_rent) if household.monthly_rent else None,
             household.notes,

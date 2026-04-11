@@ -2834,8 +2834,10 @@ class PersonDialog(QDialog):
                         break
                     old_evidence_id = self._pending_id_replacements.pop(0)
                     try:
+                        doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
                         response = self._api_service.update_identification_document(
-                            self._survey_id, old_evidence_id, person_id, file_path=file_path)
+                            self._survey_id, old_evidence_id, person_id, file_path=file_path,
+                            document_type=doc_type)
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         self._evidence_ids[os.path.normpath(file_path)] = new_eid
@@ -2925,10 +2927,10 @@ class PersonDialog(QDialog):
 
         for file_path in self.uploaded_files:
             try:
-                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else 1
+                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
                 response = self._api_service.upload_identification_document(
                     self._survey_id, person_id, file_path,
-                    document_type=doc_type or 1,
+                    document_type=doc_type,
                 )
                 evidence_id = (
                     response.get("id") or response.get("evidenceId") or

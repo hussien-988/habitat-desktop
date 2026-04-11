@@ -21,7 +21,7 @@ class IdentificationDocument:
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     person_id: str = ""
-    document_type: int = 1  # 1=PersonalIdPhoto, 2=FamilyRecord, 3=Photo
+    document_type: Optional[int] = None  # 1=PersonalIdPhoto, 2=FamilyRecord, 3=Photo
     description: Optional[str] = None
     original_file_name: Optional[str] = None
     file_path: Optional[str] = None
@@ -39,6 +39,8 @@ class IdentificationDocument:
 
     @property
     def document_type_display_ar(self) -> str:
+        if self.document_type is None:
+            return ""
         types = {
             1: "صورة الهوية الشخصية",
             2: "إخراج قيد",
@@ -81,7 +83,7 @@ class IdentificationDocument:
         return cls(
             id=str(data.get("id", "")),
             person_id=str(data.get("personId", "")),
-            document_type=data.get("documentType", 1),
+            document_type=data.get("documentType"),
             description=data.get("description"),
             original_file_name=data.get("originalFileName"),
             file_path=data.get("filePath"),

@@ -147,6 +147,8 @@ def get_identification_document_type_options() -> list:
     return _vocab_options("IdentificationDocumentType")
 
 def get_identification_document_type_display(type_key) -> str:
+    if type_key is None:
+        return tr("mapping.not_specified")
     _str_fallback = {
         "personalidphoto": "mapping.id_doc_type.personal_id_photo",
         "familyrecord": "mapping.id_doc_type.family_record",

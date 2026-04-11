@@ -1128,23 +1128,17 @@ class ReviewStep(BaseStep):
 
         self._household_content.addWidget(summary_container)
 
-        # Demographics cards (male + female side by side)
-        demo_keys = ['adult_males', 'adult_females', 'male_children_under18', 'female_children_under18',
-                     'male_elderly_over65', 'female_elderly_over65', 'disabled_males', 'disabled_females']
-        demographics = {key: hh.get(key, 0) for key in demo_keys}
-
-        male_items = [
-            (tr("wizard.household.adult_males"), demographics.get('adult_males', 0)),
-            (tr("wizard.household.male_children"), demographics.get('male_children_under18', 0)),
-            (tr("wizard.household.male_elderly"), demographics.get('male_elderly_over65', 0)),
-            (tr("wizard.household.disabled_males"), demographics.get('disabled_males', 0)),
+        # Demographics cards (gender + age side by side)
+        gender_items = [
+            (tr("wizard.household.males"), hh.get('male_count', 0)),
+            (tr("wizard.household.females"), hh.get('female_count', 0)),
         ]
 
-        female_items = [
-            (tr("wizard.household.adult_females"), demographics.get('adult_females', 0)),
-            (tr("wizard.household.female_children"), demographics.get('female_children_under18', 0)),
-            (tr("wizard.household.female_elderly"), demographics.get('female_elderly_over65', 0)),
-            (tr("wizard.household.disabled_females"), demographics.get('disabled_females', 0)),
+        age_items = [
+            (tr("wizard.household.adults"), hh.get('adult_count', 0)),
+            (tr("wizard.household.children"), hh.get('child_count', 0)),
+            (tr("wizard.household.elderly"), hh.get('elderly_count', 0)),
+            (tr("wizard.household.disabled"), hh.get('disabled_count', 0)),
         ]
 
         cards_container = QWidget()
@@ -1154,8 +1148,8 @@ class ReviewStep(BaseStep):
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(20)
 
-        cards_layout.addWidget(self._create_demographic_card(male_items))
-        cards_layout.addWidget(self._create_demographic_card(female_items))
+        cards_layout.addWidget(self._create_demographic_card(gender_items))
+        cards_layout.addWidget(self._create_demographic_card(age_items))
 
         self._household_content.addWidget(cards_container)
 

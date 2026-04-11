@@ -647,12 +647,12 @@ class ApplicantInfoStep(BaseStep):
                 new_files = [f for f in self.uploaded_files if f not in already_uploaded]
                 for fp in new_files:
                     try:
-                        doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else 1
+                        doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
                         self._api_client.upload_identification_document(
                             survey_id=survey_id,
                             person_id=person_id,
                             file_path=fp,
-                            document_type=doc_type or 1,
+                            document_type=doc_type,
                         )
                         already_uploaded.add(fp)
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")

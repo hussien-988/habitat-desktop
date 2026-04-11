@@ -1238,22 +1238,24 @@ class TRRCMSApiClient:
         if property_unit_id == '':
             property_unit_id = None
 
-        occupancy_type = get_value('occupancy_type', 'occupancyType', 0)
         occupancy_nature = get_value('occupancy_nature', 'occupancyNature', 0)
+
+        # occupancyStartDate: convert to ISO-8601 UTC string
+        start_date = get_value('occupancy_start_date', 'occupancyStartDate', None)
+        if start_date and not isinstance(start_date, str):
+            start_date = start_date.isoformat() + "T00:00:00Z" if hasattr(start_date, 'isoformat') else str(start_date)
 
         api_data = {
             "propertyUnitId": property_unit_id,
             "householdSize": int(get_value('size', 'householdSize', 0)),
-            "occupancyType": int(occupancy_type) if occupancy_type else None,
             "occupancyNature": int(occupancy_nature) if occupancy_nature else None,
-            "maleCount": int(get_value('adult_males', 'maleCount', 0)),
-            "femaleCount": int(get_value('adult_females', 'femaleCount', 0)),
-            "maleChildCount": int(get_value('male_children_under18', 'maleChildCount', 0)),
-            "femaleChildCount": int(get_value('female_children_under18', 'femaleChildCount', 0)),
-            "maleElderlyCount": int(get_value('male_elderly_over65', 'maleElderlyCount', 0)),
-            "femaleElderlyCount": int(get_value('female_elderly_over65', 'femaleElderlyCount', 0)),
-            "maleDisabledCount": int(get_value('disabled_males', 'maleDisabledCount', 0)),
-            "femaleDisabledCount": int(get_value('disabled_females', 'femaleDisabledCount', 0)),
+            "maleCount": int(get_value('male_count', 'maleCount', 0)),
+            "femaleCount": int(get_value('female_count', 'femaleCount', 0)),
+            "adultCount": int(get_value('adult_count', 'adultCount', 0)),
+            "childCount": int(get_value('child_count', 'childCount', 0)),
+            "elderlyCount": int(get_value('elderly_count', 'elderlyCount', 0)),
+            "disabledCount": int(get_value('disabled_count', 'disabledCount', 0)),
+            "occupancyStartDate": start_date,
             "notes": get_value('notes', 'notes', '') or None
         }
         if survey_id:
@@ -1549,7 +1551,7 @@ class TRRCMSApiClient:
         person_id: str,
         file_path: str,
         description: str = "",
-        document_type: int = 1,
+        document_type: Optional[int] = None,
         document_issued_date: str = "",
         document_expiry_date: str = "",
         issuing_authority: str = "",
@@ -1598,6 +1600,8 @@ class TRRCMSApiClient:
             form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
         if notes:
             form_fields["Notes"] = (None, notes)
+        if document_type is not None:
+            form_fields["DocumentType"] = (None, str(document_type))
 
         logger.info(f"[API REQ] POST {endpoint} File: {file_name} for person {person_id}")
 
@@ -1644,7 +1648,7 @@ class TRRCMSApiClient:
         file_path: str = None,
         description: str = "",
         notes: str = "",
-        document_type: int = None,
+        document_type: Optional[int] = None,
         document_issued_date: str = "",
         document_expiry_date: str = "",
         issuing_authority: str = "",

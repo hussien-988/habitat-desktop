@@ -36,7 +36,7 @@ from ui.design_system import Colors, ScreenScale
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_type_options, get_occupancy_nature_options
+from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_nature_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -213,15 +213,12 @@ class HouseholdStep(BaseStep):
         # Divider
         family_info_layout.addWidget(make_divider())
 
-        occupancy_row = QHBoxLayout()
-        occupancy_row.setSpacing(12)
-
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         combo_style = FORM_FIELD_STYLE + f"""
             QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
         """
 
-        # -- Left field: Occupancy Nature (ownership/other) --
+        # -- Occupancy Nature --
         nature_col = QVBoxLayout()
         nature_col.setSpacing(4)
 
@@ -240,30 +237,7 @@ class HouseholdStep(BaseStep):
         self.hh_occupancy_nature.setMinimumHeight(ScreenScale.h(38))
         nature_col.addWidget(self.hh_occupancy_nature)
 
-        occupancy_row.addLayout(nature_col, 1)
-
-        # -- Right field: Occupancy Type (residential/non-residential) --
-        type_col = QVBoxLayout()
-        type_col.setSpacing(4)
-
-        self._occupancy_type_label = QLabel(tr("wizard.household.occupancy_type"))
-        self._occupancy_type_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_type_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        type_col.addWidget(self._occupancy_type_label)
-
-        self.hh_occupancy_type = RtlCombo()
-        self.hh_occupancy_type.addItem(tr("wizard.household.select"), None)
-        for code, display_name in get_occupancy_type_options():
-            if code == 0:
-                continue
-            self.hh_occupancy_type.addItem(display_name, code)
-        self.hh_occupancy_type.setStyleSheet(combo_style)
-        self.hh_occupancy_type.setMinimumHeight(ScreenScale.h(38))
-        type_col.addWidget(self.hh_occupancy_type)
-
-        occupancy_row.addLayout(type_col, 1)
-
-        family_info_layout.addLayout(occupancy_row)
+        family_info_layout.addLayout(nature_col)
         family_info_layout.addSpacing(8)
 
         total_members_layout = QVBoxLayout()
@@ -344,23 +318,21 @@ class HouseholdStep(BaseStep):
         cards_row = QHBoxLayout()
         cards_row.setSpacing(12)  # Gap between cards: 12px
 
-        # Create Male card (LEFT in RTL)
-        male_card = self._create_gender_card(tr("wizard.household.males"), [
-            (tr("wizard.household.adult_males"), "hh_adult_males"),
-            (tr("wizard.household.male_children"), "hh_male_children_under18"),
-            (tr("wizard.household.male_elderly"), "hh_male_elderly_over65"),
-            (tr("wizard.household.disabled_males"), "hh_disabled_males")
+        # Gender Distribution card
+        gender_card = self._create_gender_card(tr("wizard.household.gender_distribution"), [
+            (tr("wizard.household.males"), "hh_male_count"),
+            (tr("wizard.household.females"), "hh_female_count"),
         ])
-        cards_row.addWidget(male_card, 1)
+        cards_row.addWidget(gender_card, 1)
 
-        # Create Female card (RIGHT in RTL)
-        female_card = self._create_gender_card(tr("wizard.household.females"), [
-            (tr("wizard.household.adult_females"), "hh_adult_females"),
-            (tr("wizard.household.female_children"), "hh_female_children_under18"),
-            (tr("wizard.household.female_elderly"), "hh_female_elderly_over65"),
-            (tr("wizard.household.disabled_females"), "hh_disabled_females")
+        # Age Distribution card
+        age_card = self._create_gender_card(tr("wizard.household.age_distribution"), [
+            (tr("wizard.household.adults"), "hh_adult_count"),
+            (tr("wizard.household.children"), "hh_child_count"),
+            (tr("wizard.household.elderly"), "hh_elderly_count"),
+            (tr("wizard.household.disabled"), "hh_disabled_count"),
         ])
-        cards_row.addWidget(female_card, 1)
+        cards_row.addWidget(age_card, 1)
 
         composition_layout.addLayout(cards_row)
         scroll_layout.addWidget(composition_frame)
@@ -590,7 +562,6 @@ class HouseholdStep(BaseStep):
 
         self.hh_composition_header_title.setText(tr("wizard.household.composition_title"))
         self.hh_composition_header_subtitle.setText(tr("wizard.household.composition_subtitle"))
-        self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
         self._notes_label.setText(tr("wizard.household.notes_label"))
@@ -613,19 +584,20 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: total members == sum of non-disabled members
-        sum_without_disability = (
-            self.hh_adult_males.value() + self.hh_adult_females.value()
-            + self.hh_male_children_under18.value() + self.hh_female_children_under18.value()
-            + self.hh_male_elderly_over65.value() + self.hh_female_elderly_over65.value()
-        )
-        if total_entered != sum_without_disability:
-            result.add_error(tr("wizard.household.members_mismatch"))
+        # Validate: gender sum <= householdSize
+        gender_sum = self.hh_male_count.value() + self.hh_female_count.value()
+        if gender_sum > total_entered:
+            result.add_error(tr("wizard.household.gender_exceeds_total"))
+            return result
+
+        # Validate: age sum <= householdSize
+        age_sum = self.hh_adult_count.value() + self.hh_child_count.value() + self.hh_elderly_count.value()
+        if age_sum > total_entered:
+            result.add_error(tr("wizard.household.age_exceeds_total"))
             return result
 
         # Validate: disabled count must not exceed total members
-        disabled_total = self.hh_disabled_males.value() + self.hh_disabled_females.value()
-        if disabled_total > total_entered:
+        if self.hh_disabled_count.value() > total_entered:
             result.add_error(tr("wizard.household.disability_exceeds_total"))
             return result
 
@@ -633,17 +605,14 @@ class HouseholdStep(BaseStep):
             "household_id": str(uuid.uuid4()),
             "property_unit_id": property_unit_id,
             "unit_uuid": property_unit_id,
-            "occupancy_type": self.hh_occupancy_type.currentData(),
             "occupancy_nature": self.hh_occupancy_nature.currentData(),
             "size": self.hh_total_members.value(),
-            "adult_males": self.hh_adult_males.value(),
-            "adult_females": self.hh_adult_females.value(),
-            "male_children_under18": self.hh_male_children_under18.value(),
-            "female_children_under18": self.hh_female_children_under18.value(),
-            "male_elderly_over65": self.hh_male_elderly_over65.value(),
-            "female_elderly_over65": self.hh_female_elderly_over65.value(),
-            "disabled_males": self.hh_disabled_males.value(),
-            "disabled_females": self.hh_disabled_females.value(),
+            "male_count": self.hh_male_count.value(),
+            "female_count": self.hh_female_count.value(),
+            "adult_count": self.hh_adult_count.value(),
+            "child_count": self.hh_child_count.value(),
+            "elderly_count": self.hh_elderly_count.value(),
+            "disabled_count": self.hh_disabled_count.value(),
             "notes": self.hh_notes.toPlainText().strip()
         }
 
@@ -700,11 +669,10 @@ class HouseholdStep(BaseStep):
         """Compare current form data with stored household to detect changes."""
         compare_keys = [
             "property_unit_id",
-            "size", "occupancy_type", "occupancy_nature",
-            "adult_males", "adult_females",
-            "male_children_under18", "female_children_under18",
-            "male_elderly_over65", "female_elderly_over65",
-            "disabled_males", "disabled_females", "notes"
+            "size", "occupancy_nature",
+            "male_count", "female_count",
+            "adult_count", "child_count", "elderly_count",
+            "disabled_count", "notes"
         ]
         for key in compare_keys:
             if current.get(key) != stored.get(key):
@@ -722,13 +690,11 @@ class HouseholdStep(BaseStep):
         """Clear all household form fields for a new wizard session."""
         if not self._is_initialized:
             return
-        for spin in [self.hh_total_members, self.hh_adult_males, self.hh_adult_females,
-                     self.hh_male_children_under18, self.hh_female_children_under18,
-                     self.hh_male_elderly_over65, self.hh_female_elderly_over65,
-                     self.hh_disabled_males, self.hh_disabled_females]:
+        for spin in [self.hh_total_members, self.hh_male_count, self.hh_female_count,
+                     self.hh_adult_count, self.hh_child_count,
+                     self.hh_elderly_count, self.hh_disabled_count]:
             spin.setValue(0)
         self.hh_occupancy_nature.setCurrentIndex(0)
-        self.hh_occupancy_type.setCurrentIndex(0)
         self.hh_notes.clear()
 
     def populate_data(self):
@@ -801,31 +767,23 @@ class HouseholdStep(BaseStep):
                 idx = self.hh_occupancy_nature.findData(household['occupancy_nature'])
                 if idx >= 0:
                     self.hh_occupancy_nature.setCurrentIndex(idx)
-            if household.get('occupancy_type') is not None:
-                idx = self.hh_occupancy_type.findData(household['occupancy_type'])
-                if idx >= 0:
-                    self.hh_occupancy_type.setCurrentIndex(idx)
 
             self.hh_total_members.setValue(int(household.get("size") or 0))
-            self.hh_adult_males.setValue(int(household.get("adult_males") or 0))
-            self.hh_adult_females.setValue(int(household.get("adult_females") or 0))
-            self.hh_male_children_under18.setValue(int(household.get("male_children_under18") or 0))
-            self.hh_female_children_under18.setValue(int(household.get("female_children_under18") or 0))
-            self.hh_male_elderly_over65.setValue(int(household.get("male_elderly_over65") or 0))
-            self.hh_female_elderly_over65.setValue(int(household.get("female_elderly_over65") or 0))
-            self.hh_disabled_males.setValue(int(household.get("disabled_males") or 0))
-            self.hh_disabled_females.setValue(int(household.get("disabled_females") or 0))
+            self.hh_male_count.setValue(int(household.get("male_count") or 0))
+            self.hh_female_count.setValue(int(household.get("female_count") or 0))
+            self.hh_adult_count.setValue(int(household.get("adult_count") or 0))
+            self.hh_child_count.setValue(int(household.get("child_count") or 0))
+            self.hh_elderly_count.setValue(int(household.get("elderly_count") or 0))
+            self.hh_disabled_count.setValue(int(household.get("disabled_count") or 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
         else:
             self.hh_total_members.setValue(0)
-            self.hh_adult_males.setValue(0)
-            self.hh_adult_females.setValue(0)
-            self.hh_male_children_under18.setValue(0)
-            self.hh_female_children_under18.setValue(0)
-            self.hh_male_elderly_over65.setValue(0)
-            self.hh_female_elderly_over65.setValue(0)
-            self.hh_disabled_males.setValue(0)
-            self.hh_disabled_females.setValue(0)
+            self.hh_male_count.setValue(0)
+            self.hh_female_count.setValue(0)
+            self.hh_adult_count.setValue(0)
+            self.hh_child_count.setValue(0)
+            self.hh_elderly_count.setValue(0)
+            self.hh_disabled_count.setValue(0)
             self.hh_notes.clear()
 
     def get_step_title(self) -> str:

@@ -27,15 +27,14 @@ class Household:
 
     # Occupancy counts
     occupancy_size: int = 1  # Total household size
-    male_count: int = 0
-    female_count: int = 0
-    minors_count: int = 0  # Under 18
+    male_count: int = 0  # Total males (all ages)
+    female_count: int = 0  # Total females (all ages)
+    child_count: int = 0  # Under 18
     adults_count: int = 0  # 18-59
     elderly_count: int = 0  # 60+
-    with_disability_count: int = 0
+    disabled_count: int = 0
 
     # Occupancy details
-    occupancy_type: Optional[str] = None  # owner, tenant, guest, etc.
     occupancy_nature: Optional[str] = None  # permanent, temporary, seasonal
     occupancy_start_date: Optional[date] = None
     monthly_rent: Optional[Decimal] = None
@@ -49,38 +48,12 @@ class Household:
     created_by: Optional[str] = None
     updated_by: Optional[str] = None
 
-    # Occupancy types
-    OCCUPANCY_TYPES = [
-        ("owner", "Owner", "مالك"),
-        ("tenant", "Tenant", "مستأجر"),
-        ("guest", "Guest", "ضيف"),
-        ("caretaker", "Caretaker", "حارس"),
-        ("relative", "Relative", "قريب"),
-        ("other", "Other", "آخر"),
-    ]
-
     # Occupancy natures
     OCCUPANCY_NATURES = [
         ("permanent", "Permanent", "دائم"),
         ("temporary", "Temporary", "مؤقت"),
         ("seasonal", "Seasonal", "موسمي"),
     ]
-
-    @property
-    def occupancy_type_display(self) -> str:
-        """Get display name for occupancy type."""
-        for code, en, ar in self.OCCUPANCY_TYPES:
-            if code == self.occupancy_type:
-                return en
-        return self.occupancy_type or ""
-
-    @property
-    def occupancy_type_display_ar(self) -> str:
-        """Get Arabic display name for occupancy type."""
-        for code, en, ar in self.OCCUPANCY_TYPES:
-            if code == self.occupancy_type:
-                return ar
-        return self.occupancy_type or ""
 
     @property
     def occupancy_nature_display(self) -> str:
@@ -116,13 +89,13 @@ class Household:
             errors.append("عدد الذكور لا يمكن أن يكون سالباً")
         if self.female_count < 0:
             errors.append("عدد الإناث لا يمكن أن يكون سالباً")
-        if self.minors_count < 0:
-            errors.append("عدد القاصرين لا يمكن أن يكون سالباً")
+        if self.child_count < 0:
+            errors.append("عدد الأطفال لا يمكن أن يكون سالباً")
         if self.adults_count < 0:
             errors.append("عدد البالغين لا يمكن أن يكون سالباً")
         if self.elderly_count < 0:
             errors.append("عدد كبار السن لا يمكن أن يكون سالباً")
-        if self.with_disability_count < 0:
+        if self.disabled_count < 0:
             errors.append("عدد ذوي الإعاقة لا يمكن أن يكون سالباً")
 
         # Gender sum validation
@@ -131,13 +104,13 @@ class Household:
             errors.append(f"مجموع الذكور والإناث ({gender_sum}) يتجاوز حجم الأسرة ({self.occupancy_size})")
 
         # Age group sum validation
-        age_sum = self.minors_count + self.adults_count + self.elderly_count
+        age_sum = self.child_count + self.adults_count + self.elderly_count
         if age_sum > self.occupancy_size:
             errors.append(f"مجموع الفئات العمرية ({age_sum}) يتجاوز حجم الأسرة ({self.occupancy_size})")
 
         # Disability count validation
-        if self.with_disability_count > self.occupancy_size:
-            errors.append(f"عدد ذوي الإعاقة ({self.with_disability_count}) يتجاوز حجم الأسرة ({self.occupancy_size})")
+        if self.disabled_count > self.occupancy_size:
+            errors.append(f"عدد ذوي الإعاقة ({self.disabled_count}) يتجاوز حجم الأسرة ({self.occupancy_size})")
 
         # Monthly rent validation
         if self.monthly_rent is not None and self.monthly_rent < 0:
@@ -159,11 +132,10 @@ class Household:
             "occupancy_size": self.occupancy_size,
             "male_count": self.male_count,
             "female_count": self.female_count,
-            "minors_count": self.minors_count,
+            "child_count": self.child_count,
             "adults_count": self.adults_count,
             "elderly_count": self.elderly_count,
-            "with_disability_count": self.with_disability_count,
-            "occupancy_type": self.occupancy_type,
+            "disabled_count": self.disabled_count,
             "occupancy_nature": self.occupancy_nature,
             "occupancy_start_date": self.occupancy_start_date.isoformat() if self.occupancy_start_date else None,
             "monthly_rent": float(self.monthly_rent) if self.monthly_rent else None,

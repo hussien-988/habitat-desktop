@@ -42,7 +42,6 @@ class HouseholdsTableModel(BaseTableModel):
             ('size', "Size", tr("table.households.size")),
             ('gender_dist', "M/F", tr("table.households.gender_dist")),
             ('age_groups', "Age Groups", tr("table.households.age_groups")),
-            ('type', "Type", tr("table.households.type")),
             ('nature', "Nature", tr("table.households.nature")),
         ]
         super().__init__(items=[], columns=columns)
@@ -63,7 +62,7 @@ class HouseholdsTableModel(BaseTableModel):
             if col == 3:
                 return f"{tr('page.households.males')}: {household.male_count}, {tr('page.households.females')}: {household.female_count}"
             elif col == 4:
-                return f"{tr('page.households.minors')}: {household.minors_count}, {tr('page.households.adults')}: {household.adults_count}, {tr('page.households.elderly')}: {household.elderly_count}"
+                return f"{tr('page.households.children')}: {household.child_count}, {tr('page.households.adults')}: {household.adults_count}, {tr('page.households.elderly')}: {household.elderly_count}"
         return super().data(index, role)
 
     def get_item_value(self, item, field_name: str):
@@ -78,9 +77,7 @@ class HouseholdsTableModel(BaseTableModel):
         elif field_name == 'gender_dist':
             return f"{item.male_count}/{item.female_count}"
         elif field_name == 'age_groups':
-            return f"{item.minors_count}/{item.adults_count}/{item.elderly_count}"
-        elif field_name == 'type':
-            return item.occupancy_type_display_ar if self._is_arabic else item.occupancy_type_display
+            return f"{item.child_count}/{item.adults_count}/{item.elderly_count}"
         elif field_name == 'nature':
             return item.occupancy_nature_display_ar if self._is_arabic else item.occupancy_nature_display
         return "-"
@@ -94,15 +91,6 @@ class HouseholdsTableModel(BaseTableModel):
 
 class HouseholdDialog(QDialog):
     """Dialog for creating/editing a household."""
-
-    OCCUPANCY_TYPES = [
-        ("owner", "page.households.type_owner", "Owner"),
-        ("tenant", "page.households.type_tenant", "Tenant"),
-        ("guest", "page.households.type_guest", "Guest"),
-        ("caretaker", "page.households.type_caretaker", "Caretaker"),
-        ("relative", "page.households.type_relative", "Relative"),
-        ("other", "page.households.type_other", "Other"),
-    ]
 
     OCCUPANCY_NATURES = [
         ("permanent", "page.households.nature_permanent", "Permanent"),
@@ -226,11 +214,11 @@ class HouseholdDialog(QDialog):
         age_label.setStyleSheet(f"font-weight: 600; color: {Config.TEXT_COLOR}; margin-top: 8px;")
         counts_form.addRow(age_label)
 
-        # Minors count
-        self.minors_spin = QSpinBox()
-        self.minors_spin.setRange(0, 50)
-        self.minors_spin.valueChanged.connect(self._validate_counts)
-        counts_form.addRow(tr("page.households.minors_under_18"), self.minors_spin)
+        # Children count
+        self.children_spin = QSpinBox()
+        self.children_spin.setRange(0, 50)
+        self.children_spin.valueChanged.connect(self._validate_counts)
+        counts_form.addRow(tr("page.households.minors_under_18"), self.children_spin)
 
         # Adults count
         self.adults_spin = QSpinBox()
@@ -260,13 +248,6 @@ class HouseholdDialog(QDialog):
         details_group.setStyleSheet(unit_group.styleSheet())
         details_form = QFormLayout(details_group)
         details_form.setSpacing(10)
-
-        # Occupancy type
-        self.type_combo = QComboBox()
-        self.type_combo.addItem(tr("page.households.select_placeholder"), "")
-        for code, tr_key, en in self.OCCUPANCY_TYPES:
-            self.type_combo.addItem(tr(tr_key), code)
-        details_form.addRow(tr("page.households.occupancy_type"), self.type_combo)
 
         # Occupancy nature
         self.nature_combo = QComboBox()
@@ -354,14 +335,14 @@ class HouseholdDialog(QDialog):
         size = self.size_spin.value()
         male = self.male_spin.value()
         female = self.female_spin.value()
-        minors = self.minors_spin.value()
+        children = self.children_spin.value()
         adults = self.adults_spin.value()
         elderly = self.elderly_spin.value()
         disability = self.disability_spin.value()
 
         errors = []
         gender_sum = male + female
-        age_sum = minors + adults + elderly
+        age_sum = children + adults + elderly
 
         if gender_sum > size:
             errors.append(f"{tr('page.households.err_gender_sum')} ({gender_sum}) > {tr('page.households.family_size')} ({size})")
@@ -416,16 +397,10 @@ class HouseholdDialog(QDialog):
         self.size_spin.setValue(self.household.occupancy_size)
         self.male_spin.setValue(self.household.male_count)
         self.female_spin.setValue(self.household.female_count)
-        self.minors_spin.setValue(self.household.minors_count)
+        self.children_spin.setValue(self.household.child_count)
         self.adults_spin.setValue(self.household.adults_count)
         self.elderly_spin.setValue(self.household.elderly_count)
-        self.disability_spin.setValue(self.household.with_disability_count)
-
-        # Occupancy type
-        if self.household.occupancy_type:
-            idx = self.type_combo.findData(self.household.occupancy_type)
-            if idx >= 0:
-                self.type_combo.setCurrentIndex(idx)
+        self.disability_spin.setValue(self.household.disabled_count)
 
         # Occupancy nature
         if self.household.occupancy_nature:
@@ -482,11 +457,10 @@ class HouseholdDialog(QDialog):
             "occupancy_size": self.size_spin.value(),
             "male_count": self.male_spin.value(),
             "female_count": self.female_spin.value(),
-            "minors_count": self.minors_spin.value(),
+            "child_count": self.children_spin.value(),
             "adults_count": self.adults_spin.value(),
             "elderly_count": self.elderly_spin.value(),
-            "with_disability_count": self.disability_spin.value(),
-            "occupancy_type": self.type_combo.currentData() or None,
+            "disabled_count": self.disability_spin.value(),
             "occupancy_nature": self.nature_combo.currentData() or None,
             "occupancy_start_date": start_date,
             "monthly_rent": Decimal(str(rent)) if rent else None,
