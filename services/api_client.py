@@ -75,6 +75,7 @@ class TRRCMSApiClient:
             response = requests.post(
                 f"{self.base_url}/v1/Auth/login",
                 json={"username": username, "password": password},
+                headers={"Accept-Language": self._get_accept_language()},
                 timeout=self.config.timeout,
                 verify=False  # Allow self-signed certificates in development
             )
@@ -115,6 +116,7 @@ class TRRCMSApiClient:
             response = requests.post(
                 f"{self.base_url}/v1/Auth/refresh",
                 json={"refreshToken": self.refresh_token},
+                headers={"Accept-Language": self._get_accept_language()},
                 timeout=self.config.timeout,
                 verify=False  # Allow self-signed certificates in development
             )
@@ -178,13 +180,20 @@ class TRRCMSApiClient:
                         self._on_session_expired()
                     raise RuntimeError("Session expired")
 
+    @staticmethod
+    def _get_accept_language() -> str:
+        """Get Accept-Language value from current app language."""
+        from services.translation_manager import get_language
+        return get_language()
+
     def _headers(self) -> Dict[str, str]:
         """الحصول على Headers مع Authorization."""
         self._ensure_valid_token()
         return {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": self._get_accept_language(),
         }
 
     _MAX_RETRIES = 2
@@ -253,10 +262,13 @@ class TRRCMSApiClient:
                     response_text = e.response.text[:500] if e.response is not None else ''
                 except Exception:
                     pass
+                api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
+                if response_data and response_data.get("detail"):
+                    logger.debug(f"[API ERR] dev detail: {response_data['detail']}")
                 if status_code == 401:
                     if self._session_expired_flag:
                         raise ApiException(
-                            message=str(e), status_code=401, response_data=response_data
+                            message=api_msg, status_code=401, response_data=response_data
                         )
                     # Only handle if the token hasn't changed (new login) since our request
                     if self.access_token and self.access_token == token_used:
@@ -282,7 +294,7 @@ class TRRCMSApiClient:
                 log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
                 log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
                 raise ApiException(
-                    message=str(e),
+                    message=api_msg,
                     status_code=status_code,
                     response_data=response_data
                 )
@@ -1476,7 +1488,8 @@ class TRRCMSApiClient:
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": self._get_accept_language(),
         }
 
         form_fields = {
@@ -1520,8 +1533,9 @@ class TRRCMSApiClient:
             except (ValueError, AttributeError):
                 pass
             logger.error(f"[API ERR] {status_code} POST {endpoint}: {response_data}")
+            upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
-                message=str(e),
+                message=upload_api_msg,
                 status_code=status_code,
                 response_data=response_data
             )
@@ -1563,7 +1577,8 @@ class TRRCMSApiClient:
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": self._get_accept_language(),
         }
 
         form_fields = {
@@ -1611,8 +1626,9 @@ class TRRCMSApiClient:
             except (ValueError, AttributeError):
                 pass
             logger.error(f"[API ERR] {status_code} POST {endpoint}: {response_data}")
+            upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
-                message=str(e),
+                message=upload_api_msg,
                 status_code=status_code,
                 response_data=response_data
             )
@@ -1651,7 +1667,8 @@ class TRRCMSApiClient:
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": self._get_accept_language(),
         }
 
         form_fields = {}
@@ -1702,7 +1719,8 @@ class TRRCMSApiClient:
             except (ValueError, AttributeError):
                 pass
             logger.error(f"[API ERR] {status_code} PUT {endpoint}: {response_data}")
-            raise ApiException(message=str(e), status_code=status_code, response_data=response_data)
+            upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
+            raise ApiException(message=upload_api_msg, status_code=status_code, response_data=response_data)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             logger.error(f"Network error during identification document update: {e}")
             raise NetworkException(message=str(e), original_error=e)
@@ -1747,7 +1765,8 @@ class TRRCMSApiClient:
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Accept-Language": self._get_accept_language(),
         }
 
         form_fields = {
@@ -1791,7 +1810,8 @@ class TRRCMSApiClient:
             except (ValueError, AttributeError):
                 pass
             logger.error(f"[API ERR] {status_code} PUT {endpoint}: {response_data}")
-            raise ApiException(message=str(e), status_code=status_code, response_data=response_data)
+            upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
+            raise ApiException(message=upload_api_msg, status_code=status_code, response_data=response_data)
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             logger.error(f"Network error during evidence update: {e}")
             raise NetworkException(message=str(e), original_error=e)
@@ -1861,7 +1881,8 @@ class TRRCMSApiClient:
         self._ensure_valid_token()
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Accept": "*/*"
+            "Accept": "*/*",
+            "Accept-Language": self._get_accept_language(),
         }
 
         urls = [
@@ -2811,9 +2832,10 @@ class TRRCMSApiClient:
                 response_data = e.response.json()
             except Exception:
                 pass
+            upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
                 status_code=e.response.status_code if e.response else 0,
-                message=str(e),
+                message=upload_api_msg,
                 response_data=response_data
             )
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:

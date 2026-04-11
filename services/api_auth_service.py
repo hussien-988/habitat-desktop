@@ -73,12 +73,14 @@ class ApiAuthService:
             "password": password
         }).encode("utf-8")
 
+        from services.translation_manager import get_language
         req = urllib.request.Request(
             self.login_url,
             data=payload,
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                "Accept-Language": get_language(),
             },
             method="POST"
         )
@@ -97,6 +99,16 @@ class ApiAuthService:
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8") if e.fp else ""
             logger.warning(f"API login failed ({e.code}) for {username}: {body}")
+
+            api_msg = ""
+            try:
+                resp_data = json.loads(body) if body else {}
+                api_msg = resp_data.get("message", "")
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+            if api_msg:
+                return None, api_msg
 
             if e.code == 401:
                 return None, "اسم المستخدم أو كلمة المرور غير صحيحة"

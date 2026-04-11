@@ -1656,17 +1656,17 @@ class MainWindow(QMainWindow):
 
     def _on_toggle_case_editable(self, case_id: str, is_editable: bool):
         """Toggle the editable flag on a case via API."""
-        from PyQt5.QtWidgets import QMessageBox
-        action_text = (
-            "\u0641\u062a\u062d \u0627\u0644\u062a\u0639\u062f\u064a\u0644" if is_editable
-            else "\u0642\u0641\u0644 \u0627\u0644\u062a\u0639\u062f\u064a\u0644"
+        from services.translation_manager import tr
+        from ui.error_handler import ErrorHandler
+
+        action_key = "page.case_entity.unlock_editing" if is_editable else "page.case_entity.lock_editing"
+        action_text = tr(action_key)
+        confirmed = ErrorHandler.confirm(
+            self,
+            tr("page.case_entity.lock_confirm_msg", action=action_text),
+            tr("page.case_entity.lock_confirm_title"),
         )
-        reply = QMessageBox.question(
-            self, "\u062a\u0623\u0643\u064a\u062f",
-            f"\u0647\u0644 \u062a\u0631\u064a\u062f {action_text} \u0644\u0647\u0630\u0647 \u0627\u0644\u062d\u0627\u0644\u0629\u061f",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
+        if not confirmed:
             return
 
         from services.api_worker import ApiWorker
@@ -1682,12 +1682,12 @@ class MainWindow(QMainWindow):
             if ce_page and hasattr(ce_page, 'update_after_editable_toggle'):
                 ce_page.update_after_editable_toggle(new_val)
             from ui.components.toast import Toast
-            Toast.show_toast(self, "\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0639\u062f\u064a\u0644", Toast.SUCCESS)
+            Toast.show_toast(self, tr("page.case_entity.editable_updated"), Toast.SUCCESS)
 
         def _on_err(msg):
             logger.error(f"Toggle editable failed: {msg}")
             from ui.components.toast import Toast
-            Toast.show_toast(self, "\u0641\u0634\u0644 \u062a\u062d\u062f\u064a\u062b \u062d\u0627\u0644\u0629 \u0627\u0644\u062a\u0639\u062f\u064a\u0644", Toast.ERROR)
+            Toast.show_toast(self, tr("page.case_entity.editable_update_failed"), Toast.ERROR)
 
         worker = ApiWorker(_toggle)
         worker.finished.connect(_on_done)

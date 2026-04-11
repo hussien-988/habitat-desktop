@@ -370,13 +370,30 @@ class OfficeSurveyWizard(BaseWizard):
         def _on_saved(_result):
             self._spinner.hide_loading()
             logger.info(f"Draft saved to backend: {survey_id}")
-            ref = (
-                (getattr(self.context, 'finalize_response', None) or {})
-                .get("survey", {})
-                .get("referenceCode", "")
-                or self.context.reference_number
-                or survey_id
-            )
+
+            # 1. Extract referenceCode from the PUT /draft API response
+            ref = ""
+            if isinstance(_result, dict):
+                ref = (_result.get("referenceCode")
+                       or (_result.get("survey") or {}).get("referenceCode")
+                       or "")
+
+            # 2. Fallback: use stored context value
+            if not ref:
+                ref = self.context.reference_number or ""
+
+            # 3. Final fallback: fetch from backend
+            if not ref:
+                try:
+                    detail = api_service.get_office_survey_detail(survey_id)
+                    ref = (detail or {}).get("referenceCode", "") or survey_id
+                except Exception:
+                    ref = survey_id
+
+            # Update context for future use
+            if ref and ref != survey_id:
+                self.context.reference_number = ref
+
             self._show_finalized_success_popup(ref, is_draft=True)
 
         def _on_save_error(msg):
@@ -407,21 +424,13 @@ class OfficeSurveyWizard(BaseWizard):
             self._handle_save_draft()
 
     def _handle_save_draft(self):
-        """Override base class: save draft and show reference popup on completion."""
+        """Override base class: save draft via on_save_draft which handles popup."""
         draft_id = self.on_save_draft()
         if not draft_id:
             return
         self._finalization_complete = True
         self.draft_saved.emit(draft_id)
-        ref_code = self.context.reference_number or draft_id
-
-        def _show_popup(_result=None):
-            self._show_draft_saved_popup(ref_code)
-
-        if hasattr(self, '_save_draft_worker') and self._save_draft_worker:
-            self._save_draft_worker.finished.connect(_show_popup)
-        else:
-            _show_popup()
+        # on_save_draft() handles showing the success popup via its _on_saved callback
 
     def _show_draft_saved_popup(self, ref_code: str = ""):
         """Show a popup dialog confirming draft was saved, displaying the reference number."""
