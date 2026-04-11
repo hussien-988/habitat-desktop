@@ -506,10 +506,10 @@ class ClaimComparisonPage(QWidget):
         options_layout.addStretch()
         res_layout.addLayout(options_layout)
 
-        just_label = QLabel(tr("page.comparison.justification_required"))
-        just_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        just_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        res_layout.addWidget(just_label)
+        self._justification_label = QLabel(tr("page.comparison.justification_required"))
+        self._justification_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._justification_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        res_layout.addWidget(self._justification_label)
 
         self._justification_edit = QTextEdit()
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
@@ -587,6 +587,7 @@ class ClaimComparisonPage(QWidget):
         title_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         layout.addWidget(title_lbl)
+        frame._title_label = title_lbl
 
         count_lbl = QLabel(f"0 {tr('page.comparison.documents')}")
         count_lbl.setObjectName("doc_count")
@@ -1580,7 +1581,12 @@ class ClaimComparisonPage(QWidget):
                 btn.setText(resolution_labels[idx])
 
         # Justification
+        self._justification_label.setText(tr("page.comparison.justification_required"))
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
+
+        # Document column titles
+        self._doc_first_frame._title_label.setText(tr("page.comparison.first_record_docs"))
+        self._doc_second_frame._title_label.setText(tr("page.comparison.second_record_docs"))
 
         # Re-render if data is loaded
         if self._current_group:
