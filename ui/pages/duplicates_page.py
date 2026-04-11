@@ -644,10 +644,10 @@ class DuplicatesPage(QWidget):
         icon_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
         layout.addWidget(icon_lbl)
 
-        msg_lbl = QLabel(tr("page.duplicates.import_banner_msg"))
-        msg_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        msg_lbl.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
-        layout.addWidget(msg_lbl, 1)
+        self._banner_msg = QLabel(tr("page.duplicates.import_banner_msg"))
+        self._banner_msg.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._banner_msg.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent; border: none;")
+        layout.addWidget(self._banner_msg, 1)
 
         btn_return = QPushButton(tr("page.duplicates.return_to_import"))
         btn_return.setCursor(Qt.PointingHandCursor)
@@ -667,6 +667,7 @@ class DuplicatesPage(QWidget):
         """)
         btn_return.clicked.connect(self.return_to_import.emit)
         layout.addWidget(btn_return)
+        self._banner_btn = btn_return
 
         return banner
 
@@ -1044,6 +1045,7 @@ class DuplicatesPage(QWidget):
         self._status_filter.addItem(tr("page.duplicates.status_in_review"), "InReview")
         self._status_filter.addItem(tr("page.duplicates.status_resolved"), "Resolved")
         self._status_filter.addItem(tr("page.duplicates.status_auto_resolved"), "AutoResolved")
+        self._status_filter.addItem(tr("page.duplicates.status_escalated"), "Escalated")
         if cur_status:
             idx = self._status_filter.findData(cur_status)
             if idx >= 0:
@@ -1073,6 +1075,15 @@ class DuplicatesPage(QWidget):
         self._count_label.setText(
             tr("page.duplicates.showing_count", shown=len(self._conflicts), total=len(self._conflicts))
         )
+
+        # Empty state
+        self._empty_state.set_title(tr("page.duplicates.no_conflicts"))
+        self._empty_state.set_description(tr("page.duplicates.no_conflicts_hint"))
+
+        # Import banner
+        if hasattr(self, '_banner_msg'):
+            self._banner_msg.setText(tr("page.duplicates.import_banner_msg"))
+            self._banner_btn.setText(tr("page.duplicates.return_to_import"))
 
         # Reload cards to pick up new translations
         self._load_conflicts()

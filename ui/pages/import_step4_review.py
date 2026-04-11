@@ -96,7 +96,7 @@ def _get_status_config(status_key):
 class ImportStep4Review(QWidget):
     """Step 3 (Review): Review all staged entities before commit."""
 
-    def __init__(self, import_controller, package_id, parent=None):
+    def __init__(self, import_controller, package_id, skip_load=False, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
         self._package_id = package_id
@@ -104,7 +104,8 @@ class ImportStep4Review(QWidget):
         self._dots_count = 0
         self._setup_ui()
         self._loading_overlay = self._create_loading_overlay()
-        self.load_entities(package_id)
+        if not skip_load:
+            self.load_entities(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())

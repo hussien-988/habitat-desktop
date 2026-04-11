@@ -36,7 +36,7 @@ def _get_entity_sections():
 class ImportStep5Commit(QWidget):
     """Step 4 (Commit): Confirmation view (display-only, orchestrator handles API calls)."""
 
-    def __init__(self, import_controller, package_id, parent=None):
+    def __init__(self, import_controller, package_id, skip_load=False, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
         self._package_id = package_id
@@ -44,7 +44,8 @@ class ImportStep5Commit(QWidget):
         self._dots_count = 0
         self._setup_ui()
         self._loading_overlay = self._create_loading_overlay()
-        self.load_summary(package_id)
+        if not skip_load:
+            self.load_summary(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -75,10 +76,10 @@ class ImportStep5Commit(QWidget):
         card_layout.setSpacing(16)
 
         # Title
-        title = QLabel(tr("wizard.import.step5.title"))
-        title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        card_layout.addWidget(title)
+        self._step_title_label = QLabel(tr("wizard.import.step5.title"))
+        self._step_title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._step_title_label.setStyleSheet("color: #212B36; background: transparent;")
+        card_layout.addWidget(self._step_title_label)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -96,6 +97,7 @@ class ImportStep5Commit(QWidget):
         self._counts_layout.setSpacing(8)
 
         self._count_labels = {}
+        self._entity_name_labels = {}
         for key, ar_name in _get_entity_sections():
             row_frame = QFrame()
             row_frame.setFixedHeight(ScreenScale.h(40))
@@ -128,6 +130,7 @@ class ImportStep5Commit(QWidget):
             row.addStretch()
 
             self._count_labels[key] = count_label
+            self._entity_name_labels[key] = name_label
             self._counts_layout.addWidget(row_frame)
 
         card_layout.addLayout(self._counts_layout)
@@ -160,10 +163,10 @@ class ImportStep5Commit(QWidget):
         """)
         warning_layout.addWidget(warning_icon)
 
-        warning_text = QLabel(tr("wizard.import.step5.irreversible_warning"))
-        warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        warning_text.setStyleSheet("color: #92400E;")
-        warning_layout.addWidget(warning_text)
+        self._warning_text_label = QLabel(tr("wizard.import.step5.irreversible_warning"))
+        self._warning_text_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._warning_text_label.setStyleSheet("color: #92400E;")
+        warning_layout.addWidget(self._warning_text_label)
         warning_layout.addStretch()
 
         card_layout.addWidget(warning_frame)
@@ -325,6 +328,10 @@ class ImportStep5Commit(QWidget):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
 
+        # Card title and warning text
+        self._step_title_label.setText(tr("wizard.import.step5.title"))
+        self._warning_text_label.setText(tr("wizard.import.step5.irreversible_warning"))
+
         # Total label
         total = self._data.get("totalCount", 0) if self._data else 0
         self._total_label.setText(tr("wizard.import.step5.total_entities", count=total))
@@ -332,6 +339,10 @@ class ImportStep5Commit(QWidget):
         # Loading label
         self._ld_label.setText(tr("wizard.import.step5.loading"))
 
-        # Re-populate entity name labels in counts section
-        # (name labels are not stored as instance vars, so re-update counts)
+        # Entity name labels
+        entity_sections = _get_entity_sections()
+        for key, ar_name in entity_sections:
+            if key in self._entity_name_labels:
+                self._entity_name_labels[key].setText(f"{ar_name}:")
+
         self._update_counts()

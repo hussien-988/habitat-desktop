@@ -26,6 +26,7 @@ _ENTITY_SECTION_KEYS = [
     ('persons', 'wizard.import.entity.persons'),
     ('households', 'wizard.import.entity.households'),
     ('personPropertyRelations', 'wizard.import.entity.person_property_relations'),
+    ('identificationDocuments', 'wizard.import.entity.identification_documents'),
     ('evidences', 'wizard.import.entity.evidences'),
     ('claims', 'wizard.import.entity.claims'),
 ]
@@ -179,10 +180,10 @@ class ImportStep6Report(QWidget):
         self._breakdown_table.setAlternatingRowColors(True)
 
         header = self._breakdown_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        self._breakdown_table.setColumnWidth(0, ScreenScale.w(160))
         for col in range(1, 5):
-            header.setSectionResizeMode(col, QHeaderView.Fixed)
-            self._breakdown_table.setColumnWidth(col, 100)
+            header.setSectionResizeMode(col, QHeaderView.Stretch)
 
         self._breakdown_table.setStyleSheet("""
             QTableWidget {
@@ -369,6 +370,7 @@ class ImportStep6Report(QWidget):
         value.setFont(create_font(size=18, weight=FontManager.WEIGHT_SEMIBOLD))
         value.setStyleSheet(f"color: {color};")
         value.setAlignment(Qt.AlignCenter)
+        value.setLayoutDirection(Qt.LeftToRight)
         box_layout.addWidget(value)
 
         label = QLabel(label_text)
@@ -723,6 +725,11 @@ class ImportStep6Report(QWidget):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
+
+        # Result title — reset to default when no report data loaded yet
+        if not self._report_data:
+            self._result_title.setText(tr("wizard.import.step6.commit_success"))
+            self._result_subtitle.setText("")
 
         # Loading label
         self._ld_label.setText(tr("wizard.import.step6.loading"))

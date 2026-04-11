@@ -40,7 +40,7 @@ class ImportStep2Staging(QWidget):
 
     resolve_duplicates_requested = pyqtSignal()
 
-    def __init__(self, import_controller, package_id, duplicates_data=None, parent=None):
+    def __init__(self, import_controller, package_id, duplicates_data=None, skip_load=False, parent=None):
         super().__init__(parent)
         self.import_controller = import_controller
         self._package_id = package_id
@@ -49,7 +49,8 @@ class ImportStep2Staging(QWidget):
         self._dots_count = 0
         self._setup_ui()
         self._loading_overlay = self._create_loading_overlay()
-        self.load_report(package_id)
+        if not skip_load:
+            self.load_report(package_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -90,9 +91,10 @@ class ImportStep2Staging(QWidget):
         scroll_layout.addWidget(dup_card)
 
         # ── Card 4: Validator Level Results ──
-        level_card = self._build_level_results_card()
-        self._apply_card_shadow(level_card)
-        scroll_layout.addWidget(level_card)
+        self._level_card = self._build_level_results_card()
+        self._apply_card_shadow(self._level_card)
+        self._level_card.setVisible(False)
+        scroll_layout.addWidget(self._level_card)
 
         scroll_layout.addStretch()
         main_scroll.setWidget(scroll_content)
@@ -108,10 +110,10 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(16)
 
-        title = QLabel(tr("wizard.import.step2.title"))
-        title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        layout.addWidget(title)
+        self._summary_title_label = QLabel(tr("wizard.import.step2.title"))
+        self._summary_title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._summary_title_label.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(self._summary_title_label)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -164,10 +166,10 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(12)
 
-        title = QLabel(tr("wizard.import.step2.entity_breakdown"))
-        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        layout.addWidget(title)
+        self._entity_title_label = QLabel(tr("wizard.import.step2.entity_breakdown"))
+        self._entity_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._entity_title_label.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(self._entity_title_label)
 
         entity_sections = _get_entity_sections()
 
@@ -191,10 +193,10 @@ class ImportStep2Staging(QWidget):
         self._entity_table.setFixedHeight(ScreenScale.h(44) * len(_ENTITY_SECTION_KEYS) + ScreenScale.h(36))
 
         header = self._entity_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        self._entity_table.setColumnWidth(0, ScreenScale.w(160))
         for col in range(1, 7):
-            header.setSectionResizeMode(col, QHeaderView.Fixed)
-            self._entity_table.setColumnWidth(col, 90)
+            header.setSectionResizeMode(col, QHeaderView.Stretch)
 
         self._entity_table.setStyleSheet("""
             QTableWidget {
@@ -241,10 +243,10 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(16)
 
-        title = QLabel(tr("wizard.import.step2.duplicates_title"))
-        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        layout.addWidget(title)
+        self._dup_title_label = QLabel(tr("wizard.import.step2.duplicates_title"))
+        self._dup_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._dup_title_label.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(self._dup_title_label)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -300,13 +302,13 @@ class ImportStep2Staging(QWidget):
         """)
         warning_layout.addWidget(warning_icon)
 
-        warning_text = QLabel(
+        self._dup_warning_text = QLabel(
             tr("wizard.import.step2.dup_warning_text")
         )
-        warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        warning_text.setStyleSheet("color: #92400E;")
-        warning_text.setWordWrap(True)
-        warning_layout.addWidget(warning_text, 1)
+        self._dup_warning_text.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._dup_warning_text.setStyleSheet("color: #92400E;")
+        self._dup_warning_text.setWordWrap(True)
+        warning_layout.addWidget(self._dup_warning_text, 1)
 
         layout.addWidget(self._dup_warning)
         self._dup_warning.setVisible(False)
@@ -341,10 +343,10 @@ class ImportStep2Staging(QWidget):
         layout.setContentsMargins(32, 24, 32, 24)
         layout.setSpacing(12)
 
-        title = QLabel(tr("wizard.import.step2.level_results_title"))
-        title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        layout.addWidget(title)
+        self._level_title_label = QLabel(tr("wizard.import.step2.level_results_title"))
+        self._level_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._level_title_label.setStyleSheet("color: #212B36; background: transparent;")
+        layout.addWidget(self._level_title_label)
 
         # Container for level rows
         self._levels_container = QVBoxLayout()
@@ -390,9 +392,11 @@ class ImportStep2Staging(QWidget):
         value.setFont(create_font(size=16, weight=FontManager.WEIGHT_SEMIBOLD))
         value.setStyleSheet(f"color: {color};")
         value.setAlignment(Qt.AlignCenter)
+        value.setLayoutDirection(Qt.LeftToRight)
         box_layout.addWidget(value)
 
         label = QLabel(label_text)
+        label.setObjectName("stat_label")
         label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         label.setStyleSheet("color: #637381;")
         label.setAlignment(Qt.AlignCenter)
@@ -632,13 +636,10 @@ class ImportStep2Staging(QWidget):
         levels = self._report_data.get("levelResults", [])
 
         if not levels:
-            empty = QLabel(tr("wizard.import.step2.no_level_details"))
-            empty.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            empty.setStyleSheet("color: #9CA3AF; background: transparent;")
-            empty.setAlignment(Qt.AlignCenter)
-            self._levels_container.addWidget(empty)
+            self._level_card.setVisible(False)
             return
 
+        self._level_card.setVisible(True)
         for level_data in levels:
             row = self._create_level_row(level_data)
             self._levels_container.addWidget(row)
@@ -734,9 +735,39 @@ class ImportStep2Staging(QWidget):
         """)
         self._clean_badge.setVisible(True)
 
+    @staticmethod
+    def _refresh_stat_label(box, text: str):
+        """Update the title label inside a stat box (uses objectName='stat_label')."""
+        from PyQt5.QtWidgets import QLabel
+        lbl = box.findChild(QLabel, "stat_label")
+        if lbl:
+            lbl.setText(text)
+
     def update_language(self, is_arabic: bool):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
+
+        # Section titles
+        self._summary_title_label.setText(tr("wizard.import.step2.title"))
+        self._entity_title_label.setText(tr("wizard.import.step2.entity_breakdown"))
+        self._dup_title_label.setText(tr("wizard.import.step2.duplicates_title"))
+        self._level_title_label.setText(tr("wizard.import.step2.level_results_title"))
+
+        # Stat box labels — summary
+        self._refresh_stat_label(self._stat_total,   tr("wizard.import.step2.total_records"))
+        self._refresh_stat_label(self._stat_valid,   tr("wizard.import.step2.valid"))
+        self._refresh_stat_label(self._stat_invalid, tr("wizard.import.step2.invalid"))
+        self._refresh_stat_label(self._stat_warning, tr("wizard.import.step2.warnings"))
+        self._refresh_stat_label(self._stat_skipped, tr("wizard.import.step2.skipped"))
+        self._refresh_stat_label(self._stat_pending, tr("wizard.import.step2.pending"))
+
+        # Stat box labels — duplicates
+        self._refresh_stat_label(self._dup_persons,    tr("wizard.import.step2.dup_persons"))
+        self._refresh_stat_label(self._dup_properties, tr("wizard.import.step2.dup_properties"))
+        self._refresh_stat_label(self._dup_total,      tr("wizard.import.step2.dup_total"))
+
+        # Duplicate warning text
+        self._dup_warning_text.setText(tr("wizard.import.step2.dup_warning_text"))
 
         # Entity breakdown table headers
         self._entity_table.setHorizontalHeaderLabels([

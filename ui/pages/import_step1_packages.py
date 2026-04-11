@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QScrollArea, QStackedWidget, QSizePolicy, QFileDialog,
     QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
 from PyQt5.QtGui import QColor
 
 from ui.components.empty_state import EmptyState
@@ -21,6 +21,74 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _POLL_INTERVAL_MS = 30_000  # 30 seconds
+
+# Status code -> badge colors (fg/bg) for package cards
+_PKG_STATUS_BADGE = {
+    1:  {"bg": "#F3F4F6", "fg": "#6B7280"},   # Pending
+    2:  {"bg": "#DBEAFE", "fg": "#3890DF"},   # Validating
+    3:  {"bg": "#FEF3C7", "fg": "#D97706"},   # Staging
+    4:  {"bg": "#FEE2E2", "fg": "#EF4444"},   # Validation Failed
+    5:  {"bg": "#FEE2E2", "fg": "#DC2626"},   # Quarantined
+    6:  {"bg": "#EDE9FE", "fg": "#7C3AED"},   # Reviewing Conflicts
+    7:  {"bg": "#D1FAE5", "fg": "#059669"},   # Ready to Commit
+    8:  {"bg": "#DBEAFE", "fg": "#3890DF"},   # Committing
+    9:  {"bg": "#D1FAE5", "fg": "#10B981"},   # Completed
+    10: {"bg": "#FEE2E2", "fg": "#EF4444"},   # Failed
+    11: {"bg": "#FEF3C7", "fg": "#D97706"},   # Partially Completed
+    12: {"bg": "#F3F4F6", "fg": "#9CA3AF"},   # Cancelled
+}
+
+# Status code -> Arabic label (API uses codes 1-12, not the old vocab 0-4)
+_PKG_STATUS_LABEL_AR = {
+    1:  "قيد الانتظار",
+    2:  "جاري التحقق",
+    3:  "جاري التدريج",
+    4:  "فشل التحقق",
+    5:  "محجورة",
+    6:  "يراجع التعارضات",
+    7:  "جاهزة للإدخال",
+    8:  "جاري الإدخال",
+    9:  "مكتملة",
+    10: "فشلت",
+    11: "مكتملة جزئياً",
+    12: "ملغاة",
+}
+_PKG_STATUS_LABEL_EN = {
+    1:  "Pending",
+    2:  "Validating",
+    3:  "Staging",
+    4:  "Validation Failed",
+    5:  "Quarantined",
+    6:  "Reviewing Conflicts",
+    7:  "Ready to Commit",
+    8:  "Committing",
+    9:  "Completed",
+    10: "Failed",
+    11: "Partially Completed",
+    12: "Cancelled",
+}
+
+
+def _get_status_label(status_code: int) -> str:
+    """Return the localised label for a package status code."""
+    from services.translation_manager import get_language
+    if get_language() == "ar":
+        return _PKG_STATUS_LABEL_AR.get(status_code, str(status_code))
+    return _PKG_STATUS_LABEL_EN.get(status_code, str(status_code))
+
+
+class _UploadWorker(QThread):
+    """Background worker for file upload to keep the UI responsive."""
+    finished = pyqtSignal(object)   # emits OperationResult
+
+    def __init__(self, controller, file_path: str):
+        super().__init__()
+        self._controller = controller
+        self._file_path = file_path
+
+    def run(self):
+        result = self._controller.upload_package(self._file_path)
+        self.finished.emit(result)
 
 
 class _PackageCard(QFrame):
@@ -57,18 +125,22 @@ class _PackageCard(QFrame):
         row1.addStretch()
 
         status_code = pkg.get("status", 1)
-        badge_text = vocab_get_label("import_status", status_code)
+        cfg = _PKG_STATUS_BADGE.get(status_code, {"bg": "#DBEAFE", "fg": "#3890DF"})
+        badge_text = _get_status_label(status_code)
+
         badge = QLabel(badge_text)
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedSize(ScreenScale.w(80), ScreenScale.h(22))
-        badge.setStyleSheet("""
-            QLabel {
-                background-color: #DBEAFE;
-                color: #1D4ED8;
+        badge.setFixedHeight(ScreenScale.h(22))
+        badge.setMinimumWidth(ScreenScale.w(80))
+        badge.setContentsMargins(8, 0, 8, 0)
+        badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: {cfg['bg']};
+                color: {cfg['fg']};
                 border-radius: 11px;
                 border: none;
-            }
+            }}
         """)
         row1.addWidget(badge)
 
@@ -83,11 +155,6 @@ class _PackageCard(QFrame):
             date_str = str(date_raw)[:16].replace("T", "  ")
             row2.addWidget(self._meta_label(tr("wizard.import.step1.date_label"), date_str))
 
-        buildings = pkg.get("buildingCount", 0) or 0
-        units = pkg.get("propertyUnitCount", 0) or 0
-        persons = pkg.get("personCount", 0) or 0
-        content = tr("wizard.import.step1.content_summary", buildings=buildings, units=units, persons=persons)
-        row2.addWidget(self._meta_label(tr("wizard.import.step1.content_label"), content))
 
         device_id = pkg.get("deviceId") or ""
         if device_id:
@@ -160,6 +227,7 @@ class ImportStep1Packages(QWidget):
         self._cards: list[_PackageCard] = []
         self._poll_timer = None
         self._dots_count = 0
+        self._upload_worker = None
         self._setup_ui()
         self._loading_overlay = self._create_loading_overlay()
         # Auto-polling disabled temporarily for import testing
@@ -193,14 +261,14 @@ class ImportStep1Packages(QWidget):
         card_layout.setContentsMargins(24, 24, 24, 24)
         card_layout.setSpacing(16)
 
-        # Header row: title + back button
+        # Header row: title + buttons
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
-        title = QLabel(tr("wizard.import.step1.title"))
-        title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        header_row.addWidget(title)
+        self._title_label = QLabel(tr("wizard.import.step1.title"))
+        self._title_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._title_label.setStyleSheet("color: #212B36; background: transparent;")
+        header_row.addWidget(self._title_label)
 
         header_row.addStretch()
 
@@ -226,12 +294,34 @@ class ImportStep1Packages(QWidget):
         self._upload_btn.clicked.connect(self._on_upload_file)
         header_row.addWidget(self._upload_btn)
 
-        back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
-        back_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        back_btn.setFixedHeight(ScreenScale.h(36))
-        back_btn.setMinimumWidth(ScreenScale.w(100))
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.setStyleSheet("""
+        self._refresh_btn = QPushButton("↻  " + tr("action.refresh"))
+        self._refresh_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._refresh_btn.setFixedHeight(ScreenScale.h(36))
+        self._refresh_btn.setMinimumWidth(ScreenScale.w(90))
+        self._refresh_btn.setCursor(Qt.PointingHandCursor)
+        self._refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FAFBFF, stop:1 #F0F4FA);
+                border: 1px solid rgba(56, 144, 223, 0.20);
+                border-radius: 8px;
+                color: #3890DF;
+                padding: 4px 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #EBF5FF; border-color: rgba(56, 144, 223, 0.40); }
+            QPushButton:pressed { background: #E0EDFA; }
+            QPushButton:disabled { color: #C0C8D0; background: #F5F7FA; border-color: #E8ECF0; }
+        """)
+        self._refresh_btn.clicked.connect(self.refresh)
+        header_row.addWidget(self._refresh_btn)
+
+        self._back_btn = QPushButton(tr("wizard.import.step1.back_btn"))
+        self._back_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._back_btn.setFixedHeight(ScreenScale.h(36))
+        self._back_btn.setMinimumWidth(ScreenScale.w(100))
+        self._back_btn.setCursor(Qt.PointingHandCursor)
+        self._back_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #FAFBFF, stop:1 #F0F4FA);
@@ -245,8 +335,8 @@ class ImportStep1Packages(QWidget):
             QPushButton:pressed { background: #E0EDFA; }
             QPushButton:disabled { color: #C0C8D0; background: #F5F7FA; border-color: #E8ECF0; }
         """)
-        back_btn.clicked.connect(self.back_requested.emit)
-        header_row.addWidget(back_btn)
+        self._back_btn.clicked.connect(self.back_requested.emit)
+        header_row.addWidget(self._back_btn)
 
         card_layout.addLayout(header_row)
 
@@ -379,12 +469,11 @@ class ImportStep1Packages(QWidget):
             elif isinstance(raw, dict):
                 packages = raw.get("items", [])
 
-        # Filter out terminal statuses (completed, partially completed, cancelled, failed)
-        _TERMINAL_STATUSES = {9, 10, 11, 12}
-        packages = [
-            p for p in packages
-            if p.get("status", 0) not in _TERMINAL_STATUSES
-        ]
+        # Hide only failed (10) and cancelled (12); show completed (9, 11) at the end
+        _HIDE_STATUSES = {10, 12}
+        _DONE_STATUSES = {9, 11}
+        packages = [p for p in packages if p.get("status", 0) not in _HIDE_STATUSES]
+        packages.sort(key=lambda p: (1 if p.get("status", 0) in _DONE_STATUSES else 0))
 
         self._populate_cards(packages)
         self.new_packages_count.emit(len(packages))
@@ -470,19 +559,32 @@ class ImportStep1Packages(QWidget):
         if self._poll_timer is not None:
             self._poll_timer.stop()
 
+    # -- File upload (async) ---------------------------------------------------
+
     def _on_upload_file(self):
-        """Upload .uhc file then auto-advance to processing."""
+        """Upload .uhc file using a background worker (non-blocking)."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, tr("wizard.import.step1.select_file"), "", "UHC Files (*.uhc);;All Files (*)"
         )
         if not file_path:
             return
 
-        from ui.components.message_dialog import MessageDialog
-
+        self._upload_btn.setEnabled(False)
+        self._refresh_btn.setEnabled(False)
         self._show_loading(tr("wizard.import.step1.uploading_file"))
-        result = self.import_controller.upload_package(file_path)
+
+        self._upload_worker = _UploadWorker(self.import_controller, file_path)
+        self._upload_worker.finished.connect(self._on_upload_done)
+        self._upload_worker.start()
+
+    def _on_upload_done(self, result):
+        """Called on the main thread when the upload worker finishes."""
         self._hide_loading()
+        self._upload_btn.setEnabled(True)
+        self._refresh_btn.setEnabled(True)
+        self._upload_worker = None
+
+        from ui.components.message_dialog import MessageDialog
 
         if result.success:
             pkg_id = ""
@@ -494,9 +596,18 @@ class ImportStep1Packages(QWidget):
                 self._auto_select(pkg_id)
                 self.upload_completed.emit(pkg_id)
             else:
-                MessageDialog.success(self, tr("wizard.import.step1.upload_success_title"), result.message_ar or tr("wizard.import.step1.upload_success_msg"))
+                MessageDialog.success(
+                    self,
+                    tr("wizard.import.step1.upload_success_title"),
+                    result.message_ar or tr("wizard.import.step1.upload_success_msg"),
+                )
         else:
-            MessageDialog.error(self, tr("wizard.import.step1.upload_error_title"), result.message_ar or tr("wizard.import.step1.upload_error_msg"))
+            MessageDialog.error(
+                self,
+                tr("wizard.import.step1.upload_error_title"),
+                result.message_ar or tr("wizard.import.step1.upload_error_msg"),
+            )
+            # Refresh so user can see any already-uploaded duplicate package
             self.refresh()
 
     def _auto_select(self, package_id: str):
@@ -512,9 +623,12 @@ class ImportStep1Packages(QWidget):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
+        self._title_label.setText(tr("wizard.import.step1.title"))
         self._empty_label.set_title(tr("wizard.import.step1.empty_state"))
         self._loading_label.setText(tr("wizard.import.step1.loading"))
         self._upload_btn.setText(tr("wizard.import.step1.upload_btn"))
+        self._refresh_btn.setText("↻  " + tr("action.refresh"))
+        self._back_btn.setText(tr("wizard.import.step1.back_btn"))
 
     def reset(self):
         """Reset to initial state."""

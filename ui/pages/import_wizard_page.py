@@ -421,6 +421,18 @@ class ImportWizardPage(QWidget):
     def _on_package_selected(self, package_id: str):
         """Handle package selection from Step 1."""
         self.btn_next.setEnabled(bool(package_id))
+        self._update_step0_btn_text()
+
+    def _update_step0_btn_text(self):
+        """Update Next button text based on selected package status at step 0."""
+        if self.current_step != 0 or not hasattr(self, 'step1'):
+            return
+        selected_status = self.step1.get_selected_status()
+        is_done = selected_status in (_PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED)
+        self.btn_next.setText(
+            tr("wizard.import.btn_view_report") if is_done
+            else tr("wizard.import.btn_start_processing")
+        )
 
     def _on_upload_completed(self, package_id: str):
         """After successful upload, auto-advance to processing."""
@@ -655,9 +667,9 @@ class ImportWizardPage(QWidget):
 
     def _navigate_to_report(self):
         """Navigate directly to the report step (for terminal/completed statuses)."""
-        self._ensure_step2(duplicates_data=None)
-        self._ensure_step_review()
-        self._ensure_step_commit()
+        self._ensure_step2(duplicates_data=None, skip_load=True)
+        self._ensure_step_review(skip_load=True)
+        self._ensure_step_commit(skip_load=True)
         self._ensure_step_report()
         self.current_step = 4
         self.step_container.setCurrentIndex(self.current_step)
@@ -907,7 +919,7 @@ class ImportWizardPage(QWidget):
 
     # -- Lazy step creation ---------------------------------------------------
 
-    def _ensure_step2(self, duplicates_data=None):
+    def _ensure_step2(self, duplicates_data=None, skip_load=False):
         """Create or rebuild Step 2: Staging + Validation + Duplicates."""
         if self.step2 is not None:
             self.step_container.removeWidget(self.step2)
@@ -918,12 +930,13 @@ class ImportWizardPage(QWidget):
             self.import_controller,
             self._current_package_id,
             duplicates_data=duplicates_data,
+            skip_load=skip_load,
             parent=self
         )
         self.step2.resolve_duplicates_requested.connect(self._on_resolve_duplicates)
         self.step_container.addWidget(self.step2)
 
-    def _ensure_step_review(self):
+    def _ensure_step_review(self, skip_load=False):
         """Create or rebuild Review step (uses import_step4_review)."""
         if self.step_review is not None:
             self.step_container.removeWidget(self.step_review)
@@ -933,11 +946,12 @@ class ImportWizardPage(QWidget):
         self.step_review = ImportStep4Review(
             self.import_controller,
             self._current_package_id,
+            skip_load=skip_load,
             parent=self
         )
         self.step_container.addWidget(self.step_review)
 
-    def _ensure_step_commit(self):
+    def _ensure_step_commit(self, skip_load=False):
         """Create or rebuild Commit step (uses import_step5_commit)."""
         if self.step_commit is not None:
             self.step_container.removeWidget(self.step_commit)
@@ -947,6 +961,7 @@ class ImportWizardPage(QWidget):
         self.step_commit = ImportStep5Commit(
             self.import_controller,
             self._current_package_id,
+            skip_load=skip_load,
             parent=self
         )
         self.step_container.addWidget(self.step_commit)
@@ -976,13 +991,13 @@ class ImportWizardPage(QWidget):
 
         if self.current_step == 0:
             self.btn_back.setEnabled(False)
-            self.btn_next.setText(tr("wizard.import.btn_start_processing"))
             has_selection = (
                 hasattr(self, 'step1')
                 and hasattr(self.step1, 'get_selected_package_id')
                 and bool(self.step1.get_selected_package_id())
             )
             self.btn_next.setEnabled(has_selection)
+            self._update_step0_btn_text()
 
         elif self.current_step == 1:
             self.btn_back.setEnabled(True)
@@ -1011,8 +1026,10 @@ class ImportWizardPage(QWidget):
             self.btn_cancel.setVisible(False)
             if self._current_package_status == _PkgStatus.FAILED:
                 self.btn_next.setText(tr("action.retry"))
+                self.btn_next.setStyleSheet(StyleManager.nav_button_primary())
             else:
                 self.btn_next.setText(tr("wizard.import.btn_new_import"))
+                self.btn_next.setStyleSheet(StyleManager.nav_button_success())
             self.btn_next.setEnabled(True)
 
     def enable_next_button(self, enabled: bool):

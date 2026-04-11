@@ -1483,6 +1483,35 @@ class StyleManager:
         """
 
     @staticmethod
+    def nav_button_success() -> str:
+        """Success navigation button (New Import, Done) for wizard footers — green variant."""
+        return """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #34D399, stop:0.5 #10B981, stop:1 #059669);
+                color: white;
+                border: 1px solid rgba(16, 185, 129, 0.4);
+                border-radius: 10px;
+                padding: 8px 32px;
+                font-weight: 700;
+                font-size: 12pt;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4ADE80, stop:0.5 #34D399, stop:1 #10B981);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #10B981, stop:0.5 #059669, stop:1 #047857);
+            }
+            QPushButton:disabled {
+                background: #E8EDF2;
+                color: #B0BEC5;
+                border-color: #DDE3EA;
+            }
+        """
+
+    @staticmethod
     def nav_button_secondary() -> str:
         """Secondary navigation button (Back, Cancel) for wizard footers."""
         return """

@@ -139,8 +139,6 @@ class _PackageCard(AnimatedCard):
         parts = []
         if d.get("created_date"):
             parts.append(d["created_date"])
-        if d.get("total_records"):
-            parts.append(f"{tr('import.total_records')}: {d['total_records']}")
         if d.get("valid_records") is not None:
             parts.append(f"{tr('import.valid_records')}: {d['valid_records']}")
         details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
@@ -423,16 +421,12 @@ class ImportPackagesPage(QWidget):
         date_raw = pkg.get("packageCreatedDate") or pkg.get("createdAtUtc") or ""
         date_str = str(date_raw)[:10] if date_raw else ""
 
-        buildings = pkg.get("buildingCount", 0) or 0
-        units = pkg.get("propertyUnitCount", 0) or 0
-        persons = pkg.get("personCount", 0) or 0
-
         return {
             "package_name": pkg.get("fileName") or "N/A",
             "status_code": status_raw,
             "status_display": vocab_get_label("import_status", status_raw),
             "created_date": date_str,
-            "total_records": buildings + units + persons if (buildings or units or persons) else None,
+            "total_records": None,
             "valid_records": None,
             "source": str(pkg.get("deviceId") or "")[:20],
         }
