@@ -284,7 +284,8 @@ class BaseMapDialog(QDialog):
         screen = self.screen().availableGeometry()
         w = min(1455, int(screen.width() * 0.92))
         h = min(816, int(screen.height() * 0.88))
-        self.setFixedSize(w, h)
+        self.resize(w, h)
+        self.setMinimumSize(800, 500)
         palette = self.palette()
         palette.setColor(QPalette.Window, QColor(30, 30, 30))
         self.setPalette(palette)
@@ -470,6 +471,15 @@ class BaseMapDialog(QDialog):
 
         # Connect search (subclass will implement)
         self.search_input.returnPressed.connect(self._on_search_submitted)
+
+        def _auto_direction(text):
+            if text and '\u0600' <= text[0] <= '\u06FF':
+                self.search_input.setLayoutDirection(Qt.RightToLeft)
+                self.search_input.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            elif text:
+                self.search_input.setLayoutDirection(Qt.LeftToRight)
+                self.search_input.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.search_input.textChanged.connect(_auto_direction)
 
         search_layout.addWidget(self.search_input, 1)
 
@@ -768,6 +778,16 @@ class BaseMapDialog(QDialog):
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
+
+    def resizeEvent(self, event):
+        """Resize web_view and loading label to match new dialog size."""
+        super().resizeEvent(event)
+        map_w = self.width() - 48
+        map_h = max(self.height() - 174, 300)
+        if hasattr(self, 'web_view') and self.web_view:
+            self.web_view.setFixedSize(map_w, map_h)
+        if hasattr(self, '_loading_label') and self._loading_label:
+            self._loading_label.setFixedSize(map_w, map_h)
 
     def _on_load_finished(self, success):
         """Called when web_view finishes loading HTML."""

@@ -559,8 +559,7 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.first_name"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.last_name"), label_style), row, 1)
         row += 1
-        # Name validator: Arabic + Latin letters + spaces + hyphens + dots
-        # Note: non-raw string so Python converts \u0600-\u06FF to actual Arabic characters
+        
         _name_validator = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
 
         self.first_name = QLineEdit()
@@ -793,7 +792,7 @@ class PersonDialog(QDialog):
         """)
 
         self.phone = QLineEdit()
-        self.phone.setPlaceholderText("00000000")
+        self.phone.setPlaceholderText("xxxxxxxx")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
         self.phone.setStyleSheet("""
             QLineEdit {
@@ -820,8 +819,8 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.phone"), label_style), row, 0, 1, 2)
         row += 1
         self.landline = QLineEdit()
-        self.landline.setPlaceholderText("0000000")
-        self.landline.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        self.landline.setPlaceholderText("0xxxxxxxxx")
+        self.landline.setValidator(QRegExpValidator(QtRegExp(r"\d{0,10}")))
         self.landline.setStyleSheet(self._input_style())
         self._landline_error = QLabel("")
         self._landline_error.setStyleSheet(self._error_label_style())
@@ -2466,7 +2465,7 @@ class PersonDialog(QDialog):
             return f"09{digits}"
         if len(digits) == 10 and digits.startswith("09"):
             return digits
-        return value or None
+        return None
 
     def _validate_mobile(self, value: str) -> bool:
         """Validate mobile number: exactly 8 digits (prefix 09 is fixed in UI)."""
@@ -2480,7 +2479,7 @@ class PersonDialog(QDialog):
         if not value:
             return True
         digits = ''.join(c for c in value if c.isdigit())
-        return len(digits) == 7
+        return len(digits) == 10
 
     def _validate_national_id(self):
         """Validate national ID format. Uniqueness is checked server-side (409). Returns (valid, error_key)."""

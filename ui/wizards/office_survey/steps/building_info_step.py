@@ -89,12 +89,13 @@ class BuildingInfoStep(BaseStep):
     # --- Card 1: بيانات البناء ----------------------------------------
 
     def _build_card1(self) -> QFrame:
-        card, grid = self._make_card_shell(
+        card, grid, self.card1_title_lbl, self.card1_subtitle_lbl = self._make_card_shell(
             title=tr("wizard.building_info.card1_title"),
             subtitle=tr("wizard.building_info.card1_subtitle"),
             icon_name="blue",
             columns=3,
         )
+
         self.lbl_governorate,  self.f_governorate  = self._add_grid_field(grid, tr("wizard.building_info.governorate_code"), 0, 0)
         self.lbl_district,     self.f_district     = self._add_grid_field(grid, tr("wizard.building_info.district_code"),  0, 1)
         self.lbl_subdistrict,  self.f_subdistrict  = self._add_grid_field(grid, tr("wizard.building_info.subdistrict_code"),  0, 2)
@@ -107,12 +108,13 @@ class BuildingInfoStep(BaseStep):
     # --- Card 2: حالة البناء ------------------------------------------
 
     def _build_card2(self) -> QFrame:
-        card, grid = self._make_card_shell(
+        card, grid, self.card2_title_lbl, self.card2_subtitle_lbl = self._make_card_shell(
             title=tr("wizard.building_info.card2_title"),
             subtitle=tr("wizard.building_info.card2_subtitle"),
             icon_name="blue",
             columns=3,
         )
+
         self.lbl_status,     self.f_status     = self._add_grid_field(grid, tr("wizard.building_info.building_status"),     0, 0)
         self.lbl_type,       self.f_type       = self._add_grid_field(grid, tr("wizard.building_info.building_type"),      0, 1)
         self.lbl_apartments, self.f_apartments = self._add_grid_field(grid, tr("wizard.building_info.apartments_count"),  0, 2)
@@ -293,7 +295,9 @@ class BuildingInfoStep(BaseStep):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        layout.addLayout(make_icon_header(title, subtitle, icon_name))
+        header_layout, title_lbl, subtitle_lbl = make_icon_header(title, subtitle, icon_name)
+        layout.addLayout(header_layout)
+
         layout.addWidget(make_divider())
 
         grid = QGridLayout()
@@ -303,7 +307,8 @@ class BuildingInfoStep(BaseStep):
             grid.setColumnStretch(col, 1)
         layout.addLayout(grid)
 
-        return card, grid
+        return card, grid, title_lbl, subtitle_lbl
+
 
     # _make_icon_header is now shared via wizard_styles.make_icon_header
 
@@ -619,6 +624,8 @@ class BuildingInfoStep(BaseStep):
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
         # Card 1 field labels
+        self.card1_title_lbl.setText(tr("wizard.building_info.card1_title"))
+        self.card1_subtitle_lbl.setText(tr("wizard.building_info.card1_subtitle"))
         self.lbl_governorate.setText(tr("wizard.building_info.governorate_code"))
         self.lbl_district.setText(tr("wizard.building_info.district_code"))
         self.lbl_subdistrict.setText(tr("wizard.building_info.subdistrict_code"))
@@ -627,6 +634,8 @@ class BuildingInfoStep(BaseStep):
         self.lbl_bldg_number.setText(tr("wizard.building_info.building_number"))
         self.lbl_bldg_code.setText(tr("wizard.building_info.building_code"))
         # Card 2 field labels
+        self.card2_title_lbl.setText(tr("wizard.building_info.card2_title"))
+        self.card2_subtitle_lbl.setText(tr("wizard.building_info.card2_subtitle"))
         self.lbl_status.setText(tr("wizard.building_info.building_status"))
         self.lbl_type.setText(tr("wizard.building_info.building_type"))
         self.lbl_apartments.setText(tr("wizard.building_info.apartments_count"))

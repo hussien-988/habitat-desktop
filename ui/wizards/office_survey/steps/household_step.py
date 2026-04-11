@@ -202,11 +202,13 @@ class HouseholdStep(BaseStep):
         family_info_layout.setContentsMargins(16, 16, 16, 16)
 
         # Icon header
-        family_info_layout.addLayout(make_icon_header(
+        header_layout, header_title, header_subtitle = make_icon_header(
             title=tr("wizard.household.occupants_title"),
             subtitle=tr("wizard.household.subtitle"),
             icon_name="user-group",
-        ))
+        )
+        
+        family_info_layout.addLayout(header_layout)
 
         # Divider
         family_info_layout.addWidget(make_divider())
@@ -326,12 +328,17 @@ class HouseholdStep(BaseStep):
         composition_layout.setContentsMargins(16, 16, 16, 16)
 
         # Icon header
-        composition_layout.addLayout(make_icon_header(
+        comp_header_layout, comp_header_title, comp_header_subtitle = make_icon_header(
             title=tr("wizard.household.composition_title"),
             subtitle=tr("wizard.household.composition_subtitle"),
             icon_name="elements",
-        ))
+        )
 
+        composition_layout.addLayout(comp_header_layout)
+
+
+        self.hh_composition_header_title = comp_header_title
+        self.hh_composition_header_subtitle = comp_header_subtitle
         # Divider
         composition_layout.addWidget(make_divider())
         cards_row = QHBoxLayout()
@@ -580,6 +587,9 @@ class HouseholdStep(BaseStep):
     def update_language(self, is_arabic: bool):
         """Update layout direction when language changes."""
         self.setLayoutDirection(get_layout_direction())
+
+        self.hh_composition_header_title.setText(tr("wizard.household.composition_title"))
+        self.hh_composition_header_subtitle.setText(tr("wizard.household.composition_subtitle"))
         self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))

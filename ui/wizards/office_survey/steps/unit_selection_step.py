@@ -200,11 +200,16 @@ class UnitSelectionStep(BaseStep):
         units_main_layout.setContentsMargins(16, 16, 16, 16)
 
         # Header: icon + title/subtitle + add-unit button
-        header_layout = make_icon_header(
+        header_layout, header_title, header_subtitle = make_icon_header(
             tr("wizard.unit.select_title"),
             tr("wizard.unit.select_subtitle"),
             "move"
         )
+
+        # إعادة تطبيق الترجمة (مهم جداً)
+        header_title.setText(tr("wizard.unit.select_title"))
+        header_subtitle.setText(tr("wizard.unit.select_subtitle"))
+
         self.add_unit_btn = ActionButton(
             text=tr("wizard.unit.add_button"),
             variant="outline",

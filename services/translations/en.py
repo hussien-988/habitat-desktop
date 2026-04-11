@@ -3099,6 +3099,9 @@ EN_TRANSLATIONS = {
     "wizard.step1.all": "All",
     "wizard.step1.buildings_load_failed": "Failed to load buildings data",
     "wizard.step1.building_unit": "building(s)",
+    "wizard.step1.map_open_error": "An error occurred while opening the map:\n{error}",
+    "wizard.step1.already_selected": "This building is already selected",
+    "wizard.step1.building_already_assigned": "This building is already assigned to a field team",
 
     # component.building_map
     "component.building_map.search_on_map": "Search on map",

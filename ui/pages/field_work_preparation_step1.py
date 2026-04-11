@@ -26,12 +26,23 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _connect_auto_direction(field):
+    """Connect textChanged on a QLineEdit to auto-detect direction from first character."""
+    def _detect(text):
+        if text and '\u0600' <= text[0] <= '\u06FF':
+            field.setLayoutDirection(Qt.RightToLeft)
+            field.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        elif text:
+            field.setLayoutDirection(Qt.LeftToRight)
+            field.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    field.textChanged.connect(_detect)
+
+
 class _SelectableBuildingCard(AnimatedCard):
-    """Card-based building item with selectable checkbox state."""
+    """Search result building card - lighter style, clicking adds to selection."""
 
-    selection_changed = pyqtSignal(object, bool)  # (building, is_selected)
+    selection_changed = pyqtSignal(object, bool)
 
-    # Status color mapping for building status
     _STATUS_COLORS = {
         "intact": "#10B981",
         "damaged": "#F59E0B",
@@ -44,37 +55,52 @@ class _SelectableBuildingCard(AnimatedCard):
     def __init__(self, building, parent=None):
         self.building = building
         self._selected = False
+        self._assigned_badge = None
+        self._locked_badge = None
 
-        # Determine status color from building status
         status_display = getattr(building, 'building_status_display', '') or ''
-        status_color = self._STATUS_COLORS.get(
-            status_display.lower(), Colors.PRIMARY_BLUE
-        )
+        status_color = self._STATUS_COLORS.get(status_display.lower(), "#CBD5E1")
 
         super().__init__(
             parent,
-            card_height=80,
-            border_radius=10,
+            card_height=72,
+            border_radius=8,
             show_chevron=False,
-            show_strip=False,
+            show_strip=True,
             status_color=status_color,
-            strip_width=4,
+            strip_width=3,
             clickable=True,
-            lift_target=2.0,
+            lift_target=1.5,
         )
 
     def _build_content(self, layout):
         """Populate card with building info."""
-        # Top row: building code (bold)
-        formatted_id = self._format_building_id_static(self.building.building_id)
-        self._code_label = QLabel(formatted_id)
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        top_row.setContentsMargins(0, 0, 0, 0)
+
+        self._code_label = QLabel(self.building.building_id or "")
         self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        layout.addWidget(self._code_label)
+        self._code_label.setLayoutDirection(Qt.LeftToRight)
+        if get_layout_direction() == Qt.RightToLeft:
+            self._code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        else:
+            self._code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        top_row.addWidget(self._code_label, 1)
 
-        # Bottom row: type + status (secondary text)
+        self._add_indicator = QLabel("+")
+        self._add_indicator.setFixedSize(22, 22)
+        self._add_indicator.setAlignment(Qt.AlignCenter)
+        self._add_indicator.setStyleSheet(
+            "color: #2563EB; background: #EFF6FF; border-radius: 11px;"
+            " font-size: 14px; font-weight: bold;"
+        )
+        top_row.addWidget(self._add_indicator)
+        layout.addLayout(top_row)
+
         info_row = QHBoxLayout()
-        info_row.setSpacing(12)
+        info_row.setSpacing(10)
         info_row.setContentsMargins(0, 0, 0, 0)
 
         type_display = getattr(self.building, 'building_type_display', '') or ''
@@ -84,27 +110,29 @@ class _SelectableBuildingCard(AnimatedCard):
             secondary_text += f"  |  {tr('wizard.step1.status_label')}: {status_display}"
 
         secondary_label = QLabel(secondary_text)
-        secondary_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        secondary_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         secondary_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+        self._secondary_label = secondary_label
         info_row.addWidget(secondary_label, 1)
 
-        # Badges
         if getattr(self.building, 'is_assigned', False) or getattr(self.building, 'has_active_assignment', False):
             assigned_badge = QLabel(tr("building.assigned"))
-            assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            assigned_badge.setFont(create_font(size=7, weight=FontManager.WEIGHT_SEMIBOLD))
             assigned_badge.setStyleSheet(
-                f"color: white; background: {Colors.PRIMARY_BLUE}; "
-                "border-radius: 9px; padding: 2px 8px;"
+                f"color: white; background: {Colors.PRIMARY_BLUE};"
+                " border-radius: 8px; padding: 2px 7px;"
             )
+            self._assigned_badge = assigned_badge
             info_row.addWidget(assigned_badge)
 
         if getattr(self.building, 'is_locked', False):
             locked_badge = QLabel(tr("building.locked"))
-            locked_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            locked_badge.setFont(create_font(size=7, weight=FontManager.WEIGHT_SEMIBOLD))
             locked_badge.setStyleSheet(
-                "color: white; background: #6c757d; "
-                "border-radius: 9px; padding: 2px 8px;"
+                "color: white; background: #6c757d;"
+                " border-radius: 8px; padding: 2px 7px;"
             )
+            self._locked_badge = locked_badge
             info_row.addWidget(locked_badge)
 
         layout.addLayout(info_row)
@@ -123,7 +151,13 @@ class _SelectableBuildingCard(AnimatedCard):
                 f"}}"
             )
         else:
-            super()._apply_base_style()
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: white;"
+                f"  border-radius: {r}px;"
+                f"  border: 1px solid #E2E8F0;"
+                f"}}"
+            )
 
     def _apply_hover_style(self):
         """Override hover style to show selection state."""
@@ -139,7 +173,13 @@ class _SelectableBuildingCard(AnimatedCard):
                 f"}}"
             )
         else:
-            super()._apply_hover_style()
+            self.setStyleSheet(
+                f"{cn} {{"
+                f"  background: #F8FAFF;"
+                f"  border-radius: {r}px;"
+                f"  border: 1px solid #93C5FD;"
+                f"}}"
+            )
 
     @property
     def is_selected(self):
@@ -149,29 +189,132 @@ class _SelectableBuildingCard(AnimatedCard):
     def is_selected(self, value):
         if self._selected != value:
             self._selected = value
+            if hasattr(self, '_add_indicator'):
+                if value:
+                    self._add_indicator.setText("✓")
+                    self._add_indicator.setStyleSheet(
+                        "color: white; background: #2563EB; border-radius: 11px;"
+                        " font-size: 12px; font-weight: bold;"
+                    )
+                else:
+                    self._add_indicator.setText("+")
+                    self._add_indicator.setStyleSheet(
+                        "color: #2563EB; background: #EFF6FF; border-radius: 11px;"
+                        " font-size: 14px; font-weight: bold;"
+                    )
             self._apply_base_style()
             self.update()
 
     def mousePressEvent(self, event):
-        """Toggle selection on click."""
+        """Emit selection signal on click without toggling internally."""
         if event.button() == Qt.LeftButton:
-            self.is_selected = not self._selected
-            self.selection_changed.emit(self.building, self._selected)
+            self.selection_changed.emit(self.building, not self._selected)
         super().mousePressEvent(event)
 
-    @staticmethod
-    def _format_building_id_static(building_id: str) -> str:
-        """Format building ID with dashes (17 digits: XX-XX-XX-XX-XX-XX-XX-XX-X)."""
-        if not building_id:
-            return ""
-        clean_id = building_id.replace("-", "")
-        if len(clean_id) >= 17:
-            return (
-                f"{clean_id[0:2]}-{clean_id[2:4]}-{clean_id[4:6]}-"
-                f"{clean_id[6:8]}-{clean_id[8:10]}-{clean_id[10:12]}-"
-                f"{clean_id[12:14]}-{clean_id[14:16]}-{clean_id[16]}"
-            )
-        return building_id
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        type_display = getattr(self.building, 'building_type_display', '') or ''
+        status_display = getattr(self.building, 'building_status_display', '') or ''
+        secondary_text = f"{tr('wizard.step1.type_label')}: {type_display}"
+        if status_display:
+            secondary_text += f"  |  {tr('wizard.step1.status_label')}: {status_display}"
+        if hasattr(self, '_secondary_label') and self._secondary_label:
+            self._secondary_label.setText(secondary_text)
+        if self._assigned_badge:
+            self._assigned_badge.setText(tr("building.assigned"))
+        if self._locked_badge:
+            self._locked_badge.setText(tr("building.locked"))
+        self.update()
+
+
+class _SelectedBuildingRow(QFrame):
+    """Row widget for the selected buildings view - distinct from search result cards."""
+
+    removal_requested = pyqtSignal(object)
+
+    def __init__(self, building, parent=None):
+        super().__init__(parent)
+        self.building = building
+        self._sub_label = None
+        self._setup()
+
+    def _setup(self):
+        self.setLayoutDirection(get_layout_direction())
+        self.setFixedHeight(ScreenScale.h(60))
+        self.setStyleSheet("""
+            _SelectedBuildingRow {
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 #EFF6FF, stop:1 #E0F2FE);
+                border-radius: 8px;
+                border: 1px solid #BFDBFE;
+                border-right: 3px solid #2563EB;
+            }
+        """)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 8, 12, 8)
+        row.setSpacing(10)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(24, 24)
+        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                color: #64748B;
+                background: #E2E8F0;
+                border: none;
+                border-radius: 12px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0;
+            }
+            QPushButton:hover {
+                color: white;
+                background: #EF4444;
+            }
+        """)
+        remove_btn.clicked.connect(lambda: self.removal_requested.emit(self.building))
+        row.addWidget(remove_btn)
+
+        info_col = QVBoxLayout()
+        info_col.setSpacing(2)
+        info_col.setContentsMargins(0, 0, 0, 0)
+
+        code_label = QLabel(self.building.building_id or "")
+        code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        code_label.setStyleSheet("color: #1E3A8A; background: transparent;")
+        code_label.setLayoutDirection(Qt.LeftToRight)
+        if get_layout_direction() == Qt.RightToLeft:
+            code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        else:
+            code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        info_col.addWidget(code_label)
+
+        type_display = getattr(self.building, 'building_type_display', '') or ''
+        if type_display:
+            sub_label = QLabel(f"{tr('wizard.step1.type_label')}: {type_display}")
+            sub_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+            sub_label.setStyleSheet("color: #64748B; background: transparent;")
+            self._sub_label = sub_label
+            info_col.addWidget(sub_label)
+
+        row.addLayout(info_col, 1)
+
+        check_circle = QLabel("✓")
+        check_circle.setFixedSize(28, 28)
+        check_circle.setAlignment(Qt.AlignCenter)
+        check_circle.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        check_circle.setStyleSheet(
+            "color: white; background: #2563EB; border-radius: 14px;"
+        )
+        row.addWidget(check_circle)
+
+    def update_language(self, is_arabic: bool):
+        self.setLayoutDirection(get_layout_direction())
+        if self._sub_label:
+            type_display = getattr(self.building, 'building_type_display', '') or ''
+            self._sub_label.setText(f"{tr('wizard.step1.type_label')}: {type_display}")
+        self.update()
 
 
 class FieldWorkPreparationStep1(QWidget):
@@ -191,9 +334,9 @@ class FieldWorkPreparationStep1(QWidget):
         self._showing_selected_view = False
 
         # Cache for filter data (from API)
-        self._all_communities = []  # [(code, name_ar), ...]
-        self._all_neighborhoods = []  # [(code, name_ar, community_code), ...]
-        self._all_neighborhoods_raw = []  # Raw API response (includes centerLatitude/centerLongitude)
+        self._all_communities = []  # [(code, name_ar, name_en), ...]
+        self._all_neighborhoods = []  # [(code, name_ar, name_en, community_code), ...]
+        self._all_neighborhoods_raw = []
 
         self._setup_ui()
 
@@ -203,7 +346,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def load_data(self):
         """Load filter data from API (call after login)."""
-        self._load_filter_data()
+        self._load_filter_data_async()
 
     def _load_filter_data_async(self):
         """Load filter data from API in background thread (non-blocking)."""
@@ -219,6 +362,7 @@ class FieldWorkPreparationStep1(QWidget):
             return communities, neighborhoods
 
         def _on_done(result):
+            from services.translation_manager import get_language
             communities, neighborhoods = result
             self._all_communities = []
             self._all_neighborhoods = []
@@ -226,31 +370,36 @@ class FieldWorkPreparationStep1(QWidget):
             for c in communities:
                 if c.get("isActive", True):
                     code = c.get("code", "")
-                    name_ar = c.get("nameArabic", "") or c.get("nameEnglish", "")
-                    if code and name_ar:
-                        self._all_communities.append((code, name_ar))
+                    name_ar = c.get("nameArabic", "")
+                    name_en = c.get("nameEnglish", "") or name_ar
+                    if code and (name_ar or name_en):
+                        self._all_communities.append((code, name_ar, name_en))
             self._all_communities.sort(key=lambda x: x[1])
 
+            lang = get_language()
             self.community_combo.blockSignals(True)
             self.community_combo.clear()
             self.community_combo.addItem(tr("wizard.step1.all"), None)
-            for code, name_ar in self._all_communities:
-                self.community_combo.addItem(name_ar, code)
+            for code, name_ar, name_en in self._all_communities:
+                display = name_ar if lang == "ar" else (name_en or name_ar)
+                self.community_combo.addItem(display, code)
             self.community_combo.blockSignals(False)
 
             self._all_neighborhoods_raw = neighborhoods
             for n in neighborhoods:
                 code = n.get("neighborhoodCode") or n.get("code", "")
-                name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
+                name_ar = n.get("nameArabic", "")
+                name_en = n.get("nameEnglish", "") or name_ar
                 comm_code = n.get("communityCode", "")
-                if code and name_ar:
-                    self._all_neighborhoods.append((code, name_ar, comm_code))
+                if code and (name_ar or name_en):
+                    self._all_neighborhoods.append((code, name_ar, name_en, comm_code))
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
             self.neighborhood_combo.clear()
             self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
-            for code, name_ar, _ in self._all_neighborhoods:
-                self.neighborhood_combo.addItem(name_ar, code)
+            for code, name_ar, name_en, _ in self._all_neighborhoods:
+                display = name_ar if lang == "ar" else (name_en or name_ar)
+                self.neighborhood_combo.addItem(display, code)
 
             logger.info(
                 f"Loaded {len(self._all_communities)} communities, "
@@ -307,8 +456,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.assignment_status_combo.addItem(tr("filter.step1.all"), None)
         self.assignment_status_combo.addItem(tr("filter.step1.unassigned"), "false")
         self.assignment_status_combo.addItem(tr("filter.step1.assigned"), "true")
-        # Default to "Unassigned" so assigned buildings are hidden from search
-        self.assignment_status_combo.setCurrentIndex(1)
+        self.assignment_status_combo.setCurrentIndex(0)
         self.assignment_status_combo.currentIndexChanged.connect(self._on_filter_changed)
         filter3_container.layout().addWidget(self.assignment_status_combo)
         filters_layout.addWidget(filter3_container, 1)
@@ -376,6 +524,7 @@ class FieldWorkPreparationStep1(QWidget):
             }
         """)
         self.building_search.textChanged.connect(self._on_search_text_changed)
+        _connect_auto_direction(self.building_search)
 
         # Map link button
         self._map_link_btn = QPushButton(tr("wizard.step1.search_on_map"))
@@ -414,9 +563,27 @@ class FieldWorkPreparationStep1(QWidget):
         self._suggestions_scroll = QScrollArea()
         self._suggestions_scroll.setWidgetResizable(True)
         self._suggestions_scroll.setFrameShape(QFrame.NoFrame)
-        self._suggestions_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-        )
+        self._suggestions_scroll.setStyleSheet("""
+            QScrollArea { background: transparent; border: none; }
+            QScrollBar:vertical {
+                border: none;
+                background: transparent;
+                width: 6px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #CBD5E1;
+                border-radius: 3px;
+                min-height: 24px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #94A3B8;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
         self._suggestions_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._suggestions_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
@@ -435,6 +602,12 @@ class FieldWorkPreparationStep1(QWidget):
         self._shimmer_timer = QTimer(self)
         self._shimmer_timer.setInterval(50)
         self._shimmer_timer.timeout.connect(self._update_shimmer)
+
+        # Debounce timer for search field (prevents API call on every keystroke)
+        self._search_debounce_timer = QTimer(self)
+        self._search_debounce_timer.setSingleShot(True)
+        self._search_debounce_timer.setInterval(350)
+        self._search_debounce_timer.timeout.connect(self._load_buildings_from_api)
 
         # Empty state (shown initially with hint)
         self.empty_label = EmptyState(
@@ -521,10 +694,9 @@ class FieldWorkPreparationStep1(QWidget):
             QComboBox {{
                 border: 1px solid {Colors.SEARCH_BAR_BORDER};
                 border-radius: 8px;
-                padding: 8px 14px;
-                padding-left: 35px;
+                padding: 8px 35px 8px 14px;
                 background-color: {Colors.SEARCH_BAR_BG};
-                color: #6c757d;
+                color: #374151;
                 font-family: 'IBM Plex Sans Arabic';
                 font-size: 9pt;
             }}
@@ -540,23 +712,23 @@ class FieldWorkPreparationStep1(QWidget):
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 background-color: white;
                 selection-background-color: #EFF6FF;
-                selection-color: #6c757d;
-                color: #6c757d;
+                selection-color: #374151;
+                color: #374151;
                 font-family: 'IBM Plex Sans Arabic';
                 font-size: 9pt;
                 outline: none;
             }}
             QComboBox QAbstractItemView::item {{
                 padding: 8px 12px;
-                color: #6c757d;
+                color: #374151;
             }}
             QComboBox QAbstractItemView::item:hover {{
                 background-color: #EFF6FF;
-                color: #6c757d;
+                color: #1d4ed8;
             }}
             QComboBox QAbstractItemView::item:selected {{
                 background-color: #EFF6FF;
-                color: #6c757d;
+                color: #1d4ed8;
             }}
             QScrollBar:vertical {{
                 width: 0px;
@@ -569,6 +741,7 @@ class FieldWorkPreparationStep1(QWidget):
     def _load_filter_data(self):
         """Load communities and neighborhoods from API."""
         try:
+            from services.translation_manager import get_language
             api = get_api_client()
 
             self._all_communities = []
@@ -580,16 +753,19 @@ class FieldWorkPreparationStep1(QWidget):
             for c in communities:
                 if c.get("isActive", True):
                     code = c.get("code", "")
-                    name_ar = c.get("nameArabic", "") or c.get("nameEnglish", "")
-                    if code and name_ar:
-                        self._all_communities.append((code, name_ar))
+                    name_ar = c.get("nameArabic", "")
+                    name_en = c.get("nameEnglish", "") or name_ar
+                    if code and (name_ar or name_en):
+                        self._all_communities.append((code, name_ar, name_en))
             self._all_communities.sort(key=lambda x: x[1])
 
+            lang = get_language()
             self.community_combo.blockSignals(True)
             self.community_combo.clear()
             self.community_combo.addItem(tr("wizard.step1.all"), None)
-            for code, name_ar in self._all_communities:
-                self.community_combo.addItem(name_ar, code)
+            for code, name_ar, name_en in self._all_communities:
+                display = name_ar if lang == "ar" else (name_en or name_ar)
+                self.community_combo.addItem(display, code)
             self.community_combo.blockSignals(False)
 
             neighborhoods = api.get_neighborhoods(
@@ -598,16 +774,18 @@ class FieldWorkPreparationStep1(QWidget):
             self._all_neighborhoods_raw = neighborhoods
             for n in neighborhoods:
                 code = n.get("neighborhoodCode") or n.get("code", "")
-                name_ar = n.get("nameArabic", "") or n.get("nameEnglish", "")
+                name_ar = n.get("nameArabic", "")
+                name_en = n.get("nameEnglish", "") or name_ar
                 comm_code = n.get("communityCode", "")
-                if code and name_ar:
-                    self._all_neighborhoods.append((code, name_ar, comm_code))
+                if code and (name_ar or name_en):
+                    self._all_neighborhoods.append((code, name_ar, name_en, comm_code))
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
             self.neighborhood_combo.clear()
             self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
-            for code, name_ar, _ in self._all_neighborhoods:
-                self.neighborhood_combo.addItem(name_ar, code)
+            for code, name_ar, name_en, _ in self._all_neighborhoods:
+                display = name_ar if lang == "ar" else (name_en or name_ar)
+                self.neighborhood_combo.addItem(display, code)
 
             logger.info(
                 f"Loaded {len(self._all_communities)} communities, "
@@ -620,21 +798,23 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _on_community_changed(self, index):
         """Cascade: update neighborhoods based on selected community."""
+        from services.translation_manager import get_language
         community_code = self.community_combo.currentData()
+        lang = get_language()
 
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
         self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
 
         if community_code:
-            # Filter neighborhoods by community
-            for code, name_ar, comm_code in self._all_neighborhoods:
+            for code, name_ar, name_en, comm_code in self._all_neighborhoods:
                 if comm_code == community_code:
-                    self.neighborhood_combo.addItem(name_ar, code)
+                    display = name_ar if lang == "ar" else (name_en or name_ar)
+                    self.neighborhood_combo.addItem(display, code)
         else:
-            # Show all neighborhoods
-            for code, name_ar, _ in self._all_neighborhoods:
-                self.neighborhood_combo.addItem(name_ar, code)
+            for code, name_ar, name_en, _ in self._all_neighborhoods:
+                display = name_ar if lang == "ar" else (name_en or name_ar)
+                self.neighborhood_combo.addItem(display, code)
 
         self.neighborhood_combo.blockSignals(False)
         self._on_filter_changed()
@@ -730,41 +910,33 @@ class FieldWorkPreparationStep1(QWidget):
                 self._results_stack.setCurrentIndex(0)
 
     def _show_selected_buildings_view(self):
-        """Show selected buildings as cards in the results area."""
+        """Show selected buildings as rows in the results area."""
         self._clear_suggestion_cards()
         self._showing_selected_view = True
 
         for bid, building in self._selected_buildings.items():
-            card = _SelectableBuildingCard(building, self._suggestions_content)
-            card.selection_changed.connect(self._on_card_selection_changed)
-            card.is_selected = True
-
+            row = _SelectedBuildingRow(building, self._suggestions_content)
+            row.removal_requested.connect(lambda b: self._remove_building_selection(b.building_id))
             self._suggestions_layout.insertWidget(
-                self._suggestions_layout.count() - 1, card
+                self._suggestions_layout.count() - 1, row
             )
-            self._suggestion_cards.append(card)
+            self._suggestion_cards.append(row)
 
         if self._suggestion_cards:
             stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
-            self._shimmer_timer.start()
 
         self._results_stack.setCurrentIndex(1)
 
     def _on_search_text_changed(self, text):
-        """Show/hide suggestions on text change."""
+        """Update UI state on text change; actual search happens only on Enter or icon click."""
         filters = self.get_filters()
         has_active_filter = any([
             filters['community'],
             filters['neighborhood'],
             filters['assignment_status'] is not None
         ])
-
         should_show = bool(text.strip()) or has_active_filter
         self._set_suggestions_visible(should_show)
-
-        if has_active_filter or text.strip():
-            self._load_buildings_from_api()
-
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
@@ -851,7 +1023,7 @@ class FieldWorkPreparationStep1(QWidget):
     def _clear_suggestion_cards(self):
         """Remove all suggestion cards from the scroll area."""
         self._suggestion_cards.clear()
-        while self._suggestions_layout.count() > 0:
+        while self._suggestions_layout.count() > 1:  # Keep trailing stretch
             item = self._suggestions_layout.takeAt(0)
             widget = item.widget()
             if widget:
@@ -881,10 +1053,27 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_card_selection_changed(self, building, is_selected):
         """Handle card selection toggle from _SelectableBuildingCard."""
         if is_selected:
+            if building.building_id in self._selected_building_ids:
+                Toast.show_toast(self, tr("wizard.step1.already_selected"), Toast.WARNING)
+                for card in self._suggestion_cards:
+                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
+                        card.is_selected = True
+                        break
+                return
+            if getattr(building, 'has_active_assignment', False):
+                Toast.show_toast(self, tr("wizard.step1.building_already_assigned"), Toast.WARNING)
+                for card in self._suggestion_cards:
+                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
+                        card.is_selected = False
+                        break
+                return
             self._on_checkbox_changed(building, Qt.Checked)
+            for card in self._suggestion_cards:
+                if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
+                    card.is_selected = True
+                    break
         else:
             self._on_checkbox_changed(building, Qt.Unchecked)
-            # In selected view, remove the deselected card
             if self._showing_selected_view:
                 for card in self._suggestion_cards[:]:
                     if card.building.building_id == building.building_id:
@@ -896,11 +1085,22 @@ class FieldWorkPreparationStep1(QWidget):
                     self._showing_selected_view = False
                     self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
                     self._results_stack.setCurrentIndex(0)
+            else:
+                for card in self._suggestion_cards:
+                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
+                        card.is_selected = False
+                        break
 
     def _on_filter_changed(self):
-        """Handle filter change -- clears results, user must click search to load."""
+        """Handle filter change -- auto-load when a geographic filter is active."""
         self._clear_suggestion_cards()
-        self._set_suggestions_visible(False)
+        filters = self.get_filters()
+        has_geo_filter = bool(filters['community'] or filters['neighborhood'])
+        if has_geo_filter:
+            self._load_buildings_from_api()
+            self._set_suggestions_visible(True)
+        else:
+            self._set_suggestions_visible(False)
 
     def _on_search(self):
         """Handle search icon click - show suggestions with filtered results."""
@@ -981,10 +1181,19 @@ class FieldWorkPreparationStep1(QWidget):
 
                 added_count += 1
 
-            # Update UI - show selected buildings as cards
+            showing_search_results = (
+                self._results_stack.currentIndex() == 1 and not self._showing_selected_view
+            )
+
             self._update_selection_count()
-            self._show_selected_buildings_view()
             self._update_selected_card_visibility()
+
+            if showing_search_results:
+                for card in self._suggestion_cards:
+                    if hasattr(card, 'is_selected'):
+                        card.is_selected = card.building.building_id in self._selected_building_ids
+            elif self._selected_building_ids:
+                self._show_selected_buildings_view()
 
             logger.info(f"Added {added_count} buildings from map to selection")
 
@@ -993,8 +1202,8 @@ class FieldWorkPreparationStep1(QWidget):
             from ui.error_handler import ErrorHandler
             ErrorHandler.show_warning(
                 self,
-                f"\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 \u0641\u062a\u062d \u0627\u0644\u062e\u0631\u064a\u0637\u0629:\n{str(e)}",
-                "\u062e\u0637\u0623 - Error"
+                tr("wizard.step1.map_open_error", error=str(e)),
+                tr("dialog.error")
             )
 
     def _on_next(self):
@@ -1071,14 +1280,10 @@ class FieldWorkPreparationStep1(QWidget):
         return super().eventFilter(obj, event)
 
     def _on_search_enter(self):
-        """Handle Enter key press in search field."""
-        # Block signals to prevent textChanged from re-showing suggestions
-        self.building_search.blockSignals(True)
-        self.building_search.clear()
-        self.building_search.blockSignals(False)
-
-        self._set_suggestions_visible(False)
-        self._update_selected_card_visibility()
+        """Handle Enter key press in search field -- execute search immediately."""
+        self._search_debounce_timer.stop()
+        self._load_buildings_from_api()
+        self._set_suggestions_visible(True)
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
@@ -1089,12 +1294,40 @@ class FieldWorkPreparationStep1(QWidget):
         self._filter2_label.setText(tr("filter.step1.neighborhood"))
         self._filter3_label.setText(tr("filter.step1.assignment_status"))
 
-        # Combo placeholders
+        # Rebuild community combo with correct language names, preserve selection
+        current_community = self.community_combo.currentData()
+        self.community_combo.blockSignals(True)
+        self.community_combo.clear()
+        self.community_combo.addItem(tr("wizard.step1.all"), None)
+        for code, name_ar, name_en in self._all_communities:
+            display = name_ar if is_arabic else (name_en or name_ar)
+            self.community_combo.addItem(display, code)
+        if current_community:
+            idx = self.community_combo.findData(current_community)
+            if idx >= 0:
+                self.community_combo.setCurrentIndex(idx)
+        self.community_combo.blockSignals(False)
         self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
-        self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
-        self.assignment_status_combo.setPlaceholderText(tr("filter.step1.assignment_status"))
 
-        # Assignment status combo items
+        # Rebuild neighborhood combo with correct language names, preserve selection
+        current_neighborhood = self.neighborhood_combo.currentData()
+        current_community_code = self.community_combo.currentData()
+        self.neighborhood_combo.blockSignals(True)
+        self.neighborhood_combo.clear()
+        self.neighborhood_combo.addItem(tr("wizard.step1.all"), None)
+        for code, name_ar, name_en, comm_code in self._all_neighborhoods:
+            if not current_community_code or comm_code == current_community_code:
+                display = name_ar if is_arabic else (name_en or name_ar)
+                self.neighborhood_combo.addItem(display, code)
+        if current_neighborhood:
+            idx = self.neighborhood_combo.findData(current_neighborhood)
+            if idx >= 0:
+                self.neighborhood_combo.setCurrentIndex(idx)
+        self.neighborhood_combo.blockSignals(False)
+        self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
+
+        # Assignment status combo
+        self.assignment_status_combo.setPlaceholderText(tr("filter.step1.assignment_status"))
         self.assignment_status_combo.setItemText(0, tr("filter.step1.all"))
         self.assignment_status_combo.setItemText(1, tr("filter.step1.unassigned"))
         self.assignment_status_combo.setItemText(2, tr("filter.step1.assigned"))
@@ -1105,10 +1338,13 @@ class FieldWorkPreparationStep1(QWidget):
         self._map_link_btn.setText(tr("wizard.step1.search_on_map"))
 
         # Empty state
-        if self._results_stack.currentIndex() == 1:
-            self.empty_label.set_title(tr("wizard.step1.no_buildings"))
-        else:
+        if self._results_stack.currentIndex() == 0:
             self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
 
         # Selection count
         self._update_selected_card_visibility()
+
+        # Refresh visible suggestion cards and selected rows
+        for card in self._suggestion_cards:
+            if hasattr(card, 'update_language'):
+                card.update_language(is_arabic)

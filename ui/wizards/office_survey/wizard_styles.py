@@ -461,8 +461,7 @@ def make_icon_header(
     icon_name: str,
     icon_size: int = 40,
     icon_radius: int = 10,
-) -> QHBoxLayout:
-    """Build a reusable icon + title/subtitle header row for step cards."""
+) :
     from ui.components.icon import Icon
     from ui.font_utils import create_font, FontManager
 
@@ -499,7 +498,7 @@ def make_icon_header(
     col.addWidget(s)
     row.addLayout(col)
     row.addStretch()
-    return row
+    return row , t , s
 
 
 def make_divider() -> QFrame:

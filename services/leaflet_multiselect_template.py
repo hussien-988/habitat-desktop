@@ -174,10 +174,9 @@ MULTISELECT_JS_TEMPLATE = """
             // Unbind any popup to prevent it from showing
             layer.unbindPopup();
 
-            // Tooltip for non-selectable buildings
-            if (isLocked || isAssigned) {
-                var tooltipText = isLocked ? '\u0645\u0628\u0646\u0649 \u0645\u0642\u0641\u0644' : '\u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b';
-                layer.bindTooltip(tooltipText, {
+            // Tooltip for assigned buildings (not selectable)
+            if (isAssigned) {
+                layer.bindTooltip('\u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b', {
                     permanent: false,
                     direction: 'top',
                     className: 'disabled-building-tooltip'
@@ -187,11 +186,6 @@ MULTISELECT_JS_TEMPLATE = """
             // Add click handler for toggle selection
             layer.on('click', function(e) {
                 L.DomEvent.stopPropagation(e);
-
-                if (isLocked) {
-                    showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0642\u0641\u0644 \u062d\u0627\u0644\u064a\u0627\u064b');
-                    return false;
-                }
 
                 if (isAssigned) {
                     showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b \u0644\u0641\u0631\u064a\u0642 \u0622\u062e\u0631');
@@ -204,7 +198,7 @@ MULTISELECT_JS_TEMPLATE = """
 
             // Hover effects
             layer.on('mouseover', function(e) {
-                if (isLocked || isAssigned) {
+                if (isAssigned) {
                     map.getContainer().style.cursor = 'pointer';
                 } else {
                     var geomType = layer.feature.geometry.type;
