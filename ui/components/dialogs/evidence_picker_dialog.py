@@ -286,15 +286,13 @@ class EvidencePickerDialog(QDialog):
                     logger.error(f"View evidence error: {e}")
                     local = None
 
-                def _on_done():
-                    b.setCursor(Qt.PointingHandCursor)
-                    b.setEnabled(True)
-                    if local:
-                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                    else:
-                        from ui.components.toast import Toast
-                        Toast.show_toast(self, tr("dialog.evidence_picker.view_failed_message"), Toast.WARNING)
-                QTimer.singleShot(0, _on_done)
+                if local:
+                    import os
+                    os.startfile(local)
+
+                from PyQt5.QtCore import QMetaObject, Q_ARG
+                QMetaObject.invokeMethod(b, "setEnabled", Qt.QueuedConnection,
+                                         Q_ARG(bool, True))
             threading.Thread(target=_download, daemon=True).start()
         btn.clicked.connect(_open)
         return btn

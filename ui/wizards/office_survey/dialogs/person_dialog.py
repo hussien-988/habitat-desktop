@@ -17,14 +17,14 @@ from PyQt5.QtWidgets import (
     QGridLayout, QTextEdit, QTabWidget,
     QRadioButton, QButtonGroup, QSizePolicy
 )
-from PyQt5.QtCore import Qt, QUrl, QTimer
+from PyQt5.QtCore import Qt, QUrl, QTimer, QLocale, QDate
 from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRegExp as QtRegExp
 
 from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_language
 from services.error_mapper import map_exception
 from services.display_mappings import (
     get_relation_type_options, get_relationship_to_head_options,
@@ -455,7 +455,7 @@ class PersonDialog(QDialog):
         self.person_role.currentIndexChanged.connect(self._update_all_progress)
         self.email.textChanged.connect(self._update_all_progress)
         self.phone.textChanged.connect(self._update_all_progress)
-        self.landline.textChanged.connect(self._update_all_progress)
+        self.landline_digits.textChanged.connect(self._update_all_progress)
 
         # Tab 3 fields
         self.rel_type_combo.currentIndexChanged.connect(self._update_all_progress)
@@ -471,7 +471,7 @@ class PersonDialog(QDialog):
         self.father_name.textChanged.connect(lambda: self._clear_field_error(self.father_name, self._father_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_field_error(self.national_id, self._nid_error))
         self.phone.textChanged.connect(lambda: self._clear_field_error(self.phone, self._mobile_error))
-        self.landline.textChanged.connect(lambda: self._clear_field_error(self.landline, self._landline_error))
+        self.landline_digits.textChanged.connect(lambda: self._clear_field_error(self.landline_digits, self._landline_error))
         self.email.textChanged.connect(lambda: self._clear_field_error(self.email, self._email_error))
         self.ownership_share.textChanged.connect(lambda: self._clear_field_error(self.ownership_share, self._ownership_error))
 
@@ -492,7 +492,7 @@ class PersonDialog(QDialog):
                 self.person_role.currentIndex() > 0,
                 bool(self.email.text().strip()),
                 bool(self.phone.text().strip()),
-                bool(self.landline.text().strip()),
+                bool(self.landline_digits.text().strip()),
             ]
         else:
             fields = [
@@ -772,7 +772,7 @@ class PersonDialog(QDialog):
             QFrame {
                 border: 1px solid rgba(56, 144, 223, 0.2);
                 border-radius: 8px;
-                background-color: #FFFFFF;
+                background-color: #f0f7ff;
                 min-height: 36px; max-height: 36px;
             }
         """)
@@ -787,13 +787,14 @@ class PersonDialog(QDialog):
         prefix_label.setStyleSheet("""
             color: #6B7280;
             font-size: 14px; font-weight: 500;
-            border: none; border-left: 1px solid rgba(56,144,223,0.2);
+            border: none; border-left: 1px solid rgba(56,144,223,0.35);
             background: transparent; padding: 0 8px;
         """)
 
         self.phone = QLineEdit()
         self.phone.setPlaceholderText("xxxxxxxx")
         self.phone.setValidator(QRegExpValidator(QtRegExp(r"\d{0,8}")))
+        self.phone.setLayoutDirection(Qt.LeftToRight)
         self.phone.setStyleSheet("""
             QLineEdit {
                 border: none; background: transparent;
@@ -818,17 +819,94 @@ class PersonDialog(QDialog):
         # Landline (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.phone"), label_style), row, 0, 1, 2)
         row += 1
-        self.landline = QLineEdit()
-        self.landline.setPlaceholderText("0xxxxxxxxx")
-        self.landline.setValidator(QRegExpValidator(QtRegExp(r"\d{0,10}")))
-        self.landline.setStyleSheet(self._input_style())
+        _area_codes = [
+            ("011", "011 - دمشق"), ("012", "012 - حمص"), ("013", "013 - حماة"),
+            ("014", "014 - القنيطرة"), ("015", "015 - درعا"), ("016", "016 - السويداء"),
+            ("017", "017 - اللاذقية"), ("018", "018 - طرطوس"), ("021", "021 - حلب"),
+            ("022", "022 - الرقة"), ("023", "023 - إدلب"), ("024", "024 - دير الزور"),
+            ("052", "052 - الحسكة"),
+        ]
+        landline_frame = QFrame()
+        landline_frame.setStyleSheet("""
+            QFrame {
+                border: 1px solid rgba(56,144,223,0.2);
+                border-radius: 8px;
+                background-color: #f0f7ff;
+                min-height: 36px; max-height: 36px;
+            }
+        """)
+        land_layout = QHBoxLayout(landline_frame)
+        land_layout.setContentsMargins(0, 0, 0, 0)
+        land_layout.setSpacing(0)
+        land_layout.setDirection(QHBoxLayout.RightToLeft)
+        self.landline_prefix = RtlCombo()
+        self.landline_prefix.setFixedWidth(ScreenScale.w(130))
+        for _code, _display in _area_codes:
+            self.landline_prefix.addItem(_display, _code)
+        self.landline_prefix.setStyleSheet("""
+            QComboBox {
+                border: none;
+                background: transparent;
+                padding: 0 4px 0 8px;
+                font-size: 14px; color: #6B7280;
+            }
+            QComboBox QLineEdit {
+                border: none;
+                background: transparent;
+                padding: 0;
+                font-size: 14px; color: #6B7280;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: right center;
+                border: none; width: 18px;
+            }
+            QComboBox::down-arrow {
+                width: 8px; height: 8px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                border: 1px solid #D0D7E2;
+                border-radius: 8px;
+                padding: 4px;
+                selection-background-color: #EBF5FF;
+                selection-color: #1E293B;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                min-height: 32px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                color: #1E293B;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #F0F7FF;
+            }
+        """)
+        _land_sep = QFrame()
+        _land_sep.setFrameShape(QFrame.VLine)
+        _land_sep.setFixedWidth(1)
+        _land_sep.setStyleSheet("background-color: rgba(56,144,223,0.35); border: none; margin: 7px 0;")
+        self.landline_digits = QLineEdit()
+        self.landline_digits.setPlaceholderText("xxxxxxx")
+        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        self.landline_digits.setLayoutDirection(Qt.LeftToRight)
+        self.landline_digits.setStyleSheet("""
+            QLineEdit {
+                border: none; background: transparent;
+                color: #2C3E50; font-size: 14px; padding: 0 10px;
+            }
+        """)
+        land_layout.addWidget(self.landline_prefix)
+        land_layout.addWidget(_land_sep)
+        land_layout.addWidget(self.landline_digits)
         self._landline_error = QLabel("")
         self._landline_error.setStyleSheet(self._error_label_style())
         self._landline_error.setVisible(False)
         landline_container = QVBoxLayout()
         landline_container.setSpacing(2)
         landline_container.setContentsMargins(0, 0, 0, 0)
-        landline_container.addWidget(self.landline)
+        landline_container.addWidget(landline_frame)
         landline_container.addWidget(self._landline_error)
         grid.addLayout(landline_container, row, 0, 1, 2)
 
@@ -893,24 +971,29 @@ class PersonDialog(QDialog):
         date_layout.setSpacing(6)
         date_layout.setContentsMargins(0, 0, 0, 0)
         input_style = self._input_style()
-        self.start_year = QLineEdit()
-        self.start_year.setPlaceholderText(tr("wizard.person_dialog.year"))
-        self.start_year.setValidator(QIntValidator(1900, 2100, self))
-        self.start_year.setMaxLength(4)
-        self.start_year.setStyleSheet(input_style)
-        self.start_month = QLineEdit()
-        self.start_month.setPlaceholderText(tr("wizard.person_dialog.month"))
-        self.start_month.setValidator(QIntValidator(1, 12, self))
-        self.start_month.setMaxLength(2)
-        self.start_month.setStyleSheet(input_style)
-        self.start_day = QLineEdit()
-        self.start_day.setPlaceholderText(tr("wizard.person_dialog.day"))
-        self.start_day.setValidator(QIntValidator(1, 31, self))
-        self.start_day.setMaxLength(2)
+
+        self.start_day = RtlCombo()
+        self.start_day.addItem(tr("wizard.person_dialog.day"), None)
+        for d in range(1, 32):
+            self.start_day.addItem(str(d), d)
         self.start_day.setStyleSheet(input_style)
-        date_layout.addWidget(self.start_year, 2)
-        date_layout.addWidget(self.start_month, 1)
+
+        self.start_month = RtlCombo()
+        self.start_month.addItem(tr("wizard.person_dialog.month"), None)
+        _date_locale = QLocale(QLocale.Arabic if get_language() == "ar" else QLocale.English)
+        for m in range(1, 13):
+            self.start_month.addItem(_date_locale.monthName(m, QLocale.ShortFormat), m)
+        self.start_month.setStyleSheet(input_style)
+
+        self.start_year = RtlCombo()
+        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.start_year.addItem(str(y), y)
+        self.start_year.setStyleSheet(input_style)
+
         date_layout.addWidget(self.start_day, 1)
+        date_layout.addWidget(self.start_month, 2)
+        date_layout.addWidget(self.start_year, 2)
         date_container = QWidget()
         date_container.setStyleSheet("background-color: transparent;")
         date_container.setLayout(date_layout)
@@ -1418,7 +1501,7 @@ class PersonDialog(QDialog):
             (self.father_name, self._father_name_error),
             (self.national_id, self._nid_error),
             (self.phone, self._mobile_error),
-            (self.landline, self._landline_error),
+            (self.landline_digits, self._landline_error),
             (self.email, self._email_error),
             (self.ownership_share, self._ownership_error),
         ]
@@ -1604,8 +1687,8 @@ class PersonDialog(QDialog):
             self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
             has_error = True
         # Optional format: landline (if filled, must be 7 digits)
-        if not self._validate_landline(self.landline.text().strip()):
-            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
+        if not self._validate_landline(self.landline_digits.text().strip()):
+            self._set_field_error(self.landline_digits, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
             has_error = True
         # Optional format: email (if filled, must be valid)
         email_text = self.email.text().strip()
@@ -1851,13 +1934,13 @@ class PersonDialog(QDialog):
             thumb.setEnabled(False)
             def _download():
                 local = download_evidence_file(eid, fn or eid)
-                def _on_done():
-                    thumb.setEnabled(True)
-                    if local:
-                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                    else:
-                        Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
-                QTimer.singleShot(0, _on_done)
+                if local:
+                    import os
+                    os.startfile(local)
+
+                from PyQt5.QtCore import QMetaObject, Q_ARG
+                QMetaObject.invokeMethod(thumb, "setEnabled", Qt.QueuedConnection,
+                                         Q_ARG(bool, True))
             threading.Thread(target=_download, daemon=True).start()
         thumb.mousePressEvent = _open_doc
 
@@ -2304,14 +2387,14 @@ class PersonDialog(QDialog):
         return ""
 
     def _build_start_date_iso(self) -> str:
-        """Build ISO date string from the 3 separate date fields (year/month/day)."""
-        y = self.start_year.text().strip()
-        m = self.start_month.text().strip()
-        d = self.start_day.text().strip()
+        """Build ISO date string from the 3 dropdown combos (year/month/day)."""
+        y = self.start_year.currentData()
+        m = self.start_month.currentData()
+        d = self.start_day.currentData()
         if y:
-            month = int(m) if m else 1
-            day = int(d) if d else 1
-            return f"{int(y):04d}-{month:02d}-{day:02d}"
+            month = m if m else 1
+            day = d if d else 1
+            return f"{y:04d}-{month:02d}-{day:02d}"
         return None
 
     def _format_phone(self, value: str):
@@ -2333,11 +2416,11 @@ class PersonDialog(QDialog):
         return len(digits) == 8
 
     def _validate_landline(self, value: str) -> bool:
-        """Validate landline number: exactly 7 digits (area code excluded)."""
+        """Validate landline local digits: exactly 7 digits."""
         if not value:
             return True
         digits = ''.join(c for c in value if c.isdigit())
-        return len(digits) == 10
+        return len(digits) == 7
 
     def _validate_national_id(self):
         """Validate national ID format. Uniqueness is checked server-side (409). Returns (valid, error_key)."""
@@ -2395,7 +2478,13 @@ class PersonDialog(QDialog):
             phone_val = phone_val[2:]
         self.phone.setText(phone_val)
         self.email.setText(data.get('email') or '')
-        self.landline.setText(data.get('landline') or '')
+        _land_val = data.get('landline') or ''
+        if len(_land_val) == 10 and _land_val[0] == '0':
+            _idx = self.landline_prefix.findData(_land_val[:3])
+            self.landline_prefix.setCurrentIndex(_idx if _idx >= 0 else 0)
+            self.landline_digits.setText(_land_val[3:])
+        else:
+            self.landline_digits.setText(_land_val)
 
         # Person role
         role = data.get('person_role') or data.get('relationship_type')
@@ -2417,11 +2506,17 @@ class PersonDialog(QDialog):
         if rel.get('start_date'):
             parts = rel['start_date'].split('-')
             if len(parts) >= 1:
-                self.start_year.setText(parts[0])
+                idx = self.start_year.findData(int(parts[0]))
+                if idx >= 0:
+                    self.start_year.setCurrentIndex(idx)
             if len(parts) >= 2:
-                self.start_month.setText(str(int(parts[1])))
+                idx = self.start_month.findData(int(parts[1]))
+                if idx >= 0:
+                    self.start_month.setCurrentIndex(idx)
             if len(parts) >= 3:
-                self.start_day.setText(str(int(parts[2])))
+                idx = self.start_day.findData(int(parts[2]))
+                if idx >= 0:
+                    self.start_day.setCurrentIndex(idx)
 
         if rel.get('ownership_share') is not None:
             self.ownership_share.setText(str(rel['ownership_share']))
@@ -2490,7 +2585,7 @@ class PersonDialog(QDialog):
             'relationship_type': self.person_role.currentData(),  # backward compat
             'phone': self._format_phone(self.phone.text().strip()),
             'email': self.email.text().strip() or None,
-            'landline': self.landline.text().strip() or None,
+            'landline': (self.landline_prefix.currentData() + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else None,
             'is_contact_person': False,
             # Tab 3
             'relation_data': {
@@ -2542,8 +2637,8 @@ class PersonDialog(QDialog):
             self._set_field_error(self.phone, self._mobile_error, tr("wizard.person_dialog.invalid_mobile"))
             self.tab_widget.setCurrentIndex(1)
             has_error = True
-        if not self._validate_landline(self.landline.text().strip()):
-            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
+        if not self._validate_landline(self.landline_digits.text().strip()):
+            self._set_field_error(self.landline_digits, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
             self.tab_widget.setCurrentIndex(1)
             has_error = True
         if has_error:
@@ -2606,8 +2701,8 @@ class PersonDialog(QDialog):
             if not has_error:
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
-        if not self._validate_landline(self.landline.text().strip()):
-            self._set_field_error(self.landline, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
+        if not self._validate_landline(self.landline_digits.text().strip()):
+            self._set_field_error(self.landline_digits, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
             if not has_error:
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
@@ -2834,8 +2929,10 @@ class PersonDialog(QDialog):
                         break
                     old_evidence_id = self._pending_id_replacements.pop(0)
                     try:
+                        doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
                         response = self._api_service.update_identification_document(
-                            self._survey_id, old_evidence_id, person_id, file_path=file_path)
+                            self._survey_id, old_evidence_id, person_id, file_path=file_path,
+                            document_type=doc_type)
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         self._evidence_ids[os.path.normpath(file_path)] = new_eid
@@ -2925,10 +3022,10 @@ class PersonDialog(QDialog):
 
         for file_path in self.uploaded_files:
             try:
-                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else 1
+                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
                 response = self._api_service.upload_identification_document(
                     self._survey_id, person_id, file_path,
-                    document_type=doc_type or 1,
+                    document_type=doc_type,
                 )
                 evidence_id = (
                     response.get("id") or response.get("evidenceId") or

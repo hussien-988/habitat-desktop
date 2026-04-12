@@ -185,10 +185,10 @@ class LogoutDialog(QDialog):
         self.setModal(True)
         _scr = QApplication.primaryScreen().availableGeometry()
 
-        w = min(420, max(300, int(_scr.width() * 0.30)))
-        h = min(270, max(210, int(_scr.height() * 0.28)))
+        w = min(500, max(360, int(_scr.width() * 0.35)))
+        h = min(320, max(250, int(_scr.height() * 0.33)))
         self.resize(w, h)
-        self.setMinimumSize(280, 200)
+        self.setMinimumSize(340, 240)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -243,7 +243,7 @@ class LogoutDialog(QDialog):
         # Title
         title_text = tr("dialog.logout.exit_app") if self._is_exit else tr("dialog.logout.logout")
         title = QLabel(title_text)
-        title.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {_BLUE_DARK};")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
@@ -252,7 +252,7 @@ class LogoutDialog(QDialog):
         # Subtitle
         subtitle_text = tr("dialog.logout.confirm_exit") if self._is_exit else tr("dialog.logout.confirm_logout")
         subtitle = QLabel(subtitle_text)
-        subtitle.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        subtitle.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         subtitle.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
@@ -286,9 +286,9 @@ class LogoutDialog(QDialog):
     def _make_action_button(self, text: str) -> QPushButton:
         """Primary button — dark-to-light blue gradient (left → right)."""
         btn = QPushButton(text)
-        btn.setFixedHeight(ScreenScale.h(36))
+        btn.setFixedHeight(ScreenScale.h(42))
         btn.setCursor(Qt.PointingHandCursor)
-        btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -316,9 +316,9 @@ class LogoutDialog(QDialog):
     def _make_cancel_button(self, text: str) -> QPushButton:
         """Cancel button — pale blue tint with blue text."""
         btn = QPushButton(text)
-        btn.setFixedHeight(ScreenScale.h(36))
+        btn.setFixedHeight(ScreenScale.h(42))
         btn.setCursor(Qt.PointingHandCursor)
-        btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {_BLUE_PALE};

@@ -345,18 +345,25 @@ class ReviewStep(BaseStep):
 
         self._scroll_layout.addLayout(top_row)
 
-        # ── Card 3: Unit & Household (full width) ───────────────────
-        self._unit_household_card = _GlowingCard()
-        self._unit_household_card_layout = QVBoxLayout(self._unit_household_card)
-        self._unit_household_card_layout.setContentsMargins(24, 20, 24, 20)
-        self._unit_household_card_layout.setSpacing(12)
+        # ── Card 3: Unit Info (full width) ────────────────────────────
+        self._unit_card = _GlowingCard()
+        _unit_card_layout = QVBoxLayout(self._unit_card)
+        _unit_card_layout.setContentsMargins(24, 20, 24, 20)
+        _unit_card_layout.setSpacing(12)
         self._unit_content = QVBoxLayout()
         self._unit_content.setSpacing(12)
-        self._unit_household_card_layout.addLayout(self._unit_content)
+        _unit_card_layout.addLayout(self._unit_content)
+        self._scroll_layout.addWidget(self._unit_card)
+
+        # ── Card 4: Household Info (full width) ───────────────────────
+        self._household_card = _GlowingCard()
+        _household_card_layout = QVBoxLayout(self._household_card)
+        _household_card_layout.setContentsMargins(24, 20, 24, 20)
+        _household_card_layout.setSpacing(12)
         self._household_content = QVBoxLayout()
         self._household_content.setSpacing(12)
-        self._unit_household_card_layout.addLayout(self._household_content)
-        self._scroll_layout.addWidget(self._unit_household_card)
+        _household_card_layout.addLayout(self._household_content)
+        self._scroll_layout.addWidget(self._household_card)
 
         # ── Card 4: Persons & Relations (full width) ─────────────────
         self._persons_card = _GlowingCard()
@@ -421,11 +428,17 @@ class ReviewStep(BaseStep):
     # ── Field helpers ────────────────────────────────────────────────
 
     def _create_field_pair(self, label_text, value_text):
-        """Create a label + value widget pair for grid display."""
-        container = QWidget()
-        container.setStyleSheet("background: transparent; border: none;")
+        """Create a label + value widget pair in a subtle card container."""
+        container = QFrame()
+        container.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: 1px solid #E8EFF6;
+                border-radius: 10px;
+            }
+        """)
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(4)
 
         lbl = QLabel(label_text)
@@ -579,12 +592,15 @@ class ReviewStep(BaseStep):
 
     # ── Person row ───────────────────────────────────────────────────
 
-    def _create_person_row(self, person: dict) -> QWidget:
+    def _create_person_row(self, person: dict, alt_bg: bool = False) -> QWidget:
         """Create a person row card with blue left border accent."""
         row = QFrame()
         row.setLayoutDirection(get_layout_direction())
         row.setFixedHeight(ScreenScale.h(80))
-        row.setStyleSheet(PERSON_CARD_STYLE)
+        if alt_bg:
+            row.setStyleSheet(PERSON_CARD_STYLE.replace("#F8FAFF", "#FFFFFF"))
+        else:
+            row.setStyleSheet(PERSON_CARD_STYLE)
 
         card_layout = QHBoxLayout(row)
         card_layout.setContentsMargins(15, 0, 15, 0)
@@ -1040,9 +1056,6 @@ class ReviewStep(BaseStep):
                 self._create_empty_state(tr("wizard.unit.not_selected"))
             )
 
-        # Divider between unit and household
-        self._unit_content.addWidget(self._create_divider())
-
     def _create_unit_stat_section(self, label_text: str, value_text: str = "-"):
         section = QWidget()
         section.setStyleSheet("background: transparent;")
@@ -1128,23 +1141,17 @@ class ReviewStep(BaseStep):
 
         self._household_content.addWidget(summary_container)
 
-        # Demographics cards (male + female side by side)
-        demo_keys = ['adult_males', 'adult_females', 'male_children_under18', 'female_children_under18',
-                     'male_elderly_over65', 'female_elderly_over65', 'disabled_males', 'disabled_females']
-        demographics = {key: hh.get(key, 0) for key in demo_keys}
-
-        male_items = [
-            (tr("wizard.household.adult_males"), demographics.get('adult_males', 0)),
-            (tr("wizard.household.male_children"), demographics.get('male_children_under18', 0)),
-            (tr("wizard.household.male_elderly"), demographics.get('male_elderly_over65', 0)),
-            (tr("wizard.household.disabled_males"), demographics.get('disabled_males', 0)),
+        # Demographics cards (gender + age side by side)
+        gender_items = [
+            (tr("wizard.household.males"), hh.get('male_count', 0)),
+            (tr("wizard.household.females"), hh.get('female_count', 0)),
         ]
 
-        female_items = [
-            (tr("wizard.household.adult_females"), demographics.get('adult_females', 0)),
-            (tr("wizard.household.female_children"), demographics.get('female_children_under18', 0)),
-            (tr("wizard.household.female_elderly"), demographics.get('female_elderly_over65', 0)),
-            (tr("wizard.household.disabled_females"), demographics.get('disabled_females', 0)),
+        age_items = [
+            (tr("wizard.household.adults"), hh.get('adult_count', 0)),
+            (tr("wizard.household.children"), hh.get('child_count', 0)),
+            (tr("wizard.household.elderly"), hh.get('elderly_count', 0)),
+            (tr("wizard.household.disabled"), hh.get('disabled_count', 0)),
         ]
 
         cards_container = QWidget()
@@ -1154,8 +1161,8 @@ class ReviewStep(BaseStep):
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(20)
 
-        cards_layout.addWidget(self._create_demographic_card(male_items))
-        cards_layout.addWidget(self._create_demographic_card(female_items))
+        cards_layout.addWidget(self._create_demographic_card(gender_items))
+        cards_layout.addWidget(self._create_demographic_card(age_items))
 
         self._household_content.addWidget(cards_container)
 
@@ -1220,8 +1227,8 @@ class ReviewStep(BaseStep):
             )
             return
 
-        for person in self.context.persons:
-            row = self._create_person_row(person)
+        for i, person in enumerate(self.context.persons):
+            row = self._create_person_row(person, alt_bg=(i % 2 == 1))
             self._persons_content.addWidget(row)
 
     # ── View/Edit Person Dialog ──────────────────────────────────────
@@ -1472,7 +1479,15 @@ class ReviewStep(BaseStep):
     # ══════════════════════════════════════════════════════════════════
 
     def update_language(self, is_arabic: bool):
-        self.setLayoutDirection(get_layout_direction())
+        _dir = get_layout_direction()
+        self.setLayoutDirection(_dir)
+        self._scroll.widget().setLayoutDirection(_dir)
+        self._survey_card.setLayoutDirection(_dir)
+        self._building_card.setLayoutDirection(_dir)
+        self._applicant_card_widget.setLayoutDirection(_dir)
+        self._unit_card.setLayoutDirection(_dir)
+        self._household_card.setLayoutDirection(_dir)
+        self._persons_card.setLayoutDirection(_dir)
         self._populate_review()
 
     def validate(self) -> StepValidationResult:

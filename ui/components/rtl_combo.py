@@ -26,8 +26,6 @@ class RtlCombo(QComboBox):
         if obj == self.lineEdit() and event.type() == event.MouseButtonPress:
             self.showPopup()
             return True
-        if obj == self.lineEdit() and event.type() == event.FocusOut:
-            self.hidePopup()
         return super().eventFilter(obj, event)
 
     def changeEvent(self, event):

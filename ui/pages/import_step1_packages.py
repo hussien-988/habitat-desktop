@@ -292,6 +292,7 @@ class ImportStep1Packages(QWidget):
             QPushButton:disabled { background: #E8EDF2; color: #B0BEC5; border-color: #DDE3EA; }
         """)
         self._upload_btn.clicked.connect(self._on_upload_file)
+        self._upload_btn.setVisible(False)
         header_row.addWidget(self._upload_btn)
 
         self._refresh_btn = QPushButton("↻  " + tr("action.refresh"))

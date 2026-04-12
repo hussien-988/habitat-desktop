@@ -654,11 +654,10 @@ class SQLiteAdapter(DatabaseAdapter):
                 occupancy_size INTEGER DEFAULT 1,
                 male_count INTEGER DEFAULT 0,
                 female_count INTEGER DEFAULT 0,
-                minors_count INTEGER DEFAULT 0,
-                adults_count INTEGER DEFAULT 0,
+                child_count INTEGER DEFAULT 0,
+                adult_count INTEGER DEFAULT 0,
                 elderly_count INTEGER DEFAULT 0,
-                with_disability_count INTEGER DEFAULT 0,
-                occupancy_type TEXT,
+                disabled_count INTEGER DEFAULT 0,
                 occupancy_nature TEXT,
                 occupancy_start_date TEXT,
                 monthly_rent REAL,
@@ -671,6 +670,33 @@ class SQLiteAdapter(DatabaseAdapter):
                 FOREIGN KEY (main_occupant_id) REFERENCES persons(person_id)
             )
         """)
+
+        # Migration: rename minors_count -> child_count, with_disability_count -> disabled_count
+        for migration_sql in (
+            "ALTER TABLE households ADD COLUMN child_count INTEGER DEFAULT 0",
+            "ALTER TABLE households ADD COLUMN disabled_count INTEGER DEFAULT 0",
+        ):
+            try:
+                cursor.execute(migration_sql)
+            except Exception:
+                pass
+
+        # Copy data from old columns to new columns (if old columns exist)
+        try:
+            cursor.execute("UPDATE households SET child_count = minors_count WHERE child_count = 0 AND minors_count > 0")
+            cursor.execute("UPDATE households SET disabled_count = with_disability_count WHERE disabled_count = 0 AND with_disability_count > 0")
+        except Exception:
+            pass
+
+        # Migration: rename adults_count -> adult_count
+        try:
+            cursor.execute("ALTER TABLE households ADD COLUMN adult_count INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            cursor.execute("UPDATE households SET adult_count = adults_count WHERE adult_count = 0 AND adults_count > 0")
+        except Exception:
+            pass
 
         # Vocabulary terms table
         cursor.execute("""

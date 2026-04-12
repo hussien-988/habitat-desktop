@@ -646,16 +646,7 @@ class CasesPage(QWidget):
         self._buildings_cache = {}
         self._clear_cards()
 
-        if role == "admin":
-            self._tab_draft.setVisible(False)
-            self._tab_finalized.setVisible(False)
-            self._tab_obstructed.setVisible(True)
-            self._active_tab = "finalized"
-            self._tab_draft.set_active(False)
-            self._tab_finalized.set_active(True)
-            self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(False)
-        elif role == "data_manager":
+        if role in ("admin", "data_manager"):
             self._tab_draft.setVisible(True)
             self._tab_finalized.setVisible(True)
             self._tab_obstructed.setVisible(True)

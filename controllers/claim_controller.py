@@ -671,16 +671,14 @@ class ClaimController(BaseController):
         return {
             "household_id": dto.get("id", ""),
             "size": dto.get("householdSize", 0),
-            "adult_males": dto.get("maleCount", 0),
-            "adult_females": dto.get("femaleCount", 0),
-            "male_children_under18": dto.get("maleChildCount", 0),
-            "female_children_under18": dto.get("femaleChildCount", 0),
-            "male_elderly_over65": dto.get("maleElderlyCount", 0),
-            "female_elderly_over65": dto.get("femaleElderlyCount", 0),
-            "disabled_males": dto.get("maleDisabledCount", 0),
-            "disabled_females": dto.get("femaleDisabledCount", 0),
-            "occupancy_type": dto.get("occupancyType"),
+            "male_count": dto.get("maleCount", 0),
+            "female_count": dto.get("femaleCount", 0),
+            "adult_count": dto.get("adultCount", 0),
+            "child_count": dto.get("childCount", 0),
+            "elderly_count": dto.get("elderlyCount", 0),
+            "disabled_count": dto.get("disabledCount", 0),
             "occupancy_nature": dto.get("occupancyNature"),
+            "occupancy_start_date": dto.get("occupancyStartDate"),
             "notes": dto.get("notes", ""),
         }
 

@@ -45,6 +45,7 @@ from services.display_mappings import get_unit_status_display, get_unit_type_dis
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.components.bottom_sheet import BottomSheet
+from app.config import Config
 
 logger = get_logger(__name__)
 
@@ -718,6 +719,81 @@ class UnitSelectionStep(BaseStep):
         if self._unit_sheet:
             self._unit_sheet.close_sheet()
 
+    def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
+        """Create a spinbox widget with icon arrows."""
+        container = QFrame()
+        container.setFixedHeight(ScreenScale.h(48))
+        container.setStyleSheet("""
+            QFrame {
+                border: 1.5px solid #D0D7E2;
+                border-radius: 10px;
+                background-color: #FFFFFF;
+            }
+        """)
+        h = QHBoxLayout(container)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+
+        spinbox.setStyleSheet("""
+            QSpinBox {
+                padding: 8px 14px;
+                border: none;
+                background: transparent;
+                font-size: 10pt;
+                color: #2C3E50;
+                min-height: 30px;
+                selection-background-color: transparent;
+                selection-color: #2C3E50;
+            }
+            QSpinBox:focus { border: none; outline: 0; }
+            QSpinBox::up-button, QSpinBox::down-button { width: 0px; border: none; }
+        """)
+        h.addWidget(spinbox, 1)
+
+        arrow_container = QFrame()
+        arrow_container.setFixedWidth(ScreenScale.w(30))
+        arrow_container.setStyleSheet("""
+            QFrame {
+                border: none;
+                border-left: 1.5px solid #D0D7E2;
+                background: transparent;
+                border-top-right-radius: 10px;
+                border-bottom-right-radius: 10px;
+            }
+        """)
+        arrow_layout = QVBoxLayout(arrow_container)
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
+        arrow_layout.setSpacing(0)
+
+        up_label = QLabel()
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(20))
+        up_label.setAlignment(Qt.AlignCenter)
+        up_px = Icon.load_pixmap("^", size=10)
+        if up_px and not up_px.isNull():
+            up_label.setPixmap(up_px)
+        else:
+            up_label.setText("^")
+            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        up_label.setCursor(Qt.PointingHandCursor)
+        up_label.mousePressEvent = lambda _: spinbox.stepUp()
+        arrow_layout.addWidget(up_label)
+
+        down_label = QLabel()
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(20))
+        down_label.setAlignment(Qt.AlignCenter)
+        down_px = Icon.load_pixmap("v", size=10)
+        if down_px and not down_px.isNull():
+            down_label.setPixmap(down_px)
+        else:
+            down_label.setText("v")
+            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+        down_label.setCursor(Qt.PointingHandCursor)
+        down_label.mousePressEvent = lambda _: spinbox.stepDown()
+        arrow_layout.addWidget(down_label)
+
+        h.addWidget(arrow_container)
+        return container
+
     def _build_unit_form_widget(self) -> QWidget:
         """Build the unit form fields widget for BottomSheet."""
         form = QWidget()
@@ -727,6 +803,10 @@ class UnitSelectionStep(BaseStep):
         form_layout.setSpacing(12)
 
         label_style = "color: #64748B; background: transparent; border: none;"
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        combo_style = FORM_FIELD_STYLE + f"""
+            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
+        """
 
         # Row 1: Floor number | Unit number
         row1 = QHBoxLayout()
@@ -734,19 +814,19 @@ class UnitSelectionStep(BaseStep):
 
         self._if_floor = QSpinBox()
         self._if_floor.setRange(-3, 100)
+        self._if_floor.setAlignment(Qt.AlignRight)
         self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_floor.setFixedHeight(ScreenScale.h(40))
-        self._if_floor.setStyleSheet(FORM_FIELD_STYLE)
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), self._if_floor, label_style), 1)
+        floor_widget = self._create_spinbox_with_arrows(self._if_floor)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), floor_widget, label_style), 1)
 
         self._if_unit_num = QSpinBox()
         self._if_unit_num.setRange(0, 9999)
+        self._if_unit_num.setAlignment(Qt.AlignRight)
         self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_unit_num.setFixedHeight(ScreenScale.h(40))
-        self._if_unit_num.setStyleSheet(FORM_FIELD_STYLE)
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), self._if_unit_num, label_style), 1)
+        unit_widget = self._create_spinbox_with_arrows(self._if_unit_num)
+        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), unit_widget, label_style), 1)
         form_layout.addLayout(row1)
 
         # Row 2: Unit type | Unit status
@@ -754,16 +834,16 @@ class UnitSelectionStep(BaseStep):
         row2.setSpacing(16)
 
         self._if_type = RtlCombo()
-        self._if_type.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_type.setFixedHeight(ScreenScale.h(40))
+        self._if_type.setStyleSheet(combo_style)
+        self._if_type.setFixedHeight(ScreenScale.h(48))
         self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self._if_type.addItem(label, code)
         row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_type"), self._if_type, label_style), 1)
 
         self._if_status = RtlCombo()
-        self._if_status.setStyleSheet(FORM_FIELD_STYLE)
-        self._if_status.setFixedHeight(ScreenScale.h(40))
+        self._if_status.setStyleSheet(combo_style)
+        self._if_status.setFixedHeight(ScreenScale.h(48))
         self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self._if_status.addItem(label, code)
@@ -776,15 +856,15 @@ class UnitSelectionStep(BaseStep):
 
         self._if_rooms = QSpinBox()
         self._if_rooms.setRange(0, 20)
+        self._if_rooms.setAlignment(Qt.AlignRight)
         self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
-        self._if_rooms.setFixedHeight(ScreenScale.h(40))
-        self._if_rooms.setStyleSheet(FORM_FIELD_STYLE)
-        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), self._if_rooms, label_style), 1)
+        rooms_widget = self._create_spinbox_with_arrows(self._if_rooms)
+        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), rooms_widget, label_style), 1)
 
         self._if_area = QLineEdit()
         self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
-        self._if_area.setFixedHeight(ScreenScale.h(40))
+        self._if_area.setFixedHeight(ScreenScale.h(48))
         self._if_area.setStyleSheet(FORM_FIELD_STYLE)
         area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))

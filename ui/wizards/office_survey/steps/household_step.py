@@ -14,9 +14,9 @@ import uuid
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QFrame, QScrollArea, QWidget, QGroupBox,
-    QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect
+    QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, QLocale
+from PyQt5.QtCore import Qt, QLocale, QDate
 from PyQt5.QtGui import QColor
 
 from ui.components.rtl_combo import RtlCombo
@@ -26,7 +26,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
-    make_step_card, make_icon_header, make_divider,
+    make_step_card, make_icon_header, make_divider, get_step_card_style,
 )
 from app.config import Config
 from services.api_client import get_api_client
@@ -35,8 +35,8 @@ from ui.components.toast import Toast
 from ui.design_system import Colors, ScreenScale
 from ui.components.icon import Icon
 from ui.font_utils import create_font, FontManager
-from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_type_options, get_occupancy_nature_options
+from services.translation_manager import tr, get_layout_direction, get_language
+from services.display_mappings import get_unit_type_display, get_unit_status_display, get_occupancy_nature_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -83,9 +83,9 @@ class HouseholdStep(BaseStep):
         card_layout = QVBoxLayout(self.household_building_frame)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(12)
-        address_container = QFrame()
-        address_container.setFixedHeight(ScreenScale.h(32))
-        address_container.setStyleSheet("""
+        self._address_container = QFrame()
+        self._address_container.setFixedHeight(ScreenScale.h(32))
+        self._address_container.setStyleSheet("""
             QFrame {
                 background-color: #F0F4FA;
                 border: 1px solid #DBEAFE;
@@ -93,7 +93,7 @@ class HouseholdStep(BaseStep):
             }
         """)
 
-        address_row = QHBoxLayout(address_container)
+        address_row = QHBoxLayout(self._address_container)
         address_row.setContentsMargins(12, 0, 12, 0)
         address_row.setSpacing(8)
 
@@ -126,16 +126,16 @@ class HouseholdStep(BaseStep):
         # Center the content
         address_row.addStretch()
 
-        card_layout.addWidget(address_container)
+        card_layout.addWidget(self._address_container)
         stats_row = QHBoxLayout()
         stats_row.setSpacing(0)
 
         # Create 5 stat sections (using helper method)
-        section_type, self.ui_building_type = self._create_stat_section(tr("wizard.building.type"))
-        section_status, self.ui_building_status = self._create_stat_section(tr("wizard.building.status"))
-        section_units, self.ui_units_count = self._create_stat_section(tr("wizard.building.units_count"))
-        section_parcels, self.ui_parcels_count = self._create_stat_section(tr("wizard.building.parcels_count"))
-        section_shops, self.ui_shops_count = self._create_stat_section(tr("wizard.building.shops_count"))
+        section_type, self.ui_building_type, self._lbl_building_type = self._create_stat_section(tr("wizard.building.type"))
+        section_status, self.ui_building_status, self._lbl_building_status = self._create_stat_section(tr("wizard.building.status"))
+        section_units, self.ui_units_count, self._lbl_units_count = self._create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count, self._lbl_parcels_count = self._create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count, self._lbl_shops_count = self._create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing
         sections = [section_type, section_status, section_units, section_parcels, section_shops]
@@ -144,9 +144,9 @@ class HouseholdStep(BaseStep):
 
         card_layout.addLayout(stats_row)
         # Same order as unit_selection_step unit cards
-        unit_info_container = QFrame()
-        unit_info_container.setFixedHeight(ScreenScale.h(73))
-        unit_info_container.setStyleSheet("""
+        self._unit_info_container = QFrame()
+        self._unit_info_container.setFixedHeight(ScreenScale.h(73))
+        self._unit_info_container.setStyleSheet("""
             QFrame {
                 background-color: #F8FAFF;
                 border: none;
@@ -154,55 +154,55 @@ class HouseholdStep(BaseStep):
             }
         """)
 
-        unit_info_row = QHBoxLayout(unit_info_container)
+        unit_info_row = QHBoxLayout(self._unit_info_container)
         unit_info_row.setSpacing(0)
         unit_info_row.setContentsMargins(8, 8, 8, 8)  # Add padding inside container
 
         # Create 6 unit info sections - SAME labels as unit_selection_step cards
-        section_unit_num, self.ui_unit_number = self._create_stat_section(tr("wizard.household.unit_number"))
-        section_floor, self.ui_floor_number = self._create_stat_section(tr("wizard.household.floor_number"))
-        section_rooms, self.ui_rooms_count = self._create_stat_section(tr("wizard.household.rooms_count"))
-        section_area, self.ui_area = self._create_stat_section(tr("wizard.household.unit_area"))
-        section_unit_type, self.ui_unit_type = self._create_stat_section(tr("wizard.household.unit_type_label"))
-        section_unit_status, self.ui_unit_status = self._create_stat_section(tr("wizard.household.unit_status_label"))
+        section_unit_num, self.ui_unit_number, self._lbl_unit_number = self._create_stat_section(tr("wizard.household.unit_number"))
+        section_floor, self.ui_floor_number, self._lbl_floor_number = self._create_stat_section(tr("wizard.household.floor_number"))
+        section_rooms, self.ui_rooms_count, self._lbl_rooms_count = self._create_stat_section(tr("wizard.household.rooms_count"))
+        section_area, self.ui_area, self._lbl_area = self._create_stat_section(tr("wizard.household.unit_area"))
+        section_unit_type, self.ui_unit_type, self._lbl_unit_type = self._create_stat_section(tr("wizard.household.unit_type_label"))
+        section_unit_status, self.ui_unit_status, self._lbl_unit_status = self._create_stat_section(tr("wizard.household.unit_status_label"))
 
         # Add sections with equal spacing
         unit_sections = [section_unit_num, section_floor, section_rooms, section_area, section_unit_type, section_unit_status]
         for section in unit_sections:
             unit_info_row.addWidget(section, stretch=1)
 
-        card_layout.addWidget(unit_info_container)
+        card_layout.addWidget(self._unit_info_container)
 
         # Create scroll area for ALL cards (modern thin scrollbar)
-        scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(get_layout_direction())
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet(
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setLayoutDirection(get_layout_direction())
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QFrame.NoFrame)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll_area.setStyleSheet(
             "QScrollArea { background-color: transparent; border: none; }"
             + StyleManager.scrollbar()
         )
 
         # Container widget for scroll area content
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
+        self._scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(self._scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.setSpacing(12)
+        scroll_layout.setSpacing(16)
 
         # Add Card 1 (Building info) to scroll area
         scroll_layout.addWidget(self.household_building_frame)
 
         # معلومات الاسرة (Family Information) Section - same design as units card
-        family_info_frame = make_step_card()
+        self._family_info_frame = make_step_card()
 
-        family_info_layout = QVBoxLayout(family_info_frame)
+        family_info_layout = QVBoxLayout(self._family_info_frame)
         family_info_layout.setSpacing(12)
         family_info_layout.setContentsMargins(16, 16, 16, 16)
 
         # Icon header
-        header_layout, header_title, header_subtitle = make_icon_header(
+        header_layout, self._occupants_header_title, self._occupants_header_subtitle = make_icon_header(
             title=tr("wizard.household.occupants_title"),
             subtitle=tr("wizard.household.subtitle"),
             icon_name="user-group",
@@ -213,23 +213,22 @@ class HouseholdStep(BaseStep):
         # Divider
         family_info_layout.addWidget(make_divider())
 
-        occupancy_row = QHBoxLayout()
-        occupancy_row.setSpacing(12)
-
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         combo_style = FORM_FIELD_STYLE + f"""
             QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
         """
 
-        # -- Left field: Occupancy Nature (ownership/other) --
+        # -- Nature + Start Date side by side --
+        fields_row = QHBoxLayout()
+        fields_row.setSpacing(12)
+
+        # Occupancy Nature
         nature_col = QVBoxLayout()
         nature_col.setSpacing(4)
-
         self._occupancy_nature_label = QLabel(tr("wizard.household.occupancy_nature"))
         self._occupancy_nature_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._occupancy_nature_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         nature_col.addWidget(self._occupancy_nature_label)
-
         self.hh_occupancy_nature = RtlCombo()
         self.hh_occupancy_nature.addItem(tr("wizard.household.select"), None)
         for code, display_name in get_occupancy_nature_options():
@@ -239,31 +238,48 @@ class HouseholdStep(BaseStep):
         self.hh_occupancy_nature.setStyleSheet(combo_style)
         self.hh_occupancy_nature.setMinimumHeight(ScreenScale.h(38))
         nature_col.addWidget(self.hh_occupancy_nature)
+        fields_row.addLayout(nature_col, 1)
 
-        occupancy_row.addLayout(nature_col, 1)
+        # Occupancy Start Date — 3 dropdowns (day | month | year)
+        start_date_col = QVBoxLayout()
+        start_date_col.setSpacing(4)
+        self._start_date_label = QLabel(tr("wizard.household.occupancy_start_date"))
+        self._start_date_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._start_date_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        start_date_col.addWidget(self._start_date_label)
 
-        # -- Right field: Occupancy Type (residential/non-residential) --
-        type_col = QVBoxLayout()
-        type_col.setSpacing(4)
+        date_row = QHBoxLayout()
+        date_row.setSpacing(6)
 
-        self._occupancy_type_label = QLabel(tr("wizard.household.occupancy_type"))
-        self._occupancy_type_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._occupancy_type_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        type_col.addWidget(self._occupancy_type_label)
+        self.hh_start_day = RtlCombo()
+        self.hh_start_day.addItem(tr("wizard.household.select"), None)
+        for d in range(1, 32):
+            self.hh_start_day.addItem(str(d), d)
+        self.hh_start_day.setStyleSheet(combo_style)
+        self.hh_start_day.setMinimumHeight(ScreenScale.h(38))
+        date_row.addWidget(self.hh_start_day, 1)
 
-        self.hh_occupancy_type = RtlCombo()
-        self.hh_occupancy_type.addItem(tr("wizard.household.select"), None)
-        for code, display_name in get_occupancy_type_options():
-            if code == 0:
-                continue
-            self.hh_occupancy_type.addItem(display_name, code)
-        self.hh_occupancy_type.setStyleSheet(combo_style)
-        self.hh_occupancy_type.setMinimumHeight(ScreenScale.h(38))
-        type_col.addWidget(self.hh_occupancy_type)
+        self.hh_start_month = RtlCombo()
+        self.hh_start_month.addItem(tr("wizard.household.select"), None)
+        _date_locale = QLocale(QLocale.Arabic if get_language() == "ar" else QLocale.English)
+        for m in range(1, 13):
+            self.hh_start_month.addItem(_date_locale.monthName(m, QLocale.ShortFormat), m)
+        self.hh_start_month.setStyleSheet(combo_style)
+        self.hh_start_month.setMinimumHeight(ScreenScale.h(38))
+        date_row.addWidget(self.hh_start_month, 2)
 
-        occupancy_row.addLayout(type_col, 1)
+        self.hh_start_year = RtlCombo()
+        self.hh_start_year.addItem(tr("wizard.household.select"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.hh_start_year.addItem(str(y), y)
+        self.hh_start_year.setStyleSheet(combo_style)
+        self.hh_start_year.setMinimumHeight(ScreenScale.h(38))
+        date_row.addWidget(self.hh_start_year, 2)
 
-        family_info_layout.addLayout(occupancy_row)
+        start_date_col.addLayout(date_row)
+        fields_row.addLayout(start_date_col, 1)
+
+        family_info_layout.addLayout(fields_row)
         family_info_layout.addSpacing(8)
 
         total_members_layout = QVBoxLayout()
@@ -320,10 +336,10 @@ class HouseholdStep(BaseStep):
 
         family_info_layout.addLayout(notes_field_layout)
 
-        scroll_layout.addWidget(family_info_frame)
-        composition_frame = make_step_card()
+        scroll_layout.addWidget(self._family_info_frame)
+        self._composition_frame = make_step_card()
 
-        composition_layout = QVBoxLayout(composition_frame)
+        composition_layout = QVBoxLayout(self._composition_frame)
         composition_layout.setSpacing(12)
         composition_layout.setContentsMargins(16, 16, 16, 16)
 
@@ -341,33 +357,64 @@ class HouseholdStep(BaseStep):
         self.hh_composition_header_subtitle = comp_header_subtitle
         # Divider
         composition_layout.addWidget(make_divider())
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(12)  # Gap between cards: 12px
 
-        # Create Male card (LEFT in RTL)
-        male_card = self._create_gender_card(tr("wizard.household.males"), [
-            (tr("wizard.household.adult_males"), "hh_adult_males"),
-            (tr("wizard.household.male_children"), "hh_male_children_under18"),
-            (tr("wizard.household.male_elderly"), "hh_male_elderly_over65"),
-            (tr("wizard.household.disabled_males"), "hh_disabled_males")
-        ])
-        cards_row.addWidget(male_card, 1)
+        comp_grid = QGridLayout()
+        comp_grid.setHorizontalSpacing(12)
+        comp_grid.setVerticalSpacing(8)
+        comp_grid.setColumnStretch(0, 1)
+        comp_grid.setColumnStretch(1, 1)
 
-        # Create Female card (RIGHT in RTL)
-        female_card = self._create_gender_card(tr("wizard.household.females"), [
-            (tr("wizard.household.adult_females"), "hh_adult_females"),
-            (tr("wizard.household.female_children"), "hh_female_children_under18"),
-            (tr("wizard.household.female_elderly"), "hh_female_elderly_over65"),
-            (tr("wizard.household.disabled_females"), "hh_disabled_females")
-        ])
-        cards_row.addWidget(female_card, 1)
+        _demo_fields = [
+            (0, 0, "wizard.household.males",    "hh_male_count"),
+            (0, 1, "wizard.household.females",  "hh_female_count"),
+            (1, 0, "wizard.household.adults",   "hh_adult_count"),
+            (1, 1, "wizard.household.children", "hh_child_count"),
+            (2, 0, "wizard.household.elderly",  "hh_elderly_count"),
+            (2, 1, "wizard.household.disabled", "hh_disabled_count"),
+        ]
+        self._demo_labels = {}
 
-        composition_layout.addLayout(cards_row)
-        scroll_layout.addWidget(composition_frame)
+        for _row, _col, _lkey, _attr in _demo_fields:
+            _lbl = QLabel(tr(_lkey))
+            _lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+            _lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+            self._demo_labels[_attr] = (_lbl, _lkey)
+            _spin = QSpinBox()
+            _spin.setRange(0, 50)
+            _spin.setValue(0)
+            _spin.setAlignment(Qt.AlignRight)
+            _spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
+            _spin.setButtonSymbols(QSpinBox.NoButtons)
+            setattr(self, _attr, _spin)
+            _cell_w = QFrame()
+            _cell_w.setStyleSheet("""
+                QFrame {
+                    background-color: #F8FAFF;
+                    border: 1px solid #E8EFF6;
+                    border-radius: 10px;
+                }
+            """)
+            _cell_layout = QVBoxLayout(_cell_w)
+            _cell_layout.setContentsMargins(10, 8, 10, 8)
+            _cell_layout.setSpacing(4)
+            _cell_layout.addWidget(_lbl)
+            _cell_layout.addWidget(self._create_composition_spinbox(_spin))
+            comp_grid.addWidget(_cell_w, _row, _col)
+
+        composition_layout.addLayout(comp_grid)
+        scroll_layout.addWidget(self._composition_frame)
+
+        # Apply deeper shadows to cards
+        for card in (self.household_building_frame, self._family_info_frame, self._composition_frame):
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(30)
+            shadow.setOffset(0, 6)
+            shadow.setColor(QColor(0, 0, 0, 28))
+            card.setGraphicsEffect(shadow)
 
         # Set scroll content and add to main layout
-        scroll_area.setWidget(scroll_content)
-        layout.addWidget(scroll_area)
+        self._scroll_area.setWidget(self._scroll_content)
+        layout.addWidget(self._scroll_area)
 
         # Loading spinner overlay
         self._spinner = LoadingSpinnerOverlay(self)
@@ -408,7 +455,7 @@ class HouseholdStep(BaseStep):
         section_layout.addWidget(label)
         section_layout.addWidget(value)
 
-        return section, value
+        return section, value, label
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox, bg_color: str = "#F8FAFF") -> QFrame:
         """
@@ -585,16 +632,80 @@ class HouseholdStep(BaseStep):
     # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
-        """Update layout direction when language changes."""
-        self.setLayoutDirection(get_layout_direction())
+        """Update layout direction and all labels when language changes."""
+        _dir = get_layout_direction()
+        self.setLayoutDirection(_dir)
 
+        # Flip direction on all containers
+        self._scroll_area.setLayoutDirection(_dir)
+        self._scroll_content.setLayoutDirection(_dir)
+        self.household_building_frame.setLayoutDirection(_dir)
+        self._address_container.setLayoutDirection(_dir)
+        self._unit_info_container.setLayoutDirection(_dir)
+        self._family_info_frame.setLayoutDirection(_dir)
+        self._composition_frame.setLayoutDirection(_dir)
+        self.hh_notes.setLayoutDirection(_dir)
+
+        # Re-apply step card styles (accent border side depends on RTL)
+        self.household_building_frame.setStyleSheet(get_step_card_style())
+        self._family_info_frame.setStyleSheet(get_step_card_style())
+        self._composition_frame.setStyleSheet(get_step_card_style())
+
+        # Building card stat titles
+        self._lbl_building_type.setText(tr("wizard.building.type"))
+        self._lbl_building_status.setText(tr("wizard.building.status"))
+        self._lbl_units_count.setText(tr("wizard.building.units_count"))
+        self._lbl_parcels_count.setText(tr("wizard.building.parcels_count"))
+        self._lbl_shops_count.setText(tr("wizard.building.shops_count"))
+
+        # Unit info stat titles
+        self._lbl_unit_number.setText(tr("wizard.household.unit_number"))
+        self._lbl_floor_number.setText(tr("wizard.household.floor_number"))
+        self._lbl_rooms_count.setText(tr("wizard.household.rooms_count"))
+        self._lbl_area.setText(tr("wizard.household.unit_area"))
+        self._lbl_unit_type.setText(tr("wizard.household.unit_type_label"))
+        self._lbl_unit_status.setText(tr("wizard.household.unit_status_label"))
+
+        self._occupants_header_title.setText(tr("wizard.household.occupants_title"))
+        self._occupants_header_subtitle.setText(tr("wizard.household.subtitle"))
         self.hh_composition_header_title.setText(tr("wizard.household.composition_title"))
         self.hh_composition_header_subtitle.setText(tr("wizard.household.composition_subtitle"))
-        self._occupancy_type_label.setText(tr("wizard.household.occupancy_type"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
+        self._start_date_label.setText(tr("wizard.household.occupancy_start_date"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
         self._notes_label.setText(tr("wizard.household.notes_label"))
         self.hh_notes.setPlaceholderText(tr("wizard.household.notes_placeholder"))
+
+        for _attr, (_lbl, _key) in self._demo_labels.items():
+            _lbl.setText(tr(_key))
+
+        _cur_nature = self.hh_occupancy_nature.currentData()
+        self.hh_occupancy_nature.clear()
+        self.hh_occupancy_nature.addItem(tr("wizard.household.select"), None)
+        for code, display_name in get_occupancy_nature_options():
+            if code == 0:
+                continue
+            self.hh_occupancy_nature.addItem(display_name, code)
+        if _cur_nature is not None:
+            _idx = self.hh_occupancy_nature.findData(_cur_nature)
+            if _idx >= 0:
+                self.hh_occupancy_nature.setCurrentIndex(_idx)
+
+        _cur_month = self.hh_start_month.currentData()
+        self.hh_start_month.clear()
+        self.hh_start_month.addItem(tr("wizard.household.select"), None)
+        _loc = QLocale(QLocale.Arabic if get_language() == "ar" else QLocale.English)
+        for m in range(1, 13):
+            self.hh_start_month.addItem(_loc.monthName(m, QLocale.ShortFormat), m)
+        if _cur_month is not None:
+            _idx = self.hh_start_month.findData(_cur_month)
+            if _idx >= 0:
+                self.hh_start_month.setCurrentIndex(_idx)
+
+        if self.hh_start_day.itemData(0) is None:
+            self.hh_start_day.setItemText(0, tr("wizard.household.select"))
+        if self.hh_start_year.itemData(0) is None:
+            self.hh_start_year.setItemText(0, tr("wizard.household.select"))
 
     def validate(self) -> StepValidationResult:
         """Validate the step and save household data automatically."""
@@ -613,37 +724,47 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: total members == sum of non-disabled members
-        sum_without_disability = (
-            self.hh_adult_males.value() + self.hh_adult_females.value()
-            + self.hh_male_children_under18.value() + self.hh_female_children_under18.value()
-            + self.hh_male_elderly_over65.value() + self.hh_female_elderly_over65.value()
-        )
-        if total_entered != sum_without_disability:
-            result.add_error(tr("wizard.household.members_mismatch"))
+        # Validate: gender sum <= householdSize
+        gender_sum = self.hh_male_count.value() + self.hh_female_count.value()
+        if gender_sum > total_entered:
+            result.add_error(tr("wizard.household.gender_exceeds_total"))
+            return result
+
+        # Validate: age sum <= householdSize
+        age_sum = self.hh_adult_count.value() + self.hh_child_count.value() + self.hh_elderly_count.value()
+        if age_sum > total_entered:
+            result.add_error(tr("wizard.household.age_exceeds_total"))
             return result
 
         # Validate: disabled count must not exceed total members
-        disabled_total = self.hh_disabled_males.value() + self.hh_disabled_females.value()
-        if disabled_total > total_entered:
+        if self.hh_disabled_count.value() > total_entered:
             result.add_error(tr("wizard.household.disability_exceeds_total"))
             return result
+
+        _y = self.hh_start_year.currentData()
+        _m = self.hh_start_month.currentData()
+        _d = self.hh_start_day.currentData()
+        occupancy_start_date = None
+        if _y and _m and _d:
+            occupancy_start_date = f"{_y:04d}-{_m:02d}-{_d:02d}"
+        elif _y and _m:
+            occupancy_start_date = f"{_y:04d}-{_m:02d}-01"
+        elif _y:
+            occupancy_start_date = f"{_y:04d}-01-01"
 
         household = {
             "household_id": str(uuid.uuid4()),
             "property_unit_id": property_unit_id,
             "unit_uuid": property_unit_id,
-            "occupancy_type": self.hh_occupancy_type.currentData(),
             "occupancy_nature": self.hh_occupancy_nature.currentData(),
+            "occupancy_start_date": occupancy_start_date,
             "size": self.hh_total_members.value(),
-            "adult_males": self.hh_adult_males.value(),
-            "adult_females": self.hh_adult_females.value(),
-            "male_children_under18": self.hh_male_children_under18.value(),
-            "female_children_under18": self.hh_female_children_under18.value(),
-            "male_elderly_over65": self.hh_male_elderly_over65.value(),
-            "female_elderly_over65": self.hh_female_elderly_over65.value(),
-            "disabled_males": self.hh_disabled_males.value(),
-            "disabled_females": self.hh_disabled_females.value(),
+            "male_count": self.hh_male_count.value(),
+            "female_count": self.hh_female_count.value(),
+            "adult_count": self.hh_adult_count.value(),
+            "child_count": self.hh_child_count.value(),
+            "elderly_count": self.hh_elderly_count.value(),
+            "disabled_count": self.hh_disabled_count.value(),
             "notes": self.hh_notes.toPlainText().strip()
         }
 
@@ -700,11 +821,10 @@ class HouseholdStep(BaseStep):
         """Compare current form data with stored household to detect changes."""
         compare_keys = [
             "property_unit_id",
-            "size", "occupancy_type", "occupancy_nature",
-            "adult_males", "adult_females",
-            "male_children_under18", "female_children_under18",
-            "male_elderly_over65", "female_elderly_over65",
-            "disabled_males", "disabled_females", "notes"
+            "size", "occupancy_nature", "occupancy_start_date",
+            "male_count", "female_count",
+            "adult_count", "child_count", "elderly_count",
+            "disabled_count", "notes"
         ]
         for key in compare_keys:
             if current.get(key) != stored.get(key):
@@ -722,13 +842,14 @@ class HouseholdStep(BaseStep):
         """Clear all household form fields for a new wizard session."""
         if not self._is_initialized:
             return
-        for spin in [self.hh_total_members, self.hh_adult_males, self.hh_adult_females,
-                     self.hh_male_children_under18, self.hh_female_children_under18,
-                     self.hh_male_elderly_over65, self.hh_female_elderly_over65,
-                     self.hh_disabled_males, self.hh_disabled_females]:
+        for spin in [self.hh_total_members, self.hh_male_count, self.hh_female_count,
+                     self.hh_adult_count, self.hh_child_count,
+                     self.hh_elderly_count, self.hh_disabled_count]:
             spin.setValue(0)
         self.hh_occupancy_nature.setCurrentIndex(0)
-        self.hh_occupancy_type.setCurrentIndex(0)
+        self.hh_start_year.setCurrentIndex(0)
+        self.hh_start_month.setCurrentIndex(0)
+        self.hh_start_day.setCurrentIndex(0)
         self.hh_notes.clear()
 
     def populate_data(self):
@@ -801,31 +922,39 @@ class HouseholdStep(BaseStep):
                 idx = self.hh_occupancy_nature.findData(household['occupancy_nature'])
                 if idx >= 0:
                     self.hh_occupancy_nature.setCurrentIndex(idx)
-            if household.get('occupancy_type') is not None:
-                idx = self.hh_occupancy_type.findData(household['occupancy_type'])
-                if idx >= 0:
-                    self.hh_occupancy_type.setCurrentIndex(idx)
+
+            saved_date = household.get('occupancy_start_date')
+            if saved_date:
+                _parts = str(saved_date)[:10].split('-')
+                if len(_parts) >= 1 and _parts[0].isdigit():
+                    _idx = self.hh_start_year.findData(int(_parts[0]))
+                    if _idx >= 0:
+                        self.hh_start_year.setCurrentIndex(_idx)
+                if len(_parts) >= 2 and _parts[1].isdigit():
+                    _idx = self.hh_start_month.findData(int(_parts[1]))
+                    if _idx >= 0:
+                        self.hh_start_month.setCurrentIndex(_idx)
+                if len(_parts) >= 3 and _parts[2].isdigit():
+                    _idx = self.hh_start_day.findData(int(_parts[2]))
+                    if _idx >= 0:
+                        self.hh_start_day.setCurrentIndex(_idx)
 
             self.hh_total_members.setValue(int(household.get("size") or 0))
-            self.hh_adult_males.setValue(int(household.get("adult_males") or 0))
-            self.hh_adult_females.setValue(int(household.get("adult_females") or 0))
-            self.hh_male_children_under18.setValue(int(household.get("male_children_under18") or 0))
-            self.hh_female_children_under18.setValue(int(household.get("female_children_under18") or 0))
-            self.hh_male_elderly_over65.setValue(int(household.get("male_elderly_over65") or 0))
-            self.hh_female_elderly_over65.setValue(int(household.get("female_elderly_over65") or 0))
-            self.hh_disabled_males.setValue(int(household.get("disabled_males") or 0))
-            self.hh_disabled_females.setValue(int(household.get("disabled_females") or 0))
+            self.hh_male_count.setValue(int(household.get("male_count") or 0))
+            self.hh_female_count.setValue(int(household.get("female_count") or 0))
+            self.hh_adult_count.setValue(int(household.get("adult_count") or 0))
+            self.hh_child_count.setValue(int(household.get("child_count") or 0))
+            self.hh_elderly_count.setValue(int(household.get("elderly_count") or 0))
+            self.hh_disabled_count.setValue(int(household.get("disabled_count") or 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
         else:
             self.hh_total_members.setValue(0)
-            self.hh_adult_males.setValue(0)
-            self.hh_adult_females.setValue(0)
-            self.hh_male_children_under18.setValue(0)
-            self.hh_female_children_under18.setValue(0)
-            self.hh_male_elderly_over65.setValue(0)
-            self.hh_female_elderly_over65.setValue(0)
-            self.hh_disabled_males.setValue(0)
-            self.hh_disabled_females.setValue(0)
+            self.hh_male_count.setValue(0)
+            self.hh_female_count.setValue(0)
+            self.hh_adult_count.setValue(0)
+            self.hh_child_count.setValue(0)
+            self.hh_elderly_count.setValue(0)
+            self.hh_disabled_count.setValue(0)
             self.hh_notes.clear()
 
     def get_step_title(self) -> str:
