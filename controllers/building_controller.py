@@ -24,6 +24,7 @@ from models.building import Building
 from repositories.building_repository import BuildingRepository
 from repositories.database import Database
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from services.validation_service import ValidationService
 from utils.logger import get_logger
 
@@ -89,7 +90,6 @@ class BuildingController(BaseController):
                     return n.get("nameArabic", code)
         except Exception as e:
             logger.debug(f"API neighborhood lookup failed: {e}")
-            raise
 
         return code
 
@@ -206,7 +206,8 @@ class BuildingController(BaseController):
                 )
 
         except Exception as e:
-            error_msg = f"Error creating building: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"create_building failed: {e}", exc_info=True)
             self._emit_error("create_building", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -275,7 +276,8 @@ class BuildingController(BaseController):
                 )
 
         except Exception as e:
-            error_msg = f"Error updating building: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"update_building failed: {e}", exc_info=True)
             self._emit_error("update_building", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -329,68 +331,9 @@ class BuildingController(BaseController):
                 )
 
         except Exception as e:
-            error_msg = f"Error deleting building: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"delete_building failed: {e}", exc_info=True)
             self._emit_error("delete_building", error_msg)
-            return OperationResult.fail(message=error_msg)
-
-    def update_geometry(
-        self,
-        building_uuid: str,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        polygon_wkt: Optional[str] = None
-    ) -> OperationResult[Building]:
-        """
-        Update building geometry (location and/or polygon footprint).
-
-        Args:
-            building_uuid: UUID of building to update
-            latitude: GPS latitude coordinate (optional)
-            longitude: GPS longitude coordinate (optional)
-            polygon_wkt: WKT polygon string for building footprint (optional)
-
-        Returns:
-            OperationResult with updated Building or error
-        """
-        try:
-            # Validate that at least one geometry field is provided
-            if latitude is None and longitude is None and polygon_wkt is None:
-                return OperationResult.fail(
-                    message="At least one geometry field must be provided",
-                    message_ar="يجب توفير حقل هندسي واحد على الأقل"
-                )
-
-            response = self._api_service.update_building_geometry(
-                building_id=building_uuid,
-                latitude=latitude,
-                longitude=longitude,
-                building_geometry_wkt=polygon_wkt
-            )
-            building = self._api_dto_to_building(response) if response else None
-
-            if building:
-                # Emit signals
-                self.building_updated.emit(building)
-
-                # Trigger callbacks
-                if self._on_building_updated:
-                    self._on_building_updated(building)
-
-                return OperationResult.ok(
-                    data=building,
-                    message="Building geometry updated successfully",
-                    message_ar="تم تحديث موقع المبنى بنجاح"
-                )
-            else:
-                self._emit_error("update_geometry", "Failed to update building geometry")
-                return OperationResult.fail(
-                    message="Failed to update building geometry",
-                    message_ar="فشل في تحديث موقع المبنى"
-                )
-
-        except Exception as e:
-            error_msg = f"Error updating building geometry: {str(e)}"
-            self._emit_error("update_geometry", error_msg)
             return OperationResult.fail(message=error_msg)
 
     def get_building(self, building_uuid: str) -> OperationResult[Building]:
@@ -416,7 +359,7 @@ class BuildingController(BaseController):
                 )
 
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_building_by_id(self, building_id: str) -> OperationResult[Building]:
         """
@@ -441,7 +384,7 @@ class BuildingController(BaseController):
                 )
 
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def select_building(self, building_uuid: str) -> OperationResult[Building]:
         """
@@ -500,7 +443,8 @@ class BuildingController(BaseController):
             return OperationResult.ok(data=buildings)
 
         except Exception as e:
-            error_msg = f"Error loading buildings: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"load_buildings failed: {e}", exc_info=True)
             self._emit_error("load_buildings", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -529,7 +473,8 @@ class BuildingController(BaseController):
             return OperationResult.ok(data=buildings)
 
         except Exception as e:
-            error_msg = f"Error searching buildings: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"search_buildings failed: {e}", exc_info=True)
             self._emit_error("search_buildings", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -595,8 +540,8 @@ class BuildingController(BaseController):
             return OperationResult.ok(data=buildings)
 
         except Exception as e:
-            error_msg = f"Error searching buildings for assignment: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            error_msg = map_exception(e)
+            logger.error(f"search_for_assignment failed: {e}", exc_info=True)
             self._emit_error("search_for_assignment", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -635,8 +580,8 @@ class BuildingController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error searching buildings by filters: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            error_msg = map_exception(e)
+            logger.error(f"search_for_assignment_by_filters failed: {e}", exc_info=True)
             self._emit_error("search_for_assignment_by_filters", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -738,8 +683,8 @@ class BuildingController(BaseController):
             result = api_client.lock_building(building_id, lock)
             return OperationResult.ok(data=result)
         except Exception as e:
-            error_msg = f"Failed to {'lock' if lock else 'unlock'} building: {e}"
-            logger.error(error_msg)
+            error_msg = map_exception(e)
+            logger.error(f"toggle_building_lock failed: {e}", exc_info=True)
             return OperationResult.fail(message=error_msg)
 
     def get_statistics(self) -> OperationResult[Dict[str, Any]]:
@@ -753,7 +698,7 @@ class BuildingController(BaseController):
             stats = self.repository.get_statistics()
             return OperationResult.ok(data=stats)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_buildings_by_neighborhood(self) -> OperationResult[Dict[str, int]]:
         """
@@ -778,7 +723,7 @@ class BuildingController(BaseController):
             return OperationResult.ok(data=result)
 
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def update_geometry(
         self,
@@ -823,24 +768,24 @@ class BuildingController(BaseController):
             required = ["neighborhood_code"]
             for field in required:
                 if not data.get(field):
-                    errors.append(f"Missing required field: {field}")
+                    errors.append("الحقل المطلوب مفقود")
 
         # Validate building ID format if provided
         if data.get("building_id"):
             building_id = data["building_id"]
             if not self._validate_building_id_format(building_id):
-                errors.append("Invalid building ID format")
+                errors.append("صيغة رقم المبنى غير صحيحة")
 
         # Validate coordinates if provided
         if data.get("latitude") is not None:
             lat = data["latitude"]
             if not (-90 <= lat <= 90):
-                errors.append("Invalid latitude value")
+                errors.append("قيمة خط العرض غير صحيحة")
 
         if data.get("longitude") is not None:
             lng = data["longitude"]
             if not (-180 <= lng <= 180):
-                errors.append("Invalid longitude value")
+                errors.append("قيمة خط الطول غير صحيحة")
 
         if errors:
             return OperationResult.fail(
@@ -1041,4 +986,4 @@ class BuildingController(BaseController):
             return OperationResult.ok(data="export_path")
 
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))

@@ -207,7 +207,7 @@ class PersonDialog(QDialog):
         phone_layout.addWidget(self.phone_number)
 
         self.phone_error = QLabel("")
-        self.phone_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.phone_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.phone_error.setVisible(False)
         phone_layout.addWidget(self.phone_error)
 
@@ -232,7 +232,7 @@ class PersonDialog(QDialog):
         email_layout.addWidget(self.email)
 
         self.email_error = QLabel("")
-        self.email_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.email_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.email_error.setVisible(False)
         email_layout.addWidget(self.email_error)
 
@@ -294,7 +294,7 @@ class PersonDialog(QDialog):
         doc_num_layout.addWidget(self.id_doc_number)
 
         self.id_doc_error = QLabel("")
-        self.id_doc_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.id_doc_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.id_doc_error.setVisible(False)
         doc_num_layout.addWidget(self.id_doc_error)
 
@@ -458,7 +458,7 @@ class PersonDialog(QDialog):
             widget.setStyleSheet(f"""
                 QLineEdit {{
                     background-color: #FEF2F2;
-                    border: 2px solid #DC2626;
+                    border: 2px solid {Colors.ERROR};
                     border-radius: 6px;
                     padding: 8px 12px;
                     font-size: 13px;
@@ -1158,13 +1158,11 @@ class PersonsPage(QWidget):
             if hasattr(result, 'duplicate_warning') and result.duplicate_warning:
                 Toast.show_toast(self, tr("page.persons.duplicate_warning"), Toast.WARNING)
         else:
-            error_msg = result.error or ""
+            error_msg = result.message or ""
             if tr("page.persons.already_registered_marker") in error_msg:
                 from ui.error_handler import ErrorHandler
                 ErrorHandler.show_warning(self, error_msg, tr("dialog.warning"))
             else:
-                if hasattr(result, 'validation_errors') and result.validation_errors:
-                    error_msg += "\n" + "\n".join(result.validation_errors)
                 Toast.show_toast(self, tr("page.persons.add_failed", error=error_msg), Toast.ERROR)
 
     def _on_create_person_error(self, error_msg):
@@ -1192,9 +1190,7 @@ class PersonsPage(QWidget):
             Toast.show_toast(self, tr("page.persons.person_updated"), Toast.SUCCESS)
             self._load_persons()
         else:
-            error_msg = result.error
-            if hasattr(result, 'validation_errors') and result.validation_errors:
-                error_msg += "\n" + "\n".join(result.validation_errors)
+            error_msg = result.message or ""
             Toast.show_toast(self, tr("page.persons.update_failed", error=error_msg), Toast.ERROR)
 
     def _on_update_person_error(self, error_msg):

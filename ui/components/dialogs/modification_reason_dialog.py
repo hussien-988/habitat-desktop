@@ -142,7 +142,7 @@ class ModificationReasonDialog(QDialog):
         # Error label (hidden initially)
         self._error_label = QLabel()
         self._error_label.setFont(create_font(size=9))
-        self._error_label.setStyleSheet("color: #EF4444;")
+        self._error_label.setStyleSheet(f"color: {Colors.ERROR};")
         self._error_label.hide()
         layout.addWidget(self._error_label)
 
@@ -232,14 +232,14 @@ class ModificationReasonDialog(QDialog):
         self._reason_input.setStyleSheet(f"""
             QTextEdit {{
                 background-color: #f0f7ff;
-                border: 2px solid #EF4444;
+                border: 2px solid {Colors.ERROR};
                 border-radius: 10px;
                 padding: 10px 14px;
                 font-size: 13px;
                 font-family: 'IBM Plex Sans Arabic', 'Calibri';
             }}
             QTextEdit:focus {{
-                border: 2px solid #EF4444;
+                border: 2px solid {Colors.ERROR};
             }}
         """)
 

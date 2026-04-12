@@ -30,7 +30,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
-from ui.design_system import ScreenScale
+from ui.design_system import Colors, ScreenScale
 
 logger = get_logger(__name__)
 
@@ -480,7 +480,7 @@ class RelationDialog(QDialog):
         person_layout.addWidget(self.person_combo)
 
         self.person_error = QLabel("")
-        self.person_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.person_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.person_error.setVisible(False)
         person_layout.addWidget(self.person_error)
 
@@ -503,7 +503,7 @@ class RelationDialog(QDialog):
         unit_layout.addWidget(self.unit_combo)
 
         self.unit_error = QLabel("")
-        self.unit_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.unit_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.unit_error.setVisible(False)
         unit_layout.addWidget(self.unit_error)
 
@@ -522,7 +522,7 @@ class RelationDialog(QDialog):
         type_layout.addWidget(self.type_combo)
 
         self.type_error = QLabel("")
-        self.type_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.type_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.type_error.setVisible(False)
         type_layout.addWidget(self.type_error)
 
@@ -558,7 +558,7 @@ class RelationDialog(QDialog):
         share_layout.addWidget(self.share_hint)
 
         self.share_error = QLabel("")
-        self.share_error.setStyleSheet("color: #DC2626; font-size: 10px;")
+        self.share_error.setStyleSheet(f"color: {Colors.ERROR}; font-size: 10px;")
         self.share_error.setVisible(False)
         share_layout.addWidget(self.share_error)
 

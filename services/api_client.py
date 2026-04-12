@@ -270,7 +270,7 @@ class TRRCMSApiClient:
                 if response_data and response_data.get("detail"):
                     logger.debug(f"[API ERR] dev detail: {response_data['detail']}")
                 if status_code == 401:
-                    if self._session_expired_flag:
+                    if self._session_expired_flag or "/auth/change-password" in endpoint.lower():
                         raise ApiException(
                             message=api_msg, status_code=401, response_data=response_data
                         )

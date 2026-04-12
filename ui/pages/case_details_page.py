@@ -784,6 +784,9 @@ class CaseDetailsPage(QWidget):
             logger.info("Case details page refreshed successfully")
         except Exception as e:
             logger.error(f"Error refreshing case details: {e}", exc_info=True)
+            from ui.components.toast import Toast
+            from services.error_mapper import map_exception
+            Toast.show_toast(self, map_exception(e), Toast.ERROR)
 
     def _populate_all(self):
         self._populate_header()

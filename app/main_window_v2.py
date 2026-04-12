@@ -750,8 +750,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 detail = ""
                 if hasattr(e, 'response_data') and e.response_data:
-                    detail = (e.response_data.get('message')
-                              or e.response_data.get('detail') or "")
+                    detail = e.response_data.get('message') or ""
                 raise Exception(detail) if detail else e
 
         from services.api_worker import ApiWorker
@@ -801,7 +800,7 @@ class MainWindow(QMainWindow):
         MessageDialog.show_error(
             self,
             tr("page.user_mgmt.password_change_failed_title"),
-            tr("page.user_mgmt.password_change_failed"),
+            error_msg or tr("page.user_mgmt.password_change_failed"),
         )
         self._start_forced_password_change(self._pwd_change_user)
 
@@ -851,8 +850,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 detail = ""
                 if hasattr(e, 'response_data') and e.response_data:
-                    detail = (e.response_data.get('message')
-                              or e.response_data.get('detail') or "")
+                    detail = e.response_data.get('message') or ""
                 raise Exception(detail) if detail else e
 
         from services.api_worker import ApiWorker
@@ -879,7 +877,7 @@ class MainWindow(QMainWindow):
         MessageDialog.show_error(
             self,
             tr("page.user_mgmt.password_change_failed_title"),
-            tr("page.user_mgmt.password_change_failed"),
+            error_msg or tr("page.user_mgmt.password_change_failed"),
         )
 
     def _show_login_loading_msg(self, message):

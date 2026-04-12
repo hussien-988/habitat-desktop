@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from controllers.base_controller import BaseController, OperationResult
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +39,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=items)
         except Exception as e:
             logger.error(f"get_all_users failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def get_user(self, user_id: str) -> OperationResult:
         try:
@@ -46,7 +47,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=data)
         except Exception as e:
             logger.error(f"get_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def create_user(self, data: Dict[str, Any]) -> OperationResult:
         try:
@@ -54,7 +55,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"create_user failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def update_user(self, user_id: str, data: Dict[str, Any]) -> OperationResult:
         try:
@@ -62,7 +63,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"update_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def delete_user(self, user_id: str) -> OperationResult:
         try:
@@ -70,7 +71,7 @@ class UserController(BaseController):
             return OperationResult.ok()
         except Exception as e:
             logger.error(f"delete_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def activate_user(self, user_id: str) -> OperationResult:
         try:
@@ -78,7 +79,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"activate_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def deactivate_user(self, user_id: str) -> OperationResult:
         try:
@@ -86,7 +87,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"deactivate_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def unlock_user(self, user_id: str) -> OperationResult:
         try:
@@ -94,7 +95,7 @@ class UserController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"unlock_user({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))
 
     def admin_change_user_password(self, user_id: str, new_password: str) -> OperationResult:
         try:
@@ -102,4 +103,4 @@ class UserController(BaseController):
             return OperationResult.ok()
         except Exception as e:
             logger.error(f"admin_change_user_password({user_id}) failed: {e}")
-            return OperationResult.fail(str(e))
+            return OperationResult.fail(map_exception(e))

@@ -10,12 +10,12 @@ from PyQt5.QtGui import QFont, QColor
 
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
-from ui.design_system import ScreenScale
+from ui.design_system import Colors, ScreenScale
 
 
 # Dialog type definitions: (icon_char, icon_bg_color, title_color, btn_color, btn_hover)
 _TYPES = {
-    "error":   ("!", "#FEE2E2", "#DC2626", "#DC2626", "#B91C1C"),
+    "error":   ("!", "#FEE2E2", Colors.ERROR, Colors.ERROR, "#B91C1C"),
     "warning": ("!", "#FEF3C7", "#D97706", "#D97706", "#B45309"),
     "info":    ("i", "#DBEAFE", "#2563EB", "#2563EB", "#1D4ED8"),
     "success": ("\u2713", "#D1FAE5", "#059669", "#059669", "#047857"),

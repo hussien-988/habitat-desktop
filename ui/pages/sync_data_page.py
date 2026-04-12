@@ -967,7 +967,7 @@ class SyncDataPage(QWidget):
             logger.warning(f"Failed to build assignment details UI: {e}")
             err = QLabel(tr("page.sync.details_load_failed"))
             err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
+            err.setStyleSheet(f"color: {Colors.ERROR}; background: transparent; border: none;")
             err.setAlignment(Qt.AlignCenter)
             body_layout.addWidget(err)
 
@@ -985,7 +985,7 @@ class SyncDataPage(QWidget):
 
         err = QLabel(tr("page.sync.details_load_failed"))
         err.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        err.setStyleSheet("color: #EF4444; background: transparent; border: none;")
+        err.setStyleSheet(f"color: {Colors.ERROR}; background: transparent; border: none;")
         err.setAlignment(Qt.AlignCenter)
         body_layout.addWidget(err)
 

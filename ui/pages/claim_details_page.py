@@ -504,6 +504,7 @@ class ClaimDetailsPage(QWidget):
         self._loading = False
         self._edit_btn_widget = None
         self._dimmed_cards = []
+        self._failed_sections = []
 
         self._setup_ui()
 
@@ -729,12 +730,17 @@ class ClaimDetailsPage(QWidget):
             self._evidences = data.get("evidences") or []
             self._claim_id = self._claim_data.get("id") or self._claim_data.get("claimId", "")
 
+            self._failed_sections = []
             self._populate_header()
             self._populate_person_card()
             self._populate_property_card()
             self._populate_relation_card()
             self._populate_status_card()
             self._update_edit_visibility()
+
+            if self._failed_sections:
+                sections_text = "، ".join(self._failed_sections)
+                Toast.show_toast(self, f"لم يتم تحميل بعض البيانات: {sections_text}", Toast.WARNING)
 
             logger.info(f"Claim details loaded: {self._claim_data.get('claimNumber', 'N/A')}")
         except Exception as e:
@@ -803,6 +809,7 @@ class ClaimDetailsPage(QWidget):
             self._header.set_claim_info(claim_number, badges)
         except Exception as e:
             logger.error(f"Error populating header: {e}")
+            self._failed_sections.append("الترويسة")
 
     def _populate_person_card(self):
         try:
@@ -856,6 +863,7 @@ class ClaimDetailsPage(QWidget):
             self._person_content.addWidget(grid_widget)
         except Exception as e:
             logger.error(f"Error populating person card: {e}")
+            self._failed_sections.append("بيانات المطالِب")
 
     def _populate_property_card(self):
         try:
@@ -941,6 +949,7 @@ class ClaimDetailsPage(QWidget):
             self._property_content.addWidget(grid_widget)
         except Exception as e:
             logger.error(f"Error populating property card: {e}")
+            self._failed_sections.append("المقاسم")
 
     def _populate_relation_card(self):
         try:
@@ -1140,6 +1149,7 @@ class ClaimDetailsPage(QWidget):
                 self._relation_content.addWidget(no_ev)
         except Exception as e:
             logger.error(f"Error populating relation card: {e}")
+            self._failed_sections.append("العلاقة والمستندات")
 
     def _populate_status_card(self):
         try:
@@ -1193,6 +1203,7 @@ class ClaimDetailsPage(QWidget):
             self._status_content.addWidget(stats_widget)
         except Exception as e:
             logger.error(f"Error populating status card: {e}")
+            self._failed_sections.append("الحالة")
 
     # -- Evidence helpers --
 

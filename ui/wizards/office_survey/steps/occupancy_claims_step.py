@@ -372,6 +372,18 @@ class OccupancyClaimsStep(BaseStep):
                                                 logger.info(f"Tenure file uploaded for relation {new_rel_id}: {f_path}")
                                             except Exception as ue:
                                                 logger.error(f"Failed to upload tenure file {f_path}: {ue}")
+                                        # Link existing selected documents to the new relation
+                                        for f_entry in tenure_files:
+                                            if not f_entry.get('_selected_existing') or not f_entry.get('evidence_id'):
+                                                continue
+                                            try:
+                                                self._api_service.link_evidence_to_relation(
+                                                    survey_id, f_entry['evidence_id'], new_rel_id
+                                                )
+                                                logger.info(f"Existing evidence {f_entry['evidence_id']} linked to relation {new_rel_id}")
+                                            except Exception as le:
+                                                logger.error(f"Failed to link existing evidence: {le}")
+                                                Toast.show_toast(self, tr("wizard.person_dialog.link_existing_doc_failed"), Toast.ERROR)
                                 except Exception as e:
                                     logger.error(f"Failed to create relation for person {person_id}: {e}")
                     except Exception as e:
@@ -625,6 +637,8 @@ class OccupancyClaimsStep(BaseStep):
                 'evidence_id': ev_id,
                 'issue_date': (ev.get('documentIssuedDate')
                                or ev.get('DocumentIssuedDate') or ''),
+                '_selected_existing': True,
+                '_display_name': (ev.get('originalFileName') or ev.get('OriginalFileName') or ev_id),
             })
 
         for person in self.context.persons:
