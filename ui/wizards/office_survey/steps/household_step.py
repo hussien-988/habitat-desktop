@@ -131,11 +131,11 @@ class HouseholdStep(BaseStep):
         stats_row.setSpacing(0)
 
         # Create 5 stat sections (using helper method)
-        section_type, self.ui_building_type = self._create_stat_section(tr("wizard.building.type"))
-        section_status, self.ui_building_status = self._create_stat_section(tr("wizard.building.status"))
-        section_units, self.ui_units_count = self._create_stat_section(tr("wizard.building.units_count"))
-        section_parcels, self.ui_parcels_count = self._create_stat_section(tr("wizard.building.parcels_count"))
-        section_shops, self.ui_shops_count = self._create_stat_section(tr("wizard.building.shops_count"))
+        section_type, self.ui_building_type, self._lbl_building_type = self._create_stat_section(tr("wizard.building.type"))
+        section_status, self.ui_building_status, self._lbl_building_status = self._create_stat_section(tr("wizard.building.status"))
+        section_units, self.ui_units_count, self._lbl_units_count = self._create_stat_section(tr("wizard.building.units_count"))
+        section_parcels, self.ui_parcels_count, self._lbl_parcels_count = self._create_stat_section(tr("wizard.building.parcels_count"))
+        section_shops, self.ui_shops_count, self._lbl_shops_count = self._create_stat_section(tr("wizard.building.shops_count"))
 
         # Add sections with equal spacing
         sections = [section_type, section_status, section_units, section_parcels, section_shops]
@@ -159,12 +159,12 @@ class HouseholdStep(BaseStep):
         unit_info_row.setContentsMargins(8, 8, 8, 8)  # Add padding inside container
 
         # Create 6 unit info sections - SAME labels as unit_selection_step cards
-        section_unit_num, self.ui_unit_number = self._create_stat_section(tr("wizard.household.unit_number"))
-        section_floor, self.ui_floor_number = self._create_stat_section(tr("wizard.household.floor_number"))
-        section_rooms, self.ui_rooms_count = self._create_stat_section(tr("wizard.household.rooms_count"))
-        section_area, self.ui_area = self._create_stat_section(tr("wizard.household.unit_area"))
-        section_unit_type, self.ui_unit_type = self._create_stat_section(tr("wizard.household.unit_type_label"))
-        section_unit_status, self.ui_unit_status = self._create_stat_section(tr("wizard.household.unit_status_label"))
+        section_unit_num, self.ui_unit_number, self._lbl_unit_number = self._create_stat_section(tr("wizard.household.unit_number"))
+        section_floor, self.ui_floor_number, self._lbl_floor_number = self._create_stat_section(tr("wizard.household.floor_number"))
+        section_rooms, self.ui_rooms_count, self._lbl_rooms_count = self._create_stat_section(tr("wizard.household.rooms_count"))
+        section_area, self.ui_area, self._lbl_area = self._create_stat_section(tr("wizard.household.unit_area"))
+        section_unit_type, self.ui_unit_type, self._lbl_unit_type = self._create_stat_section(tr("wizard.household.unit_type_label"))
+        section_unit_status, self.ui_unit_status, self._lbl_unit_status = self._create_stat_section(tr("wizard.household.unit_status_label"))
 
         # Add sections with equal spacing
         unit_sections = [section_unit_num, section_floor, section_rooms, section_area, section_unit_type, section_unit_status]
@@ -189,7 +189,7 @@ class HouseholdStep(BaseStep):
         self._scroll_content = QWidget()
         scroll_layout = QVBoxLayout(self._scroll_content)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.setSpacing(12)
+        scroll_layout.setSpacing(16)
 
         # Add Card 1 (Building info) to scroll area
         scroll_layout.addWidget(self.household_building_frame)
@@ -375,12 +375,9 @@ class HouseholdStep(BaseStep):
         self._demo_labels = {}
 
         for _row, _col, _lkey, _attr in _demo_fields:
-            _cell = QVBoxLayout()
-            _cell.setSpacing(4)
             _lbl = QLabel(tr(_lkey))
             _lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             _lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-            _cell.addWidget(_lbl)
             self._demo_labels[_attr] = (_lbl, _lkey)
             _spin = QSpinBox()
             _spin.setRange(0, 50)
@@ -388,15 +385,32 @@ class HouseholdStep(BaseStep):
             _spin.setAlignment(Qt.AlignRight)
             _spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
             _spin.setButtonSymbols(QSpinBox.NoButtons)
-            _cell.addWidget(self._create_composition_spinbox(_spin))
             setattr(self, _attr, _spin)
-            _cell_w = QWidget()
-            _cell_w.setStyleSheet("background: transparent;")
-            _cell_w.setLayout(_cell)
+            _cell_w = QFrame()
+            _cell_w.setStyleSheet("""
+                QFrame {
+                    background-color: #F8FAFF;
+                    border: 1px solid #E8EFF6;
+                    border-radius: 10px;
+                }
+            """)
+            _cell_layout = QVBoxLayout(_cell_w)
+            _cell_layout.setContentsMargins(10, 8, 10, 8)
+            _cell_layout.setSpacing(4)
+            _cell_layout.addWidget(_lbl)
+            _cell_layout.addWidget(self._create_composition_spinbox(_spin))
             comp_grid.addWidget(_cell_w, _row, _col)
 
         composition_layout.addLayout(comp_grid)
         scroll_layout.addWidget(self._composition_frame)
+
+        # Apply deeper shadows to cards
+        for card in (self.household_building_frame, self._family_info_frame, self._composition_frame):
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(30)
+            shadow.setOffset(0, 6)
+            shadow.setColor(QColor(0, 0, 0, 28))
+            card.setGraphicsEffect(shadow)
 
         # Set scroll content and add to main layout
         self._scroll_area.setWidget(self._scroll_content)
@@ -441,7 +455,7 @@ class HouseholdStep(BaseStep):
         section_layout.addWidget(label)
         section_layout.addWidget(value)
 
-        return section, value
+        return section, value, label
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox, bg_color: str = "#F8FAFF") -> QFrame:
         """
@@ -636,6 +650,21 @@ class HouseholdStep(BaseStep):
         self.household_building_frame.setStyleSheet(get_step_card_style())
         self._family_info_frame.setStyleSheet(get_step_card_style())
         self._composition_frame.setStyleSheet(get_step_card_style())
+
+        # Building card stat titles
+        self._lbl_building_type.setText(tr("wizard.building.type"))
+        self._lbl_building_status.setText(tr("wizard.building.status"))
+        self._lbl_units_count.setText(tr("wizard.building.units_count"))
+        self._lbl_parcels_count.setText(tr("wizard.building.parcels_count"))
+        self._lbl_shops_count.setText(tr("wizard.building.shops_count"))
+
+        # Unit info stat titles
+        self._lbl_unit_number.setText(tr("wizard.household.unit_number"))
+        self._lbl_floor_number.setText(tr("wizard.household.floor_number"))
+        self._lbl_rooms_count.setText(tr("wizard.household.rooms_count"))
+        self._lbl_area.setText(tr("wizard.household.unit_area"))
+        self._lbl_unit_type.setText(tr("wizard.household.unit_type_label"))
+        self._lbl_unit_status.setText(tr("wizard.household.unit_status_label"))
 
         self._occupants_header_title.setText(tr("wizard.household.occupants_title"))
         self._occupants_header_subtitle.setText(tr("wizard.household.subtitle"))

@@ -17,14 +17,14 @@ from PyQt5.QtWidgets import (
     QGridLayout, QTextEdit, QTabWidget,
     QRadioButton, QButtonGroup, QSizePolicy
 )
-from PyQt5.QtCore import Qt, QUrl, QTimer
+from PyQt5.QtCore import Qt, QUrl, QTimer, QLocale, QDate
 from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRegExp as QtRegExp
 
 from app.config import Config
 from services.validation_service import ValidationService
 from services.api_client import get_api_client
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, get_language
 from services.error_mapper import map_exception
 from services.display_mappings import (
     get_relation_type_options, get_relationship_to_head_options,
@@ -864,6 +864,24 @@ class PersonDialog(QDialog):
             QComboBox::down-arrow {
                 width: 8px; height: 8px;
             }
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                border: 1px solid #D0D7E2;
+                border-radius: 8px;
+                padding: 4px;
+                selection-background-color: #EBF5FF;
+                selection-color: #1E293B;
+                outline: none;
+            }
+            QComboBox QAbstractItemView::item {
+                min-height: 32px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                color: #1E293B;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #F0F7FF;
+            }
         """)
         _land_sep = QFrame()
         _land_sep.setFrameShape(QFrame.VLine)
@@ -953,24 +971,29 @@ class PersonDialog(QDialog):
         date_layout.setSpacing(6)
         date_layout.setContentsMargins(0, 0, 0, 0)
         input_style = self._input_style()
-        self.start_year = QLineEdit()
-        self.start_year.setPlaceholderText(tr("wizard.person_dialog.year"))
-        self.start_year.setValidator(QIntValidator(1900, 2100, self))
-        self.start_year.setMaxLength(4)
-        self.start_year.setStyleSheet(input_style)
-        self.start_month = QLineEdit()
-        self.start_month.setPlaceholderText(tr("wizard.person_dialog.month"))
-        self.start_month.setValidator(QIntValidator(1, 12, self))
-        self.start_month.setMaxLength(2)
-        self.start_month.setStyleSheet(input_style)
-        self.start_day = QLineEdit()
-        self.start_day.setPlaceholderText(tr("wizard.person_dialog.day"))
-        self.start_day.setValidator(QIntValidator(1, 31, self))
-        self.start_day.setMaxLength(2)
+
+        self.start_day = RtlCombo()
+        self.start_day.addItem(tr("wizard.person_dialog.day"), None)
+        for d in range(1, 32):
+            self.start_day.addItem(str(d), d)
         self.start_day.setStyleSheet(input_style)
-        date_layout.addWidget(self.start_year, 2)
-        date_layout.addWidget(self.start_month, 1)
+
+        self.start_month = RtlCombo()
+        self.start_month.addItem(tr("wizard.person_dialog.month"), None)
+        _date_locale = QLocale(QLocale.Arabic if get_language() == "ar" else QLocale.English)
+        for m in range(1, 13):
+            self.start_month.addItem(_date_locale.monthName(m, QLocale.ShortFormat), m)
+        self.start_month.setStyleSheet(input_style)
+
+        self.start_year = RtlCombo()
+        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.start_year.addItem(str(y), y)
+        self.start_year.setStyleSheet(input_style)
+
         date_layout.addWidget(self.start_day, 1)
+        date_layout.addWidget(self.start_month, 2)
+        date_layout.addWidget(self.start_year, 2)
         date_container = QWidget()
         date_container.setStyleSheet("background-color: transparent;")
         date_container.setLayout(date_layout)
@@ -1911,13 +1934,13 @@ class PersonDialog(QDialog):
             thumb.setEnabled(False)
             def _download():
                 local = download_evidence_file(eid, fn or eid)
-                def _on_done():
-                    thumb.setEnabled(True)
-                    if local:
-                        QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                    else:
-                        Toast.show_toast(self, tr("wizard.person_dialog.view_failed_message"), Toast.ERROR)
-                QTimer.singleShot(0, _on_done)
+                if local:
+                    import os
+                    os.startfile(local)
+
+                from PyQt5.QtCore import QMetaObject, Q_ARG
+                QMetaObject.invokeMethod(thumb, "setEnabled", Qt.QueuedConnection,
+                                         Q_ARG(bool, True))
             threading.Thread(target=_download, daemon=True).start()
         thumb.mousePressEvent = _open_doc
 
@@ -2364,14 +2387,14 @@ class PersonDialog(QDialog):
         return ""
 
     def _build_start_date_iso(self) -> str:
-        """Build ISO date string from the 3 separate date fields (year/month/day)."""
-        y = self.start_year.text().strip()
-        m = self.start_month.text().strip()
-        d = self.start_day.text().strip()
+        """Build ISO date string from the 3 dropdown combos (year/month/day)."""
+        y = self.start_year.currentData()
+        m = self.start_month.currentData()
+        d = self.start_day.currentData()
         if y:
-            month = int(m) if m else 1
-            day = int(d) if d else 1
-            return f"{int(y):04d}-{month:02d}-{day:02d}"
+            month = m if m else 1
+            day = d if d else 1
+            return f"{y:04d}-{month:02d}-{day:02d}"
         return None
 
     def _format_phone(self, value: str):
@@ -2483,11 +2506,17 @@ class PersonDialog(QDialog):
         if rel.get('start_date'):
             parts = rel['start_date'].split('-')
             if len(parts) >= 1:
-                self.start_year.setText(parts[0])
+                idx = self.start_year.findData(int(parts[0]))
+                if idx >= 0:
+                    self.start_year.setCurrentIndex(idx)
             if len(parts) >= 2:
-                self.start_month.setText(str(int(parts[1])))
+                idx = self.start_month.findData(int(parts[1]))
+                if idx >= 0:
+                    self.start_month.setCurrentIndex(idx)
             if len(parts) >= 3:
-                self.start_day.setText(str(int(parts[2])))
+                idx = self.start_day.findData(int(parts[2]))
+                if idx >= 0:
+                    self.start_day.setCurrentIndex(idx)
 
         if rel.get('ownership_share') is not None:
             self.ownership_share.setText(str(rel['ownership_share']))

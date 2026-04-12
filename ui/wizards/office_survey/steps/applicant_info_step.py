@@ -278,8 +278,8 @@ class ApplicantInfoStep(BaseStep):
         
         self.lbl_mobile = self._lbl(tr("wizard.person_dialog.mobile"))
         layout.addWidget(self.lbl_mobile)
-        mobile_container = QFrame()
-        mobile_container.setStyleSheet(f"""
+        self._mobile_container = QFrame()
+        self._mobile_container.setStyleSheet(f"""
             QFrame {{
                 border: 1.5px solid #D0D7E2;
                 border-radius: 10px;
@@ -287,7 +287,7 @@ class ApplicantInfoStep(BaseStep):
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
         """)
-        mob_layout = QHBoxLayout(mobile_container)
+        mob_layout = QHBoxLayout(self._mobile_container)
         mob_layout.setContentsMargins(0, 0, 0, 0)
         mob_layout.setSpacing(0)
         mob_layout.setDirection(QHBoxLayout.RightToLeft)
@@ -320,7 +320,7 @@ class ApplicantInfoStep(BaseStep):
         mob_outer = QVBoxLayout()
         mob_outer.setSpacing(2)
         mob_outer.setContentsMargins(0, 0, 0, 0)
-        mob_outer.addWidget(mobile_container)
+        mob_outer.addWidget(self._mobile_container)
         mob_outer.addWidget(self._mobile_error)
         layout.addLayout(mob_outer)
 
@@ -334,8 +334,8 @@ class ApplicantInfoStep(BaseStep):
         ]
         self.lbl_phone = self._lbl(tr("wizard.person_dialog.phone"))
         layout.addWidget(self.lbl_phone)
-        landline_container = QFrame()
-        landline_container.setStyleSheet(f"""
+        self._landline_container = QFrame()
+        self._landline_container.setStyleSheet(f"""
             QFrame {{
                 border: 1.5px solid #D0D7E2;
                 border-radius: 10px;
@@ -343,7 +343,7 @@ class ApplicantInfoStep(BaseStep):
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
         """)
-        land_layout = QHBoxLayout(landline_container)
+        land_layout = QHBoxLayout(self._landline_container)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
         land_layout.setDirection(QHBoxLayout.RightToLeft)
@@ -375,6 +375,24 @@ class ApplicantInfoStep(BaseStep):
             QComboBox::down-arrow {{
                 width: 8px; height: 8px;
             }}
+            QComboBox QAbstractItemView {{
+                background-color: #FFFFFF;
+                border: 1px solid #D0D7E2;
+                border-radius: 8px;
+                padding: 4px;
+                selection-background-color: #EBF5FF;
+                selection-color: #1E293B;
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                min-height: 32px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                color: #1E293B;
+            }}
+            QComboBox QAbstractItemView::item:hover {{
+                background-color: #F0F7FF;
+            }}
         """)
         _land_sep = QFrame()
         _land_sep.setFrameShape(QFrame.VLine)
@@ -398,7 +416,7 @@ class ApplicantInfoStep(BaseStep):
         land_outer = QVBoxLayout()
         land_outer.setSpacing(2)
         land_outer.setContentsMargins(0, 0, 0, 0)
-        land_outer.addWidget(landline_container)
+        land_outer.addWidget(self._landline_container)
         land_outer.addWidget(self._landline_error)
         layout.addLayout(land_outer)
 
@@ -974,6 +992,13 @@ class ApplicantInfoStep(BaseStep):
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
+
+        # Phone/mobile fields must stay LTR for number format
+        self._mobile_container.setLayoutDirection(Qt.LeftToRight)
+        self.phone.setLayoutDirection(Qt.LeftToRight)
+        self._landline_container.setLayoutDirection(Qt.LeftToRight)
+        self.landline_digits.setLayoutDirection(Qt.LeftToRight)
+        self.landline_prefix.setLayoutDirection(Qt.LeftToRight)
 
     # Card header
         self.app_title_lbl.setText(tr("wizard.step.applicant_info"))

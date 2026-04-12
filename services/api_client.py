@@ -1263,10 +1263,13 @@ class TRRCMSApiClient:
 
         occupancy_nature = get_value('occupancy_nature', 'occupancyNature', 0)
 
-        # occupancyStartDate: convert to ISO-8601 UTC string
+        # occupancyStartDate: ensure ISO-8601 UTC format for PostgreSQL timestamptz
         start_date = get_value('occupancy_start_date', 'occupancyStartDate', None)
-        if start_date and not isinstance(start_date, str):
-            start_date = start_date.isoformat() + "T00:00:00Z" if hasattr(start_date, 'isoformat') else str(start_date)
+        if start_date:
+            if not isinstance(start_date, str):
+                start_date = start_date.isoformat() + "T00:00:00Z" if hasattr(start_date, 'isoformat') else str(start_date)
+            elif "T" not in start_date:
+                start_date = start_date + "T00:00:00Z"
 
         api_data = {
             "propertyUnitId": property_unit_id,
