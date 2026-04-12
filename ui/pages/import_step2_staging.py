@@ -703,7 +703,7 @@ class ImportStep2Staging(QWidget):
         if errors > 0:
             err_label = QLabel(tr("wizard.import.step2.error_count", count=errors))
             err_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            err_label.setStyleSheet("color: #EF4444;")
+            err_label.setStyleSheet(f"color: {Colors.ERROR};")
             row_layout.addWidget(err_label)
 
         # Warnings

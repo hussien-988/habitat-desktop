@@ -20,6 +20,7 @@ from controllers.base_controller import BaseController, OperationResult
 from models.person import Person
 from repositories.database import Database
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -111,7 +112,7 @@ class PersonController(BaseController):
 
         except Exception as e:
             from services.exceptions import ApiException
-            from services.error_mapper import build_duplicate_person_message, _extract_validation_details, map_exception
+            from services.error_mapper import build_duplicate_person_message, _extract_validation_details
             if isinstance(e, ApiException):
                 if e.status_code == 409:
                     msg = build_duplicate_person_message(e.response_data)
@@ -167,7 +168,7 @@ class PersonController(BaseController):
 
         except Exception as e:
             from services.exceptions import ApiException
-            from services.error_mapper import build_duplicate_person_message, _extract_validation_details, map_exception
+            from services.error_mapper import build_duplicate_person_message, _extract_validation_details
             if isinstance(e, ApiException):
                 if e.status_code == 409:
                     msg = build_duplicate_person_message(e.response_data)
@@ -214,7 +215,8 @@ class PersonController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error deleting person: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"delete_person failed: {e}", exc_info=True)
             self._emit_error("delete_person", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -240,7 +242,7 @@ class PersonController(BaseController):
                 message_ar="الشخص غير موجود"
             )
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_person_by_national_id(self, national_id: str) -> OperationResult[Person]:
         """
@@ -262,7 +264,7 @@ class PersonController(BaseController):
                 message_ar="الشخص غير موجود"
             )
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def select_person(self, person_uuid: str) -> OperationResult[Person]:
         """
@@ -321,7 +323,8 @@ class PersonController(BaseController):
             return OperationResult.ok(data=persons)
 
         except Exception as e:
-            error_msg = f"Error loading persons: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"load_persons failed: {e}", exc_info=True)
             self._emit_error("load_persons", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -397,17 +400,17 @@ class PersonController(BaseController):
             required = ["full_name"]
             for field in required:
                 if not data.get(field):
-                    errors.append(f"Missing required field: {field}")
+                    errors.append("الحقل المطلوب مفقود")
 
         # Validate national ID format if provided
         if data.get("national_id"):
             if not self._validate_national_id(data["national_id"]):
-                errors.append("Invalid national ID format")
+                errors.append("صيغة الرقم الوطني غير صحيحة")
 
         # Validate phone number format if provided
         if data.get("phone_number"):
             if not self._validate_phone_number(data["phone_number"]):
-                errors.append("Invalid phone number format")
+                errors.append("صيغة رقم الهاتف غير صحيحة")
 
         if errors:
             return OperationResult.fail(
@@ -462,4 +465,4 @@ class PersonController(BaseController):
             stats = {"total": total}
             return OperationResult.ok(data=stats)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))

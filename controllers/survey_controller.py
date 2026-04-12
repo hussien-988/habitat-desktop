@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from controllers.base_controller import OperationResult
+from services.error_mapper import map_exception
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -62,7 +63,7 @@ class SurveyController:
             return OperationResult.ok(data=surveys)
         except Exception as e:
             logger.error(f"Failed to load office surveys: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
     # Detail: full survey context for ReviewStep / CaseDetailsPage
 
     def get_survey_full_context(self, survey_id: str) -> OperationResult:
@@ -266,7 +267,7 @@ class SurveyController:
 
         except Exception as e:
             logger.error(f"Failed to get survey context: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     @staticmethod
     def _determine_resume_step(detail: dict, households: list, persons: list) -> int:

@@ -46,10 +46,11 @@ class _BuildingsWorker(QThread):
             buildings = []
             if self._is_view_only and self._selected_building_id:
                 result['buildings_geojson'] = '{"type": "FeatureCollection", "features": []}'
-                building = map_service.get_building_with_polygon(self._selected_building_id)
-                result['view_buildings'] = [building] if building else []
-                if not result['view_buildings'] and self._fallback_building:
+                if self._fallback_building:
                     result['view_buildings'] = [self._fallback_building]
+                else:
+                    building = map_service.get_building_with_polygon(self._selected_building_id)
+                    result['view_buildings'] = [building] if building else []
             else:
                 try:
                     delta_lat, delta_lng = 0.015, 0.02

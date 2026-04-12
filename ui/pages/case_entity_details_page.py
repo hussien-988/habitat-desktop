@@ -448,8 +448,13 @@ class _CaseEntityHeader(QWidget):
         self._revisit_btn.setVisible(visible)
 
     def update_texts(self):
-        """Update button texts for language change."""
+        """Update texts and layout direction for language change."""
+        self.setLayoutDirection(get_layout_direction())
         self._revisit_btn.setText(tr("page.case_entity.revisit"))
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        self._num_label.setAlignment(
+            Qt.AlignRight | Qt.AlignVCenter if is_rtl else Qt.AlignLeft | Qt.AlignVCenter
+        )
 
     def pulse_accent(self):
         self._accent_line.pulse()
@@ -532,17 +537,6 @@ class _SurveyMiniCard(QFrame):
         row1.addWidget(ref_label)
         row1.addStretch()
 
-        status_text = self._survey_data.get("statusName") or self._survey_data.get("status", "")
-        if status_text:
-            status_badge = QLabel(str(status_text))
-            status_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-            status_badge.setAlignment(Qt.AlignCenter)
-            status_badge.setFixedHeight(ScreenScale.h(20))
-            status_badge.setStyleSheet(
-                "QLabel { background: #EFF6FF; color: #1E40AF; "
-                "border: 1px solid #BFDBFE; border-radius: 10px; padding: 0 8px; }"
-            )
-            row1.addWidget(status_badge)
 
         content.addLayout(row1)
 
@@ -762,17 +756,6 @@ class _ClaimMiniCard(QFrame):
         row1.addWidget(num_label)
         row1.addStretch()
 
-        claim_type = self._claim_data.get("claimTypeName") or self._claim_data.get("claimType", "")
-        if claim_type:
-            type_badge = QLabel(str(claim_type))
-            type_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-            type_badge.setAlignment(Qt.AlignCenter)
-            type_badge.setFixedHeight(ScreenScale.h(20))
-            type_badge.setStyleSheet(
-                "QLabel { background: #FEF3C7; color: #B45309; "
-                "border: 1px solid #FDE68A; border-radius: 10px; padding: 0 8px; }"
-            )
-            row1.addWidget(type_badge)
 
         content.addLayout(row1)
 
@@ -918,6 +901,8 @@ class CaseEntityDetailsPage(QWidget):
         self._case_id: Optional[str] = None
         self._survey_details: List[dict] = []
         self._claim_details: List[dict] = []
+        self._unit_details: dict = {}
+        self._building_details: dict = {}
         self._loading = False
         self._user_role = "admin"
         self._show_actions = True
@@ -1175,15 +1160,13 @@ class CaseEntityDetailsPage(QWidget):
         logger.warning(f"Failed to load case data: {error_msg}")
 
     def _load_linked_entities(self):
-        """Fetch survey and claim summaries for mini-cards."""
+        """Fetch survey/claim summaries and property unit/building details."""
         if not self._case:
             return
 
         survey_ids = self._case.survey_ids or []
         claim_ids = self._case.claim_ids or []
-
-        if not survey_ids and not claim_ids:
-            return
+        property_unit_id = self._case.property_unit_id or ""
 
         def _fetch_linked():
             from services.api_client import get_api_client
@@ -1207,7 +1190,21 @@ class CaseEntityDetailsPage(QWidget):
                     logger.warning(f"Failed to fetch claim {cid}: {e}")
                     claims.append({"id": cid, "claimNumber": cid[:12]})
 
-            return {"surveys": surveys, "claims": claims}
+            unit_data = {}
+            building_data = {}
+            if property_unit_id:
+                try:
+                    unit_data = api.get_property_unit_by_id(property_unit_id) or {}
+                    bid = unit_data.get("buildingId")
+                    if bid:
+                        building_data = api.get_building_by_id(bid) or {}
+                except Exception as e:
+                    logger.warning(f"Failed to fetch unit/building details: {e}")
+
+            return {
+                "surveys": surveys, "claims": claims,
+                "unit": unit_data, "building": building_data,
+            }
 
         self._linked_worker = ApiWorker(_fetch_linked)
         self._linked_worker.finished.connect(self._on_linked_loaded)
@@ -1219,8 +1216,11 @@ class CaseEntityDetailsPage(QWidget):
             return
         self._survey_details = data.get("surveys", [])
         self._claim_details = data.get("claims", [])
+        self._unit_details = data.get("unit", {})
+        self._building_details = data.get("building", {})
         self._populate_surveys_section()
         self._populate_claims_section()
+        self._populate_property_info()
 
     def _on_linked_load_error(self, error_msg):
         logger.warning(f"Failed to load linked entities: {error_msg}")
@@ -1327,21 +1327,64 @@ class CaseEntityDetailsPage(QWidget):
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setContentsMargins(0, 0, 0, 0)
-        for c in range(2):
+        for c in range(3):
             grid.setColumnStretch(c, 1)
 
-        unit_id = self._case.property_unit_id or "-"
+        bd = self._building_details
+        ud = self._unit_details
+
+        # Building code (formatted with dashes)
+        raw_code = (bd.get("buildingCode") or bd.get("buildingId") or
+                    bd.get("building_id") or "")
+        if isinstance(raw_code, str) and len(raw_code) == 17 and "-" not in raw_code:
+            building_code = (f"{raw_code[0:2]}-{raw_code[2:4]}-{raw_code[4:6]}-"
+                             f"{raw_code[6:9]}-{raw_code[9:12]}-{raw_code[12:17]}")
+        else:
+            building_code = raw_code or "-"
+
+        # Unit number
+        unit_number = str(ud.get("unitIdentifier") or ud.get("unitNumber") or "-")
+
+        # Floor display
+        floor_val = ud.get("floorNumber")
+        if floor_val is not None:
+            try:
+                fn = int(floor_val)
+                if fn == 0:
+                    floor_display = tr("page.case_entity.floor_ground")
+                elif fn < 0:
+                    floor_display = tr("page.case_entity.floor_basement", n=abs(fn))
+                else:
+                    floor_display = str(fn)
+            except (ValueError, TypeError):
+                floor_display = str(floor_val)
+        else:
+            floor_display = "-"
+
+        # Unit type
+        from services.display_mappings import get_unit_type_display
+        unit_type_raw = ud.get("unitType")
+        unit_type_display = get_unit_type_display(unit_type_raw) if unit_type_raw else "-"
+
+        # Location from building
+        gov_name = bd.get("governorateNameArabic") or bd.get("governorate_name_ar") or bd.get("governorateName") or ""
+        sub_name = bd.get("subdistrictNameArabic") or bd.get("subdistrict_name_ar") or bd.get("subdistrictName") or ""
+        location_parts = [p for p in (sub_name, gov_name) if p]
+        location = " - ".join(location_parts) if location_parts else "-"
 
         fields = [
-            (tr("page.case_entity.field_unit_id"),
-             unit_id[:16] + "..." if len(unit_id) > 16 else unit_id),
+            (tr("page.case_entity.field_building_code"), building_code),
+            (tr("page.case_entity.field_unit_number"), unit_number),
+            (tr("page.case_entity.field_floor"), floor_display),
+            (tr("page.case_entity.field_unit_type"), unit_type_display),
+            (tr("page.case_entity.field_location"), location),
             (tr("page.case_entity.field_relations_count"),
              str(self._case.person_property_relation_count)),
         ]
 
         for i, (label, value) in enumerate(fields):
-            row = i // 2
-            col = i % 2
+            row = i // 3
+            col = i % 3
             grid.addWidget(self._create_field_pair(label, value), row, col)
 
         self._property_content.addLayout(grid)
@@ -1461,6 +1504,10 @@ class CaseEntityDetailsPage(QWidget):
         """Re-apply RTL direction and refresh all text for language change."""
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
+        self._scroll.setLayoutDirection(direction)
+        scroll_widget = self._scroll.widget()
+        if scroll_widget:
+            scroll_widget.setLayoutDirection(direction)
         self._header.update_texts()
         if self._case:
             self._populate_all()

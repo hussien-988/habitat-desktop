@@ -13,7 +13,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
-from ui.design_system import ScreenScale
+from ui.design_system import Colors, ScreenScale
 
 logger = get_logger(__name__)
 
@@ -288,7 +288,7 @@ class ImportStep6Report(QWidget):
         errors_title_row = QHBoxLayout()
         self._errors_title_label = QLabel(tr("wizard.import.step6.errors_title"))
         self._errors_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._errors_title_label.setStyleSheet("color: #EF4444; background: transparent;")
+        self._errors_title_label.setStyleSheet(f"color: {Colors.ERROR}; background: transparent;")
         errors_title_row.addWidget(self._errors_title_label)
 
         self._errors_count_label = QLabel("")

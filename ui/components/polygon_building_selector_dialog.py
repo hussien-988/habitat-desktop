@@ -18,7 +18,7 @@ from models.building import Building
 from repositories.database import Database
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
-from ui.design_system import ScreenScale
+from ui.design_system import Colors, ScreenScale
 
 logger = get_logger(__name__)
 
@@ -252,7 +252,7 @@ class PolygonBuildingSelectorDialog(QDialog):
             if not validation_result.is_valid:
                 error_msg = "\n".join(validation_result.errors)
                 self.status_label.setText(f"{tr('dialog.polygon_selector.invalid_polygon')}: {error_msg}")
-                self.status_label.setStyleSheet("QLabel { color: #DC2626; }")
+                self.status_label.setStyleSheet(f"QLabel {{ color: {Colors.ERROR}; }}")
                 self._clear_buildings()
                 return
 

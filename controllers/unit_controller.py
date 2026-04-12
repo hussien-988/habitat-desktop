@@ -21,6 +21,7 @@ from PyQt5.QtCore import pyqtSignal
 from controllers.base_controller import BaseController, OperationResult
 from models.unit import PropertyUnit
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -114,7 +115,7 @@ class UnitController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error creating unit: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("create_unit", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -158,7 +159,7 @@ class UnitController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error updating unit: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("update_unit", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -199,7 +200,7 @@ class UnitController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error deleting unit: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("delete_unit", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -222,7 +223,7 @@ class UnitController(BaseController):
                 message_ar="الوحدة غير موجودة"
             )
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def select_unit(self, unit_uuid: str) -> OperationResult[PropertyUnit]:
         """
@@ -289,7 +290,7 @@ class UnitController(BaseController):
             return OperationResult.ok(data=units)
 
         except Exception as e:
-            error_msg = f"Error loading units: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("load_units", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -316,7 +317,7 @@ class UnitController(BaseController):
             self._emit_completed("get_units_grouped", True)
             return OperationResult.ok(data=groups)
         except Exception as e:
-            error_msg = f"Error loading grouped units: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("get_units_grouped", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -353,7 +354,7 @@ class UnitController(BaseController):
                     return OperationResult.ok(data=units)
             except Exception as e2:
                 logger.warning(f"Local DB fallback failed: {e2}")
-            error_msg = f"Error getting units for building: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("get_units_for_building", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -371,7 +372,7 @@ class UnitController(BaseController):
             self.units_loaded.emit(units)
             return OperationResult.ok(data=units)
         except Exception as e:
-            error_msg = f"Error getting units for survey: {str(e)}"
+            error_msg = map_exception(e)
             self._emit_error("get_units_for_survey", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -429,19 +430,19 @@ class UnitController(BaseController):
             required = ["building_uuid"]
             for field in required:
                 if not data.get(field):
-                    errors.append(f"Missing required field: {field}")
+                    errors.append("الحقل المطلوب مفقود")
 
         # Validate floor number
         if data.get("floor_number") is not None:
             floor = data["floor_number"]
             if not isinstance(floor, int) or floor < -10 or floor > 200:
-                errors.append("Invalid floor number")
+                errors.append("رقم الطابق غير صحيح")
 
         # Validate unit area
         if data.get("unit_area") is not None:
             area = data["unit_area"]
             if area <= 0 or area > 10000:
-                errors.append("Invalid unit area")
+                errors.append("مساحة الوحدة غير صحيحة")
 
         if errors:
             return OperationResult.fail(
@@ -467,7 +468,7 @@ class UnitController(BaseController):
             }
             return OperationResult.ok(data=stats)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_units_count_for_building(self, building_uuid: str) -> int:
         """

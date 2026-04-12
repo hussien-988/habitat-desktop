@@ -231,10 +231,10 @@ def _extract_validation_details(response_data: dict) -> str:
         lines = []
         for field, messages in errors.items():
             if isinstance(messages, list):
-                for msg in messages:
-                    lines.append(f"- {field}: {msg}")
+                for msg in messages[:1]:
+                    lines.append(f"- {msg}")
             else:
-                lines.append(f"- {field}: {messages}")
+                lines.append(f"- {messages}")
         return "\n".join(lines)
 
     if isinstance(errors, list):

@@ -744,7 +744,7 @@ class CaseManagementPage(QWidget):
             raw = api.get_cases(**params)
         except Exception as e:
             logger.warning(f"Cases fetch failed: {e}")
-            raw = {}
+            raise
 
         if isinstance(raw, dict):
             items = raw.get("cases", raw.get("items", []))

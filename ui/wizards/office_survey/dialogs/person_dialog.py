@@ -1829,7 +1829,7 @@ class PersonDialog(QDialog):
 
         try:
             self._refresh_token()
-            evidences = self._api_service.get_survey_evidences(self._survey_id)
+            evidences = self._api_service.get_survey_evidences(self._survey_id, evidence_type="tenure")
         except Exception as e:
             logger.warning(f"Could not load existing docs: {e}")
             Toast.show_toast(self, tr("wizard.person_dialog.failed_load_docs"), Toast.ERROR)
@@ -2794,13 +2794,31 @@ class PersonDialog(QDialog):
                         self._api_relation_id = relation_id
                     new_tenure_files = [
                         f for f in self.relation_uploaded_files
-                        if not f.get("evidence_id")
+                        if not f.get("evidence_id") and not f.get("_selected_existing")
                     ]
                     if relation_id and new_tenure_files:
                         saved = self.relation_uploaded_files
                         self.relation_uploaded_files = new_tenure_files
                         self._upload_tenure_files(relation_id)
                         self.relation_uploaded_files = saved
+
+                    # Link existing selected documents to this relation
+                    if relation_id:
+                        for entry in self.relation_uploaded_files:
+                            if not entry.get('_selected_existing') or not entry.get('evidence_id'):
+                                continue
+                            try:
+                                self._api_service.link_evidence_to_relation(
+                                    self._survey_id, entry['evidence_id'], relation_id
+                                )
+                                logger.info(f"Existing evidence {entry['evidence_id']} linked to relation {relation_id}")
+                            except Exception as e:
+                                logger.error(f"Failed to link existing evidence: {e}")
+                                Toast.show_toast(
+                                    self,
+                                    tr("wizard.person_dialog.link_existing_doc_failed"),
+                                    Toast.ERROR
+                                )
 
                 except Exception as e:
                     link_success = False
@@ -3000,6 +3018,11 @@ class PersonDialog(QDialog):
                             logger.info(f"Existing evidence {entry['evidence_id']} linked to relation {relation_id}")
                         except Exception as e:
                             logger.error(f"Failed to link existing evidence: {e}")
+                            Toast.show_toast(
+                                self,
+                                tr("wizard.person_dialog.link_existing_doc_failed"),
+                                Toast.ERROR
+                            )
 
                 # Delete leftover pending tenure IDs
                 for old_id in self._pending_rel_replacements:

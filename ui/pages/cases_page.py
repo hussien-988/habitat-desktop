@@ -856,8 +856,8 @@ class CasesPage(QWidget):
                     try:
                         dto = api.get_building_by_id(bid)
                         new_buildings[bid] = bc._api_dto_to_building(dto)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning(f"Building enrichment failed for {bid}: {exc}")
             except Exception:
                 pass
 

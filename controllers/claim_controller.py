@@ -21,6 +21,7 @@ from PyQt5.QtCore import pyqtSignal
 from controllers.base_controller import BaseController, OperationResult
 from models.claim import Claim
 from services.api_client import get_api_client
+from services.error_mapper import map_exception
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -99,20 +100,16 @@ class ClaimController(BaseController):
             self.claim_updated.emit(claim_id)
             return OperationResult.ok(data=result)
         except Exception as e:
-            error_msg = str(e)
-            # Extract backend response details for API errors
-            if hasattr(e, 'status_code'):
-                error_msg = f"HTTP {e.status_code}: {error_msg}"
+            # Detect orphaned evidence relation error
             if hasattr(e, 'response_data') and e.response_data:
                 backend_msg = (e.response_data.get('message') or
-                               e.response_data.get('detail') or
-                               e.response_data.get('title') or '')
-                if backend_msg:
-                    error_msg = f"{error_msg} — {backend_msg}"
-                # Detect orphaned evidence relation error
+                               e.response_data.get('detail') or '')
                 if 'EvidenceRelation' in backend_msg and 'not found' in backend_msg.lower():
                     error_msg = "يوجد مستند محذوف مرتبط بهذه المطالبة — يرجى فصله من قائمة المستندات أولاً"
-            logger.error(f"Failed to update claim {claim_id}: {error_msg}", exc_info=True)
+                    logger.error(f"Failed to update claim {claim_id}: {e}", exc_info=True)
+                    return OperationResult.fail(message=error_msg)
+            error_msg = map_exception(e)
+            logger.error(f"Failed to update claim {claim_id}: {e}", exc_info=True)
             return OperationResult.fail(message=error_msg)
 
     def delete_claim(self, claim_uuid: str) -> OperationResult[bool]:
@@ -159,7 +156,8 @@ class ClaimController(BaseController):
             )
 
         except Exception as e:
-            error_msg = f"Error deleting claim: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"delete_claim failed: {e}", exc_info=True)
             self._emit_error("delete_claim", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -182,7 +180,7 @@ class ClaimController(BaseController):
                 message_ar="المطالبة غير موجودة"
             )
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def select_claim(self, claim_uuid: str) -> OperationResult[Claim]:
         
@@ -236,7 +234,8 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=claims)
 
         except Exception as e:
-            error_msg = f"Error loading claims: {str(e)}"
+            error_msg = map_exception(e)
+            logger.error(f"load_claims failed: {e}", exc_info=True)
             self._emit_error("load_claims", error_msg)
             return OperationResult.fail(message=error_msg)
 
@@ -247,7 +246,7 @@ class ClaimController(BaseController):
             dtos = get_api_client().get_claims_summaries(claim_status=status)
             return OperationResult.ok(data=dtos)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def search_claims(self, search_text: str) -> OperationResult[List[Claim]]:
         
@@ -271,7 +270,7 @@ class ClaimController(BaseController):
             claims = [self._api_summary_to_claim(s) for s in filtered]
             return OperationResult.ok(data=claims)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_claims_for_unit(self, unit_uuid: str) -> OperationResult[List[Claim]]:
         
@@ -319,7 +318,7 @@ class ClaimController(BaseController):
             self.status_changed.emit(claim_id, "draft", "submitted")
             return OperationResult.ok(data=result)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def verify_claim(self, claim_id: str, user_id: str,
                      notes: str = "") -> OperationResult:
@@ -328,7 +327,7 @@ class ClaimController(BaseController):
             result = self._api.verify_claim(claim_id, user_id, notes)
             return OperationResult.ok(data=result)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def assign_claim(self, claim_id: str, user_id: str,
                      target_date: Optional[str] = None) -> OperationResult:
@@ -337,7 +336,7 @@ class ClaimController(BaseController):
             result = self._api.assign_claim(claim_id, user_id, target_date)
             return OperationResult.ok(data=result)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def _can_change_status(self, from_status: str, to_status: str) -> bool:
         """Check if status transition is allowed."""
@@ -366,7 +365,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=dtos if isinstance(dtos, list) else [])
         except Exception as e:
             logger.error(f"Failed to search claims: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_claim_full_detail(self, claim_id: str,
                               hint_survey_id: str = None,
@@ -449,7 +448,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to get claim detail {claim_id}: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def update_person(self, person_id: str,
                       person_data: Dict[str, Any]) -> OperationResult:
@@ -459,7 +458,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to update person {person_id}: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def update_property_unit(self, unit_id: str,
                              unit_data: Dict[str, Any]) -> OperationResult:
@@ -469,7 +468,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to update unit {unit_id}: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def add_tenure_evidence(self, survey_id: str, relation_id: str,
                             file_path: str, **kwargs) -> OperationResult:
@@ -480,7 +479,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to add tenure evidence: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def add_identification_evidence(self, survey_id: str, person_id: str,
                                     file_path: str, **kwargs) -> OperationResult:
@@ -491,7 +490,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to add identification evidence: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def update_tenure_evidence(self, survey_id: str, evidence_id: str,
                                relation_id: str, file_path: str = None,
@@ -508,7 +507,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=result)
         except Exception as e:
             logger.error(f"Failed to update tenure evidence: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def delete_evidence(self, survey_id: str,
                         evidence_id: str) -> OperationResult:
@@ -518,7 +517,7 @@ class ClaimController(BaseController):
             return OperationResult.ok(data=True)
         except Exception as e:
             logger.error(f"Failed to delete evidence {evidence_id}: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_claim_full_context(self, claim_id: str) -> OperationResult:
         
@@ -602,7 +601,7 @@ class ClaimController(BaseController):
 
         except Exception as e:
             logger.error(f"Failed to get claim context: {e}", exc_info=True)
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     @staticmethod
     def _map_building_dto(dto: dict) -> dict:
@@ -717,7 +716,7 @@ class ClaimController(BaseController):
             stats = {"total": total, "by_status": by_status}
             return OperationResult.ok(data=stats)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def get_claims_by_status(self) -> OperationResult[Dict[str, int]]:
         """
@@ -735,7 +734,7 @@ class ClaimController(BaseController):
                 result[status_str] = result.get(status_str, 0) + 1
             return OperationResult.ok(data=result)
         except Exception as e:
-            return OperationResult.fail(message=str(e))
+            return OperationResult.fail(message=map_exception(e))
 
     def _validate_claim_data(
         self,

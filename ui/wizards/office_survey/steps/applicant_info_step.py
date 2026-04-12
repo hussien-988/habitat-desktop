@@ -915,7 +915,6 @@ class ApplicantInfoStep(BaseStep):
         import tempfile
         from services.api_worker import ApiWorker
 
-        # Use evidence metadata already fetched by the controller (primary source)
         applicant = self.context.applicant or {}
         evidences = applicant.get("id_photo_evidences", [])
 
@@ -926,51 +925,22 @@ class ApplicantInfoStep(BaseStep):
         self._set_auth_token()
 
         def _do_fetch():
+            from utils.helpers import download_evidence_file
             docs = evidences
             if not docs and person_id:
                 docs = self._api_client.get_person_identification_documents(person_id)
             if not docs:
                 return []
-            tmp_dir = tempfile.mkdtemp(prefix="id_photos_")
             downloaded = []
             for doc in docs:
                 ev_id = doc.get("id") or doc.get("evidenceId", "")
                 if not ev_id:
                     continue
                 file_name = doc.get("fileName") or doc.get("originalFileName") or f"{ev_id}.jpg"
-                save_path = os.path.join(tmp_dir, f"{ev_id}_{file_name}")
                 try:
-                    self._api_client.download_evidence(ev_id, save_path)
-                    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-                        # Ensure a file extension exists so QDesktopServices can open it
-                        _, existing_ext = os.path.splitext(save_path)
-                        if not existing_ext:
-                            mime_ext = {
-                                "image/jpeg": ".jpg", "image/jpg": ".jpg",
-                                "image/png": ".png", "image/gif": ".gif",
-                                "image/bmp": ".bmp", "image/webp": ".webp",
-                                "application/pdf": ".pdf",
-                            }.get((doc.get("mimeType") or "").lower(), "")
-                            if not mime_ext:
-                                with open(save_path, 'rb') as _f:
-                                    magic = _f.read(12)
-                                if magic[:3] == b'\xff\xd8\xff':
-                                    mime_ext = ".jpg"
-                                elif magic[:8] == b'\x89PNG\r\n\x1a\n':
-                                    mime_ext = ".png"
-                                elif magic[:4] in (b'GIF8', b'GIF9'):
-                                    mime_ext = ".gif"
-                                elif magic[:2] == b'BM':
-                                    mime_ext = ".bmp"
-                                elif magic[:4] == b'%PDF':
-                                    mime_ext = ".pdf"
-                                elif magic[8:12] == b'WEBP':
-                                    mime_ext = ".webp"
-                            if mime_ext:
-                                new_path = save_path + mime_ext
-                                os.rename(save_path, new_path)
-                                save_path = new_path
-                        downloaded.append(save_path)
+                    result_path = download_evidence_file(ev_id, file_name)
+                    if result_path:
+                        downloaded.append(result_path)
                 except Exception as e:
                     logger.warning(f"Failed to download ID photo {ev_id}: {e}")
             return downloaded
