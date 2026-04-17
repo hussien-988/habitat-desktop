@@ -69,11 +69,65 @@ class SecurityService:
     MAX_LOCKOUT_DURATION = 1440  # 24 hours
     MAX_FAILED_ATTEMPTS = 20
 
+    # Backend-managed policy cache (populated by fetch_from_api after login)
+    _cached_settings: Optional["SecuritySettings"] = None
+
     def __init__(self, db: Database):
         self.db = db
 
+    @classmethod
+    def fetch_from_api(cls) -> bool:
+        """Fetch admin-managed security policy from backend and cache it in memory.
+
+        Must be called after successful login (requires bearer token).
+        Returns True on success. On failure, cache is cleared and get_settings falls
+        back to local DB.
+        """
+        try:
+            from services.api_client import get_api_client
+            api_client = get_api_client()
+            data = api_client.get_security_settings()
+            if not data:
+                cls._cached_settings = None
+                logger.warning("Backend returned empty security settings")
+                return False
+
+            pwd = data.get("passwordPolicy", {})
+            session = data.get("sessionLockoutPolicy", {})
+            cls._cached_settings = SecuritySettings(
+                password_min_length=pwd.get("minLength", 8),
+                password_require_uppercase=pwd.get("requireUppercase", True),
+                password_require_lowercase=pwd.get("requireLowercase", True),
+                password_require_digit=pwd.get("requireDigit", True),
+                password_require_symbol=pwd.get("requireSpecialCharacter", False),
+                password_expiry_days=pwd.get("expiryDays", 90),
+                password_reuse_history=pwd.get("reuseHistory", 5),
+                session_timeout_minutes=session.get("sessionTimeoutMinutes", 30),
+                max_failed_login_attempts=session.get("maxFailedLoginAttempts", 5),
+                account_lockout_duration_minutes=session.get("lockoutDurationMinutes", 15),
+            )
+            logger.info("Security policy fetched from backend successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to fetch security settings from backend: {e}")
+            cls._cached_settings = None
+            return False
+
+    @classmethod
+    def is_ready(cls) -> bool:
+        """True if the policy was successfully fetched from the backend."""
+        return cls._cached_settings is not None
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear cached policy (e.g., on logout)."""
+        cls._cached_settings = None
+
     def get_settings(self) -> SecuritySettings:
-        """Get current security settings."""
+        """Get current security settings. Prefers backend-fetched cache; falls back to local DB."""
+        if SecurityService._cached_settings is not None:
+            return SecurityService._cached_settings
+
         query = "SELECT * FROM security_settings WHERE setting_id = 'default'"
         row = self.db.fetch_one(query)
 
