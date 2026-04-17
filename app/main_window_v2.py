@@ -636,6 +636,15 @@ class MainWindow(QMainWindow):
         self._vocab_worker = ApiWorker(_background_vocab_refresh)
         self._vocab_worker.start()
 
+        # Fetch admin-managed security policy from backend (fire-and-forget)
+        def _background_security_policy_refresh():
+            from services.security_service import SecurityService
+            if not SecurityService.fetch_from_api():
+                logger.warning("Security policy fetch returned no data — using local fallback")
+
+        self._security_policy_worker = ApiWorker(_background_security_policy_refresh)
+        self._security_policy_worker.start()
+
         # Pre-initialize map services in background (tile server + landmark icons)
         import threading
         threading.Thread(target=self._prewarm_map_services, daemon=True).start()
@@ -1000,6 +1009,8 @@ class MainWindow(QMainWindow):
                 get_api_client().logout()
             except Exception as e:
                 logger.warning(f"API logout failed: {e}")
+            from services.security_service import SecurityService
+            SecurityService.clear_cache()
             self.current_user = None
             self._stop_session_timer()
             self._stop_token_refresh_timer()
@@ -1071,6 +1082,8 @@ class MainWindow(QMainWindow):
             Toast.WARNING,
             5000
         )
+        from services.security_service import SecurityService
+        SecurityService.clear_cache()
         self.current_user = None
         self._stop_session_timer()
         self._stop_token_refresh_timer()
@@ -1112,6 +1125,8 @@ class MainWindow(QMainWindow):
                     get_api_client().logout()
                 except Exception as e:
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
+                from services.security_service import SecurityService
+                SecurityService.clear_cache()
                 self.current_user = None
                 self._stop_session_timer()
                 self._stop_token_refresh_timer()
