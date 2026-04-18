@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
 from PyQt5.QtGui import QColor
 
 from ui.components.wizard_header import WizardHeader
+from app.config import Pages
 from ui.components.accent_line import AccentLine
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -127,6 +128,7 @@ class ImportWizardPage(QWidget):
             title=tr("wizard.import.title"),
             subtitle=tr("wizard.import.subtitle"),
             steps=step_names,
+            help_page_id=Pages.IMPORT_WIZARD,
         )
         outer_layout.addWidget(self.header)
 

@@ -14,7 +14,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QColor, QCursor, QFont
 import re
 
-from app.config import Config
+from app.config import Config, Pages
 from services.translation_manager import tr, get_layout_direction
 from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
@@ -817,6 +817,7 @@ class PersonsPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.persons.title"))
+        self._header.set_help(Pages.PERSONS)
 
         # Stat pill
         self._stat_total = StatPill(tr("page.persons.total"))

@@ -39,6 +39,7 @@ class WizardHeader(QWidget):
         title: str = "",
         subtitle: str = "",
         steps: list = None,
+        help_page_id: str = None,
         parent=None
     ):
         super().__init__(parent)
@@ -46,6 +47,8 @@ class WizardHeader(QWidget):
         self.subtitle_text = subtitle
         self._steps = steps or []
         self._current_step = 0
+        self._help_page_id = help_page_id
+        self._help_btn = None
 
         # Constellation particles
         self._anim_start = time.time()
@@ -84,7 +87,10 @@ class WizardHeader(QWidget):
         )
         main_layout.setSpacing(0)
 
-        # Row 1: Title + Subtitle
+        # Row 1: Title block + optional help button on the opposite side
+        title_row_wrapper = QHBoxLayout()
+        title_row_wrapper.setSpacing(12)
+
         title_row = QVBoxLayout()
         title_row.setSpacing(4)
 
@@ -103,7 +109,15 @@ class WizardHeader(QWidget):
             self.subtitle_label.hide()
         title_row.addWidget(self.subtitle_label)
 
-        main_layout.addLayout(title_row)
+        title_row_wrapper.addLayout(title_row)
+        title_row_wrapper.addStretch()
+
+        if self._help_page_id:
+            from ui.components.help_button import HelpButton
+            self._help_btn = HelpButton(self._help_page_id, variant="dark", parent=self)
+            title_row_wrapper.addWidget(self._help_btn, 0, Qt.AlignTop)
+
+        main_layout.addLayout(title_row_wrapper)
 
         # Row 2: Step indicator pills (if steps provided)
         if self._steps:
@@ -195,6 +209,15 @@ class WizardHeader(QWidget):
         """Set the currently active step index (0-based)."""
         self._current_step = step
         self._update_step_styles()
+
+    def set_help(self, page_id: str):
+        if self._help_btn is not None:
+            self._help_btn._page_id = page_id
+            return
+        self._help_page_id = page_id
+        from ui.components.help_button import HelpButton
+        self._help_btn = HelpButton(page_id, variant="dark", parent=self)
+        self._help_btn.show()
 
     def get_title_label(self) -> QLabel:
         return self.title_label

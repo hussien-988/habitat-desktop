@@ -22,6 +22,7 @@ from PyQt5.QtGui import (
 from repositories.database import Database
 from services.duplicate_service import DuplicateService
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -498,6 +499,7 @@ class DuplicatesPage(QWidget):
         # Dark header
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.duplicates.title"))
+        self._header.set_help(Pages.DUPLICATES)
 
         self._stat_pending = StatPill(tr("page.duplicates.stat_pending"))
         self._stat_pending.set_count(0)

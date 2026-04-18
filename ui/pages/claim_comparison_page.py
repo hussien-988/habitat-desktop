@@ -16,6 +16,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions, ButtonDimensions, ScreenScale
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.accent_line import AccentLine
 from ui.components.icon import Icon
 from ui.components.toast import Toast
@@ -260,6 +261,7 @@ class ClaimComparisonPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.comparison.title"))
+        self._header.set_help(Pages.CLAIM_COMPARISON)
 
         # Action button in header
         self.action_btn = QPushButton(tr("page.comparison.execute"))

@@ -25,7 +25,7 @@ try:
 except ImportError:
     HAS_WEBENGINE = False
 
-from app.config import Config
+from app.config import Config, Pages
 from services.vocab_service import get_options as vocab_get_options, get_label as vocab_get_label
 from services.display_mappings import (
     get_building_type_display, get_building_status_display,
@@ -2280,6 +2280,7 @@ class BuildingsListPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.buildings.title"))
+        self._header.set_help(Pages.BUILDINGS)
 
         self._stat_total = StatPill(tr("page.buildings.total"))
         self._header.add_stat_pill(self._stat_total)

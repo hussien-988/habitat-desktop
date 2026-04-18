@@ -133,6 +133,11 @@ class DarkHeaderZone(QFrame):
         idx = self._row2.count() - 1
         self._row2.insertWidget(idx, widget)
 
+    def set_help(self, page_id: str):
+        from ui.components.help_button import HelpButton
+        btn = HelpButton(page_id, variant="dark", parent=self)
+        self._row1.insertWidget(1, btn)
+
     def get_title_label(self) -> QLabel:
         return self._title_label
 

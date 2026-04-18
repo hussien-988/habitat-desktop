@@ -32,6 +32,7 @@ from ui.components.empty_state import EmptyState
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.search_context_bar import SearchContextBar
+from app.config import Pages
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_source_display, get_claim_type_display
 from services.api_worker import ApiWorker
@@ -388,6 +389,7 @@ class CompletedClaimsPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.claims.subtitle"))
+        self._header.set_help(Pages.CLAIMS)
 
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 

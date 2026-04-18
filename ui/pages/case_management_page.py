@@ -32,6 +32,7 @@ from ui.style_manager import StyleManager
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.toast import Toast
 from ui.components.empty_state import EmptyState
 from services.translation_manager import get_layout_direction, tr
@@ -509,6 +510,7 @@ class CaseManagementPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.case_mgmt.title"))
+        self._header.set_help(Pages.CASE_MANAGEMENT)
 
         # Stat pills
         self._pill_total = _make_stat_pill(

@@ -33,6 +33,7 @@ from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.search_context_bar import SearchContextBar
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.display_mappings import get_survey_type_display
@@ -488,6 +489,7 @@ class CasesPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("cases.page.title"))
+        self._header.set_help(Pages.SURVEYS)
 
         # Add button in header actions
         self._add_btn = QPushButton(tr("wizard.button.add_case"))

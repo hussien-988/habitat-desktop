@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QColor, QIcon, QCursor, QFont
 
-from app.config import Config
+from app.config import Config, Pages
 from repositories.database import Database
 from repositories.unit_repository import UnitRepository
 from repositories.building_repository import BuildingRepository
@@ -190,6 +190,7 @@ class UnitsPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.units.title"))
+        self._header.set_help(Pages.UNITS)
 
         self._stat_units = StatPill(tr("page.units.stat_units"))
         self._header.add_stat_pill(self._stat_units)

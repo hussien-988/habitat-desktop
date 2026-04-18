@@ -17,6 +17,7 @@ from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from ui.components.icon import Icon
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.animated_card import AnimatedCard, animate_card_entrance
@@ -419,6 +420,7 @@ class SyncDataPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.sync.title"))
+        self._header.set_help(Pages.SYNC_DATA)
 
         # Stat pills for status counts
         self._stat_pending = StatPill(tr("page.sync.status_pending"))

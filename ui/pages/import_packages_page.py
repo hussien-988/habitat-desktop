@@ -12,6 +12,7 @@ from PyQt5.QtGui import QCursor
 from ui.components.animated_card import AnimatedCard, animate_card_entrance
 from ui.components.empty_state import EmptyState
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -204,6 +205,7 @@ class ImportPackagesPage(QWidget):
         # Dark header
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.import_packages.title"))
+        self._header.set_help(Pages.IMPORT_PACKAGES)
 
         self._stat_total = StatPill(tr("page.import_packages.stat_total"))
         self._stat_total.set_count(0)

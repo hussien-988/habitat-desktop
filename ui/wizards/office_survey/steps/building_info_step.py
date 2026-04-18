@@ -12,7 +12,7 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QFrame, QWidget,
-    QLineEdit, QTextEdit, QScrollArea, QGridLayout
+    QLineEdit, QTextEdit, QScrollArea, QGridLayout, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
@@ -74,85 +74,111 @@ class BuildingInfoStep(BaseStep):
 
         content = QWidget()
         content.setStyleSheet("background: transparent;")
-        vbox = QVBoxLayout(content)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(12)
 
-        vbox.addWidget(self._build_card1())
-        vbox.addWidget(self._build_card2())
-        vbox.addWidget(self._build_card3())
-        vbox.addStretch()
+        outer_grid = QGridLayout(content)
+        outer_grid.setContentsMargins(0, 0, 0, 0)
+        outer_grid.setHorizontalSpacing(ScreenScale.w(12))
+        outer_grid.setVerticalSpacing(ScreenScale.h(12))
+        outer_grid.setColumnStretch(0, 1)
+        outer_grid.setColumnStretch(1, 1)
+
+        outer_grid.addWidget(self._build_merged_card(), 0, 0)
+        outer_grid.addWidget(self._build_card3(), 0, 1)
 
         scroll.setWidget(content)
         self.main_layout.addWidget(scroll)
 
-    # --- Card 1: بيانات البناء ----------------------------------------
+    # --- Merged card: بيانات + حالة البناء ----------------------------
 
-    def _build_card1(self) -> QFrame:
-        card, grid, self.card1_title_lbl, self.card1_subtitle_lbl = self._make_card_shell(
-            title=tr("wizard.building_info.card1_title"),
-            subtitle=tr("wizard.building_info.card1_subtitle"),
-            icon_name="blue",
+    def _build_merged_card(self) -> QFrame:
+        card = make_step_card()
+        card.setMinimumWidth(ScreenScale.w(360))
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(ScreenScale.h(10))
+
+        grid1 = self._add_card_section(
+            layout,
+            tr("wizard.building_info.card1_title"),
+            tr("wizard.building_info.card1_subtitle"),
+            "card1",
             columns=3,
         )
+        self.lbl_governorate,  self.f_governorate  = self._add_grid_field(grid1, tr("wizard.building_info.governorate_code"),  0, 0)
+        self.lbl_district,     self.f_district     = self._add_grid_field(grid1, tr("wizard.building_info.district_code"),     0, 1)
+        self.lbl_subdistrict,  self.f_subdistrict  = self._add_grid_field(grid1, tr("wizard.building_info.subdistrict_code"),  0, 2)
+        self.lbl_community,    self.f_community    = self._add_grid_field(grid1, tr("wizard.building_info.community_code"),    1, 0)
+        self.lbl_neighborhood, self.f_neighborhood = self._add_grid_field(grid1, tr("wizard.building_info.neighborhood_code"), 1, 1)
+        self.lbl_bldg_number,  self.f_bldg_number  = self._add_grid_field(grid1, tr("wizard.building_info.building_number"),   1, 2)
+        self.lbl_bldg_code,    self.f_bldg_code    = self._add_grid_field(grid1, tr("wizard.building_info.building_code"),     2, 0, col_span=3)
 
-        self.lbl_governorate,  self.f_governorate  = self._add_grid_field(grid, tr("wizard.building_info.governorate_code"), 0, 0)
-        self.lbl_district,     self.f_district     = self._add_grid_field(grid, tr("wizard.building_info.district_code"),  0, 1)
-        self.lbl_subdistrict,  self.f_subdistrict  = self._add_grid_field(grid, tr("wizard.building_info.subdistrict_code"),  0, 2)
-        self.lbl_community,    self.f_community    = self._add_grid_field(grid, tr("wizard.building_info.community_code"),  1, 0)
-        self.lbl_neighborhood, self.f_neighborhood = self._add_grid_field(grid, tr("wizard.building_info.neighborhood_code"),     1, 1)
-        self.lbl_bldg_number,  self.f_bldg_number  = self._add_grid_field(grid, tr("wizard.building_info.building_number"),   1, 2)
-        self.lbl_bldg_code,    self.f_bldg_code    = self._add_grid_field(grid, tr("wizard.building_info.building_code"),   2, 0, col_span=3)
+        layout.addSpacing(ScreenScale.h(6))
+
+        self.card2_title_lbl = QLabel(tr("wizard.building_info.card2_title"))
+        self.card2_title_lbl.hide()
+        self.card2_subtitle_lbl = QLabel()
+        self.card2_subtitle_lbl.hide()
+
+        grid2 = QGridLayout()
+        grid2.setHorizontalSpacing(ScreenScale.w(10))
+        grid2.setVerticalSpacing(ScreenScale.h(10))
+        grid2.setContentsMargins(0, 0, 0, 0)
+        grid2.setColumnStretch(0, 1)
+        grid2.setColumnStretch(1, 1)
+        layout.addLayout(grid2)
+        self.lbl_status,     self.f_status     = self._add_grid_field(grid2, tr("wizard.building_info.building_status"),  0, 0)
+        self.lbl_type,       self.f_type       = self._add_grid_field(grid2, tr("wizard.building_info.building_type"),    0, 1)
+        self.lbl_apartments, self.f_apartments = self._add_grid_field(grid2, tr("wizard.building_info.apartments_count"), 1, 0)
+        self.lbl_shops,      self.f_shops      = self._add_grid_field(grid2, tr("wizard.building_info.shops_count"),      1, 1)
+        self.lbl_floors,     self.f_floors     = self._add_grid_field(grid2, tr("wizard.building_info.floors_count"),     2, 0)
+        self.lbl_total,      self.f_total      = self._add_grid_field(grid2, tr("wizard.building_info.total_units"),      2, 1)
+
         return card
 
-    # --- Card 2: حالة البناء ------------------------------------------
+    def _add_card_section(self, parent_layout, title: str, subtitle: str, attr_prefix: str, columns: int = 2) -> QGridLayout:
+        header_layout, title_lbl, subtitle_lbl = make_icon_header(title, subtitle, "blue")
+        setattr(self, f"{attr_prefix}_title_lbl", title_lbl)
+        setattr(self, f"{attr_prefix}_subtitle_lbl", subtitle_lbl)
+        parent_layout.addLayout(header_layout)
+        parent_layout.addWidget(make_divider())
 
-    def _build_card2(self) -> QFrame:
-        card, grid, self.card2_title_lbl, self.card2_subtitle_lbl = self._make_card_shell(
-            title=tr("wizard.building_info.card2_title"),
-            subtitle=tr("wizard.building_info.card2_subtitle"),
-            icon_name="blue",
-            columns=3,
-        )
-
-        self.lbl_status,     self.f_status     = self._add_grid_field(grid, tr("wizard.building_info.building_status"),     0, 0)
-        self.lbl_type,       self.f_type       = self._add_grid_field(grid, tr("wizard.building_info.building_type"),      0, 1)
-        self.lbl_apartments, self.f_apartments = self._add_grid_field(grid, tr("wizard.building_info.apartments_count"),  0, 2)
-        self.lbl_shops,      self.f_shops      = self._add_grid_field(grid, tr("wizard.building_info.shops_count"),       1, 0)
-        self.lbl_floors,     self.f_floors     = self._add_grid_field(grid, tr("wizard.building_info.floors_count"),      1, 1)
-        self.lbl_total,      self.f_total      = self._add_grid_field(grid, tr("wizard.building_info.total_units"),       1, 2)
-        return card
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(ScreenScale.w(10))
+        grid.setVerticalSpacing(ScreenScale.h(10))
+        grid.setContentsMargins(0, 0, 0, 0)
+        for col in range(columns):
+            grid.setColumnStretch(col, 1)
+        parent_layout.addLayout(grid)
+        return grid
 
     # --- Card 3: موقع البناء (mirrors AddBuildingPage Card 3) ----------
 
     def _build_card3(self) -> QFrame:
+        from PyQt5.QtWidgets import QPushButton, QGraphicsDropShadowEffect
+        from PyQt5.QtGui import QCursor, QIcon, QColor
+        from PyQt5.QtCore import QSize
+        from ui.components.icon import Icon
+
         card = make_step_card()
+        card.setMinimumWidth(ScreenScale.w(360))
 
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 12, 12, 12)
-        card_layout.setSpacing(0)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(ScreenScale.h(10))
 
-        # Simple text header — matches AddBuildingPage Card 3 exactly
-        header = QLabel(tr("wizard.building_info.card3_title"))
-        header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        card_layout.addWidget(header)
-        self._card3_header_lbl = header
-        card_layout.addSpacing(12)
-
-        content_row = QHBoxLayout()
-        content_row.setSpacing(24)
-
-        # --- Section 1: Map placeholder ---
-        map_section = QVBoxLayout()
-        map_section.setSpacing(4)
-
-        map_align_lbl = QLabel("")
-        map_align_lbl.setFixedHeight(ScreenScale.h(16))
-        map_section.addWidget(map_align_lbl)
+        header_layout, self._card3_header_lbl, self._card3_subtitle_lbl = make_icon_header(
+            tr("wizard.building_info.card3_title"),
+            "",
+            "blue",
+        )
+        card_layout.addLayout(header_layout)
+        card_layout.addWidget(make_divider())
 
         self._map_container = QLabel()
-        self._map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))
+        self._map_container.setMinimumSize(ScreenScale.w(320), ScreenScale.h(200))
+        self._map_container.setMaximumHeight(ScreenScale.h(280))
+        self._map_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._map_container.setAlignment(Qt.AlignCenter)
         self._map_container.setObjectName("mapContainer")
         self._map_container.setStyleSheet("""
@@ -162,29 +188,29 @@ class BuildingInfoStep(BaseStep):
             }
         """)
 
-        from ui.components.icon import Icon
         map_bg = Icon.load_pixmap("image-40", size=None)
         if not map_bg or map_bg.isNull():
             map_bg = Icon.load_pixmap("map-placeholder", size=None)
         if map_bg and not map_bg.isNull():
             self._map_container.setPixmap(
-                map_bg.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+                map_bg.scaled(
+                    ScreenScale.w(800), ScreenScale.h(220),
+                    Qt.IgnoreAspectRatio, Qt.SmoothTransformation,
+                )
             )
 
         loc_icon_lbl = QLabel(self._map_container)
-        loc_px = Icon.load_pixmap("carbon_location-filled", size=56)
+        loc_px = Icon.load_pixmap("carbon_location-filled", size=48)
         if loc_px and not loc_px.isNull():
             loc_icon_lbl.setPixmap(loc_px)
-            loc_icon_lbl.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
-            loc_icon_lbl.move(172, 37)
+            loc_icon_lbl.setFixedSize(ScreenScale.w(48), ScreenScale.h(48))
+            loc_icon_lbl.move(ScreenScale.w(160), ScreenScale.h(80))
             loc_icon_lbl.setStyleSheet("background: transparent;")
+        self._map_loc_icon = loc_icon_lbl
 
-        from PyQt5.QtWidgets import QPushButton
-        from PyQt5.QtGui import QIcon
-        from PyQt5.QtCore import QSize
         map_button = QPushButton(self._map_container)
-        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
-        map_button.move(8, 8)
+        map_button.setMinimumSize(ScreenScale.w(96), ScreenScale.h(24))
+        map_button.move(ScreenScale.w(8), ScreenScale.h(8))
         map_button.setCursor(Qt.PointingHandCursor)
         pill_px = Icon.load_pixmap("pill", size=12)
         if pill_px and not pill_px.isNull():
@@ -198,49 +224,36 @@ class BuildingInfoStep(BaseStep):
                 color: {Colors.PRIMARY_BLUE};
                 border: none;
                 border-radius: 5px;
-                padding: 4px;
+                padding: 4px 10px;
                 text-align: center;
             }}
         """)
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        from PyQt5.QtGui import QColor
         shadow = QGraphicsDropShadowEffect(map_button)
         shadow.setBlurRadius(8)
         shadow.setXOffset(0)
         shadow.setYOffset(2)
         shadow.setColor(QColor(0, 0, 0, 60))
         map_button.setGraphicsEffect(shadow)
-        map_button.setEnabled(True)
         map_button.clicked.connect(self._open_map_view)
         self._map_button = map_button
 
-        map_section.addWidget(self._map_container)
+        card_layout.addWidget(self._map_container, stretch=1)
+
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(ScreenScale.w(10))
 
         self.f_location_status = QLabel("")
         self.f_location_status.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self.f_location_status.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent;"
         )
-        map_section.addWidget(self.f_location_status)
-        map_section.addStretch(1)
-
-        content_row.addLayout(map_section, stretch=1)
-
-        # --- Section 2: وثائق المبنى (button) ---
-        from PyQt5.QtWidgets import QPushButton
-        from PyQt5.QtGui import QCursor
-
-        docs_section = QVBoxLayout()
-        docs_section.setSpacing(8)
-
-        docs_lbl = QLabel(tr("wizard.building_info.documents_title"))
-        docs_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        docs_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        docs_section.addWidget(docs_lbl)
-        self._docs_title_lbl = docs_lbl
+        self.f_location_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        meta_row.addWidget(self.f_location_status, stretch=1)
 
         self._docs_btn = QPushButton(tr("wizard.building_info.show_documents"))
-        self._docs_btn.setFixedHeight(ScreenScale.h(40))
+        self._docs_btn.setMinimumHeight(ScreenScale.h(36))
+        self._docs_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self._docs_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self._docs_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._docs_btn.setStyleSheet("""
@@ -255,32 +268,23 @@ class BuildingInfoStep(BaseStep):
             QPushButton:pressed { background-color: #D6ECFF; }
         """)
         self._docs_btn.clicked.connect(self._on_show_documents)
-        docs_section.addWidget(self._docs_btn)
-        docs_section.addStretch(1)
-
-        content_row.addLayout(docs_section, stretch=1)
-
-        # --- Section 3: وصف البناء ---
-        desc_section = QVBoxLayout()
-        desc_section.setSpacing(4)
+        meta_row.addWidget(self._docs_btn, stretch=0)
+        card_layout.addLayout(meta_row)
 
         desc_lbl = QLabel(tr("wizard.building_info.description_label"))
         desc_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         desc_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        desc_section.addWidget(desc_lbl)
+        card_layout.addWidget(desc_lbl)
         self._desc_lbl = desc_lbl
 
         self.f_description = QTextEdit()
         self.f_description.setReadOnly(True)
-        self.f_description.setFixedHeight(ScreenScale.h(130))
+        self.f_description.setMinimumHeight(ScreenScale.h(100))
+        self.f_description.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.f_description.setStyleSheet(_TEXTAREA_STYLE)
         self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))
-        desc_section.addWidget(self.f_description)
-        desc_section.addStretch(1)
+        card_layout.addWidget(self.f_description, stretch=1)
 
-        content_row.addLayout(desc_section, stretch=1)
-
-        card_layout.addLayout(content_row)
         return card
     # Reusable builders
 
@@ -290,10 +294,11 @@ class BuildingInfoStep(BaseStep):
         Returns (card_frame, grid_layout).
         """
         card = make_step_card()
+        card.setMinimumWidth(ScreenScale.w(360))
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(ScreenScale.h(10))
 
         header_layout, title_lbl, subtitle_lbl = make_icon_header(title, subtitle, icon_name)
         layout.addLayout(header_layout)
@@ -301,7 +306,8 @@ class BuildingInfoStep(BaseStep):
         layout.addWidget(make_divider())
 
         grid = QGridLayout()
-        grid.setSpacing(10)
+        grid.setHorizontalSpacing(ScreenScale.w(10))
+        grid.setVerticalSpacing(ScreenScale.h(10))
         grid.setContentsMargins(0, 0, 0, 0)
         for col in range(columns):
             grid.setColumnStretch(col, 1)
@@ -334,7 +340,8 @@ class BuildingInfoStep(BaseStep):
 
         field = QLineEdit()
         field.setReadOnly(True)
-        field.setFixedHeight(ScreenScale.h(40))
+        field.setMinimumHeight(ScreenScale.h(36))
+        field.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         field.setAlignment(Qt.AlignCenter)
         field.setStyleSheet(READONLY_FIELD_STYLE)
         vbox.addWidget(field)
@@ -644,7 +651,6 @@ class BuildingInfoStep(BaseStep):
         self.lbl_total.setText(tr("wizard.building_info.total_units"))
         # Card 3
         self._card3_header_lbl.setText(tr("wizard.building_info.card3_title"))
-        self._docs_title_lbl.setText(tr("wizard.building_info.documents_title"))
         self._docs_btn.setText(tr("wizard.building_info.show_documents"))
         self._desc_lbl.setText(tr("wizard.building_info.description_label"))
         self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))

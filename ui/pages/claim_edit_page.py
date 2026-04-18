@@ -18,6 +18,7 @@ from ui.components.toast import Toast
 from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
 from services.translation_manager import tr, get_layout_direction
 from services.api_worker import ApiWorker
+from app.config import Pages
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -136,6 +137,11 @@ class ClaimEditPage(QWidget):
         layout = QHBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        from ui.components.help_button import HelpButton
+        self._help_btn = HelpButton(Pages.CLAIM_EDIT, variant="light")
+        layout.addWidget(self._help_btn)
+        layout.addSpacing(8)
 
         self._title_label = QLabel(tr("page.claim_edit.title"))
         self._title_label.setFont(create_font(size=FontManager.SIZE_TITLE, weight=QFont.Bold))
