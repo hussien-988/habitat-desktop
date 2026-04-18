@@ -14,7 +14,7 @@ from typing import List
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QWidget, QComboBox,
-    QGridLayout, QCheckBox, QSizePolicy,
+    QGridLayout, QCheckBox, QSizePolicy, QRadioButton, QButtonGroup,
     QScrollArea, QFileDialog, QGraphicsDropShadowEffect,
 )
 from PyQt5.QtCore import Qt, QUrl, QRegExp as QtRegExp
@@ -26,6 +26,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
     make_step_card, make_icon_header, make_divider, make_sub_section_header,
+    make_editable_date_combo, read_int_from_combo,
 )
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
@@ -64,46 +65,68 @@ class ApplicantInfoStep(BaseStep):
             + StyleManager.scrollbar()
         )
 
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+
+        outer_grid = QGridLayout(content)
+        outer_grid.setContentsMargins(0, 0, 0, 0)
+        outer_grid.setHorizontalSpacing(ScreenScale.w(12))
+        outer_grid.setVerticalSpacing(ScreenScale.h(12))
+        outer_grid.setColumnStretch(0, 1)
+        outer_grid.setColumnStretch(1, 1)
+
+        outer_grid.addWidget(self._build_card_a(), 0, 0)
+        outer_grid.addWidget(self._build_card_b(), 0, 1)
+
+        scroll.setWidget(content)
+        self.main_layout.addWidget(scroll)
+
+        self._spinner = LoadingSpinnerOverlay(self)
+
+    def _build_card_a(self) -> QFrame:
         card = make_step_card()
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(20)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(ScreenScale.h(10))
 
-        # Icon header
         header_layout, self.app_title_lbl, self.app_subtitle_lbl = make_icon_header(
             title=tr("wizard.step.applicant_info"),
             subtitle=tr("wizard.applicant.card_subtitle"),
             icon_name="user",
-)
-
+        )
         card_layout.addLayout(header_layout)
-
         card_layout.addWidget(make_divider())
 
-        # Section 1: Personal Information
-        
         self.section_personal_header = make_sub_section_header(tr("wizard.section.personal_info"))
         card_layout.addWidget(self.section_personal_header)
         card_layout.addLayout(self._build_personal_section())
 
-        # Section 2: Contact Details
-        
+        card_layout.addSpacing(ScreenScale.h(4))
+        card_layout.addWidget(make_divider())
+
+        self.section_visit_header = make_sub_section_header(tr("wizard.section.visit_type"))
+        card_layout.addWidget(self.section_visit_header)
+        card_layout.addLayout(self._build_visit_section())
+        card_layout.addStretch()
+
+        return card
+
+    def _build_card_b(self) -> QFrame:
+        card = make_step_card()
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(ScreenScale.h(10))
+
         self.section_contact_header = make_sub_section_header(tr("wizard.section.contact_details"))
         card_layout.addWidget(self.section_contact_header)
         card_layout.addLayout(self._build_contact_section())
 
-        # Section 3: Visit Type
-        
-        self.section_visit_header = make_sub_section_header(tr("wizard.section.visit_type"))
-        card_layout.addWidget(self.section_visit_header)
-        card_layout.addLayout(self._build_visit_section())
+        card_layout.addSpacing(ScreenScale.h(4))
+        card_layout.addWidget(make_divider())
 
-        # Section 4: ID Photos
-        
         self.section_id_header = make_sub_section_header(tr("wizard.section.id_photos"))
         card_layout.addWidget(self.section_id_header)
 
-        from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel
         doc_type_row = QHBoxLayout()
         doc_type_row.setContentsMargins(0, 0, 0, 4)
         self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
@@ -137,115 +160,83 @@ class ApplicantInfoStep(BaseStep):
             button_text=tr("wizard.person_dialog.attach_id_photos"),
         )
         card_layout.addWidget(self._id_upload_frame)
+        card_layout.addStretch()
 
-        container = QWidget()
-        container.setStyleSheet("background: transparent;")
-        wrap = QVBoxLayout(container)
-        wrap.setContentsMargins(0, 0, 0, 0)
-        wrap.setSpacing(0)
-        wrap.addWidget(card)
-        wrap.addStretch()
-
-        scroll.setWidget(container)
-        self.main_layout.addWidget(scroll)
-
-        self._spinner = LoadingSpinnerOverlay(self)
+        return card
 
     def _build_personal_section(self) -> QGridLayout:
         grid = QGridLayout()
-        grid.setHorizontalSpacing(16)
-        grid.setVerticalSpacing(12)
+        grid.setHorizontalSpacing(ScreenScale.w(10))
+        grid.setVerticalSpacing(ScreenScale.h(8))
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
 
         _name_v = QRegExpValidator(QtRegExp("[\u0600-\u06FFa-zA-Z\\s.\\-']+"))
         row = 0
 
-    # Row 1: First Name | Father Name
-        self.lbl_first_name = self._lbl(tr("wizard.person_dialog.first_name") + " *")
+        # Row 0 labels: الاسم الأول | اسم الأب | الكنية
+        self.lbl_first_name  = self._lbl(tr("wizard.person_dialog.first_name")  + " *")
         self.lbl_father_name = self._lbl(tr("wizard.person_dialog.father_name") + " *")
-        grid.addWidget(self.lbl_first_name, row, 0)
+        self.lbl_last_name   = self._lbl(tr("wizard.person_dialog.last_name")   + " *")
+        grid.addWidget(self.lbl_first_name,  row, 0)
         grid.addWidget(self.lbl_father_name, row, 1)
+        grid.addWidget(self.lbl_last_name,   row, 2)
         row += 1
 
-        self.first_name = self._field(tr("wizard.person_dialog.first_name_placeholder"), _name_v)
-        self._first_name_error = self._err_lbl()
-        grid.addLayout(self._field_box(self.first_name, self._first_name_error), row, 0)
-
+        self.first_name  = self._field(tr("wizard.person_dialog.first_name_placeholder"),  _name_v)
         self.father_name = self._field(tr("wizard.person_dialog.father_name_placeholder"), _name_v)
+        self.last_name   = self._field(tr("wizard.person_dialog.last_name_placeholder"),   _name_v)
+        self._first_name_error  = self._err_lbl()
         self._father_name_error = self._err_lbl()
+        self._last_name_error   = self._err_lbl()
+        grid.addLayout(self._field_box(self.first_name,  self._first_name_error),  row, 0)
         grid.addLayout(self._field_box(self.father_name, self._father_name_error), row, 1)
+        grid.addLayout(self._field_box(self.last_name,   self._last_name_error),   row, 2)
         row += 1
 
-    # Row 2: Last Name | Mother Name
-        self.lbl_last_name = self._lbl(tr("wizard.person_dialog.last_name") + " *")
+        # Row 2 labels: اسم الأم | تاريخ الميلاد (col_span=2)
         self.lbl_mother_name = self._lbl(tr("wizard.person_dialog.mother_name") + " *")
-        grid.addWidget(self.lbl_last_name, row, 0)
-        grid.addWidget(self.lbl_mother_name, row, 1)
+        self.lbl_birth_date  = self._lbl(tr("wizard.person_dialog.birth_date"))
+        grid.addWidget(self.lbl_mother_name, row, 0)
+        grid.addWidget(self.lbl_birth_date,  row, 1, 1, 2)
         row += 1
-
-        self.last_name = self._field(tr("wizard.person_dialog.last_name_placeholder"), _name_v)
-        self._last_name_error = self._err_lbl()
-        grid.addLayout(self._field_box(self.last_name, self._last_name_error), row, 0)
 
         self.mother_name = self._field(tr("wizard.person_dialog.mother_name_placeholder"), _name_v)
         self._mother_name_error = self._err_lbl()
-        grid.addLayout(self._field_box(self.mother_name, self._mother_name_error), row, 1)
-        row += 1
-
-    # Row 3: Birth Date | Gender
-        self.lbl_birth_date = self._lbl(tr("wizard.person_dialog.birth_date"))
-        self.lbl_gender = self._lbl(tr("wizard.person_dialog.gender"))
-        grid.addWidget(self.lbl_birth_date, row, 0)
-        grid.addWidget(self.lbl_gender, row, 1)
-        row += 1
+        grid.addLayout(self._field_box(self.mother_name, self._mother_name_error), row, 0)
 
         birth_layout = QHBoxLayout()
         birth_layout.setSpacing(6)
         birth_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.birth_year_combo = QComboBox()
-        self.birth_year_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_year_combo.setStyleSheet(self._input_style())
-        self.birth_year_combo.addItem("--", None)
-        for y in range(2010, 1919, -1):
-            self.birth_year_combo.addItem(str(y), y)
-
-        self.birth_month_combo = QComboBox()
-        self.birth_month_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_month_combo.setStyleSheet(self._input_style())
-        self.birth_month_combo.addItem("--", None)
-        for m in range(1, 13):
-            self.birth_month_combo.addItem(str(m), m)
-
-        self.birth_day_combo = QComboBox()
-        self.birth_day_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_day_combo.setStyleSheet(self._input_style())
-        self.birth_day_combo.addItem("--", None)
-        for d in range(1, 32):
-            self.birth_day_combo.addItem(str(d), d)
-
-        birth_layout.addWidget(self.birth_year_combo, 2)
-        birth_layout.addWidget(self.birth_month_combo, 1)
+        self.birth_day_combo = make_editable_date_combo(
+            items=[(str(d), d) for d in range(1, 32)],
+            max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
+        )
+        self.birth_month_combo = make_editable_date_combo(
+            items=[(str(m), m) for m in range(1, 13)],
+            max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
+        )
+        self.birth_year_combo = make_editable_date_combo(
+            items=[(str(y), y) for y in range(2010, 1919, -1)],
+            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
         birth_layout.addWidget(self.birth_day_combo, 1)
+        birth_layout.addWidget(self.birth_month_combo, 1)
+        birth_layout.addWidget(self.birth_year_combo, 2)
         birth_container = QWidget()
         birth_container.setStyleSheet("background-color: transparent;")
         birth_container.setLayout(birth_layout)
-        grid.addWidget(birth_container, row, 0)
-
-        self.gender = RtlCombo()
-        self.gender.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_gender_options():
-            self.gender.addItem(display_name, code)
-        self.gender.setStyleSheet(self._input_style())
-        grid.addWidget(self.gender, row, 1)
+        grid.addWidget(birth_container, row, 1, 1, 2)
         row += 1
 
-    # Row 4: Nationality | National ID
+        # Row 4 labels: الجنسية | الرقم الوطني | الجنس
         self.lbl_nationality = self._lbl(tr("wizard.person_dialog.nationality"))
-        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id"))
+        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id") + " *")
+        self.lbl_gender      = self._lbl(tr("wizard.person_dialog.gender"))
         grid.addWidget(self.lbl_nationality, row, 0)
         grid.addWidget(self.lbl_national_id, row, 1)
+        grid.addWidget(self.lbl_gender,      row, 2)
         row += 1
 
         self.nationality = RtlCombo()
@@ -259,7 +250,9 @@ class ApplicantInfoStep(BaseStep):
         self._nid_error = self._err_lbl()
         grid.addLayout(self._field_box(self.national_id, self._nid_error), row, 1)
 
-    # Connect clear-error signals
+        self.gender = self._build_gender_radios()
+        grid.addWidget(self.gender, row, 2)
+
         self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
         self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
@@ -287,10 +280,10 @@ class ApplicantInfoStep(BaseStep):
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
         """)
+        self._mobile_container.setLayoutDirection(Qt.LeftToRight)
         mob_layout = QHBoxLayout(self._mobile_container)
         mob_layout.setContentsMargins(0, 0, 0, 0)
         mob_layout.setSpacing(0)
-        mob_layout.setDirection(QHBoxLayout.RightToLeft)
         self.lbl_mobile_prefix = QLabel("+963 | 09")
         self.lbl_mobile_prefix.setFixedWidth(ScreenScale.w(90))
         self.lbl_mobile_prefix.setAlignment(Qt.AlignCenter)
@@ -298,7 +291,7 @@ class ApplicantInfoStep(BaseStep):
             QLabel {{
                 color: {Colors.WIZARD_SUBTITLE};
                 font-size: 10pt;
-                border-left: 1px solid rgba(56,144,223,0.25);
+                border-right: 1px solid rgba(56,144,223,0.25);
                 padding: 0 10px;
                 background: transparent;
             }}
@@ -343,37 +336,51 @@ class ApplicantInfoStep(BaseStep):
             }}
             QFrame:focus-within {{ border: 1.5px solid {Colors.PRIMARY_BLUE}; }}
         """)
+        self._landline_container.setLayoutDirection(Qt.LeftToRight)
         land_layout = QHBoxLayout(self._landline_container)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
-        land_layout.setDirection(QHBoxLayout.RightToLeft)
         self.landline_prefix = RtlCombo()
         self.landline_prefix.setFixedWidth(ScreenScale.w(130))
+        self.landline_prefix.setCursor(Qt.PointingHandCursor)
+        self.landline_prefix.setToolTip(tr("wizard.person_dialog.select"))
         for _code, _display in _area_codes:
             self.landline_prefix.addItem(_display, _code)
         self.landline_prefix.setStyleSheet(f"""
             QComboBox {{
                 border: none;
-                background: transparent;
-                padding: 0 4px 0 8px;
+                background: #EBF5FF;
+                border-top-left-radius: 9px;
+                border-bottom-left-radius: 9px;
+                padding: 0 22px 0 10px;
                 font-size: 10pt;
-                color: {Colors.WIZARD_SUBTITLE};
+                font-weight: 600;
+                color: {Colors.PRIMARY_BLUE};
+            }}
+            QComboBox:hover {{
+                background: #D6ECFF;
             }}
             QComboBox QLineEdit {{
                 border: none;
                 background: transparent;
                 padding: 0;
                 font-size: 10pt;
-                color: {Colors.WIZARD_SUBTITLE};
+                font-weight: 600;
+                color: {Colors.PRIMARY_BLUE};
             }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: right center;
                 border: none;
-                width: 18px;
+                width: 20px;
             }}
             QComboBox::down-arrow {{
-                width: 8px; height: 8px;
+                image: none;
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid {Colors.PRIMARY_BLUE};
+                margin-right: 6px;
             }}
             QComboBox QAbstractItemView {{
                 background-color: #FFFFFF;
@@ -517,8 +524,8 @@ class ApplicantInfoStep(BaseStep):
 
     def _lbl(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        lbl.setStyleSheet("color: #64748B; background: transparent; border: none;")
+        lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_BOLD))
+        lbl.setStyleSheet("color: #1E293B; background: transparent; border: none;")
         return lbl
 
     def _field(self, placeholder: str, validator=None) -> QLineEdit:
@@ -611,6 +618,108 @@ class ApplicantInfoStep(BaseStep):
         frame._thumbnails_layout = thumbnails_layout
         frame._text_btn = text_btn
         return frame
+
+    # Editable birth combos + gender radios
+
+    def _make_editable_combo(self, items, max_digits: int, placeholder: str = "") -> QComboBox:
+        combo = QComboBox()
+        combo.setLayoutDirection(Qt.LeftToRight)
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        for label, data in items:
+            combo.addItem(label, data)
+        line_edit = combo.lineEdit()
+        if line_edit is not None:
+            line_edit.setValidator(QRegExpValidator(QtRegExp(rf"\d{{0,{max_digits}}}")))
+            line_edit.setAlignment(Qt.AlignCenter)
+            if placeholder:
+                line_edit.setPlaceholderText(placeholder)
+        combo.setCurrentIndex(-1)
+        combo.clearEditText()
+        combo.setStyleSheet(self._input_style())
+        return combo
+
+    @staticmethod
+    def _read_int_from_combo(combo: QComboBox):
+        val = combo.currentData()
+        if val is not None:
+            return val
+        text = combo.currentText().strip()
+        if text.isdigit():
+            try:
+                return int(text)
+            except ValueError:
+                return None
+        return None
+
+    def _build_gender_radios(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        lay = QHBoxLayout(container)
+        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setSpacing(ScreenScale.w(16))
+
+        self._gender_group = QButtonGroup(container)
+        self._gender_group.setExclusive(True)
+        self._gender_btns = []
+
+        radio_css = f"""
+            QRadioButton {{
+                color: {Colors.WIZARD_TITLE};
+                background: transparent;
+                font-size: 10pt;
+                spacing: 6px;
+                padding: 2px 4px;
+            }}
+            QRadioButton::indicator {{
+                width: 16px; height: 16px;
+                border: 1.5px solid #B0BEC5;
+                border-radius: 9px;
+                background: white;
+            }}
+            QRadioButton::indicator:checked {{
+                border: 1.5px solid {Colors.PRIMARY_BLUE};
+                background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                    stop:0 {Colors.PRIMARY_BLUE}, stop:0.55 {Colors.PRIMARY_BLUE},
+                    stop:0.6 white, stop:1 white);
+            }}
+        """
+        for code, label in get_gender_options():
+            btn = QRadioButton(label)
+            btn.setStyleSheet(radio_css)
+            btn.setProperty("gender_code", code)
+            btn.setProperty("gender_label", label)
+            lay.addWidget(btn)
+            self._gender_group.addButton(btn)
+            self._gender_btns.append(btn)
+        lay.addStretch()
+        return container
+
+    def _get_gender(self):
+        for btn in getattr(self, "_gender_btns", []):
+            if btn.isChecked():
+                return btn.property("gender_code")
+        return None
+
+    def _set_gender(self, code):
+        for btn in getattr(self, "_gender_btns", []):
+            if btn.property("gender_code") == code:
+                btn.setChecked(True)
+                return
+        self._gender_group.setExclusive(False)
+        for btn in getattr(self, "_gender_btns", []):
+            btn.setChecked(False)
+        self._gender_group.setExclusive(True)
+
+    def _refill_gender_radios(self):
+        options = list(get_gender_options())
+        current = self._get_gender()
+        for btn, (code, label) in zip(self._gender_btns, options):
+            btn.setText(label)
+            btn.setProperty("gender_code", code)
+            btn.setProperty("gender_label", label)
+        if current is not None:
+            self._set_gender(current)
 
     # Style helpers
 
@@ -786,9 +895,9 @@ class ApplicantInfoStep(BaseStep):
         fat = self.father_name.text().strip()
         ln  = self.last_name.text().strip()
 
-        y = self.birth_year_combo.currentData()
-        m = self.birth_month_combo.currentData()
-        d = self.birth_day_combo.currentData()
+        y = read_int_from_combo(self.birth_year_combo)
+        m = read_int_from_combo(self.birth_month_combo)
+        d = read_int_from_combo(self.birth_day_combo)
         birth_date = None
         if y:
             month = m if m else 1
@@ -806,7 +915,7 @@ class ApplicantInfoStep(BaseStep):
             "mother_name_ar": self.mother_name.text().strip(),
             "last_name_ar":   ln,
             "birth_date":     birth_date,
-            "gender":         self.gender.currentData(),
+            "gender":         self._get_gender(),
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
 
@@ -830,10 +939,10 @@ class ApplicantInfoStep(BaseStep):
             field.clear()
         self.landline_digits.clear()
         self.landline_prefix.setCurrentIndex(0)
-        self.birth_year_combo.setCurrentIndex(0)
-        self.birth_month_combo.setCurrentIndex(0)
-        self.birth_day_combo.setCurrentIndex(0)
-        self.gender.setCurrentIndex(0)
+        for c in (self.birth_year_combo, self.birth_month_combo, self.birth_day_combo):
+            c.setCurrentIndex(-1)
+            c.clearEditText()
+        self._set_gender(None)
         self.nationality.setCurrentIndex(0)
         self.in_person_check.setChecked(True)
         self.uploaded_files.clear()
@@ -875,11 +984,7 @@ class ApplicantInfoStep(BaseStep):
             if idx >= 0:
                 self.birth_year_combo.setCurrentIndex(idx)
 
-        gender_val = a.get("gender")
-        for i in range(self.gender.count()):
-            if self.gender.itemData(i) == gender_val:
-                self.gender.setCurrentIndex(i)
-                break
+        self._set_gender(a.get("gender"))
 
         nat_val = a.get("nationality")
         for i in range(self.nationality.count()):
@@ -997,6 +1102,16 @@ class ApplicantInfoStep(BaseStep):
         self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
         self.national_id.setPlaceholderText("00000000000")
 
+    # Birth date placeholders
+        for combo, key in (
+            (self.birth_day_combo,   "wizard.person_dialog.day_placeholder"),
+            (self.birth_month_combo, "wizard.person_dialog.month_placeholder"),
+            (self.birth_year_combo,  "wizard.person_dialog.year_placeholder"),
+        ):
+            le = combo.lineEdit()
+            if le is not None:
+                le.setPlaceholderText(tr(key))
+
     # Contact section labels
         
         self.lbl_mobile.setText(tr("wizard.person_dialog.mobile"))
@@ -1024,20 +1139,8 @@ class ApplicantInfoStep(BaseStep):
             if code == 0:
                 continue
             self._id_doc_type_combo.addItem(label, code)
-    # Refill gender combo
-        current_gender = self.gender.currentData()  # حفظ القيمة الحالية
-        self.gender.clear()
-        self.gender.addItem(tr("wizard.person_dialog.select"), None)
-
-        from services.display_mappings import get_gender_options
-        for code, label in get_gender_options():
-            self.gender.addItem(label, code)
-
-        # إعادة اختيار القيمة السابقة إذا كانت موجودة
-        if current_gender is not None:
-            index = self.gender.findData(current_gender)
-            if index >= 0:
-                self.gender.setCurrentIndex(index)
+    # Refill gender radio buttons
+        self._refill_gender_radios()
         # Refill nationality combo
         current_nat = self.nationality.currentData()
         self.nationality.clear()

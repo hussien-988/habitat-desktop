@@ -80,7 +80,7 @@ class _UnitCard(AnimatedCard):
         from PyQt5.QtGui import QFont
         from ui.font_utils import create_font, FontManager
         from ui.design_system import Colors
-        from services.translation_manager import tr
+        from services.translation_manager import tr, apply_label_alignment
         from services.display_mappings import get_unit_type_display, get_unit_status_display
 
         u = self._unit
@@ -92,6 +92,7 @@ class _UnitCard(AnimatedCard):
         num_label = QLabel(f"{tr('page.unit_details.unit_number')}: {display_num}")
         num_label.setFont(create_font(size=13, weight=QFont.Bold))
         num_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
+        apply_label_alignment(num_label)
         row1.addWidget(num_label)
         row1.addStretch()
 
@@ -125,6 +126,7 @@ class _UnitCard(AnimatedCard):
         details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
         details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        apply_label_alignment(details)
         layout.addWidget(details)
 
         # Row 3: Description
@@ -133,6 +135,7 @@ class _UnitCard(AnimatedCard):
             desc_label = QLabel(desc[:80] + ("..." if len(desc) > 80 else ""))
             desc_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             desc_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none; opacity: 0.7;")
+            apply_label_alignment(desc_label)
             layout.addWidget(desc_label)
 
 

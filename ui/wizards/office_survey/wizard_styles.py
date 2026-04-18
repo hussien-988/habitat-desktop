@@ -3,10 +3,10 @@
 
 from PyQt5.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QVBoxLayout, QLabel,
-    QWidget,
+    QWidget, QComboBox,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QRegExp as _QtRegExp
+from PyQt5.QtGui import QColor, QRegExpValidator as _QRegExpValidator
 from ui.design_system import ScreenScale
 
 
@@ -639,3 +639,47 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
         layout.addWidget(s, alignment=Qt.AlignCenter)
 
     return container
+
+
+# ── Shared date-combo helpers (DRY: used by applicant_info, person_dialog, household) ──
+
+def make_editable_date_combo(items, max_digits: int, placeholder: str = "") -> QComboBox:
+    """
+    Editable QComboBox for a single date part (day / month / year).
+    Supports both dropdown selection AND direct numeric keyboard input.
+    Numbers only; LTR regardless of app language (digits are LTR).
+    """
+    from app.config import Config
+    combo = QComboBox()
+    combo.setLayoutDirection(Qt.LeftToRight)
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.NoInsert)
+    for label, data in items:
+        combo.addItem(label, data)
+    line_edit = combo.lineEdit()
+    if line_edit is not None:
+        line_edit.setValidator(_QRegExpValidator(_QtRegExp(rf"\d{{0,{max_digits}}}")))
+        line_edit.setAlignment(Qt.AlignCenter)
+        if placeholder:
+            line_edit.setPlaceholderText(placeholder)
+    combo.setCurrentIndex(-1)
+    combo.clearEditText()
+    _down = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+    combo.setStyleSheet(FORM_FIELD_STYLE + f"""
+        QComboBox::down-arrow {{ image: url({_down}); width: 12px; height: 12px; }}
+    """)
+    return combo
+
+
+def read_int_from_combo(combo: QComboBox):
+    """Read integer value from an editable date combo (selected item OR typed text)."""
+    val = combo.currentData()
+    if val is not None:
+        return val
+    text = combo.currentText().strip()
+    if text.isdigit():
+        try:
+            return int(text)
+        except ValueError:
+            return None
+    return None

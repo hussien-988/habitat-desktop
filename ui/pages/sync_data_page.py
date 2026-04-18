@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtPrope
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
 
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from ui.components.icon import Icon
 from ui.components.dark_header_zone import DarkHeaderZone
 from app.config import Pages
@@ -213,6 +213,7 @@ class _AssignmentCard(AnimatedCard):
         title_lbl = QLabel(building_code)
         title_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        apply_label_alignment(title_lbl)
         row1.addWidget(title_lbl)
 
         row1.addStretch()

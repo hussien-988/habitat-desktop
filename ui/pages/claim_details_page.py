@@ -790,16 +790,10 @@ class ClaimDetailsPage(QWidget):
             claim = self._claim_data
             claim_number = self._survey_ref_code or str(claim.get("claimNumber") or "N/A")
             claim_type = get_claim_type_display(claim.get("claimType") or "")
-            case_status = claim.get("caseStatus") or claim.get("status") or 1
-            status_label = _get_case_status_label(case_status)
             source = get_source_display(claim.get("claimSource") or 0)
 
             badges = []
             badges.append((claim_type, "#EFF6FF", "#1E40AF"))
-            if case_status == 2:
-                badges.append((status_label, "#F0FDF4", "#15803D"))
-            else:
-                badges.append((status_label, "#FFF7ED", "#C2410C"))
             badges.append((source, "#F5F3FF", "#6D28D9"))
 
             date_str = (str(claim.get("createdAtUtc") or ""))[:10]

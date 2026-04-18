@@ -27,7 +27,7 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.logo import LogoWidget
 from ui.components.toast import Toast
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from services.display_mappings import (
     get_building_type_display, get_building_status_display,
     get_unit_type_display, get_unit_status_display,
@@ -814,25 +814,6 @@ class CaseDetailsPage(QWidget):
 
         badges = []
 
-        # Status badge
-        if is_obstructed:
-            badges.append((tr("page.case_details.status_obstructed"), "#FFFBEB", "#B45309"))
-        elif is_draft:
-            badges.append((tr("page.case_details.status_draft"), "#FEF3C7", "#92400E"))
-        else:
-            badges.append((tr("page.case_details.status_completed"), "#D1FAE5", "#065F46"))
-
-        # Case status badge
-        case_status = getattr(ctx, 'case_status', 1)
-        if case_status == 2:
-            badges.append((tr("page.case_details.case_closed"), "#DBEAFE", "#1E40AF"))
-        else:
-            badges.append((tr("page.case_details.case_open"), "#E0E7FF", "#3730A3"))
-
-        # Building ID badge
-        if ctx.building and ctx.building.building_id_formatted:
-            badges.append((ctx.building.building_id_formatted, "#F0F9FF", "#0369A1"))
-
         self._header.set_info(ref, badges, is_draft, can_resume_obstructed, can_revert)
 
     # -- Survey Info Card --
@@ -859,17 +840,68 @@ class CaseDetailsPage(QWidget):
                 created = str(ctx.created_at)
 
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
-        status_display = tr("page.case_details.status_draft") if str(status).lower() in ("draft", "1", "") else tr("page.case_details.status_completed")
+        status_lower = str(status).lower()
+        is_draft = status_lower in ("draft", "1", "")
+        is_obstructed = status_lower in ("obstructed", "4")
+        if is_obstructed:
+            status_display = tr("page.case_details.status_obstructed")
+            s_bg, s_fg, s_br = "#FFFBEB", "#B45309", "#FCD34D"
+        elif is_draft:
+            status_display = tr("page.case_details.status_draft")
+            s_bg, s_fg, s_br = "#FEF3C7", "#92400E", "#FBBF24"
+        else:
+            status_display = tr("page.case_details.status_completed")
+            s_bg, s_fg, s_br = "#D1FAE5", "#065F46", "#6EE7B7"
 
         case_status = getattr(ctx, 'case_status', 1)
-        case_display = tr("page.case_details.case_closed") if case_status == 2 else tr("page.case_details.case_open")
+        if case_status == 2:
+            case_display = tr("page.case_details.case_closed")
+            c_bg, c_fg, c_br = "#FEF2F2", "#DC2626", "#FECACA"
+        else:
+            case_display = tr("page.case_details.case_open")
+            c_bg, c_fg, c_br = "#ECFDF5", "#059669", "#A7F3D0"
 
         grid.addWidget(self._create_field_pair(tr("page.case_details.ref_number"), ref), 0, 0)
         grid.addWidget(self._create_field_pair(tr("wizard.review.survey_date"), created or "-"), 0, 1)
-        grid.addWidget(self._create_field_pair(tr("wizard.review.case_status"), status_display), 0, 2)
-        grid.addWidget(self._create_field_pair(tr("page.case_details.case_status"), case_display), 0, 3)
+        grid.addWidget(
+            self._build_status_pill(tr("wizard.review.case_status"), status_display, s_bg, s_fg, s_br), 0, 2)
+        grid.addWidget(
+            self._build_status_pill(tr("page.case_details.case_status"), case_display, c_bg, c_fg, c_br), 0, 3)
 
         self._survey_content.addLayout(grid)
+
+    def _build_status_pill(self, label_text, value_text, bg, fg, border):
+        wrap = QFrame()
+        wrap.setStyleSheet(
+            "QFrame { background-color: #F8FAFF; border: 1px solid #E8EFF6; border-radius: 10px; }"
+        )
+        wrap.setLayoutDirection(get_layout_direction())
+
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(ScreenScale.w(10), ScreenScale.h(6), ScreenScale.w(10), ScreenScale.h(6))
+        v.setSpacing(ScreenScale.h(4))
+
+        lbl = QLabel(label_text)
+        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        apply_label_alignment(lbl)
+        v.addWidget(lbl)
+
+        pill = QLabel(value_text)
+        pill.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        pill.setAlignment(Qt.AlignCenter)
+        pill.setFixedHeight(ScreenScale.h(22))
+        pill.setStyleSheet(
+            f"QLabel {{ background-color: {bg}; color: {fg}; "
+            f"border: 1px solid {border}; border-radius: 11px; padding: 0 10px; }}"
+        )
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(pill)
+        row.addStretch(1)
+        v.addLayout(row)
+        return wrap
 
     # -- Building Card --
 

@@ -22,7 +22,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from utils.i18n import I18n
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -63,6 +63,7 @@ class _ResearcherCard(AnimatedCard):
         name_label = QLabel(self.researcher_data.get('display_name', ''))
         name_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
         name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
+        apply_label_alignment(name_label)
         top_row.addWidget(name_label)
 
         # Availability badge
@@ -103,12 +104,14 @@ class _ResearcherCard(AnimatedCard):
             user_label = QLabel(f"@{username}")
             user_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             user_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+            apply_label_alignment(user_label)
             bottom_row.addWidget(user_label)
 
         active = self.researcher_data.get('active_assignments', 0)
         count_label = QLabel(f"{tr('wizard.step2.col_active_tasks')}: {active}")
         count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         count_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+        apply_label_alignment(count_label)
         bottom_row.addWidget(count_label)
 
         bottom_row.addStretch()

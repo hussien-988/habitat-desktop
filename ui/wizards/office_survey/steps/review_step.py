@@ -57,6 +57,22 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 logger = get_logger(__name__)
 
 
+_ROLE_PALETTE = {
+    'head':     ('#DBEAFE', '#1D4ED8'),
+    'spouse':   ('#FAE8FF', '#7E22CE'),
+    'wife':     ('#FAE8FF', '#7E22CE'),
+    'husband':  ('#FAE8FF', '#7E22CE'),
+    'son':      ('#DCFCE7', '#166534'),
+    'daughter': ('#DCFCE7', '#166534'),
+    'child':    ('#DCFCE7', '#166534'),
+    'brother':  ('#FEF3C7', '#B45309'),
+    'sister':   ('#FEF3C7', '#B45309'),
+    'father':   ('#FFEDD5', '#C2410C'),
+    'mother':   ('#FFEDD5', '#C2410C'),
+    'other':    ('#E0E7FF', '#4338CA'),
+}
+
+
 # ---------------------------------------------------------------------------
 #  _AccentLine  (animated gradient separator)
 # ---------------------------------------------------------------------------
@@ -299,83 +315,72 @@ class ReviewStep(BaseStep):
         scroll_content = QWidget()
         scroll_content.setLayoutDirection(get_layout_direction())
         scroll_content.setStyleSheet("background: transparent;")
-        self._scroll_layout = QVBoxLayout(scroll_content)
-        self._scroll_layout.setContentsMargins(16, 16, 16, 40)
-        self._scroll_layout.setSpacing(16)
+        scroll_content.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+
+        root_grid = QGridLayout(scroll_content)
+        root_grid.setContentsMargins(
+            ScreenScale.w(16), ScreenScale.h(14),
+            ScreenScale.w(16), ScreenScale.h(16),
+        )
+        root_grid.setHorizontalSpacing(ScreenScale.w(12))
+        root_grid.setVerticalSpacing(ScreenScale.h(12))
+        for c in range(3):
+            root_grid.setColumnStretch(c, 1)
+        self._root_grid = root_grid
+        self._scroll_layout = root_grid  # backwards-compat attribute
+
+        def _make_summary_card() -> _GlowingCard:
+            card = _GlowingCard()
+            card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+            outer = QVBoxLayout(card)
+            outer.setContentsMargins(
+                ScreenScale.w(16), ScreenScale.h(12),
+                ScreenScale.w(16), ScreenScale.h(12),
+            )
+            outer.setSpacing(ScreenScale.h(8))
+            content = QVBoxLayout()
+            content.setSpacing(ScreenScale.h(8))
+            outer.addLayout(content)
+            return card, content
 
         # Case status banner (shown only in read-only/case-details mode)
         self.case_status_banner = self._create_case_status_banner()
         self.case_status_banner.hide()
-        self._scroll_layout.addWidget(self.case_status_banner)
+        root_grid.addWidget(self.case_status_banner, 0, 0, 1, 3)
 
-        # ── Card 1: Survey Info (full width) ────────────────────────
-        self._survey_card = _GlowingCard()
-        self._survey_card_layout = QVBoxLayout(self._survey_card)
-        self._survey_card_layout.setContentsMargins(24, 20, 24, 20)
-        self._survey_card_layout.setSpacing(12)
-        self._survey_content = QVBoxLayout()
-        self._survey_content.setSpacing(12)
-        self._survey_card_layout.addLayout(self._survey_content)
-        self._scroll_layout.addWidget(self._survey_card)
+        # Build five summary cards
+        self._building_card, self._building_content = _make_summary_card()
+        self._applicant_card_widget, self._applicant_content = _make_summary_card()
+        self._unit_card, self._unit_content = _make_summary_card()
+        self._household_card, self._household_content = _make_summary_card()
+        self._persons_card, self._persons_content = _make_summary_card()
 
-        # ── Row: Building (half) | Applicant (half) ─────────────────
-        top_row = QHBoxLayout()
-        top_row.setSpacing(16)
+        # backwards-compat aliases
+        self._building_card_layout = self._building_card.layout()
+        self._applicant_card_layout = self._applicant_card_widget.layout()
+        self._persons_card_layout = self._persons_card.layout()
 
-        self._building_card = _GlowingCard()
-        self._building_card_layout = QVBoxLayout(self._building_card)
-        self._building_card_layout.setContentsMargins(24, 20, 24, 20)
-        self._building_card_layout.setSpacing(12)
-        self._building_content = QVBoxLayout()
-        self._building_content.setSpacing(12)
-        self._building_card_layout.addLayout(self._building_content)
-        top_row.addWidget(self._building_card, 1)
-
-        self._applicant_card_widget = _GlowingCard()
-        self._applicant_card_layout = QVBoxLayout(self._applicant_card_widget)
-        self._applicant_card_layout.setContentsMargins(24, 20, 24, 20)
-        self._applicant_card_layout.setSpacing(12)
-        self._applicant_content = QVBoxLayout()
-        self._applicant_content.setSpacing(12)
-        self._applicant_card_layout.addLayout(self._applicant_content)
-        top_row.addWidget(self._applicant_card_widget, 1)
-
+        # ── Layout: 3-column responsive grid ────────────────────────
+        # Wizard mode (applicant visible):
+        #   Row 1:  Building  |  Applicant  |  Unit
+        #   Row 2:  Household |  Persons (span 2)
+        # Read-only mode (no applicant):
+        #   Row 1:  Building  |  Unit  |  Household
+        #   Row 2:  Persons (span 3)
         if self._read_only:
             self._applicant_card_widget.hide()
+            root_grid.addWidget(self._building_card,  1, 0)
+            root_grid.addWidget(self._unit_card,      1, 1)
+            root_grid.addWidget(self._household_card, 1, 2)
+            root_grid.addWidget(self._persons_card,   2, 0, 1, 3)
+        else:
+            root_grid.addWidget(self._building_card,          1, 0)
+            root_grid.addWidget(self._applicant_card_widget,  1, 1)
+            root_grid.addWidget(self._unit_card,              1, 2)
+            root_grid.addWidget(self._household_card,         2, 0)
+            root_grid.addWidget(self._persons_card,           2, 1, 1, 2)
 
-        self._scroll_layout.addLayout(top_row)
-
-        # ── Card 3: Unit Info (full width) ────────────────────────────
-        self._unit_card = _GlowingCard()
-        _unit_card_layout = QVBoxLayout(self._unit_card)
-        _unit_card_layout.setContentsMargins(24, 20, 24, 20)
-        _unit_card_layout.setSpacing(12)
-        self._unit_content = QVBoxLayout()
-        self._unit_content.setSpacing(12)
-        _unit_card_layout.addLayout(self._unit_content)
-        self._scroll_layout.addWidget(self._unit_card)
-
-        # ── Card 4: Household Info (full width) ───────────────────────
-        self._household_card = _GlowingCard()
-        _household_card_layout = QVBoxLayout(self._household_card)
-        _household_card_layout.setContentsMargins(24, 20, 24, 20)
-        _household_card_layout.setSpacing(12)
-        self._household_content = QVBoxLayout()
-        self._household_content.setSpacing(12)
-        _household_card_layout.addLayout(self._household_content)
-        self._scroll_layout.addWidget(self._household_card)
-
-        # ── Card 4: Persons & Relations (full width) ─────────────────
-        self._persons_card = _GlowingCard()
-        self._persons_card_layout = QVBoxLayout(self._persons_card)
-        self._persons_card_layout.setContentsMargins(24, 20, 24, 20)
-        self._persons_card_layout.setSpacing(12)
-        self._persons_content = QVBoxLayout()
-        self._persons_content.setSpacing(10)
-        self._persons_card_layout.addLayout(self._persons_content)
-        self._scroll_layout.addWidget(self._persons_card)
-
-        self._scroll_layout.addStretch()
+        root_grid.setRowStretch(3, 1)
 
         self._scroll.setWidget(scroll_content)
         layout.addWidget(self._scroll, 1)
@@ -391,26 +396,35 @@ class ReviewStep(BaseStep):
         header.setStyleSheet("background: transparent; border: none;")
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setSpacing(10)
+        h_layout.setSpacing(ScreenScale.w(8))
+        header.setLayoutDirection(get_layout_direction())
 
         icon_label = QLabel()
-        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
-            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 8px; }"
+            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 6px; }"
         )
-        icon_pixmap = Icon.load_pixmap(icon_name, size=16)
+        icon_pixmap = Icon.load_pixmap(icon_name, size=14)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
 
+        direction = get_layout_direction()
+        is_rtl = direction == Qt.RightToLeft
+        header_text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
         title_box = QVBoxLayout()
-        title_box.setSpacing(2)
+        title_box.setSpacing(1)
         title_lbl = QLabel(title)
+        title_lbl.setLayoutDirection(direction)
+        title_lbl.setAlignment(header_text_align)
         title_lbl.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         title_box.addWidget(title_lbl)
         if subtitle:
             sub_lbl = QLabel(subtitle)
+            sub_lbl.setLayoutDirection(direction)
+            sub_lbl.setAlignment(header_text_align)
             sub_lbl.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
             sub_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
             title_box.addWidget(sub_lbl)
@@ -437,19 +451,30 @@ class ReviewStep(BaseStep):
                 border-radius: 10px;
             }
         """)
+        direction = get_layout_direction()
+        container.setLayoutDirection(direction)
+
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
+        layout.setContentsMargins(
+            ScreenScale.w(10), ScreenScale.h(6),
+            ScreenScale.w(10), ScreenScale.h(6),
+        )
+        layout.setSpacing(2)
+
+        is_rtl = direction == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
 
         lbl = QLabel(label_text)
-        lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setLayoutDirection(direction)
+        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setAlignment(text_align)
 
         val = QLabel(str(value_text) if value_text else "-")
-        val.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+        val.setLayoutDirection(direction)
+        val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-        val.setAlignment(Qt.AlignCenter)
+        val.setAlignment(text_align)
         val.setWordWrap(True)
 
         layout.addWidget(lbl)
@@ -552,6 +577,7 @@ class ReviewStep(BaseStep):
         banner = QFrame()
         banner.setObjectName("caseStatusBanner")
         banner.setFixedHeight(ScreenScale.h(48))
+        banner.setLayoutDirection(get_layout_direction())
         banner.setStyleSheet("""
             QFrame#caseStatusBanner {
                 background-color: #FFF7ED;
@@ -562,10 +588,13 @@ class ReviewStep(BaseStep):
         b_layout = QHBoxLayout(banner)
         b_layout.setContentsMargins(16, 0, 16, 0)
 
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        banner_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
         self._case_status_label = QLabel(tr("review.case.open"))
         self._case_status_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._case_status_label.setStyleSheet("color: #C2410C; background: transparent; border: none;")
-        self._case_status_label.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
+        self._case_status_label.setAlignment(banner_align)
         b_layout.addWidget(self._case_status_label)
         return banner
 
@@ -593,81 +622,98 @@ class ReviewStep(BaseStep):
     # ── Person row ───────────────────────────────────────────────────
 
     def _create_person_row(self, person: dict, alt_bg: bool = False) -> QWidget:
-        """Create a person row card with blue left border accent."""
-        row = QFrame()
-        row.setLayoutDirection(get_layout_direction())
-        row.setFixedHeight(ScreenScale.h(80))
-        if alt_bg:
-            row.setStyleSheet(PERSON_CARD_STYLE.replace("#F8FAFF", "#FFFFFF"))
-        else:
-            row.setStyleSheet(PERSON_CARD_STYLE)
+        """Compact person card designed for a responsive grid (2–3 cols)."""
+        is_rtl = get_layout_direction() == Qt.RightToLeft
 
-        card_layout = QHBoxLayout(row)
-        card_layout.setContentsMargins(15, 0, 15, 0)
-
-        # Icon + Text
-        right_group = QHBoxLayout()
-        right_group.setSpacing(12)
-
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                color: #3890DF;
-                border-radius: 18px;
-                border: 1px solid #DBEAFE;
-            }
+        card = QFrame()
+        card.setObjectName("ReviewPersonCard")
+        card.setLayoutDirection(get_layout_direction())
+        card.setMinimumWidth(ScreenScale.w(260))
+        card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        bg = "#F8FAFF" if alt_bg else "#FFFFFF"
+        card.setStyleSheet(f"""
+            QFrame#ReviewPersonCard {{
+                background-color: {bg};
+                border: 1px solid #E2EAF2;
+                border-radius: {ScreenScale.w(12)}px;
+            }}
+            QFrame#ReviewPersonCard:hover {{
+                border-color: #3890DF;
+                background-color: #F0F7FF;
+            }}
         """)
-        user_pixmap = Icon.load_pixmap("user", size=20)
-        if user_pixmap and not user_pixmap.isNull():
-            icon_lbl.setPixmap(user_pixmap)
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(16)
+        shadow.setXOffset(0)
+        shadow.setYOffset(3)
+        shadow.setColor(QColor(15, 23, 42, 20))
+        card.setGraphicsEffect(shadow)
 
-        text_vbox = QVBoxLayout()
-        text_vbox.setSpacing(2)
+        v = QVBoxLayout(card)
+        v.setContentsMargins(
+            ScreenScale.w(14), ScreenScale.h(12),
+            ScreenScale.w(14), ScreenScale.h(10),
+        )
+        v.setSpacing(ScreenScale.h(8))
+
+        # Row 1: name + role badge
+        top = QHBoxLayout()
+        top.setSpacing(ScreenScale.w(8))
+        top.setContentsMargins(0, 0, 0, 0)
 
         full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
         if not full_name:
             full_name = person.get('full_name', person.get('name', '-'))
-        name_lbl = QLabel(full_name)
-        name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+
+        direction = get_layout_direction()
+        name_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
+        name_lbl = QLabel(full_name or '-')
+        name_lbl.setLayoutDirection(direction)
+        name_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        name_lbl.setAlignment(name_align)
+        name_lbl.setWordWrap(True)
+        top.addWidget(name_lbl, 1)
 
         role_key = person.get('person_role') or person.get('relationship_type')
-        role_text = get_relationship_to_head_display(role_key) if role_key else ""
+        if role_key:
+            role_text = get_relationship_to_head_display(role_key)
+            badge_bg, badge_fg = _ROLE_PALETTE.get(
+                str(role_key).lower(),
+                ('#DBEAFE', '#1D4ED8'),
+            )
+            role_badge = self._create_badge(role_text, badge_bg, badge_fg)
+            top.addWidget(role_badge, 0, Qt.AlignTop)
 
-        # Role badge
-        role_widget = QWidget()
-        role_widget.setStyleSheet("background: transparent; border: none;")
-        role_row = QHBoxLayout(role_widget)
-        role_row.setContentsMargins(0, 0, 0, 0)
-        role_row.setSpacing(6)
-        if role_text:
-            role_badge = self._create_badge(role_text, "#DBEAFE", "#1E40AF")
-            role_row.addWidget(role_badge)
-        role_row.addStretch()
+        v.addLayout(top)
 
-        text_vbox.addWidget(name_lbl)
-        text_vbox.addWidget(role_widget)
-
-        right_group.addWidget(icon_lbl)
-        right_group.addLayout(text_vbox)
-
-        card_layout.addLayout(right_group)
-        card_layout.addStretch()
-
-        # "View personal info" link
+        # View button (wizard mode only)
         if not self._read_only:
-            view_lbl = QLabel(tr("wizard.review.view_personal_info"))
-            view_lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_MEDIUM))
-            view_lbl.setStyleSheet("color: #3890DF; background: transparent; border: none;")
-            view_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            view_lbl.setCursor(Qt.PointingHandCursor)
-            view_lbl.mousePressEvent = lambda e, p=person: self._view_person_editable(p)
-            card_layout.addWidget(view_lbl)
+            btn_row = QHBoxLayout()
+            btn_row.setContentsMargins(0, 0, 0, 0)
+            view_btn = QPushButton(tr("wizard.review.view_personal_info"))
+            view_btn.setCursor(Qt.PointingHandCursor)
+            view_btn.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+            view_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #3890DF;
+                    border: none;
+                    padding: 4px 0;
+                }
+                QPushButton:hover { color: #1D4ED8; }
+            """)
+            view_btn.clicked.connect(lambda _=False, p=person: self._view_person_editable(p))
+            if is_rtl:
+                btn_row.addWidget(view_btn)
+                btn_row.addStretch(1)
+            else:
+                btn_row.addStretch(1)
+                btn_row.addWidget(view_btn)
+            v.addLayout(btn_row)
 
-        return row
+        return card
 
     # ── Map dialog ───────────────────────────────────────────────────
 
@@ -703,7 +749,6 @@ class ReviewStep(BaseStep):
     def _populate_review(self):
         """Populate all summary cards with data from context."""
         self._populate_case_status_banner()
-        self._populate_survey_card()
         self._populate_building_card()
         self._populate_applicant_card()
         self._populate_unit_card()
@@ -809,102 +854,55 @@ class ReviewStep(BaseStep):
         building = self.context.building
         building_code = str(building.building_id) if hasattr(building, 'building_id') else "-"
 
-        # Building code
+        direction = get_layout_direction()
+        is_rtl = direction == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
         code_lbl = QLabel(building_code)
+        code_lbl.setLayoutDirection(direction)
         code_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         code_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        code_lbl.setAlignment(Qt.AlignRight | Qt.AlignAbsolute)
+        code_lbl.setAlignment(text_align)
         self._building_content.addWidget(code_lbl)
 
-        # Address bar
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)
         addr_bar = QFrame()
         addr_bar.setLayoutDirection(get_layout_direction())
-        addr_bar.setFixedHeight(ScreenScale.h(32))
-        addr_bar.setStyleSheet("QFrame { background-color: #F0F4FA; border: 1px solid #DBEAFE; border-radius: 10px; }")
+        addr_bar.setStyleSheet(
+            "QFrame { background-color: #F0F4FA; border: 1px solid #DBEAFE; border-radius: 10px; }"
+        )
         addr_row = QHBoxLayout(addr_bar)
-        addr_row.setContentsMargins(12, 0, 12, 0)
+        addr_row.setContentsMargins(
+            ScreenScale.w(12), ScreenScale.h(6),
+            ScreenScale.w(12), ScreenScale.h(6),
+        )
         addr_row.setSpacing(8)
-        addr_row.addStretch()
         addr_icon = QLabel()
         addr_icon.setStyleSheet("background: transparent; border: none;")
-        addr_icon_pixmap = Icon.load_pixmap("dec", size=16)
+        addr_icon_pixmap = Icon.load_pixmap("dec", size=14)
         if addr_icon_pixmap and not addr_icon_pixmap.isNull():
             addr_icon.setPixmap(addr_icon_pixmap)
-        addr_row.addWidget(addr_icon)
         addr_text = QLabel(address if address else "-")
-        addr_text.setAlignment(Qt.AlignCenter)
-        addr_text.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
+        addr_text.setLayoutDirection(direction)
+        addr_text.setAlignment(text_align)
+        addr_text.setWordWrap(True)
+        addr_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         addr_text.setStyleSheet(f"color: {ADDRESS_TEXT_COLOR}; background: transparent; border: none;")
-        addr_row.addWidget(addr_text)
-        addr_row.addStretch()
+        addr_row.addWidget(addr_icon, 0, Qt.AlignVCenter)
+        addr_row.addWidget(addr_text, 1)
         self._building_content.addWidget(addr_bar)
 
-        # Stats grid
         building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
         units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
 
         stats_grid = QGridLayout()
-        stats_grid.setSpacing(12)
-        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.status"), status), 0, 0)
-        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.type"), building_type), 0, 1)
-        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.units_count"), units_count), 1, 0)
-
-        parcels_count = str(getattr(building, 'number_of_apartments', 0))
-        shops_count = str(building.number_of_shops) if hasattr(building, 'number_of_shops') else "0"
-        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.parcels_count"), parcels_count), 1, 1)
-
+        stats_grid.setHorizontalSpacing(ScreenScale.w(10))
+        stats_grid.setVerticalSpacing(ScreenScale.h(8))
+        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.type"),   building_type), 0, 0)
+        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.status"), status),        0, 1)
+        stats_grid.addWidget(self._create_field_pair(tr("wizard.building.units_count"), units_count), 1, 0, 1, 2)
         self._building_content.addLayout(stats_grid)
-
-        # Map thumbnail
-        map_container = QLabel()
-        map_container.setFixedHeight(ScreenScale.h(100))
-        map_container.setAlignment(Qt.AlignCenter)
-        map_container.setObjectName("reviewMapContainer")
-        map_container.setStyleSheet("QLabel#reviewMapContainer { background-color: #E8E8E8; border-radius: 8px; }")
-        map_pixmap = Icon.load_pixmap("image-40", size=None)
-        if not map_pixmap or map_pixmap.isNull():
-            map_pixmap = Icon.load_pixmap("map-placeholder", size=None)
-        if map_pixmap and not map_pixmap.isNull():
-            map_container.setPixmap(map_pixmap.scaled(map_container.width() or 300, 100, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
-        else:
-            loc_fallback = Icon.load_pixmap("carbon_location-filled", size=36)
-            if loc_fallback and not loc_fallback.isNull():
-                map_container.setPixmap(loc_fallback)
-
-        map_button = QPushButton(map_container)
-        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
-        map_button.move(8, 8)
-        map_button.setCursor(Qt.PointingHandCursor)
-        icon_pixmap = Icon.load_pixmap("pill", size=12)
-        if icon_pixmap and not icon_pixmap.isNull():
-            map_button.setIcon(QIcon(icon_pixmap))
-            map_button.setIconSize(QSize(12, 12))
-        map_button.setText(tr("wizard.building.open_map"))
-        map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
-        map_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: white;
-                color: {Colors.PRIMARY_BLUE};
-                border: none;
-                border-radius: 5px;
-                padding: 4px;
-                text-align: center;
-            }}
-            QPushButton:hover {{
-                background-color: #F5F5F5;
-            }}
-        """)
-        btn_shadow = QGraphicsDropShadowEffect()
-        btn_shadow.setBlurRadius(8)
-        btn_shadow.setXOffset(0)
-        btn_shadow.setYOffset(2)
-        btn_shadow.setColor(QColor(0, 0, 0, 60))
-        map_button.setGraphicsEffect(btn_shadow)
-        map_button.clicked.connect(self._open_map_dialog)
-
-        self._building_content.addWidget(map_container)
 
     # ── Applicant Card (half width) ──────────────────────────────────
 
@@ -968,7 +966,6 @@ class ReviewStep(BaseStep):
             if unit:
                 unit_num = str(unit.unit_number or unit.apartment_number or "-")
                 floor = str(unit.floor_number) if unit.floor_number is not None else "-"
-                rooms = str(unit.apartment_number) if unit.apartment_number and str(unit.apartment_number) != "0" else "-"
                 if unit.area_sqm:
                     try:
                         area = tr("wizard.unit.area_format", value=f"{float(unit.area_sqm):.2f}")
@@ -978,79 +975,24 @@ class ReviewStep(BaseStep):
                     area = "-"
                 unit_type = unit.unit_type_display_ar if hasattr(unit, 'unit_type_display_ar') else "-"
                 status_raw = getattr(unit, 'apartment_status', None)
-                if status_raw is not None:
-                    status = get_unit_status_display(status_raw)
-                else:
-                    status = "-"
+                status = get_unit_status_display(status_raw) if status_raw is not None else "-"
             else:
                 unit_num = str(new_unit_data.get('unit_number', tr("wizard.review.new_unit")))
                 floor = str(new_unit_data.get('floor_number', '-'))
-                rooms = str(new_unit_data.get('number_of_rooms', '-'))
                 area_raw = new_unit_data.get('area_sqm')
                 area = tr("wizard.unit.area_format", value=f"{float(area_raw):.2f}") if area_raw else "-"
                 unit_type = new_unit_data.get('unit_type', '-')
                 status = tr("wizard.review.new_unit")
 
-            # Unit info container
-            unit_info_container = QFrame()
-            unit_info_container.setLayoutDirection(get_layout_direction())
-            unit_info_container.setFixedHeight(ScreenScale.h(73))
-            unit_info_container.setStyleSheet("""
-                QFrame {
-                    background-color: #F8FAFF;
-                    border: 1px solid #E2EAF2;
-                    border-radius: 10px;
-                }
-            """)
-
-            unit_info_row = QHBoxLayout(unit_info_container)
-            unit_info_row.setSpacing(0)
-            unit_info_row.setContentsMargins(8, 8, 8, 8)
-
-            data_points = [
-                (tr("wizard.unit.number"), unit_num),
-                (tr("wizard.unit.floor_number"), floor),
-                (tr("wizard.unit.rooms_count"), rooms),
-                (tr("wizard.unit.area"), area),
-                (tr("wizard.unit.type"), unit_type),
-                (tr("wizard.unit.status"), status),
-            ]
-
-            for label_text, value_text in data_points:
-                section, _ = self._create_unit_stat_section(label_text, value_text)
-                unit_info_row.addWidget(section, stretch=1)
-
-            self._unit_content.addWidget(unit_info_container)
-
-            # Property description
-            desc_text_content = ""
-            if unit and hasattr(unit, 'property_description') and unit.property_description:
-                desc_text_content = unit.property_description
-            elif new_unit_data and new_unit_data.get('property_description'):
-                desc_text_content = new_unit_data.get('property_description')
-            else:
-                desc_text_content = tr("wizard.unit.property_description_placeholder")
-
-            desc_container = QWidget()
-            desc_container.setLayoutDirection(get_layout_direction())
-            desc_container.setStyleSheet("background: transparent; border: none;")
-            desc_layout = QVBoxLayout(desc_container)
-            desc_layout.setContentsMargins(0, 0, 0, 0)
-            desc_layout.setSpacing(2)
-
-            desc_title = QLabel(tr("wizard.unit.property_description"))
-            desc_title.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            desc_title.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-
-            desc_text = QLabel(desc_text_content)
-            desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-            desc_text.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            desc_text.setWordWrap(True)
-            desc_text.setMaximumHeight(ScreenScale.h(40))
-
-            desc_layout.addWidget(desc_title)
-            desc_layout.addWidget(desc_text)
-            self._unit_content.addWidget(desc_container)
+            stats_grid = QGridLayout()
+            stats_grid.setHorizontalSpacing(ScreenScale.w(10))
+            stats_grid.setVerticalSpacing(ScreenScale.h(8))
+            stats_grid.addWidget(self._create_field_pair(tr("wizard.unit.number"),       unit_num),  0, 0)
+            stats_grid.addWidget(self._create_field_pair(tr("wizard.unit.floor_number"), floor),     0, 1)
+            stats_grid.addWidget(self._create_field_pair(tr("wizard.unit.type"),         unit_type), 1, 0)
+            stats_grid.addWidget(self._create_field_pair(tr("wizard.unit.status"),       status),    1, 1)
+            stats_grid.addWidget(self._create_field_pair(tr("wizard.unit.area"),         area),      2, 0, 1, 2)
+            self._unit_content.addLayout(stats_grid)
         else:
             self._unit_content.addWidget(
                 self._create_empty_state(tr("wizard.unit.not_selected"))
@@ -1106,65 +1048,27 @@ class ReviewStep(BaseStep):
             if not main_occupant_name:
                 main_occupant_name = p.get('full_name', p.get('name', '-'))
 
-        # Summary row
-        summary_container = QWidget()
-        summary_container.setLayoutDirection(get_layout_direction())
-        summary_container.setStyleSheet("background: transparent; border: none;")
-        summary_layout = QHBoxLayout(summary_container)
-        summary_layout.setContentsMargins(0, 0, 0, 0)
-        summary_layout.setSpacing(0)
-
-        occupant_block = QVBoxLayout()
-        occupant_block.setSpacing(4)
-        occupant_title = self._create_section_label(tr("wizard.review.main_occupant_info"))
-        occupant_val = QLabel(main_occupant_name)
-        occupant_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        occupant_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        occupant_block.addWidget(occupant_title)
-        occupant_block.addWidget(occupant_val)
-
-        count_block = QVBoxLayout()
-        count_block.setSpacing(4)
-        count_title = self._create_section_label(tr("wizard.household.family_size"))
-        count_title.setAlignment(Qt.AlignCenter)
-        count_val = QLabel(str(total_size))
-        count_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        count_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        count_val.setAlignment(Qt.AlignCenter)
-        count_block.addWidget(count_title)
-        count_block.addWidget(count_val)
-
-        summary_layout.addLayout(occupant_block)
-        summary_layout.addStretch()
-        summary_layout.addLayout(count_block)
-        summary_layout.addStretch()
-
-        self._household_content.addWidget(summary_container)
-
-        # Demographics cards (gender + age side by side)
-        gender_items = [
-            (tr("wizard.household.males"), hh.get('male_count', 0)),
-            (tr("wizard.household.females"), hh.get('female_count', 0)),
-        ]
-
-        age_items = [
-            (tr("wizard.household.adults"), hh.get('adult_count', 0)),
-            (tr("wizard.household.children"), hh.get('child_count', 0)),
-            (tr("wizard.household.elderly"), hh.get('elderly_count', 0)),
-            (tr("wizard.household.disabled"), hh.get('disabled_count', 0)),
-        ]
-
-        cards_container = QWidget()
-        cards_container.setLayoutDirection(get_layout_direction())
-        cards_container.setStyleSheet("background: transparent; border: none;")
-        cards_layout = QHBoxLayout(cards_container)
-        cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(20)
-
-        cards_layout.addWidget(self._create_demographic_card(gender_items))
-        cards_layout.addWidget(self._create_demographic_card(age_items))
-
-        self._household_content.addWidget(cards_container)
+        stats_grid = QGridLayout()
+        stats_grid.setHorizontalSpacing(ScreenScale.w(10))
+        stats_grid.setVerticalSpacing(ScreenScale.h(8))
+        stats_grid.addWidget(
+            self._create_field_pair(
+                tr("wizard.review.main_occupant_info"), main_occupant_name,
+            ),
+            0, 0, 1, 2,
+        )
+        stats_grid.addWidget(
+            self._create_field_pair(tr("wizard.household.family_size"), str(total_size)),
+            1, 0,
+        )
+        stats_grid.addWidget(
+            self._create_field_pair(
+                tr("wizard.review.persons_card_title"),
+                str(len(self.context.persons or [])),
+            ),
+            1, 1,
+        )
+        self._household_content.addLayout(stats_grid)
 
     def _create_demographic_card(self, items: list) -> QFrame:
         frame = QFrame()
@@ -1227,9 +1131,27 @@ class ReviewStep(BaseStep):
             )
             return
 
+        viewport_w = self._persons_card.width() or ScreenScale.w(800)
+        if viewport_w < ScreenScale.w(560):
+            cols = 1
+        elif viewport_w < ScreenScale.w(900):
+            cols = 2
+        else:
+            cols = 3
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(ScreenScale.w(12))
+        grid.setVerticalSpacing(ScreenScale.h(12))
+        grid.setContentsMargins(0, ScreenScale.h(8), 0, 0)
+        for c in range(cols):
+            grid.setColumnStretch(c, 1)
+
         for i, person in enumerate(self.context.persons):
-            row = self._create_person_row(person, alt_bg=(i % 2 == 1))
-            self._persons_content.addWidget(row)
+            r, c = divmod(i, cols)
+            card = self._create_person_row(person, alt_bg=(i % 2 == 1))
+            grid.addWidget(card, r, c)
+
+        self._persons_content.addLayout(grid)
 
     # ── View/Edit Person Dialog ──────────────────────────────────────
 
@@ -1481,13 +1403,17 @@ class ReviewStep(BaseStep):
     def update_language(self, is_arabic: bool):
         _dir = get_layout_direction()
         self.setLayoutDirection(_dir)
-        self._scroll.widget().setLayoutDirection(_dir)
-        self._survey_card.setLayoutDirection(_dir)
-        self._building_card.setLayoutDirection(_dir)
-        self._applicant_card_widget.setLayoutDirection(_dir)
-        self._unit_card.setLayoutDirection(_dir)
-        self._household_card.setLayoutDirection(_dir)
-        self._persons_card.setLayoutDirection(_dir)
+        scroll_widget = self._scroll.widget()
+        if scroll_widget is not None:
+            scroll_widget.setLayoutDirection(_dir)
+        for card in (
+            self._building_card,
+            self._applicant_card_widget,
+            self._unit_card,
+            self._household_card,
+            self._persons_card,
+        ):
+            card.setLayoutDirection(_dir)
         self._populate_review()
 
     def validate(self) -> StepValidationResult:

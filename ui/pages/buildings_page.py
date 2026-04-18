@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Optional, Tuple
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QComboBox, QHeaderView,
     QFrame, QFileDialog, QAbstractItemView, QGraphicsDropShadowEffect,
     QDoubleSpinBox, QSpinBox, QScrollArea,
@@ -2145,7 +2145,7 @@ class _BuildingCard(AnimatedCard):
         from PyQt5.QtGui import QFont
         from ui.font_utils import create_font, FontManager
         from ui.design_system import Colors
-        from services.translation_manager import tr
+        from services.translation_manager import tr, apply_label_alignment
         from services.display_mappings import get_building_type_display, get_building_status_display
 
         b = self._building
@@ -2158,6 +2158,7 @@ class _BuildingCard(AnimatedCard):
         code_label.setFont(create_font(size=13, weight=QFont.Bold))
         code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         code_label.setMaximumWidth(ScreenScale.w(400))
+        apply_label_alignment(code_label)
         row1.addWidget(code_label)
         row1.addStretch()
 
@@ -2193,6 +2194,7 @@ class _BuildingCard(AnimatedCard):
         details = QLabel(details_text)
         details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        apply_label_alignment(details)
         layout.addWidget(details)
 
         # Row 3: assignment + lock chips
@@ -2314,10 +2316,11 @@ class BuildingsListPage(QWidget):
 
         cards_container = QWidget()
         cards_container.setStyleSheet("background: transparent;")
-        self._cards_layout = QVBoxLayout(cards_container)
+        self._cards_layout = QGridLayout(cards_container)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
-        self._cards_layout.setSpacing(10)
-        self._cards_layout.addStretch()
+        self._cards_layout.setSpacing(16)
+        self._cards_layout.setColumnStretch(0, 1)
+        self._cards_layout.setColumnStretch(1, 1)
         scroll.setWidget(cards_container)
         self._stack.addWidget(scroll)
 
@@ -2432,11 +2435,19 @@ class BuildingsListPage(QWidget):
 
         self._stack.setCurrentIndex(0)  # Show cards
 
-        for b in page_buildings:
+        for idx, b in enumerate(page_buildings):
             card = _BuildingCard(b)
             card.view_building.connect(self.view_building.emit)
-            self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
+            row = idx // 2
+            col = idx % 2
+            self._cards_layout.addWidget(card, row, col)
             self._card_widgets.append(card)
+
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        spacer.setStyleSheet("background: transparent;")
+        total_rows = (len(page_buildings) + 1) // 2
+        self._cards_layout.addWidget(spacer, total_rows, 0, 1, 2)
 
         animate_card_entrance(self._card_widgets)
         if not self._shimmer_timer.isActive():
@@ -2698,6 +2709,13 @@ class BuildingsListPage(QWidget):
             card.setParent(None)
             card.deleteLater()
         self._card_widgets.clear()
+
+        while self._cards_layout.count():
+            item = self._cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
 
     def _update_card_shimmer(self):
         """Update shimmer animation on all visible cards."""

@@ -12,8 +12,8 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QWidget, QMenu, QSpacerItem,
-    QSizePolicy, QDialog
+    QFrame, QWidget, QMenu,
+    QDialog, QGridLayout
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QColor
@@ -23,7 +23,6 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 
 from app.config import Config
-from ui.style_manager import StyleManager
 from services.api_client import get_api_client
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -62,32 +61,24 @@ class OccupancyClaimsStep(BaseStep):
         self._api_service = get_api_client()
 
     def setup_ui(self):
-        """Setup the step UI - same card pattern as PersonStep."""
-        widget = self
-        widget.setLayoutDirection(get_layout_direction())
-        widget.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
+        self.setLayoutDirection(get_layout_direction())
+        self.setStyleSheet(f"background-color: {Colors.BACKGROUND};")
 
         layout = self.main_layout
         layout.setContentsMargins(0, 15, 0, 16)
         layout.setSpacing(15)
 
-        # Main card
-        table_frame = make_step_card()
-        table_frame.setLayoutDirection(get_layout_direction())
-        table_layout = QVBoxLayout(table_frame)
-        table_layout.setContentsMargins(20, 20, 20, 20)
-        table_layout.setSpacing(14)
+        persons_frame = make_step_card()
+        persons_frame.setLayoutDirection(get_layout_direction())
+        pf_layout = QVBoxLayout(persons_frame)
+        pf_layout.setContentsMargins(20, 20, 20, 20)
+        pf_layout.setSpacing(14)
 
-        # Header: icon + title + add button
         header_layout, header_title, header_subtitle = make_icon_header(
             tr("wizard.occupancy_claims.title"),
             tr("wizard.occupancy_claims.subtitle"),
-            "user"
+            "user",
         )
-
-        # إعادة تطبيق الترجمة (مهم جداً)
-        header_title.setText(tr("wizard.occupancy_claims.title"))
-        header_subtitle.setText(tr("wizard.occupancy_claims.subtitle"))
         self._header_title = header_title
         self._header_subtitle = header_subtitle
 
@@ -97,39 +88,23 @@ class OccupancyClaimsStep(BaseStep):
         self._add_person_btn.setStyleSheet(IN_CARD_ACTION_STYLE)
         self._add_person_btn.clicked.connect(self._add_person)
         header_layout.addWidget(self._add_person_btn)
+        pf_layout.addLayout(header_layout)
+        pf_layout.addSpacing(8)
 
+        self._persons_grid_widget = QWidget()
+        self._persons_grid_widget.setStyleSheet("background: transparent;")
+        self.persons_grid = QGridLayout(self._persons_grid_widget)
+        self.persons_grid.setSpacing(ScreenScale.w(12))
+        self.persons_grid.setContentsMargins(0, 0, 0, 0)
+        for c in range(3):
+            self.persons_grid.setColumnStretch(c, 1)
 
-        table_layout.addLayout(header_layout)
-
-        table_layout.addSpacing(12)
-
-        # Scroll area for person cards
-        scroll_area = QScrollArea()
-        scroll_area.setLayoutDirection(get_layout_direction())
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet(
-            "QScrollArea { border: none; background-color: transparent; }"
-            + StyleManager.scrollbar()
-        )
-
-        scroll_widget = QWidget()
-        scroll_widget.setLayoutDirection(get_layout_direction())
-        scroll_widget.setStyleSheet("background-color: transparent;")
-        self.persons_table_layout = QVBoxLayout(scroll_widget)
-        self.persons_table_layout.setSpacing(10)
-        self.persons_table_layout.setContentsMargins(0, 0, 0, 0)
-        self.persons_table_layout.addStretch()
-
-        scroll_area.setWidget(scroll_widget)
-        self._scroll_area = scroll_area
-
-        # Empty state widget (shown when no persons added)
         self._empty_state = self._create_empty_state()
+        pf_layout.addWidget(self._empty_state)
+        pf_layout.addWidget(self._persons_grid_widget, 1)
+        pf_layout.addStretch(0)
 
-        table_layout.addWidget(self._empty_state)
-        table_layout.addWidget(scroll_area)
-
-        layout.addWidget(table_frame)
+        layout.addWidget(persons_frame, 1)
 
     def _create_empty_state(self) -> QWidget:
         """Create empty state widget shown when no persons are added."""
@@ -192,6 +167,13 @@ class OccupancyClaimsStep(BaseStep):
         main_layout.addWidget(center_widget)
 
         return container
+
+    @staticmethod
+    def _thin_hline() -> QFrame:
+        d = QFrame()
+        d.setFixedHeight(1)
+        d.setStyleSheet("background-color: #E2EAF2; border: none;")
+        return d
 
     def _get_context_ids(self):
         """Get survey_id, household_id, unit_id, and auth_token from context."""
@@ -281,11 +263,21 @@ class OccupancyClaimsStep(BaseStep):
 
         person_data_copy = dict(person_data)
         if is_applicant and self.context.applicant:
-            id_photos = self.context.applicant.get('id_photo_paths', [])
+            a = self.context.applicant
+            # PersonDialog expects 'first_name' key; applicant context stores 'first_name_ar'
+            for person_key, applicant_key in (
+                ('first_name',  'first_name_ar'),
+                ('father_name', 'father_name_ar'),
+                ('mother_name', 'mother_name_ar'),
+                ('last_name',   'last_name_ar'),
+            ):
+                if not person_data_copy.get(person_key) and a.get(applicant_key):
+                    person_data_copy[person_key] = a[applicant_key]
+            id_photos = a.get('id_photo_paths', [])
             if id_photos:
                 person_data_copy['_uploaded_files'] = id_photos
             else:
-                id_ev = self.context.applicant.get('id_photo_evidences', [])
+                id_ev = a.get('id_photo_evidences', [])
                 if id_ev:
                     person_data_copy['_id_photo_evidences'] = id_ev
 
@@ -403,107 +395,233 @@ class OccupancyClaimsStep(BaseStep):
             logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
-        """Create a person row card with name, role, and action menu."""
-        from ui.components.icon import Icon
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
         person_id = person.get('person_id', '')
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        cell_align = (
+            Qt.AlignRight | Qt.AlignAbsolute | Qt.AlignVCenter
+            if is_rtl else
+            Qt.AlignLeft | Qt.AlignAbsolute | Qt.AlignVCenter
+        )
 
         card = QFrame()
+        card.setObjectName("personCard")
         card.setLayoutDirection(get_layout_direction())
-        card.setFixedHeight(ScreenScale.h(68))
         card.setStyleSheet(PERSON_CARD_STYLE)
         card.setCursor(Qt.PointingHandCursor)
-        card.mousePressEvent = lambda e, pid=person_id: self._view_person(pid) if e.button() == Qt.LeftButton else None
 
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(14, 10, 14, 10)
-        card_layout.setSpacing(14)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(14)
+        shadow.setXOffset(0)
+        shadow.setYOffset(2)
+        shadow.setColor(QColor(0, 0, 0, 20))
+        card.setGraphicsEffect(shadow)
 
-        # Right side: icon + text
-        right_group = QHBoxLayout()
-        right_group.setSpacing(12)
+        card.mousePressEvent = lambda ev, pid=person_id: (
+            self._view_person(pid)
+            if ev.button() == Qt.LeftButton
+            and not any(c.underMouse() for c in card.findChildren(QPushButton))
+            else None
+        )
 
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(ScreenScale.w(40), ScreenScale.h(40))
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("""
-            QLabel {
-                background-color: #EBF5FF;
-                color: #3890DF;
-                border-radius: 20px;
-                border: 1px solid #DBEAFE;
-            }
-        """)
-        user_pixmap = Icon.load_pixmap("user", size=20)
-        if user_pixmap and not user_pixmap.isNull():
-            icon_lbl.setPixmap(user_pixmap)
-        else:
-            icon_lbl.setText("U")
-            icon_lbl.setStyleSheet(icon_lbl.styleSheet() + "font-size: 16px;")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(ScreenScale.h(6))
+        layout.setContentsMargins(16, 14, 16, 12)
 
-        text_vbox = QVBoxLayout()
-        text_vbox.setSpacing(2)
+        def _labeled_cell(label_text: str, value_widget: QWidget) -> QWidget:
+            wrap = QWidget()
+            wrap.setLayoutDirection(card.layoutDirection())
+            wrap.setStyleSheet("background: transparent;")
+            vl = QVBoxLayout(wrap)
+            vl.setContentsMargins(0, 0, 0, 0)
+            vl.setSpacing(3)
+            lbl = QLabel(label_text)
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet("color: #64748B; background: transparent; border: none;")
+            lbl.setAlignment(cell_align)
+            if isinstance(value_widget, QLabel):
+                value_widget.setAlignment(cell_align)
+            vl.addWidget(lbl)
+            vl.addWidget(value_widget)
+            return wrap
 
-        full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
-        name_lbl = QLabel(full_name)
-        name_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-        name_lbl.setAlignment(Qt.AlignRight)
+        # ── Top strip: ⋮ menu on trailing edge (mirrors unit card's checkmark strip) ──
+        top_strip = QWidget()
+        top_strip.setLayoutDirection(card.layoutDirection())
+        top_strip.setFixedHeight(ScreenScale.h(16))
+        top_strip.setStyleSheet("background: transparent;")
+        ts_layout = QHBoxLayout(top_strip)
+        ts_layout.setContentsMargins(0, 0, 0, 0)
+        ts_layout.setSpacing(0)
 
-        # Show household role (person_role), not claim type (rel_type)
-        role_key = person.get('person_role') or person.get('relationship_type')
-        role_text = get_relationship_to_head_display(role_key) if role_key else ""
-        role_lbl = QLabel(role_text)
-        role_lbl.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
-
-        text_vbox.addWidget(name_lbl)
-        text_vbox.addWidget(role_lbl)
-
-        right_group.addWidget(icon_lbl)
-        right_group.addLayout(text_vbox)
-
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-
-        # Left side: menu button
         menu_btn = QPushButton("⋮")
-        menu_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(36))
+        menu_btn.setFixedSize(ScreenScale.w(24), ScreenScale.h(18))
         menu_btn.setStyleSheet(MENU_DOTS_STYLE)
         menu_btn.setCursor(Qt.PointingHandCursor)
-
         menu = QMenu(menu_btn)
         menu.setLayoutDirection(get_layout_direction())
         menu.setFixedSize(ScreenScale.w(99), ScreenScale.h(80))
         menu.setStyleSheet(CONTEXT_MENU_STYLE)
-
         eye_icon = QIcon(str(Config.IMAGES_DIR / "Eye.png"))
         view_action = menu.addAction(eye_icon, tr("wizard.occupancy_claims.view"))
-        view_action.triggered.connect(lambda _, pid=person['person_id']: self._view_person(pid))
+        view_action.triggered.connect(lambda _, pid=person_id: self._view_person(pid))
+        menu_btn.clicked.connect(
+            lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight()))
+        )
 
-        menu_btn.clicked.connect(lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight())))
+        ts_layout.addStretch(1)
+        ts_layout.addWidget(menu_btn, 0, Qt.AlignVCenter)
+        layout.addWidget(top_strip)
 
-        card_layout.addLayout(right_group)
-        card_layout.addSpacerItem(spacer)
-        card_layout.addWidget(menu_btn)
+        # ── 3 rows × 2 cols info grid (identical structure to unit card) ──
+        info_grid = QGridLayout()
+        info_grid.setHorizontalSpacing(ScreenScale.w(12))
+        info_grid.setVerticalSpacing(ScreenScale.h(8))
+        info_grid.setContentsMargins(0, 0, 0, 0)
+        info_grid.setColumnStretch(0, 1)
+        info_grid.setColumnStretch(1, 1)
+
+        # Row 0: full name (13pt Bold) | role badge (colored pill like unit status)
+        full_name = " ".join(filter(None, [
+            person.get('first_name', ''),
+            person.get('father_name', ''),
+            person.get('last_name', ''),
+        ])).strip() or "-"
+        name_val = QLabel(full_name)
+        name_val.setFont(create_font(size=15, weight=FontManager.WEIGHT_BOLD))
+        name_val.setStyleSheet("color: #0F172A; background: transparent; border: none;")
+        name_val.setWordWrap(True)
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.first_name"), name_val), 0, 0)
+
+        role_key = person.get('person_role') or person.get('relationship_type')
+        role_text = get_relationship_to_head_display(role_key) if role_key else "-"
+        _ROLE_PALETTE = {
+            'head':     ('#DBEAFE', '#1D4ED8'),
+            'spouse':   ('#FAE8FF', '#7E22CE'),
+            'wife':     ('#FAE8FF', '#7E22CE'),
+            'husband':  ('#FAE8FF', '#7E22CE'),
+            'son':      ('#DCFCE7', '#166534'),
+            'daughter': ('#DCFCE7', '#166534'),
+            'child':    ('#DCFCE7', '#166534'),
+            'brother':  ('#FEF3C7', '#B45309'),
+            'sister':   ('#FEF3C7', '#B45309'),
+            'father':   ('#FFEDD5', '#C2410C'),
+            'mother':   ('#FFEDD5', '#C2410C'),
+            'other':    ('#E0E7FF', '#4338CA'),
+        }
+        badge_bg, badge_fg = _ROLE_PALETTE.get(
+            str(role_key).lower() if role_key else '',
+            ('#DBEAFE', '#1D4ED8'),
+        )
+        role_badge = QLabel(role_text)
+        role_badge.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        role_badge.setStyleSheet(
+            f"background-color: {badge_bg}; color: {badge_fg};"
+            "padding: 4px 12px; border-radius: 10px; border: none;"
+        )
+        role_badge.setAlignment(Qt.AlignCenter)
+        role_holder = QWidget()
+        role_holder.setLayoutDirection(card.layoutDirection())
+        role_holder.setStyleSheet("background: transparent;")
+        rh = QHBoxLayout(role_holder)
+        rh.setContentsMargins(0, 0, 0, 0)
+        rh.setSpacing(0)
+        rh.addWidget(role_badge, 0)
+        rh.addStretch(1)
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.person_role"), role_holder), 0, 1)
+
+        # Row 1: father_name | mother_name
+        father_val = QLabel(person.get('father_name') or '-')
+        father_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        father_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.father_name"), father_val), 1, 0)
+
+        mother_val = QLabel(person.get('mother_name') or '-')
+        mother_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        mother_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.mother_name"), mother_val), 1, 1)
+
+        # Row 2: phone | national_id
+        phone_val = QLabel(person.get('phone') or '-')
+        phone_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        phone_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.phone"), phone_val), 2, 0)
+
+        nid_val = QLabel(person.get('national_id') or '-')
+        nid_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        nid_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.national_id"), nid_val), 2, 1)
+
+        layout.addLayout(info_grid)
+
+        # ── Relation + docs: only rendered when there is actual content ──
+        rel_data = person.get('relation_data', {}) or {}
+        rel_type = rel_data.get('rel_type') or person.get('relationship_type') or person.get('person_role')
+        rel_display = get_relation_type_display(rel_type) if rel_type else ''
+        share = rel_data.get('ownership_share')
+        if rel_display and share:
+            rel_display = f"{rel_display} · {share}٪"
+        has_docs = bool(rel_data.get('has_documents') or person.get('_relation_uploaded_files'))
+
+        if rel_display or has_docs:
+            layout.addWidget(self._thin_hline())
+
+            bottom_row = QHBoxLayout()
+            bottom_row.setContentsMargins(0, 0, 0, 0)
+            bottom_row.setSpacing(8)
+
+            if rel_display:
+                rel_val = QLabel(rel_display)
+                rel_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+                rel_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+                bottom_row.addWidget(
+                    _labeled_cell(tr("wizard.occupancy_claims.rel_type_label"), rel_val), 1
+                )
+            else:
+                bottom_row.addStretch(1)
+
+            if has_docs:
+                docs_lbl = QLabel("📎 " + tr("wizard.occupancy_claims.has_documents"))
+                docs_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+                docs_lbl.setStyleSheet(
+                    "QLabel { color: #10B981; background: #ECFDF5;"
+                    " border: 1px solid #A7F3D0; border-radius: 6px;"
+                    " padding: 3px 10px; }"
+                )
+                bottom_row.addWidget(
+                    docs_lbl, 0,
+                    Qt.AlignVCenter | (Qt.AlignLeft if is_rtl else Qt.AlignRight),
+                )
+
+            layout.addLayout(bottom_row)
 
         return card
 
     def _refresh_persons_list(self):
-        """Refresh the persons list display and toggle empty state."""
-        while self.persons_table_layout.count() > 1:
-            item = self.persons_table_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        while self.persons_grid.count():
+            it = self.persons_grid.takeAt(0)
+            w = it.widget()
+            if w:
+                w.deleteLater()
 
-        has_persons = len(self.context.persons) > 0
+        persons = self.context.persons or []
+        has = len(persons) > 0
+        self._empty_state.setVisible(not has)
+        self._persons_grid_widget.setVisible(has)
 
-        # Toggle empty state vs scroll area
-        self._empty_state.setVisible(not has_persons)
-        self._scroll_area.setVisible(has_persons)
+        cols = 3
+        for idx, person in enumerate(persons):
+            card = self._create_person_row_card(person, idx)
+            self.persons_grid.addWidget(card, idx // cols, idx % cols)
 
-        for idx, person in enumerate(self.context.persons):
-            person_card = self._create_person_row_card(person, idx)
-            self.persons_table_layout.insertWidget(idx, person_card)
+        remainder = len(persons) % cols
+        if remainder:
+            last_row = len(persons) // cols
+            for c in range(remainder, cols):
+                filler = QWidget()
+                filler.setStyleSheet("background: transparent;")
+                self.persons_grid.addWidget(filler, last_row, c)
 
     def _collect_relations_from_persons(self) -> List[Dict[str, Any]]:
         """Collect relation data from person records (stored in relation_data)."""
@@ -698,7 +816,6 @@ class OccupancyClaimsStep(BaseStep):
     # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
-        """Update translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
         self._add_person_btn.setText(tr("wizard.occupancy_claims.add_person"))
         if hasattr(self, '_header_title'):

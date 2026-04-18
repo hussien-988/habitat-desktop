@@ -32,7 +32,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.components.toast import Toast
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from utils.i18n import I18n
 from utils.logger import get_logger
 
@@ -174,6 +174,7 @@ class _DuplicateCard(AnimatedCard):
         id_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
+        apply_label_alignment(id_label)
         row1.addWidget(id_label)
         row1.addStretch()
 
@@ -222,6 +223,7 @@ class _DuplicateCard(AnimatedCard):
         info_label.setStyleSheet(
             "color: #6B7280; background: transparent; border: none;"
         )
+        apply_label_alignment(info_label)
         row2.addWidget(info_label)
         row2.addStretch()
 

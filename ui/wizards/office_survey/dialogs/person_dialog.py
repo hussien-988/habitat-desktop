@@ -37,7 +37,9 @@ from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
-from ui.wizards.office_survey.wizard_styles import FORM_FIELD_STYLE
+from ui.wizards.office_survey.wizard_styles import (
+    FORM_FIELD_STYLE, make_editable_date_combo, read_int_from_combo,
+)
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -447,7 +449,7 @@ class PersonDialog(QDialog):
         self.last_name.textChanged.connect(self._update_all_progress)
         self.father_name.textChanged.connect(self._update_all_progress)
         self.mother_name.textChanged.connect(self._update_all_progress)
-        self.gender.currentIndexChanged.connect(self._update_all_progress)
+        self._gender_group.buttonClicked.connect(self._update_all_progress)
         self.nationality.currentIndexChanged.connect(self._update_all_progress)
         self.national_id.textChanged.connect(self._update_all_progress)
 
@@ -483,7 +485,7 @@ class PersonDialog(QDialog):
                 bool(self.last_name.text().strip()),
                 bool(self.father_name.text().strip()),
                 bool(self.mother_name.text().strip()),
-                self.gender.currentIndex() > 0,
+                self._get_gender() is not None,
                 self.nationality.currentIndex() > 0,
                 bool(self.national_id.text().strip()),
             ]
@@ -545,7 +547,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(6)
 
-        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #1E293B; font-weight: 700; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
@@ -616,66 +618,36 @@ class PersonDialog(QDialog):
         grid.addWidget(self.mother_name, row, 1)
         row += 1
 
-        # Row: Birth Date (3 dropdowns: year, month, day)
+        # Row: Birth Date (col 0) | National ID (col 1)
         grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 0)
+        grid.addWidget(self._label(tr("wizard.person_dialog.national_id") + " *", label_style), row, 1)
         row += 1
         birth_layout = QHBoxLayout()
         birth_layout.setSpacing(6)
         birth_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.birth_year_combo = QComboBox()
-        self.birth_year_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_year_combo.setStyleSheet(self._input_style())
-        self.birth_year_combo.addItem("--", None)
         from datetime import datetime as _dt
-        for y in range(_dt.now().year, 1919, -1):
-            self.birth_year_combo.addItem(str(y), y)
+        self.birth_day_combo = make_editable_date_combo(
+            items=[(str(d), d) for d in range(1, 32)],
+            max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
+        )
+        self.birth_month_combo = make_editable_date_combo(
+            items=[(str(m), m) for m in range(1, 13)],
+            max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
+        )
+        self.birth_year_combo = make_editable_date_combo(
+            items=[(str(y), y) for y in range(_dt.now().year, 1919, -1)],
+            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
 
-        self.birth_month_combo = QComboBox()
-        self.birth_month_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_month_combo.setStyleSheet(self._input_style())
-        self.birth_month_combo.addItem("--", None)
-        for m in range(1, 13):
-            self.birth_month_combo.addItem(str(m), m)
-
-        self.birth_day_combo = QComboBox()
-        self.birth_day_combo.setLayoutDirection(Qt.LeftToRight)
-        self.birth_day_combo.setStyleSheet(self._input_style())
-        self.birth_day_combo.addItem("--", None)
-        for d in range(1, 32):
-            self.birth_day_combo.addItem(str(d), d)
-
-        birth_layout.addWidget(self.birth_year_combo, 2)
-        birth_layout.addWidget(self.birth_month_combo, 1)
         birth_layout.addWidget(self.birth_day_combo, 1)
+        birth_layout.addWidget(self.birth_month_combo, 1)
+        birth_layout.addWidget(self.birth_year_combo, 2)
         birth_container = QWidget()
         birth_container.setStyleSheet("background-color: transparent;")
         birth_container.setLayout(birth_layout)
         grid.addWidget(birth_container, row, 0)
-        row += 1
 
-        # Row: Gender | Nationality
-        grid.addWidget(self._label(tr("wizard.person_dialog.gender"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.nationality"), label_style), row, 1)
-        row += 1
-        self.gender = RtlCombo()
-        self.gender.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_gender_options():
-            self.gender.addItem(display_name, code)
-        self.gender.setStyleSheet(self._input_style())
-        grid.addWidget(self.gender, row, 0)
-
-        self.nationality = RtlCombo()
-        self.nationality.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_nationality_options():
-            self.nationality.addItem(display_name, code)
-        self.nationality.setStyleSheet(self._input_style())
-        grid.addWidget(self.nationality, row, 1)
-        row += 1
-
-        # Row: National ID (full width)
-        grid.addWidget(self._label(tr("wizard.person_dialog.national_id"), label_style), row, 0, 1, 2)
-        row += 1
         self.national_id = QLineEdit()
         self.national_id.setPlaceholderText("0000000000")
         self.national_id.setValidator(QRegExpValidator(QtRegExp(r"\d{0,11}")))
@@ -688,7 +660,22 @@ class PersonDialog(QDialog):
         nid_container.setContentsMargins(0, 0, 0, 0)
         nid_container.addWidget(self.national_id)
         nid_container.addWidget(self._nid_error)
-        grid.addLayout(nid_container, row, 0, 1, 2)
+        grid.addLayout(nid_container, row, 1)
+        row += 1
+
+        # Row: Nationality (col 0) | Gender (col 1)
+        grid.addWidget(self._label(tr("wizard.person_dialog.nationality"), label_style), row, 0)
+        grid.addWidget(self._label(tr("wizard.person_dialog.gender"), label_style), row, 1)
+        row += 1
+        self.nationality = RtlCombo()
+        self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_nationality_options():
+            self.nationality.addItem(display_name, code)
+        self.nationality.setStyleSheet(self._input_style())
+        grid.addWidget(self.nationality, row, 0)
+
+        self.gender = self._build_gender_radios()
+        grid.addWidget(self.gender, row, 1)
         row += 1
 
         # ID Document Type selector
@@ -725,7 +712,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(6)
 
-        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #1E293B; font-weight: 700; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
@@ -776,10 +763,10 @@ class PersonDialog(QDialog):
                 min-height: 36px; max-height: 36px;
             }
         """)
+        mobile_container.setLayoutDirection(Qt.LeftToRight)
         mobile_layout = QHBoxLayout(mobile_container)
         mobile_layout.setContentsMargins(0, 0, 0, 0)
         mobile_layout.setSpacing(0)
-        mobile_layout.setDirection(QHBoxLayout.RightToLeft)
 
         prefix_label = QLabel("+963 | 09")
         prefix_label.setFixedWidth(ScreenScale.w(90))
@@ -787,7 +774,7 @@ class PersonDialog(QDialog):
         prefix_label.setStyleSheet("""
             color: #6B7280;
             font-size: 14px; font-weight: 500;
-            border: none; border-left: 1px solid rgba(56,144,223,0.35);
+            border: none; border-right: 1px solid rgba(56,144,223,0.35);
             background: transparent; padding: 0 8px;
         """)
 
@@ -835,34 +822,40 @@ class PersonDialog(QDialog):
                 min-height: 36px; max-height: 36px;
             }
         """)
+        landline_frame.setLayoutDirection(Qt.LeftToRight)
         land_layout = QHBoxLayout(landline_frame)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
-        land_layout.setDirection(QHBoxLayout.RightToLeft)
         self.landline_prefix = RtlCombo()
         self.landline_prefix.setFixedWidth(ScreenScale.w(130))
+        self.landline_prefix.setCursor(Qt.PointingHandCursor)
         for _code, _display in _area_codes:
             self.landline_prefix.addItem(_display, _code)
         self.landline_prefix.setStyleSheet("""
             QComboBox {
                 border: none;
-                background: transparent;
-                padding: 0 4px 0 8px;
-                font-size: 14px; color: #6B7280;
+                background: #EBF5FF;
+                border-top-left-radius: 7px;
+                border-bottom-left-radius: 7px;
+                padding: 0 22px 0 10px;
+                font-size: 13px; font-weight: 600; color: #3890DF;
             }
+            QComboBox:hover { background: #D6ECFF; }
             QComboBox QLineEdit {
-                border: none;
-                background: transparent;
-                padding: 0;
-                font-size: 14px; color: #6B7280;
+                border: none; background: transparent;
+                padding: 0; font-size: 13px; font-weight: 600; color: #3890DF;
             }
             QComboBox::drop-down {
                 subcontrol-origin: padding;
                 subcontrol-position: right center;
-                border: none; width: 18px;
+                border: none; width: 20px;
             }
             QComboBox::down-arrow {
-                width: 8px; height: 8px;
+                image: none; width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #3890DF;
+                margin-right: 6px;
             }
             QComboBox QAbstractItemView {
                 background-color: #FFFFFF;
@@ -925,7 +918,7 @@ class PersonDialog(QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(6)
 
-        label_style = "color: #374151; font-weight: 600; font-size: 11pt; background: transparent;"
+        label_style = "color: #1E293B; font-weight: 700; font-size: 11pt; background: transparent;"
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(12)
@@ -1347,6 +1340,97 @@ class PersonDialog(QDialog):
         self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f.get("path") != file_path]
         self._refresh_relation_thumbnails()
 
+    # Editable combo + gender radio helpers
+
+    def _make_editable_combo(self, items, max_digits: int, placeholder: str = "") -> QComboBox:
+        combo = QComboBox()
+        combo.setLayoutDirection(Qt.LeftToRight)
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        for label, data in items:
+            combo.addItem(label, data)
+        line_edit = combo.lineEdit()
+        if line_edit is not None:
+            line_edit.setValidator(QRegExpValidator(QtRegExp(rf"\d{{0,{max_digits}}}")))
+            line_edit.setAlignment(Qt.AlignCenter)
+            if placeholder:
+                line_edit.setPlaceholderText(placeholder)
+        combo.setCurrentIndex(-1)
+        combo.clearEditText()
+        combo.setStyleSheet(self._input_style())
+        return combo
+
+    @staticmethod
+    def _read_int_from_combo(combo: QComboBox):
+        val = combo.currentData()
+        if val is not None:
+            return val
+        text = combo.currentText().strip()
+        if text.isdigit():
+            try:
+                return int(text)
+            except ValueError:
+                return None
+        return None
+
+    def _build_gender_radios(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        lay = QHBoxLayout(container)
+        lay.setContentsMargins(2, 2, 2, 2)
+        lay.setSpacing(ScreenScale.w(14))
+
+        self._gender_group = QButtonGroup(container)
+        self._gender_group.setExclusive(True)
+        self._gender_btns = []
+
+        radio_css = f"""
+            QRadioButton {{
+                color: #2C3E50;
+                background: transparent;
+                font-size: 10pt;
+                spacing: 6px;
+                padding: 2px 4px;
+            }}
+            QRadioButton::indicator {{
+                width: 16px; height: 16px;
+                border: 1.5px solid #B0BEC5;
+                border-radius: 9px;
+                background: white;
+            }}
+            QRadioButton::indicator:checked {{
+                border: 1.5px solid #3890DF;
+                background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                    stop:0 #3890DF, stop:0.55 #3890DF,
+                    stop:0.6 white, stop:1 white);
+            }}
+        """
+        for code, label in get_gender_options():
+            btn = QRadioButton(label)
+            btn.setStyleSheet(radio_css)
+            btn.setProperty("gender_code", code)
+            lay.addWidget(btn)
+            self._gender_group.addButton(btn)
+            self._gender_btns.append(btn)
+        lay.addStretch()
+        return container
+
+    def _get_gender(self):
+        for btn in getattr(self, "_gender_btns", []):
+            if btn.isChecked():
+                return btn.property("gender_code")
+        return None
+
+    def _set_gender(self, code):
+        for btn in getattr(self, "_gender_btns", []):
+            if btn.property("gender_code") == code:
+                btn.setChecked(True)
+                return
+        self._gender_group.setExclusive(False)
+        for btn in getattr(self, "_gender_btns", []):
+            btn.setChecked(False)
+        self._gender_group.setExclusive(True)
+
     def _input_style(self) -> str:
         """Custom input style with light background."""
         return """
@@ -1629,16 +1713,16 @@ class PersonDialog(QDialog):
         father = self.father_name.text().strip()
         mother = self.mother_name.text().strip()
 
-        if not first or len(first) < 2:
+        if not first:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.ERROR)
             return
-        if not last or len(last) < 2:
+        if not last:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.ERROR)
             return
-        if not father or len(father) < 2:
+        if not father:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_father_name"), Toast.ERROR)
             return
-        if not mother or len(mother) < 2:
+        if not mother:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_mother_name"), Toast.ERROR)
             return
 
@@ -2377,9 +2461,9 @@ class PersonDialog(QDialog):
 
     def _build_birth_date_iso(self) -> str:
         """Build ISO date string from birth date combo boxes."""
-        y = self.birth_year_combo.currentData()
-        m = self.birth_month_combo.currentData()
-        d = self.birth_day_combo.currentData()
+        y = read_int_from_combo(self.birth_year_combo)
+        m = read_int_from_combo(self.birth_month_combo)
+        d = read_int_from_combo(self.birth_day_combo)
         if y:
             month = m if m else 1
             day = d if d else 1
@@ -2459,11 +2543,7 @@ class PersonDialog(QDialog):
                     self.birth_day_combo.setCurrentIndex(idx)
 
         # Gender
-        gender_val = data.get('gender')
-        if gender_val:
-            idx = self.gender.findData(gender_val)
-            if idx >= 0:
-                self.gender.setCurrentIndex(idx)
+        self._set_gender(data.get('gender'))
 
         # Nationality
         nat = data.get('nationality')
@@ -2577,7 +2657,7 @@ class PersonDialog(QDialog):
             'mother_name': self.mother_name.text().strip(),
             'last_name': self.last_name.text().strip(),
             'national_id': self.national_id.text().strip() or None,
-            'gender': self.gender.currentData(),
+            'gender': self._get_gender(),
             'nationality': self.nationality.currentData(),
             'birth_date': self._build_birth_date_iso(),
             # Tab 2
@@ -2658,7 +2738,7 @@ class PersonDialog(QDialog):
         last = self.last_name.text().strip()
         father = self.father_name.text().strip()
         mother = self.mother_name.text().strip()
-        name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']{2,}$')
+        name_pattern = re.compile(r'^[\u0600-\u06FFa-zA-Z\s.\-\']+$')
         if not first:
             self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
             self.tab_widget.setCurrentIndex(0)

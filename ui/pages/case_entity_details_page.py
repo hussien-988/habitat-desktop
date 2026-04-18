@@ -30,7 +30,7 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.logo import LogoWidget
 from ui.components.toast import Toast
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from services.api_worker import ApiWorker
 from models.case import Case
 from utils.logger import get_logger
@@ -534,6 +534,7 @@ class _SurveyMiniCard(QFrame):
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         ref_label.setMaximumWidth(ScreenScale.w(400))
+        apply_label_alignment(ref_label)
         row1.addWidget(ref_label)
         row1.addStretch()
 
@@ -553,6 +554,7 @@ class _SurveyMiniCard(QFrame):
             date_label.setStyleSheet(
                 f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
             )
+            apply_label_alignment(date_label)
             content.addWidget(date_label)
 
         outer.addLayout(content, 1)
@@ -753,6 +755,7 @@ class _ClaimMiniCard(QFrame):
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         num_label.setMaximumWidth(ScreenScale.w(400))
+        apply_label_alignment(num_label)
         row1.addWidget(num_label)
         row1.addStretch()
 
@@ -768,6 +771,7 @@ class _ClaimMiniCard(QFrame):
                 f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
             )
             name_label.setMaximumWidth(ScreenScale.w(300))
+            apply_label_alignment(name_label)
             content.addWidget(name_label)
 
         outer.addLayout(content, 1)
@@ -1241,10 +1245,8 @@ class CaseEntityDetailsPage(QWidget):
             return
 
         case_number = self._case.case_number or self._case.id[:16]
-        status_style = _CASE_STATUS_STYLES.get(self._case.status, _CASE_STATUS_STYLES[1])
 
         badges = []
-        badges.append((tr(status_style["label_key"]), status_style["bg"], status_style["fg"]))
 
         if not self._case.is_editable:
             badges.append((

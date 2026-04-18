@@ -22,7 +22,7 @@ from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
 from services.vocab_service import get_label as vocab_get_label
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -119,6 +119,7 @@ class _PackageCard(AnimatedCard):
         name_label.setFont(create_font(size=13, weight=QFont.Bold))
         name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         name_label.setMaximumWidth(ScreenScale.w(500))
+        apply_label_alignment(name_label)
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -145,6 +146,7 @@ class _PackageCard(AnimatedCard):
         details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
         details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        apply_label_alignment(details)
         layout.addWidget(details)
 
         # Row 3: source chip

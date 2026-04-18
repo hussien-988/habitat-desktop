@@ -100,3 +100,14 @@ def get_layout_direction():
 
 def get_text_alignment():
     return _translator.get_text_alignment()
+
+
+def apply_label_alignment(label, vcenter: bool = True):
+    """Force label to follow the APP language direction regardless of content characters."""
+    direction = _translator.get_layout_direction()
+    label.setLayoutDirection(direction)
+    base = Qt.AlignRight if direction == Qt.RightToLeft else Qt.AlignLeft
+    align = base | Qt.AlignAbsolute
+    if vcenter:
+        align |= Qt.AlignVCenter
+    label.setAlignment(align)
