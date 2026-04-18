@@ -43,3 +43,17 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Virtual environment
+.venv/
+
+# Type checker cache
+.mypy_cache/
+
+# Coverage reports
+.coverage
+
+# Runtime credentials and cache
+users.txt
+data/vocab_cache.json
+data/settings.json
