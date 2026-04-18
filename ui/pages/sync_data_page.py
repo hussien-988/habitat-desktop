@@ -14,9 +14,10 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtPrope
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
 
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from ui.components.icon import Icon
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.stat_pill import StatPill
 from ui.components.accent_line import AccentLine
 from ui.components.animated_card import AnimatedCard, animate_card_entrance
@@ -212,6 +213,7 @@ class _AssignmentCard(AnimatedCard):
         title_lbl = QLabel(building_code)
         title_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        apply_label_alignment(title_lbl)
         row1.addWidget(title_lbl)
 
         row1.addStretch()
@@ -419,6 +421,7 @@ class SyncDataPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.sync.title"))
+        self._header.set_help(Pages.SYNC_DATA)
 
         # Stat pills for status counts
         self._stat_pending = StatPill(tr("page.sync.status_pending"))

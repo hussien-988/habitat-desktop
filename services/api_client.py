@@ -209,6 +209,7 @@ class TRRCMSApiClient:
         json_data: Optional[Dict] = None,
         params: Optional[Dict] = None,
         headers_override: Optional[Dict] = None,
+        skip_accept_language: bool = False,
     ) -> Any:
         """Execute HTTP request with error handling and automatic retry."""
         url = f"{self.base_url}{endpoint}"
@@ -228,6 +229,8 @@ class TRRCMSApiClient:
             try:
                 token_used = self.access_token
                 headers = self._headers()
+                if skip_accept_language:
+                    headers.pop("Accept-Language", None)
                 if headers_override:
                     headers.update(headers_override)
                 response = requests.request(
@@ -349,7 +352,11 @@ class TRRCMSApiClient:
             payload["status"] = status
 
         logger.debug(f"Fetching buildings for map: bbox={payload}")
-        result = self._request("POST", "/v2/buildings/map", json_data=payload)
+        result = self._request(
+            "POST", "/v2/buildings/map",
+            json_data=payload,
+            skip_accept_language=True,
+        )
         buildings = result.get("items", []) if isinstance(result, dict) else result
         logger.info(f"Fetched {len(buildings)} buildings from API")
 
@@ -374,7 +381,11 @@ class TRRCMSApiClient:
             params["type"] = landmark_type
 
         try:
-            result = self._request("GET", "/v2/landmarks/map", params=params)
+            result = self._request(
+                "GET", "/v2/landmarks/map",
+                params=params,
+                skip_accept_language=True,
+            )
             landmarks = result.get("items", []) if isinstance(result, dict) else result
             logger.info(f"Fetched {len(landmarks)} landmarks for map")
             return landmarks
@@ -448,7 +459,11 @@ class TRRCMSApiClient:
         }
 
         try:
-            result = self._request("GET", "/v2/streets/map", params=params)
+            result = self._request(
+                "GET", "/v2/streets/map",
+                params=params,
+                skip_accept_language=True,
+            )
             streets = result.get("items", []) if isinstance(result, dict) else result
             logger.info(f"Fetched {len(streets)} streets for map")
             return streets
@@ -480,7 +495,11 @@ class TRRCMSApiClient:
             payload["damageLevel"] = damage_level
 
         logger.debug(f"Fetching buildings in polygon: page={page}, pageSize={page_size}")
-        response = self._request("POST", "/v1/Buildings/polygon", json_data=payload)
+        response = self._request(
+            "POST", "/v1/Buildings/polygon",
+            json_data=payload,
+            skip_accept_language=True,
+        )
 
         buildings = response.get("buildings", [])
         total_count = response.get("totalCount", 0)
@@ -646,6 +665,7 @@ class TRRCMSApiClient:
         return self._request(
             "POST", "/v1/BuildingAssignments/buildings/search",
             json_data=payload,
+            skip_accept_language=True,
         )
 
     def get_building_by_id(self, building_id: str) -> Dict[str, Any]:

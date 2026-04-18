@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor, QIcon
 
-from app.config import Config
+from app.config import Config, Pages
 from services.vocab_service import get_options as vocab_get_options
 from repositories.database import Database
 from repositories.relation_repository import RelationRepository
@@ -825,6 +825,10 @@ class RelationsPage(QWidget):
 
         # Header
         header_layout = QHBoxLayout()
+
+        from ui.components.help_button import HelpButton
+        self._help_btn = HelpButton(Pages.RELATIONS, variant="light")
+        header_layout.addWidget(self._help_btn)
 
         self._title = QLabel(self.i18n.t("relations"))
         self._title.setStyleSheet(f"""

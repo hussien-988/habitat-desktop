@@ -12,7 +12,7 @@ from PyQt5.QtGui import QIcon
 from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
-from services.translation_manager import tr, get_layout_direction
+from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from ui.components.animated_card import AnimatedCard
 from ui.components.empty_state import EmptyState
 from ui.components.icon import Icon
@@ -82,11 +82,7 @@ class _SelectableBuildingCard(AnimatedCard):
         self._code_label = QLabel(self.building.building_id or "")
         self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         self._code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        self._code_label.setLayoutDirection(Qt.LeftToRight)
-        if get_layout_direction() == Qt.RightToLeft:
-            self._code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        else:
-            self._code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        apply_label_alignment(self._code_label)
         top_row.addWidget(self._code_label, 1)
 
         self._add_indicator = QLabel("+")
@@ -112,6 +108,7 @@ class _SelectableBuildingCard(AnimatedCard):
         secondary_label = QLabel(secondary_text)
         secondary_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
         secondary_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
+        apply_label_alignment(secondary_label)
         self._secondary_label = secondary_label
         info_row.addWidget(secondary_label, 1)
 

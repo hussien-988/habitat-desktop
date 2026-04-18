@@ -32,9 +32,10 @@ from ui.style_manager import StyleManager
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.toast import Toast
 from ui.components.empty_state import EmptyState
-from services.translation_manager import get_layout_direction, tr
+from services.translation_manager import get_layout_direction, tr, apply_label_alignment
 from services.api_worker import ApiWorker
 from ui.components.icon import Icon
 from models.case import Case
@@ -201,6 +202,7 @@ class _CaseCard(QFrame):
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         name_label.setMaximumWidth(ScreenScale.w(600))
+        apply_label_alignment(name_label)
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -229,6 +231,7 @@ class _CaseCard(QFrame):
         date_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
+        apply_label_alignment(date_label)
         content.addWidget(date_label)
 
         content.addSpacing(4)
@@ -509,6 +512,7 @@ class CaseManagementPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.case_mgmt.title"))
+        self._header.set_help(Pages.CASE_MANAGEMENT)
 
         # Stat pills
         self._pill_total = _make_stat_pill(

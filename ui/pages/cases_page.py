@@ -12,7 +12,7 @@ import time
 from typing import List, Dict, Optional
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QFrame, QLineEdit, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect, QStackedWidget,
@@ -33,8 +33,9 @@ from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.config import Pages
 from ui.components.search_context_bar import SearchContextBar
-from services.translation_manager import tr, get_layout_direction, get_language
+from services.translation_manager import tr, get_layout_direction, get_language, apply_label_alignment
 from services.display_mappings import get_survey_type_display
 from services.api_worker import ApiWorker
 from ui.components.toast import Toast
@@ -190,6 +191,7 @@ class _SurveyCard(QFrame):
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         name_label.setMaximumWidth(ScreenScale.w(600))
+        apply_label_alignment(name_label)
         row1.addWidget(name_label)
         row1.addStretch()
 
@@ -216,6 +218,7 @@ class _SurveyCard(QFrame):
         ref_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
+        apply_label_alignment(ref_label)
         content.addWidget(ref_label)
 
         content.addSpacing(4)
@@ -488,6 +491,7 @@ class CasesPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("cases.page.title"))
+        self._header.set_help(Pages.SURVEYS)
 
         # Add button in header actions
         self._add_btn = QPushButton(tr("wizard.button.add_case"))
@@ -584,10 +588,11 @@ class CasesPage(QWidget):
 
         self._scroll_content = QWidget()
         self._scroll_content.setStyleSheet("background: transparent;")
-        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout = QGridLayout(self._scroll_content)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
-        self._cards_layout.setSpacing(10)
-        self._cards_layout.addStretch()
+        self._cards_layout.setSpacing(16)
+        self._cards_layout.setColumnStretch(0, 1)
+        self._cards_layout.setColumnStretch(1, 1)
 
         self._scroll.setWidget(self._scroll_content)
         self._stack.addWidget(self._scroll)
@@ -954,13 +959,19 @@ class CasesPage(QWidget):
 
             self._stack.setCurrentIndex(0)
 
-            for item in data:
+            for idx, item in enumerate(data):
                 card = _SurveyCard(item)
                 card.clicked.connect(self._on_card_clicked)
-                self._cards_layout.insertWidget(
-                    self._cards_layout.count() - 1, card
-                )
+                row = idx // 2
+                col = idx % 2
+                self._cards_layout.addWidget(card, row, col)
                 self._card_widgets.append(card)
+
+            spacer = QWidget()
+            spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            spacer.setStyleSheet("background: transparent;")
+            total_rows = (len(data) + 1) // 2
+            self._cards_layout.addWidget(spacer, total_rows, 0, 1, 2)
 
             self._update_pagination()
             self._animate_card_entrance()
@@ -1019,6 +1030,13 @@ class CasesPage(QWidget):
             card.setParent(None)
             card.deleteLater()
         self._card_widgets.clear()
+
+        while self._cards_layout.count():
+            item = self._cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
 
     def _update_card_shimmer(self):
         for card in self._card_widgets:

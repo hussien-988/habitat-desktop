@@ -12,6 +12,7 @@ from controllers.building_controller import BuildingController
 from services.translation_manager import tr, get_layout_direction
 from ui.design_system import Colors, ScreenScale
 from ui.components.wizard_header import WizardHeader
+from app.config import Pages
 from ui.components.accent_line import AccentLine
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
@@ -58,6 +59,7 @@ class FieldWorkPreparationPage(QWidget):
             title=tr("wizard.field_work.title"),
             subtitle=tr("wizard.field_work.subtitle"),
             steps=step_names,
+            help_page_id=Pages.FIELD_ASSIGNMENT,
         )
         outer_layout.addWidget(self.header)
 

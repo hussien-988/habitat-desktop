@@ -392,7 +392,7 @@ class MainWindow(QMainWindow):
 
         # Map tabs to pages
         # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: المسوحات (Cases/Surveys)
+        # Tab 1: الادعاءات (Cases/Claims)
         # Tab 2: إدارة الحالات (Case Management)
         # Tab 3: الاستيراد (Import)
         # Tab 4: التكرارات (Duplicates)
@@ -1872,10 +1872,10 @@ class MainWindow(QMainWindow):
         tm_set_language(new_lang)
         save_language(new_lang)
 
-        if self._is_arabic:
-            self.setLayoutDirection(Qt.RightToLeft)
-        else:
-            self.setLayoutDirection(Qt.LeftToRight)
+        from PyQt5.QtWidgets import QApplication as _QApp
+        direction = Qt.RightToLeft if self._is_arabic else Qt.LeftToRight
+        _QApp.instance().setLayoutDirection(direction)
+        self.setLayoutDirection(direction)
 
         self.language_changed.emit(self._is_arabic)
         logger.info(f"Language changed to: {'Arabic' if self._is_arabic else 'English'}")

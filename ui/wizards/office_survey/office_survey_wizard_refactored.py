@@ -33,6 +33,7 @@ from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from ui.components.toast import Toast
 from ui.components.dark_header_zone import DarkHeaderZone
+from app.help_content import OFFICE_SURVEY_WIZARD_ID
 from ui.components.nav_style_tab import NavStyleTab
 from ui.components.accent_line import AccentLine
 from ui.wizards.office_survey.wizard_styles import (
@@ -777,6 +778,7 @@ class OfficeSurveyWizard(BaseWizard):
         # Title
         self.title_label = header.get_title_label()
         header.set_title(tr("wizard.header.title"))
+        header.set_help(OFFICE_SURVEY_WIZARD_ID)
 
         # Subtitle row (breadcrumb + dot + step name) as a single widget in row1
         subtitle_widget = QWidget()

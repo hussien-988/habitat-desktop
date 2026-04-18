@@ -405,10 +405,11 @@ def main():
 
         # Initialize language from saved preference (before splash text)
         from services.translation_manager import (
-            set_language as tm_set_language, tr
+            set_language as tm_set_language, tr, get_layout_direction
         )
         saved_lang = get_saved_language()
         tm_set_language(saved_lang)
+        app.setLayoutDirection(get_layout_direction())
 
         # Show animated splash screen
         splash = AnimatedSplash()

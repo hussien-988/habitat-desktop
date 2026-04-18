@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QModelIndex, QDate
 from PyQt5.QtGui import QColor
 
-from app.config import Config
+from app.config import Config, Pages
 from repositories.database import Database
 from repositories.household_repository import HouseholdRepository
 from repositories.unit_repository import UnitRepository
@@ -493,6 +493,10 @@ class HouseholdsPage(QWidget):
 
         # Header
         header_layout = QHBoxLayout()
+
+        from ui.components.help_button import HelpButton
+        self._help_btn = HelpButton(Pages.HOUSEHOLDS, variant="light")
+        header_layout.addWidget(self._help_btn)
 
         self._title = QLabel(tr("households"))
         self._title.setStyleSheet(f"""

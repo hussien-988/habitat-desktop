@@ -411,14 +411,14 @@ class PageDimensions:
     CONTENT_POSITION_Y = 141
 
     # Content padding (static fallbacks)
-    CONTENT_PADDING_H = 131
+    CONTENT_PADDING_H = 24
     CONTENT_PADDING_V_TOP = 32
     CONTENT_PADDING_V_BOTTOM = 0
 
     @classmethod
     def content_padding_h(cls):
         """Dynamic horizontal padding — scales on small screens."""
-        return ScreenScale.w(131)
+        return ScreenScale.w(24)
 
     @classmethod
     def content_padding_v_top(cls):

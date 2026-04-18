@@ -27,6 +27,7 @@ class PageHeader(QWidget):
         show_add_button: bool = False,
         button_text: str = None,
         button_icon: str = "icon",
+        help_page_id: str = None,
         parent=None
     ):
         """Initialize page header."""
@@ -35,6 +36,7 @@ class PageHeader(QWidget):
         self.show_add_button = show_add_button
         self.button_text = button_text or tr("component.page_header.add_button")
         self.button_icon = button_icon
+        self.help_page_id = help_page_id
         self._setup_ui()
 
     def _setup_ui(self):
@@ -45,6 +47,12 @@ class PageHeader(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # No extra padding
         layout.setSpacing(16)
+
+        # Help button (before title so it sits next to it in both RTL and LTR)
+        if self.help_page_id:
+            from .help_button import HelpButton
+            help_btn = HelpButton(self.help_page_id, variant="light", parent=self)
+            layout.addWidget(help_btn)
 
         # Page title
         self.title_label = QLabel(self.title_text)

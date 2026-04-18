@@ -11,7 +11,7 @@ import time
 from typing import List, Dict, Optional
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QFrame, QLineEdit, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect, QStackedWidget,
@@ -32,7 +32,8 @@ from ui.components.empty_state import EmptyState
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
 from ui.components.search_context_bar import SearchContextBar
-from services.translation_manager import tr, get_layout_direction, get_language
+from app.config import Pages
+from services.translation_manager import tr, get_layout_direction, get_language, apply_label_alignment
 from services.display_mappings import get_source_display, get_claim_type_display
 from services.api_worker import ApiWorker
 from ui.components.toast import Toast
@@ -133,6 +134,7 @@ class _ClaimCard(QFrame):
         claim_id_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
+        apply_label_alignment(claim_id_label)
         row1.addWidget(claim_id_label)
         row1.addStretch()
 
@@ -158,6 +160,7 @@ class _ClaimCard(QFrame):
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
         name_label.setMaximumWidth(ScreenScale.w(600))
+        apply_label_alignment(name_label)
         content.addWidget(name_label)
 
         # Row 3: details
@@ -186,6 +189,7 @@ class _ClaimCard(QFrame):
         details.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
         )
+        apply_label_alignment(details)
         content.addWidget(details)
 
         outer.addLayout(content, 1)
@@ -388,6 +392,7 @@ class CompletedClaimsPage(QWidget):
         # Dark header zone
         self._header = DarkHeaderZone(self)
         self._header.set_title(tr("page.claims.subtitle"))
+        self._header.set_help(Pages.CLAIMS)
 
         tab_font = create_font(size=12, weight=QFont.DemiBold)
 
@@ -477,10 +482,11 @@ class CompletedClaimsPage(QWidget):
 
         self._scroll_content = QWidget()
         self._scroll_content.setStyleSheet("background: transparent;")
-        self._cards_layout = QVBoxLayout(self._scroll_content)
+        self._cards_layout = QGridLayout(self._scroll_content)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
-        self._cards_layout.setSpacing(10)
-        self._cards_layout.addStretch()
+        self._cards_layout.setSpacing(16)
+        self._cards_layout.setColumnStretch(0, 1)
+        self._cards_layout.setColumnStretch(1, 1)
 
         self._scroll.setWidget(self._scroll_content)
         self._stack.addWidget(self._scroll)
@@ -832,13 +838,19 @@ class CompletedClaimsPage(QWidget):
                 term = self._search.text().strip()
                 self._search_bar.update_count(term, total)
 
-            for claim in self.claims_data:
+            for idx, claim in enumerate(self.claims_data):
                 card = _ClaimCard(claim)
                 card.clicked.connect(self._on_card_clicked)
-                self._cards_layout.insertWidget(
-                    self._cards_layout.count() - 1, card
-                )
+                row = idx // 2
+                col = idx % 2
+                self._cards_layout.addWidget(card, row, col)
                 self._card_widgets.append(card)
+
+            spacer = QWidget()
+            spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            spacer.setStyleSheet("background: transparent;")
+            total_rows = (len(self.claims_data) + 1) // 2
+            self._cards_layout.addWidget(spacer, total_rows, 0, 1, 2)
 
             self._update_pagination()
 
@@ -899,6 +911,13 @@ class CompletedClaimsPage(QWidget):
             card.setParent(None)
             card.deleteLater()
         self._card_widgets.clear()
+
+        while self._cards_layout.count():
+            item = self._cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
 
     def _update_empty_text(self):
         if self._search_mode:
