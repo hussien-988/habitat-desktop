@@ -7,6 +7,7 @@ including clustering, drawing tools, and viewport-based loading.
 """
 
 import json
+from pathlib import Path
 from typing import Dict, Optional
 from utils.logger import get_logger
 from ui.constants.map_constants import MapConstants
@@ -20,6 +21,39 @@ class LeafletHTMLGenerator:
     # Import status colors from MapConstants
     STATUS_COLORS = MapConstants.STATUS_COLORS
     STATUS_LABELS_AR = MapConstants.STATUS_LABELS_AR
+
+    _assets_cache: Dict[str, str] = {}
+
+    @classmethod
+    def _load_asset(cls, filename: str) -> str:
+        """Read a leaflet asset file and cache it. Returns empty string on failure."""
+        if filename not in cls._assets_cache:
+            asset_path = Path(__file__).parent.parent / "assets" / "leaflet" / filename
+            try:
+                cls._assets_cache[filename] = asset_path.read_text(encoding='utf-8')
+            except Exception as e:
+                logger.warning(f"Failed to load asset {filename}: {e}")
+                cls._assets_cache[filename] = ""
+        return cls._assets_cache[filename]
+
+    @classmethod
+    def _get_qwebchannel_content(cls) -> str:
+        """Read qwebchannel.js from Qt resources and cache it."""
+        cache_key = '_qwebchannel'
+        if cache_key not in cls._assets_cache:
+            try:
+                from PyQt5.QtCore import QFile, QIODevice
+                f = QFile(":/qtwebchannel/qwebchannel.js")
+                if f.open(QIODevice.ReadOnly):
+                    cls._assets_cache[cache_key] = bytes(f.readAll()).decode('utf-8')
+                    f.close()
+                else:
+                    cls._assets_cache[cache_key] = ""
+                    logger.warning("Could not open qrc:///qtwebchannel/qwebchannel.js")
+            except Exception as e:
+                cls._assets_cache[cache_key] = ""
+                logger.warning(f"Failed to load qwebchannel.js: {e}")
+        return cls._assets_cache[cache_key]
 
     @staticmethod
     def generate(
@@ -76,12 +110,18 @@ class LeafletHTMLGenerator:
         local_assets_url = get_local_server_url()
         _loading_text = _tr('page.map.loading_map')
 
-        drawing_css = f'<link rel="stylesheet" href="{local_assets_url}/leaflet-draw.css" />' if enable_drawing else ''
-        drawing_js = f'<script src="{local_assets_url}/leaflet-draw.js"></script>' if enable_drawing else ''
+        drawing_css = f'<style>{LeafletHTMLGenerator._load_asset("leaflet.draw.css")}</style>' if enable_drawing else ''
+        drawing_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.draw.js")}</script>' if enable_drawing else ''
         clustering_css = f'''
-    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.css" />
-    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.Default.css" />'''
-        clustering_js = f'<script src="{local_assets_url}/leaflet.markercluster.js"></script>'
+    <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.css")}</style>
+    <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.Default.css")}</style>'''
+        clustering_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.markercluster.js")}</script>'
+        qwebchannel_content = LeafletHTMLGenerator._get_qwebchannel_content()
+        qwebchannel_tag = (
+            f'<script>{qwebchannel_content}</script>'
+            if qwebchannel_content else
+            '<script src="qrc:///qtwebchannel/qwebchannel.js"></script>'
+        )
 
         html = f'''
 <!DOCTYPE html>
@@ -90,13 +130,13 @@ class LeafletHTMLGenerator:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
-    <link rel="stylesheet" href="{local_assets_url}/leaflet.css" />
+    <style>{LeafletHTMLGenerator._load_asset("leaflet.css")}</style>
     {clustering_css}
     {drawing_css}
-    <script src="{local_assets_url}/leaflet.js"></script>
+    <script>{LeafletHTMLGenerator._load_asset("leaflet.js")}</script>
     {clustering_js}
     {drawing_js}
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    {qwebchannel_tag}
     {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing, enable_multiselect)}
 </head>
 <body>
@@ -472,13 +512,11 @@ class LeafletHTMLGenerator:
         }}
 
         .building-pin-icon svg {{
-            transition: transform 0.2s ease-in-out;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            transition: transform 0.15s ease-in-out;
         }}
 
         .building-pin-icon:hover svg {{
             transform: scale(1.1);
-            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
         }}
 
         /* Polygon Styles */
@@ -664,12 +702,12 @@ class LeafletHTMLGenerator:
         status_colors_json = json.dumps(status_colors)
         status_labels_json = json.dumps(status_labels)
 
-        # Parse buildings GeoJSON string to dict, then embed directly in JavaScript
-        try:
-            buildings_dict = json.loads(buildings_geojson)
-            buildings_json = json.dumps(buildings_dict)
-        except Exception as e:
-            logger.warning(f"Failed to parse buildings GeoJSON: {e}")
+        # Embed buildings GeoJSON directly — it's already a valid JSON string
+        if isinstance(buildings_geojson, str) and buildings_geojson.strip():
+            buildings_json = buildings_geojson
+        elif isinstance(buildings_geojson, dict):
+            buildings_json = json.dumps(buildings_geojson)
+        else:
             buildings_json = '{"type":"FeatureCollection","features":[]}'
 
         # Parse existing polygons if provided
@@ -786,7 +824,6 @@ class LeafletHTMLGenerator:
             keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
             updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
             updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
-            loading: 'lazy',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
 
@@ -861,30 +898,22 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
-        // Convert all Polygon/MultiPolygon geometries to Point (centroid) for pin-only display
-        if (buildingsData && buildingsData.features) {{
-            buildingsData.features.forEach(function(f) {{
-                if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {{
-                    var bounds = L.geoJSON(f).getBounds();
-                    var center = bounds.getCenter();
-                    f.geometry = {{ type: 'Point', coordinates: [center.lng, center.lat] }};
-                }}
-            }});
-        }}
-
         // Summary counts
         var _ptCount = buildingsData.features.length;
 
         // Marker Clustering Configuration
-
         var markers;
         if (typeof L.markerClusterGroup === 'function') {{
             markers = L.markerClusterGroup({{
-                maxClusterRadius: 60,
+                maxClusterRadius: function(zoom) {{
+                    if (zoom <= 15) return 80;
+                    if (zoom <= 16) return 50;
+                    return 30;
+                }},
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
                 zoomToBoundsOnClick: true,
-                disableClusteringAtZoom: 18,
+                disableClusteringAtZoom: {MapConstants.DISABLE_CLUSTERING_AT_ZOOM},
                 spiderfyDistanceMultiplier: 1.5,
                 chunkedLoading: true,
                 chunkInterval: {MapConstants.CHUNK_INTERVAL},
@@ -898,17 +927,17 @@ class LeafletHTMLGenerator:
             markers = L.featureGroup();
         }}
 
-        // Points layer for all buildings (all converted to Point above)
+        // Points layer for all buildings
         var pointsLayer = L.featureGroup();
 
-        // Add buildings layer (all features are Points after conversion)
+        // Batch collection for addLayers (faster than per-marker addLayer)
+        var _initialMarkerList = [];
+
         var buildingsLayer = L.geoJSON(buildingsData, {{
-            // pointToLayer for Point features
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
                 var isAssigned = feature.properties.is_assigned === true;
-
                 var innerSvg;
                 if (isAssigned) {{
                     color = '#F59E0B';
@@ -916,24 +945,20 @@ class LeafletHTMLGenerator:
                 }} else {{
                     innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                 }}
-
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
                     html: '<div style="position:relative;width:24px;height:36px;">' +
                           '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                           '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                           'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                          innerSvg +
-                          '</svg></div>',
+                          innerSvg + '</svg></div>',
                     iconSize: [24, 36],
                     iconAnchor: [12, 36],
                     popupAnchor: [0, -36]
                 }});
-
                 return L.marker(latlng, {{icon: pinIcon}});
             }},
 
-            // onEachFeature for popups and events
             onEachFeature: function(feature, layer) {{
                 var props = feature.properties;
                 var status = props.status || 'intact';
@@ -942,23 +967,19 @@ class LeafletHTMLGenerator:
                 var geomType = props.geometry_type || 'Point';
                 var actualGeomType = feature.geometry.type;
 
-                // Per-building logging removed for performance
-
-                // Use building_id_display (with dashes) for UI, building_id (no dashes) for API
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
-                var buildingIdForApi = props.building_id;  // No dashes for API
+                var buildingIdForApi = props.building_id;
 
                 {popup_js_block}
 
-                // All buildings are Points — add to marker cluster
                 pointsLayer.addLayer(layer);
-                markers.addLayer(layer);
+                _initialMarkerList.push(layer);
 
                 {hover_js_block}
             }}
         }});
 
-        // Add marker cluster group to map (contains all markers)
+        markers.addLayers(_initialMarkerList);
         map.addLayer(markers);
 
         // Add existing polygons layer (displayed in blue)
@@ -1706,8 +1727,8 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        // Start initialization after a small delay to ensure DOM is ready
-        setTimeout(initializeQWebChannel, 100);
+        // qwebchannel.js is inlined — start bridge init immediately
+        initializeQWebChannel();
 
         // Function to select building (called from popup button)
         // Wait for bridge or retry with timeout

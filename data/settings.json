@@ -1,5 +1,5 @@
 {
-  "tile_server_url": "http://localhost:5000",
+  "tile_server_url": "https://tile.openstreetmap.org",
   "api_server_url": "https://unsectionalized-lennie-opulently.ngrok-free.dev",
   "language": "ar"
 }

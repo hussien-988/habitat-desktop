@@ -28,7 +28,7 @@ class MapConstants:
     MAX_LON = _Cfg.MAP_BOUNDS_MAX_LNG
     MIN_ZOOM = _Cfg.MAP_MIN_ZOOM
     MAX_ZOOM = _Cfg.MAP_MAX_ZOOM
-    MIN_ZOOM_FOR_LOADING = 12  # Don't load buildings below this zoom (performance)
+    MIN_ZOOM_FOR_LOADING = 15  # Don't load buildings below this zoom (performance)
     # نفس الألوان المستخدمة في LeafletHTMLGenerator
     STATUS_COLORS = {
         'intact': '#28a745',          # أخضر - سليم
@@ -64,14 +64,14 @@ class MapConstants:
     # Reference: https://leafletjs.com/reference.html#tilelayer
     TILE_KEEP_BUFFER = 4              # Extra tile rows/cols beyond viewport (reduces blank areas during pan)
     TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation
-    TILE_UPDATE_WHEN_IDLE = True      # Load tiles only after pan/zoom ends (reduces requests)
+    TILE_UPDATE_WHEN_IDLE = False     # Load tiles continuously during pan/zoom (better UX, local server handles load)
     TILE_PANE_BACKGROUND = '#1a1a2e'  # Dark background for tile pane (matches satellite imagery)
     MAP_FADE_ANIMATION = True         # Fade tiles in (hides gray flashes)
     MAP_ZOOM_ANIMATION = True         # Animate zoom transitions
     MAP_ZOOM_ANIMATION_THRESHOLD = 4  # Max zoom diff for animation (avoids long animations)
     MAX_MARKERS_PER_VIEWPORT = 2000
     CLUSTER_MAX_RADIUS = 60
-    DISABLE_CLUSTERING_AT_ZOOM = 15
+    DISABLE_CLUSTERING_AT_ZOOM = 16
     CHUNK_INTERVAL = 50  # Chunk loading interval (ms) - reduced from 100 for faster rendering
     CHUNK_DELAY = 5  # Delay between chunks (ms) - reduced from 10 for faster rendering
     OVERLAY_COLOR = 'rgba(45, 45, 45, 0.6)'  # رمادي شفاف

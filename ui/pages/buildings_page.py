@@ -2268,6 +2268,12 @@ class BuildingsListPage(QWidget):
         }
         self._neighborhoods_api_cache = []  # cached from API on first filter use
         self._load_worker = None
+        self._search_text = ""
+        self._search_worker = None
+        self._search_debounce = QTimer(self)
+        self._search_debounce.setSingleShot(True)
+        self._search_debounce.setInterval(400)
+        self._search_debounce.timeout.connect(self._execute_building_search)
 
         self._setup_ui()
 
@@ -2286,6 +2292,40 @@ class BuildingsListPage(QWidget):
 
         self._stat_total = StatPill(tr("page.buildings.total"))
         self._header.add_stat_pill(self._stat_total)
+
+        # Search field in header (dark style, same pattern as cases/claims pages)
+        from ui.components.icon import Icon
+        self._building_search_input = QLineEdit()
+        self._building_search_input.setPlaceholderText(tr("page.buildings.search_placeholder"))
+        self._building_search_input.setFixedSize(ScreenScale.w(260), ScreenScale.h(34))
+        self._building_search_input.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._building_search_input.setLayoutDirection(get_layout_direction())
+        self._building_search_input.setStyleSheet("""
+            QLineEdit {
+                background: rgba(10, 22, 40, 140);
+                color: white;
+                border: 1px solid rgba(56, 144, 223, 35);
+                border-radius: 8px;
+                padding: 0 12px 0 34px;
+            }
+            QLineEdit:focus {
+                border: 1.5px solid rgba(56, 144, 223, 140);
+                background: rgba(10, 22, 40, 180);
+            }
+            QLineEdit::placeholder {
+                color: rgba(139, 172, 200, 130);
+            }
+        """)
+        search_icon_px = Icon.load_pixmap("search", 16)
+        if search_icon_px and not search_icon_px.isNull():
+            _icon_lbl = QLabel(self._building_search_input)
+            _icon_lbl.setPixmap(search_icon_px)
+            _icon_lbl.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
+            _icon_lbl.move(10, 9)
+            _icon_lbl.setStyleSheet("background: transparent; border: none;")
+        self._building_search_input.textChanged.connect(self._on_building_search_changed)
+        self._building_search_input.returnPressed.connect(self._execute_building_search)
+        self._header.add_action_widget(self._building_search_input)
 
         layout.addWidget(self._header)
 
@@ -2692,6 +2732,51 @@ class BuildingsListPage(QWidget):
         return [
             {"neighborhoodCode": k, "nameArabic": v} for k, v in seen.items()
         ]
+
+    def _on_building_search_changed(self, text: str):
+        """Debounce search input changes."""
+        self._search_text = text.strip()
+        self._search_debounce.start()
+
+    def _execute_building_search(self):
+        """Run search: API search if text present, else reload all buildings."""
+        self._search_debounce.stop()
+        if not self._search_text:
+            self._load_buildings()
+            return
+
+        self._clear_cards()
+        self._spinner.show_loading(tr("page.buildings.loading") or "جاري البحث...")
+
+        search_text = self._search_text
+
+        def _do_search():
+            return self.building_controller.search_buildings(search_text)
+
+        self._search_worker = ApiWorker(_do_search)
+        self._search_worker.finished.connect(self._on_search_results)
+        self._search_worker.error.connect(self._on_search_error)
+        self._search_worker.start()
+
+    def _on_search_results(self, result):
+        """Display search results in card grid."""
+        self._spinner.hide_loading()
+        if result.success:
+            self._all_buildings = result.data
+        else:
+            Toast.show_toast(self, tr("page.buildings.load_error") or "فشل البحث", Toast.ERROR)
+            self._all_buildings = []
+        self._current_page = 1
+        self._populate_table_from_buildings()
+
+    def _on_search_error(self, error_msg):
+        """Handle search API error."""
+        self._spinner.hide_loading()
+        Toast.show_toast(self, tr("page.buildings.load_error") or "فشل البحث", Toast.ERROR)
+        logger.error(f"Building search failed: {error_msg}")
+        self._all_buildings = []
+        self._current_page = 1
+        self._populate_table_from_buildings()
 
     def _clear_cards(self):
         """Remove all card widgets."""

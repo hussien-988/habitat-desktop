@@ -1427,6 +1427,7 @@ AR_TRANSLATIONS = {
     "dialog.map.building_not_found_title": "لم يتم العثور على المبنى",
     "dialog.map.buildings_load_failed_try_pan": "حاول التحريك للتحميل",
     "dialog.map.clear_all": "مسح الكل",
+    "dialog.map.refresh_buildings": "تحديث المباني",
     "dialog.map.confirm_coordinates": "تأكيد الإحداثيات",
     "dialog.map.confirm_selection": "تأكيد الاختيار",
     "dialog.map.coordinates_not_selected": "الإحداثيات: لم يتم التحديد",

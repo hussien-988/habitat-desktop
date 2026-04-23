@@ -58,7 +58,10 @@ class TRRCMSApiClient:
         self._login_cooldown_until: Optional[datetime] = None
         self._on_session_expired = None
         self._on_password_change_required = None
+        self._on_network_error = None
+        self._last_network_error_time: Optional[datetime] = None
         self._session_expired_flag = False
+        self._neighborhoods_cache = None
         logger.info(f"API client initialized for {self.base_url}")
 
     def set_session_expired_callback(self, callback):
@@ -68,6 +71,20 @@ class TRRCMSApiClient:
     def set_password_change_required_callback(self, callback):
         """Set callback to invoke when password change is required (403 PasswordChangeRequired)."""
         self._on_password_change_required = callback
+
+    def set_network_error_callback(self, callback):
+        """Set callback to invoke on network/server errors (debounced — at most once per 10s)."""
+        self._on_network_error = callback
+
+    def _fire_network_error(self, error_type: str):
+        """Fire network error callback with debounce (10s cooldown between notifications)."""
+        if not self._on_network_error:
+            return
+        now = datetime.now()
+        if self._last_network_error_time and (now - self._last_network_error_time).total_seconds() < 10:
+            return
+        self._last_network_error_time = now
+        self._on_network_error(error_type)
 
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """Authenticate and obtain access token."""
@@ -215,6 +232,9 @@ class TRRCMSApiClient:
         url = f"{self.base_url}{endpoint}"
 
         import json as _json
+        _MAP_ENDPOINTS = ('/buildings/map', '/BuildingAssignments/buildings', '/buildings/search')
+        _is_map_endpoint = any(ep in endpoint for ep in _MAP_ENDPOINTS)
+
         logger.info(f"[API REQ] {method} {endpoint}")
         if params:
             logger.info(f"[API REQ] Params: {params}")
@@ -223,6 +243,16 @@ class TRRCMSApiClient:
                 logger.info(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
             except Exception:
                 logger.info(f"[API REQ] Body: {json_data}")
+
+        if _is_map_endpoint:
+            print(f"[HTTP REQ] {method} {endpoint}")
+            if json_data:
+                try:
+                    print(f"[HTTP REQ] Body: {_json.dumps(json_data, ensure_ascii=False, default=str)}")
+                except Exception:
+                    print(f"[HTTP REQ] Body: {json_data}")
+            if params:
+                print(f"[HTTP REQ] Params: {params}")
 
         last_error = None
         for attempt in range(self._MAX_RETRIES + 1):
@@ -258,6 +288,14 @@ class TRRCMSApiClient:
                             logger.info(f"[API RES] Body: {res_str}")
                     except Exception:
                         logger.info(f"[API RES] Body: {result}")
+
+                if _is_map_endpoint:
+                    _items = []
+                    _total = '?'
+                    if isinstance(result, dict):
+                        _items = result.get('items', result.get('features', []))
+                        _total = result.get('totalCount', result.get('total', '?'))
+                    print(f"[HTTP RES] {response.status_code} {endpoint} | items={len(_items)} total={_total}")
 
                 return result
 
@@ -304,6 +342,8 @@ class TRRCMSApiClient:
                         )
                 log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
                 log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
+                if status_code >= 500:
+                    self._fire_network_error("server")
                 raise ApiException(
                     message=api_msg,
                     status_code=status_code,
@@ -321,12 +361,14 @@ class TRRCMSApiClient:
                     time.sleep(wait)
                     continue
                 logger.error(f"Network error: {endpoint} - {e}")
+                self._fire_network_error("network")
                 raise NetworkException(
                     message=str(e),
                     original_error=e
                 )
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request failed: {endpoint} - {e}")
+                self._fire_network_error("network")
                 raise NetworkException(
                     message=str(e),
                     original_error=e
@@ -555,6 +597,7 @@ class TRRCMSApiClient:
         response = self._request(
             "POST", "/v1/BuildingAssignments/buildings/search",
             json_data=payload,
+            skip_accept_language=True,
         )
 
         # API returns paginated response
@@ -713,7 +756,7 @@ class TRRCMSApiClient:
         """Search buildings with multiple criteria."""
         payload = {
             "page": page,
-            "pageSize": page_size
+            "pageSize": min(page_size, 100)
         }
 
         if building_id:
@@ -2550,10 +2593,18 @@ class TRRCMSApiClient:
         if community_code:
             params["communityCode"] = community_code
 
+        # Cache only the unfiltered full list (common hot path from _resolve_address_names)
+        if not params and self._neighborhoods_cache is not None:
+            return self._neighborhoods_cache
+
         logger.info(f"Fetching neighborhoods with filters: {params or 'none'}")
         result = self._request("GET", "/v2/neighborhoods", params=params)
         neighborhoods = result.get("items", []) if isinstance(result, dict) else result
         logger.info(f"Fetched {len(neighborhoods)} neighborhoods")
+
+        if not params:
+            self._neighborhoods_cache = neighborhoods
+
         return neighborhoods
 
     def get_neighborhood_by_code(self, full_code: str) -> Optional[Dict[str, Any]]:

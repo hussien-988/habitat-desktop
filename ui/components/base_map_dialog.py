@@ -13,7 +13,7 @@ from PyQt5.QtGui import QPainter, QColor, QPainterPath, QPalette
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
-from services.viewport_map_loader import ViewportMapLoader
+from services.viewport_map_loader import ViewportMapLoader, get_shared_viewport_loader
 from services.building_cache_service import get_building_cache
 from services.translation_manager import tr
 
@@ -136,8 +136,9 @@ class MapBridge(QObject):
 
 class _ViewportWorker(QThread):
     """Background worker for loading buildings in viewport without blocking UI."""
-    finished = pyqtSignal(str)  # GeoJSON string
+    finished = pyqtSignal(str)       # GeoJSON string
     buildings_loaded = pyqtSignal(list)  # Building objects for cache
+    network_error = pyqtSignal(str)  # user-friendly error message
 
     def __init__(self, viewport_loader, bounds, zoom, auth_token):
         super().__init__()
@@ -148,6 +149,7 @@ class _ViewportWorker(QThread):
 
     def run(self):
         try:
+            print(f"[MAP] ViewportWorker start  | zoom={self._zoom} bounds={self._bounds}")
             buildings = self._viewport_loader.load_buildings_for_viewport(
                 north_east_lat=self._bounds[0],
                 north_east_lng=self._bounds[1],
@@ -156,12 +158,19 @@ class _ViewportWorker(QThread):
                 zoom_level=self._zoom,
                 auth_token=self._auth_token
             )
+            print(f"[MAP] ViewportWorker api    | buildings={len(buildings)}")
             if self.isInterruptionRequested():
                 return
             from services.geojson_converter import GeoJSONConverter
+            import json as _json
             geojson = GeoJSONConverter.buildings_to_geojson(
                 buildings, force_points=True
             )
+            try:
+                _feat_count = len(_json.loads(geojson).get('features', []))
+            except Exception:
+                _feat_count = 0
+            print(f"[MAP] ViewportWorker done   | geojson_features={_feat_count}")
             if self.isInterruptionRequested():
                 return
             self.buildings_loaded.emit(buildings)
@@ -169,7 +178,12 @@ class _ViewportWorker(QThread):
         except Exception as e:
             if not self.isInterruptionRequested():
                 logger.error(f"Viewport worker error: {e}")
-                self.finished.emit("")
+                err_str = str(e)
+                if any(k in err_str for k in ("SSL", "ConnectionError", "Timeout", "Max retries", "Connection refused")):
+                    self.network_error.emit("network")
+                else:
+                    self.network_error.emit("server")
+                self.finished.emit('{"type":"FeatureCollection","features":[]}')
 
 
 class BaseMapDialog(QDialog):
@@ -238,21 +252,16 @@ class BaseMapDialog(QDialog):
         self._map_loaded = False  # Track whether map has finished loading
 
         if self.enable_viewport_loading:
-            building_cache = None
-            try:
-                from services.building_cache_service import BuildingCacheService
-                building_cache = BuildingCacheService.get_instance()
-            except Exception:
-                building_cache = None
-
-            self._viewport_loader = ViewportMapLoader(
-                cache_enabled=True,
-                cache_max_size=50,
-                cache_max_age_minutes=10,
-                building_cache_service=building_cache,
-                use_spatial_sampling=True
+            from services.map_service_api import MapServiceAPI
+            _provider = getattr(self, '_map_data_provider', None)
+            provider_key = type(_provider).__name__ if _provider else 'default'
+            map_svc = MapServiceAPI(data_provider=_provider)
+            self._viewport_loader = get_shared_viewport_loader(
+                provider_key=provider_key,
+                map_service=map_svc,
+                cache_max_age_minutes=30,
             )
-            logger.info(f"Viewport loading enabled (cache={'active' if building_cache else 'disabled'})")
+            logger.info(f"Viewport loading enabled (session cache, provider={provider_key})")
 
         # Get auth token if not provided
         if not self._auth_token and parent:
@@ -427,6 +436,30 @@ class BaseMapDialog(QDialog):
         close_btn.setAutoDefault(False)
 
         layout.addWidget(close_btn)
+
+        # Refresh button
+        refresh_btn = QPushButton("↺")
+        refresh_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.setFont(create_font(size=16, weight=FontManager.WEIGHT_REGULAR))
+        refresh_btn.setToolTip(tr("dialog.map.refresh_buildings"))
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Colors.TEXT_SECONDARY};
+                border: none;
+                border-radius: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.LIGHT_GRAY_BG};
+                color: {Colors.PRIMARY_BLUE};
+            }}
+        """)
+        refresh_btn.setDefault(False)
+        refresh_btn.setAutoDefault(False)
+        refresh_btn.clicked.connect(self._on_refresh_map)
+
+        layout.addWidget(refresh_btn)
 
         return title_bar
 
@@ -869,21 +902,59 @@ class BaseMapDialog(QDialog):
                 self.selection_counter_label.setText(tr("dialog.map.many_buildings_selected", count=count))
                 self.clear_all_btn.setEnabled(True)
 
+    def _on_refresh_map(self):
+        """Clear all caches, reset JS state, and reload buildings from API."""
+        # 1. Clear Python-side caches
+        try:
+            from services.building_cache_service import BuildingCacheService
+            BuildingCacheService.get_instance().invalidate_cache()
+        except Exception:
+            pass
+        if self._viewport_loader:
+            self._viewport_loader.clear_cache()
+
+        # 2. Clear JS additive state so all buildings reload fresh
+        if self.web_view:
+            loading_text = tr("dialog.map.loading_buildings") or "جاري تحميل المباني..."
+            self.web_view.page().runJavaScript(f"""
+                if (typeof window.clearMapBuildings === 'function') window.clearMapBuildings();
+                (function() {{
+                    if (document.getElementById('loadingOverlay')) return;
+                    var overlay = document.createElement('div');
+                    overlay.id = 'loadingOverlay';
+                    overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
+                        'background:rgba(27,43,77,0.92);color:white;padding:8px 20px;border-radius:20px;' +
+                        'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;' +
+                        'display:flex;align-items:center;gap:8px;';
+                    overlay.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></span>' +
+                        '<span>{loading_text}</span>';
+                    if (!document.getElementById('mapSpinStyle')) {{
+                        var s = document.createElement('style');
+                        s.id = 'mapSpinStyle';
+                        s.textContent = '@keyframes spin{{to{{transform:rotate(360deg)}}}}';
+                        document.head.appendChild(s);
+                    }}
+                    document.body.appendChild(overlay);
+                }})();
+            """)
+
+        # 3. Reload — use viewport if available, else trigger full viewport change
+        if hasattr(self, '_pending_viewport') and self._pending_viewport:
+            self._fire_viewport_load()
+        elif self.web_view:
+            self.web_view.page().runJavaScript(
+                "if (typeof loadBuildingsForViewport === 'function') { "
+                "isLoadingViewport = false; loadBuildingsForViewport(); }"
+            )
+
     def _on_viewport_changed(self, ne_lat: float, ne_lng: float, sw_lat: float, sw_lng: float, zoom: int):
-        """Handle viewport changed event from JavaScript (non-blocking)."""
+        """Handle viewport changed event from JavaScript (JS already debounces at 300ms)."""
         if not self._viewport_loader:
             return
-
-        # Debounce: store pending bounds and use a single-shot timer
+        if getattr(self, '_is_view_only', False):
+            return
         self._pending_viewport = (ne_lat, ne_lng, sw_lat, sw_lng, zoom)
-        if not hasattr(self, '_viewport_debounce_timer'):
-            from PyQt5.QtCore import QTimer
-            self._viewport_debounce_timer = QTimer(self)
-            self._viewport_debounce_timer.setSingleShot(True)
-            self._viewport_debounce_timer.setInterval(400)
-            self._viewport_debounce_timer.timeout.connect(self._fire_viewport_load)
-        if not self._viewport_debounce_timer.isActive():
-            self._viewport_debounce_timer.start()
+        self._fire_viewport_load()
 
     def _fire_viewport_load(self):
         """Actually fire viewport loading after debounce."""
@@ -920,7 +991,32 @@ class BaseMapDialog(QDialog):
         )
         self._viewport_worker.buildings_loaded.connect(self._on_viewport_buildings_cached)
         self._viewport_worker.finished.connect(self._on_viewport_geojson_ready)
+        self._viewport_worker.network_error.connect(self._on_map_network_error)
         self._viewport_worker.start()
+
+    def _on_map_network_error(self, error_type: str):
+        """Show a temporary error banner on the map when the server is unreachable."""
+        if not self.web_view:
+            return
+        if error_type == "network":
+            msg = tr("dialog.map.error_server_unreachable") or "تعذّر الاتصال بالخادم — تحقق من الاتصال"
+        else:
+            msg = tr("dialog.map.error_server") or "خطأ في الخادم — يرجى المحاولة لاحقاً"
+        self.web_view.page().runJavaScript(f"""
+            (function() {{
+                var existing = document.getElementById('mapNetworkError');
+                if (existing) existing.remove();
+                var banner = document.createElement('div');
+                banner.id = 'mapNetworkError';
+                banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+                    'background:rgba(185,28,28,0.93);color:white;padding:9px 22px;border-radius:20px;' +
+                    'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;' +
+                    'display:flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+                banner.innerHTML = '<span style="font-size:16px">⚠</span><span>{msg}</span>';
+                document.body.appendChild(banner);
+                setTimeout(function() {{ if (banner.parentNode) banner.parentNode.removeChild(banner); }}, 5000);
+            }})();
+        """)
 
     def _on_viewport_buildings_cached(self, buildings):
         """Cache buildings loaded by viewport worker."""
@@ -938,8 +1034,25 @@ class BaseMapDialog(QDialog):
 
     def _on_viewport_geojson_ready(self, geojson):
         """Update map with GeoJSON from viewport worker."""
+        import json as _json
+        has_buildings = False
         if geojson:
+            try:
+                _feats = _json.loads(geojson).get('features', [])
+                has_buildings = bool(_feats)
+                print(f"[MAP] _on_viewport_geojson  | features={len(_feats)}")
+            except Exception:
+                print(f"[MAP] _on_viewport_geojson  | parse_error geojson={str(geojson)[:80]}")
+        else:
+            print("[MAP] _on_viewport_geojson  | empty geojson")
+        if has_buildings:
             self._update_map_buildings(geojson)
+        else:
+            # Reset isLoadingViewport without clearing existing buildings
+            if self.web_view:
+                self.web_view.page().runJavaScript(
+                    "if (typeof isLoadingViewport !== 'undefined') { isLoadingViewport = false; }"
+                )
 
     def _update_buildings_list(self, building_ids: List[str]):
         """Update the chips container with selected building IDs."""
@@ -975,18 +1088,17 @@ class BaseMapDialog(QDialog):
             return
 
         try:
-            import json
+            if not isinstance(buildings_geojson, str) or not buildings_geojson.strip():
+                return
 
-            # Parse and re-stringify to ensure valid JSON
-            geojson_obj = json.loads(buildings_geojson)
+            import json as _json
+            try:
+                _feats = _json.loads(buildings_geojson).get('features', [])
+            except Exception:
+                _feats = []
+            print(f"[MAP] _update_map_buildings | features={len(_feats)} → calling JS updateBuildingsOnMap")
 
-            # Direct JSON injection (no escaping needed - json.dumps produces valid JavaScript)
-            # This is the same approach used in initial map load (leaflet_html_generator.py:439)
-            geojson_json = json.dumps(geojson_obj)
-
-            # Call JavaScript function to update buildings
-            js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({geojson_json}); }}"
-
+            js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({buildings_geojson}); }}"
             self.web_view.page().runJavaScript(js_code)
 
         except Exception as e:

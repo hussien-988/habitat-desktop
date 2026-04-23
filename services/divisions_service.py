@@ -131,4 +131,3 @@ class DivisionsService:
             if code == comm_code:
                 return (name_en, name_ar)
         return ("", "")
-

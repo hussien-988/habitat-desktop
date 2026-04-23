@@ -1427,6 +1427,7 @@ EN_TRANSLATIONS = {
     "dialog.map.building_not_found_title": "Building Not Found",
     "dialog.map.buildings_load_failed_try_pan": "Failed to load buildings. Try panning the map.",
     "dialog.map.clear_all": "Clear All",
+    "dialog.map.refresh_buildings": "Refresh Buildings",
     "dialog.map.confirm_coordinates": "Confirm Coordinates",
     "dialog.map.confirm_selection": "Confirm Selection",
     "dialog.map.coordinates_not_selected": "Coordinates not selected",

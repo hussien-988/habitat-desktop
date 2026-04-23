@@ -1033,6 +1033,7 @@ class MainWindow(QMainWindow):
                 api.refresh_token = refresh
             api.set_session_expired_callback(self._on_session_expired)
             api.set_password_change_required_callback(self._on_password_change_required)
+            api.set_network_error_callback(self._on_network_error)
             logger.info("API token set on singleton")
 
         # Pass token to BuildingsPage controller
@@ -1058,6 +1059,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_user_controller') and self._user_controller:
             self._user_controller.set_auth_token(token)
             logger.info("API token set for UserController")
+
+    def _on_network_error(self, error_type: str):
+        """Handle network/server errors from any API call (called from background thread)."""
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self._do_network_error(error_type))
+
+    def _do_network_error(self, error_type: str):
+        """Show network error toast (runs on main thread)."""
+        from ui.components.toast import Toast
+        if error_type == "network":
+            msg = "تعذّر الاتصال بالخادم — تحقق من الاتصال بالإنترنت"
+        else:
+            msg = "خطأ في الخادم — يرجى المحاولة لاحقاً"
+        Toast.show_toast(self, msg, Toast.ERROR, 6000)
 
     def _on_session_expired(self):
         """Handle session expiry (called from background thread)."""

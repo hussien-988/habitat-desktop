@@ -33,12 +33,12 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
 
         // Configuration (from MapConstants)
         var MIN_ZOOM_FOR_LOADING = 15;
-        var MAX_MARKERS_PER_VIEWPORT = 2000; // محسّن: زيادة من 1000 إلى 2000
+        var MAX_MARKERS_PER_VIEWPORT = 2000;
 
         // Viewport loading state
         var viewportLoadingEnabled = true;
         var viewportLoadingDebounceTimer = null;
-        var viewportLoadingDebounceDelay = 250; // ms - reduced from 500 for faster viewport updates
+        var viewportLoadingDebounceDelay = 300; // ms — single debounce (Python debounce removed)
         var currentBuildingsLayer = null;
         var currentMarkersCluster = null;
         var isLoadingViewport = false;
@@ -48,14 +48,15 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         // The selection JS (loaded before this) already created 'bridge' and 'bridgeReady'
 
         // Wait for bridge to be ready before enabling viewport loading
+        // Wait for bridge to be ready before enabling viewport loading
         var viewportBridgeCheckInterval = setInterval(function() {
             if (typeof bridgeReady !== 'undefined' && bridgeReady && typeof bridge !== 'undefined' && bridge) {
                 clearInterval(viewportBridgeCheckInterval);
                 console.log('Viewport loading: Reusing existing bridge (ready)');
 
-                // Trigger initial viewport load after bridge is confirmed ready
-                if (viewportLoadingEnabled) {
-                    console.log('Triggering initial viewport load');
+                // Trigger initial viewport load only if Python hasn't pre-loaded buildings
+                if (viewportLoadingEnabled && !window.initialBuildingsLoaded) {
+                    console.log('Triggering initial viewport load (no pre-loaded buildings)');
                     setTimeout(function() {
                         loadBuildingsForViewport();
                     }, 100);
@@ -90,21 +91,10 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 return;
             }
 
-            // Min zoom check - don't load buildings when zoomed out too far
+            // Min zoom check - don't load NEW buildings when zoomed out too far
+            // but keep existing buildings visible (clustering handles density)
             var currentZoom = map.getZoom();
             if (currentZoom < MIN_ZOOM_FOR_LOADING) {
-                console.log('Zoom level ' + currentZoom + ' < ' + MIN_ZOOM_FOR_LOADING + ', skipping building load');
-
-                // Clear existing buildings when zoomed out too far
-                if (currentBuildingsLayer) {
-                    map.removeLayer(currentBuildingsLayer);
-                    currentBuildingsLayer = null;
-                }
-                if (currentMarkersCluster) {
-                    map.removeLayer(currentMarkersCluster);
-                    currentMarkersCluster = null;
-                }
-
                 return;
             }
 
@@ -148,83 +138,78 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             }
         }
 
+        // ─── Additive loading state ───────────────────────────────────────────
+        // Buildings accumulate as the user explores — never cleared by viewport events.
+        var _addedBuildingIds = {};
+
+        function _createMarkersCluster() {
+            if (typeof L.markerClusterGroup === 'function') {
+                return L.markerClusterGroup({
+                    maxClusterRadius: function(zoom) {
+                        if (zoom <= 15) return 80;
+                        if (zoom <= 16) return 50;
+                        return 30;
+                    },
+                    spiderfyOnMaxZoom: true,
+                    showCoverageOnHover: false,
+                    zoomToBoundsOnClick: true,
+                    disableClusteringAtZoom: 16,
+                    chunkedLoading: true,
+                    chunkInterval: 50,
+                    chunkDelay: 5,
+                    removeOutsideVisibleBounds: true,
+                    animate: true,
+                    animateAddingMarkers: false
+                });
+            }
+            console.warn('MarkerCluster not available, using featureGroup fallback');
+            return L.featureGroup();
+        }
+
         /**
-         * Update buildings on map with new GeoJSON data.
-         * Called from Python when new viewport data is loaded.
-         *
-         * - Converts all geometries to Point (pin markers)
-         * - Uses marker clustering
-         * - Limits to MAX_MARKERS_PER_VIEWPORT
-         *
-         * @param {string} buildingsGeoJSON - GeoJSON FeatureCollection string
+         * Update buildings on map — additive approach.
+         * Never clears existing buildings; only adds new ones (tracked by building_id).
+         * Uses batch addLayers() for fast rendering.
          */
         function updateBuildingsOnMap(buildingsGeoJSON) {
             try {
-                console.log('Updating buildings on map with clustering...');
-
-                // Parse GeoJSON
-                var newBuildingsData = typeof buildingsGeoJSON === 'string'
+                var data = typeof buildingsGeoJSON === 'string'
                     ? JSON.parse(buildingsGeoJSON)
                     : buildingsGeoJSON;
 
-                // Convert all Polygon/MultiPolygon to Point (centroid) for pin-only display
-                if (newBuildingsData.features) {
-                    newBuildingsData.features.forEach(function(f) {
-                        if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {
-                            var bounds = L.geoJSON(f).getBounds();
-                            var center = bounds.getCenter();
-                            f.geometry = { type: 'Point', coordinates: [center.lng, center.lat] };
-                        }
-                    });
+                // Lazy cluster init — created once, stays on map
+                if (!currentMarkersCluster) {
+                    currentMarkersCluster = _createMarkersCluster();
+                    map.addLayer(currentMarkersCluster);
                 }
 
-                console.log('  - Buildings count:', newBuildingsData.features.length);
-                console.log('  - Max markers limit:', MAX_MARKERS_PER_VIEWPORT);
-
-                // Limit to MAX_MARKERS_PER_VIEWPORT
-                if (newBuildingsData.features.length > MAX_MARKERS_PER_VIEWPORT) {
-                    console.warn('Too many buildings (' + newBuildingsData.features.length + '), limiting to ' + MAX_MARKERS_PER_VIEWPORT);
-                    newBuildingsData.features = newBuildingsData.features.slice(0, MAX_MARKERS_PER_VIEWPORT);
-                }
-
-                // Remove existing layers if present
+                // Legacy layer cleanup (first call only, if stale)
                 if (currentBuildingsLayer) {
                     map.removeLayer(currentBuildingsLayer);
-                    console.log('  - Removed old buildings layer');
-                }
-                if (currentMarkersCluster) {
-                    map.removeLayer(currentMarkersCluster);
-                    console.log('  - Removed old markers cluster');
+                    currentBuildingsLayer = null;
                 }
 
-                // Create marker cluster group for points
-                if (typeof L.markerClusterGroup === 'function') {
-                    currentMarkersCluster = L.markerClusterGroup({
-                        maxClusterRadius: 60,
-                        spiderfyOnMaxZoom: true,
-                        showCoverageOnHover: false,
-                        zoomToBoundsOnClick: true,
-                        disableClusteringAtZoom: 15,
-                        chunkedLoading: true,
-                        chunkInterval: 100,
-                        chunkDelay: 10,
-                        removeOutsideVisibleBounds: true,
-                        animate: true,
-                        animateAddingMarkers: false
-                    });
-                } else {
-                    console.warn('MarkerCluster not available, using featureGroup fallback');
-                    currentMarkersCluster = L.featureGroup();
+                // Filter: only buildings not yet on the map
+                var newFeatures = [];
+                for (var i = 0; i < data.features.length; i++) {
+                    var f = data.features[i];
+                    var id = f.properties && f.properties.building_id;
+                    if (id && !_addedBuildingIds[id]) newFeatures.push(f);
                 }
 
-                // Create new buildings layer (all features are Points after conversion)
-                currentBuildingsLayer = L.geoJSON(newBuildingsData, {
-                    // pointToLayer for Point features
+                if (newFeatures.length === 0) {
+                    console.log('No new buildings. Total on map: ' + Object.keys(_addedBuildingIds).length);
+                    isLoadingViewport = false;
+                    return;
+                }
+
+                // Batch: collect layers first, then addLayers() in one call (faster than per-layer add)
+                var layersBatch = [];
+                L.geoJSON({type: 'FeatureCollection', features: newFeatures}, {
                     pointToLayer: function(feature, latlng) {
                         var status = getStatusKey(feature.properties.status || 1);
                         var color = statusColors[status] || '#0072BC';
                         var isAssigned = feature.properties.is_assigned === true;
-
                         var innerSvg;
                         if (isAssigned) {
                             color = '#F59E0B';
@@ -232,43 +217,35 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         } else {
                             innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                         }
-
                         var pinIcon = L.divIcon({
                             className: 'building-pin-icon',
                             html: '<div style="position:relative;width:24px;height:36px;">' +
                                   '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                                   '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                                   'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                                  innerSvg +
-                                  '</svg></div>',
+                                  innerSvg + '</svg></div>',
                             iconSize: [24, 36],
                             iconAnchor: [12, 36],
                             popupAnchor: [0, -36]
                         });
-
                         return L.marker(latlng, { icon: pinIcon });
                     },
-
-                    // onEachFeature for popups/multiselect and events
                     onEachFeature: function(feature, layer) {
                         var props = feature.properties;
-                        var status = props.status || 'intact';
-                        var statusLabel = statusLabels[status] || status;
-                        var statusClass = 'status-' + status;
-                        var geomType = props.geometry_type || 'Point';
+                        _addedBuildingIds[props.building_id] = true;
+                        layersBatch.push(layer);
 
-                        // All buildings are Points — add to marker cluster
-                        currentMarkersCluster.addLayer(layer);
-
-                        // Multi-select mode: attach click handler instead of popup
                         if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {
                             window.attachMultiselectHandler(layer);
                             return;
                         }
 
-                        // Normal mode: build popup
+                        var status = props.status || 'intact';
+                        var statusLabel = statusLabels[status] || status;
+                        var statusClass = 'status-' + status;
+                        var geomType = props.geometry_type || 'Point';
                         var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
-                        var buildingIdForApi = props.building_id;
+                        var buildingIdForApi = props.building_uuid || props.building_id;
 
                         var popup = '<div class="building-popup">' +
                             '<h4>' + buildingIdDisplay + ' ' +
@@ -287,20 +264,17 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         }
 
                         popup += '</div>';
-
                         layer.bindPopup(popup);
-
                     }
                 });
 
-                // Add marker cluster to map
-                map.addLayer(currentMarkersCluster);
+                currentMarkersCluster.addLayers(layersBatch);
 
                 isLoadingViewport = false;
-                var totalCount = currentMarkersCluster.getLayers().length;
-                console.log('Buildings updated: ' + totalCount);
+                var total = currentMarkersCluster.getLayers().length;
+                console.log('Added ' + newFeatures.length + ' buildings. Total on map: ' + total);
                 if (typeof window.updateBuildingCount === 'function') {
-                    window.updateBuildingCount(totalCount);
+                    window.updateBuildingCount(total);
                 }
 
             } catch (error) {
@@ -309,7 +283,22 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             }
         }
 
-        // Expose function to window for Python to call
+        // Called from Python on forced refresh: clears all buildings then re-triggers load
+        window.clearMapBuildings = function() {
+            _addedBuildingIds = {};
+            if (currentMarkersCluster) {
+                map.removeLayer(currentMarkersCluster);
+                currentMarkersCluster = null;
+            }
+            if (currentBuildingsLayer) {
+                map.removeLayer(currentBuildingsLayer);
+                currentBuildingsLayer = null;
+            }
+            isLoadingViewport = false;
+            console.log('Map buildings cleared for refresh');
+        };
+
+        // Expose to window for Python calls
         window.updateBuildingsOnMap = updateBuildingsOnMap;
 
         /**

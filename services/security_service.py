@@ -109,7 +109,11 @@ class SecurityService:
             logger.info("Security policy fetched from backend successfully")
             return True
         except Exception as e:
-            logger.error(f"Failed to fetch security settings from backend: {e}")
+            from services.exceptions import ApiException
+            if isinstance(e, ApiException) and e.status_code in (404, 405):
+                logger.warning(f"Security settings endpoint not available on backend (status {e.status_code}) — using local fallback")
+            else:
+                logger.error(f"Failed to fetch security settings from backend: {e}")
             cls._cached_settings = None
             return False
 

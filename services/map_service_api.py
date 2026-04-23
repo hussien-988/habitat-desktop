@@ -386,13 +386,22 @@ class MapServiceAPI:
             قائمة بـ BuildingGeoData
         """
         try:
-            result = self.api.search_buildings(
-                neighborhood_code=neighborhood_code,
-                page_size=1000
-            )
+            all_buildings = []
+            page = 1
+            while True:
+                result = self.api.search_buildings(
+                    neighborhood_code=neighborhood_code,
+                    page_size=100,
+                    page=page
+                )
+                items = result.get("items", result.get("buildings", []))
+                all_buildings.extend(items)
+                total = result.get("totalCount", len(items))
+                if not items or len(all_buildings) >= total or page >= 10:
+                    break
+                page += 1
 
-            buildings = result.get("items", [])
-            return [self._convert_api_building_to_geodata(b) for b in buildings]
+            return [self._convert_api_building_to_geodata(b) for b in all_buildings]
 
         except Exception as e:
             logger.error(f"Error fetching buildings by neighborhood: {e}")

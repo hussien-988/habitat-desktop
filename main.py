@@ -12,6 +12,10 @@ import sys
 import time
 from pathlib import Path
 
+# Enable Chromium WebEngine in Wine/CrossOver environments on macOS
+if sys.platform == 'darwin':
+    os.environ.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox')
+
 # Add trrcms directory to Python path
 trrcms_path = Path(__file__).parent / "trrcms"
 sys.path.insert(0, str(trrcms_path))
