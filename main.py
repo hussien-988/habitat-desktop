@@ -429,7 +429,6 @@ def main():
                            Qt.AlignBottom | Qt.AlignHCenter,
                            QColor(255, 255, 255, 120))
         app.processEvents()
-        print("[STARTUP] Initializing database...")
 
         from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -462,17 +461,14 @@ def main():
         app.processEvents()
         window.show()
         splash.finish(window)
-        print("[STARTUP] Application started successfully!")
 
         # Defer API data loading so window appears immediately
         def _init_deferred():
-            print("[STARTUP] Fetching vocabularies from API...")
             try:
                 from services.vocab_service import initialize_vocabularies  # type: ignore
                 initialize_vocabularies()
-                print("[STARTUP] Vocabularies initialized successfully")
             except Exception as e:
-                print(f"[STARTUP] Vocabularies initialization failed: {e}")
+                logger.warning(f"Vocabularies initialization failed: {e}")
 
         from PyQt5.QtCore import QTimer  # type: ignore
         QTimer.singleShot(0, _init_deferred)

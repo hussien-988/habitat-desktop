@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Building Map Dialog V2 - dialog for building selection via interactive map."""
-
+from cProfile import label
+import time
 import json
 from typing import Optional, List
 from ui.error_handler import ErrorHandler
@@ -9,7 +10,7 @@ from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 from repositories.database import Database
 from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
-from ui.components.base_map_dialog import BaseMapDialog
+from ui.components.base_map_dialog import BaseMapDialog, _perf  # [PERF] diagnostic
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
 from utils.logger import get_logger
@@ -34,9 +35,9 @@ class _BuildingsWorker(QThread):
         self._center_lon = center_lon
         self._data_provider = data_provider
 
+
     def run(self):
         try:
-            print(f"[MAP] BuildingsWorker start | view_only={self._is_view_only} center=({self._center_lat:.3f},{self._center_lon:.3f})")
             result = {}
             from services.map_service_api import MapServiceAPI
 
@@ -65,7 +66,6 @@ class _BuildingsWorker(QThread):
                     )
                 except Exception as e:
                     logger.warning(f"API map loading failed: {e}")
-                print(f"[MAP] BuildingsWorker done  | buildings={len(buildings)}")
                 result['buildings_list'] = buildings
                 result['buildings_geojson'] = GeoJSONConverter.buildings_to_geojson(
                     buildings, force_points=True
@@ -91,61 +91,6 @@ class _LayersWorker(QThread):
             from concurrent.futures import ThreadPoolExecutor
 
             result = {}
-
-            def _load_neighborhoods():
-                nh_geojson = None
-                bd_geojson = None
-                try:
-                    from services.api_client import get_api_client
-                    api = get_api_client()
-                    if api and self._auth_token:
-                        from app.config import Config
-                        neighborhoods = api.get_neighborhoods_by_bounds(
-                            sw_lat=Config.MAP_BOUNDS_MIN_LAT,
-                            sw_lng=Config.MAP_BOUNDS_MIN_LNG,
-                            ne_lat=Config.MAP_BOUNDS_MAX_LAT,
-                            ne_lng=Config.MAP_BOUNDS_MAX_LNG,
-                        )
-                        if neighborhoods:
-                            import re
-                            features = []
-                            for n in neighborhoods:
-                                wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
-                                coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
-                                if coords:
-                                    lngs = [float(c[0]) for c in coords]
-                                    lats = [float(c[1]) for c in coords]
-                                    center = (sum(lats)/len(lats), sum(lngs)/len(lngs))
-                                    features.append({
-                                        "type": "Feature",
-                                        "properties": {
-                                            "code": n.get('neighborhoodCode') or n.get('code', ''),
-                                            "center_lat": center[0], "center_lng": center[1],
-                                            "name_ar": n.get('nameArabic') or n.get('name_ar', '')
-                                        },
-                                        "geometry": None
-                                    })
-                            nh_geojson = json.dumps(
-                                {"type": "FeatureCollection", "features": features}
-                            )
-                except Exception as e:
-                    logger.warning(f"Could not load neighborhoods: {e}")
-
-                try:
-                    from services import boundary_service
-                    if boundary_service.is_available('neighbourhoods'):
-                        raw = boundary_service.get('neighbourhoods')
-                        if raw:
-                            boundary_data = json.loads(raw)
-                            boundary_data['features'] = [
-                                f for f in boundary_data['features']
-                                if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
-                            ]
-                            bd_geojson = json.dumps(boundary_data, ensure_ascii=False)
-                except Exception as e:
-                    logger.warning(f"Failed to load boundaries: {e}")
-
-                return nh_geojson, bd_geojson
 
             def _load_landmarks():
                 try:
@@ -185,17 +130,13 @@ class _LayersWorker(QThread):
                     logger.warning(f"Failed to load streets: {e}")
                 return None
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                f_nh = executor.submit(_load_neighborhoods)
+            with ThreadPoolExecutor(max_workers=2) as executor:
                 f_lm = executor.submit(_load_landmarks)
                 f_st = executor.submit(_load_streets)
 
-                nh_geojson, bd_geojson = f_nh.result()
                 lm_json = f_lm.result()
                 st_json = f_st.result()
 
-            result['neighborhoods_geojson'] = nh_geojson
-            result['boundaries_geojson'] = bd_geojson
             result['landmarks_json'] = lm_json
             result['streets_json'] = st_json
 
@@ -338,7 +279,7 @@ class _SearchWorker(QThread):
 
 class BuildingMapDialog(BaseMapDialog):
     """Dialog for selecting a single building by clicking on map."""
-
+    
     def __init__(
         self,
         db: Database,
@@ -408,7 +349,6 @@ class BuildingMapDialog(BaseMapDialog):
             enable_viewport_loading=True,
             parent=parent
         )
-
         # Restore auth token after BaseMapDialog.__init__
         self._auth_token = temp_auth_token
         logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
@@ -495,6 +435,7 @@ class BuildingMapDialog(BaseMapDialog):
                 streets_json='[]',
                 boundaries_geojson=None,
                 boundary_level='neighbourhoods',
+                max_selection=getattr(self, '_max_selection', None),
             )
             if not html:
                 logger.error("generate_leaflet_html returned empty HTML")
@@ -545,10 +486,10 @@ class BuildingMapDialog(BaseMapDialog):
             self._buildings_worker.error.connect(self._on_map_data_error)
             self._buildings_worker.start()
 
-        self._layers_worker = _LayersWorker(self._auth_token)
-        self._layers_worker.finished.connect(self._on_layers_ready)
-        self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
-        self._layers_worker.start()
+        # _LayersWorker is deferred to _on_page_ready — its CPU-bound JSON
+        # parsing (neighborhoods 2.9MB + normalize_landmark/normalize_street
+        # per feature) holds the Python GIL and starves Qt's event loop
+        # during the critical setHtml -> loadFinished window.
 
     def _prefetch_buildings_early(self):
         """Start fetching buildings immediately on dialog open, before HTML is ready."""
@@ -575,11 +516,6 @@ class BuildingMapDialog(BaseMapDialog):
 
     def _on_buildings_ready(self, data):
         """Inject buildings into the already-visible map, or buffer if page not loaded."""
-        try:
-            _feats = json.loads(data.get('buildings_geojson', '{"features":[]}')).get('features', [])
-        except Exception:
-            _feats = []
-        print(f"[MAP] _on_buildings_ready   | features={len(_feats)} page_loaded={self._page_loaded}")
         if not self._page_loaded:
             self._pending_buildings_data = data
             logger.info("Buildings data buffered, waiting for page load")
@@ -594,11 +530,6 @@ class BuildingMapDialog(BaseMapDialog):
         """
         try:
             buildings_geojson = data.get('buildings_geojson', '{"type":"FeatureCollection","features":[]}')
-            try:
-                _feats = json.loads(buildings_geojson).get('features', []) if isinstance(buildings_geojson, str) else []
-            except Exception:
-                _feats = []
-            print(f"[MAP] _inject_buildings     | features={len(_feats)}")
 
             if 'buildings_list' in data:
                 self._buildings_cache = data['buildings_list']
@@ -698,6 +629,15 @@ class BuildingMapDialog(BaseMapDialog):
                 self._inject_layers(self._pending_layers_data)
                 self._pending_layers_data = None
 
+            # Start layers worker now that the page is visible. Running it
+            # earlier caused its JSON parsing / normalize_* loops to hold the
+            # GIL and starve Qt/Chromium during the critical render window.
+            if self._layers_worker is None:
+                self._layers_worker = _LayersWorker(self._auth_token)
+                self._layers_worker.finished.connect(self._on_layers_ready)
+                self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
+                self._layers_worker.start()
+
     def _on_layers_ready(self, data):
         """Inject landmarks and streets, or buffer if page not loaded yet."""
         if self._page_loaded:
@@ -741,37 +681,22 @@ class BuildingMapDialog(BaseMapDialog):
                             if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
                                 console.log('Found building marker');
 
-                                // Enhanced marker for visibility
+                                // Show pre-selected building: large blue pin + permanent ID tooltip, no popup
                                 if (layer.setIcon) {{
-                                    var rawStatus = layer.feature.properties.status || 1;
-                                    var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
-                                        ? getStatusKey(rawStatus)
-                                        : (typeof rawStatus === 'string' ? rawStatus : 'intact');
-
-                                    var statusColors = {{
-                                        'intact': '#28a745',
-                                        'minor_damage': '#ffc107',
-                                        'major_damage': '#fd7e14',
-                                        'severely_damaged': '#dc3545',
-                                        'destroyed': '#dc3545',
-                                        'under_construction': '#17a2b8',
-                                        'demolished': '#6c757d'
-                                    }};
-                                    var color = statusColors[status] || '#0072BC';
-
-                                    var largeIcon = L.divIcon({{
+                                    var largeBlueIcon = L.divIcon({{
                                         className: 'building-pin-icon-huge',
-                                        html: '<div style="width: 72px; height: 108px;">' +
+                                        html: '<div style="position:relative;width:72px;height:108px;' +
+                                              'filter:drop-shadow(0 4px 12px rgba(25,118,210,0.5));">' +
                                               '<svg width="72" height="108" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                                               '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
-                                              'fill="' + color + '" stroke="#fff" stroke-width="3"/>' +
-                                              '<circle cx="12" cy="12" r="5" fill="#fff"/>' +
+                                              'fill="#1976D2" stroke="#64B5F6" stroke-width="2"/>' +
+                                              '<circle cx="12" cy="12" r="5" fill="#64B5F6"/>' +
                                               '</svg></div>',
                                         iconSize: [72, 108],
                                         iconAnchor: [36, 108],
                                         popupAnchor: [0, -108]
                                     }});
-                                    layer.setIcon(largeIcon);
+                                    layer.setIcon(largeBlueIcon);
 
                                     if (layer.setZIndexOffset) {{
                                         layer.setZIndexOffset(10000);
@@ -782,10 +707,17 @@ class BuildingMapDialog(BaseMapDialog):
                                     layer.bringToFront();
                                 }}
 
-                                setTimeout(function() {{
-                                    layer.openPopup();
-                                    console.log('Popup opened');
-                                }}, 100);
+                                // Permanent tooltip showing building ID — no popup
+                                var _displayId = layer.feature.properties.building_id_display
+                                    || layer.feature.properties.building_id
+                                    || '{building_id}';
+                                layer.unbindTooltip();
+                                layer.bindTooltip(_displayId, {{
+                                    permanent: true,
+                                    direction: 'top',
+                                    offset: [0, -112],
+                                    className: 'building-id-tooltip'
+                                }}).openTooltip();
                             }}
                         }});
                     }}
@@ -1065,6 +997,7 @@ class BuildingMapDialog(BaseMapDialog):
         return self._selected_building
 
 
+
 def show_building_map_dialog(
     db: Database,
     selected_building_id: Optional[str] = None,
@@ -1093,9 +1026,12 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
     def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None,
                  center_lat: Optional[float] = None, center_lon: Optional[float] = None,
                  initial_zoom: Optional[int] = None,
-                 already_selected_ids: Optional[list] = None):
+                 already_selected_ids: Optional[list] = None,
+                 max_selection: Optional[int] = None):
         self._multi_selected_buildings: List[Building] = []
         self._already_selected_ids = set(already_selected_ids or [])
+        # [UNIFIED-DIALOG] None = unlimited (Field Work), 1 = single-select replace mode (Claims).
+        self._max_selection = max_selection
 
         # Hooks consumed by parent __init__ / _start_map_load (see BuildingMapDialog)
         self._initial_center_lat = center_lat
@@ -1176,6 +1112,20 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
         logger.info(f"Multi-select: {len(self._multi_selected_buildings)} buildings selected")
 
+        # [UNIFIED-DIALOG] In single-select mode, show the chosen building's ID in the
+        # counter label. Building ID stays in Latin digits regardless of UI language;
+        # Qt's bidi rendering places it on the correct side based on the label's
+        # layoutDirection (Arabic \u2192 left of RTL label, English \u2192 right of LTR label).
+        if self._max_selection == 1 and hasattr(self, 'selection_counter_label'):
+            if self._multi_selected_buildings:
+                b = self._multi_selected_buildings[0]
+                display = getattr(b, 'building_id_display', None) or b.building_id or '\u2014'
+                self.selection_counter_label.setText(
+                    f"{tr('dialog.map.selected_building_label')}: ‪{display}‬"
+                )
+            else:
+                self.selection_counter_label.setText(tr("dialog.map.select_building_prompt"))
+
     def _find_building_in_cache(self, building_id: str) -> Optional[Building]:
         """Find building in caches or fetch from API."""
         # Check initial buildings cache
@@ -1227,14 +1177,23 @@ def show_multiselect_map_dialog(
     center_lon: Optional[float] = None,
     initial_zoom: Optional[int] = None,
     already_selected_ids: Optional[list] = None,
+    max_selection: Optional[int] = None,
 ) -> Optional[List[Building]]:
-    """Show multi-select building map dialog. Returns list of buildings or None."""
+    """Show the unified building map dialog.
+
+    Args:
+        max_selection: None (default) = multi-select (Field Work mode).
+                       1 = single-select replace mode (Claims mode).
+
+    Returns list of selected buildings, or None if cancelled.
+    """
     dialog = MultiSelectBuildingMapDialog(
         db, auth_token, parent,
         center_lat=center_lat,
         center_lon=center_lon,
         initial_zoom=initial_zoom,
         already_selected_ids=already_selected_ids,
+        max_selection=max_selection,
     )
     result = dialog.exec_()
 
@@ -1244,3 +1203,5 @@ def show_multiselect_map_dialog(
             return selected
 
     return None
+
+

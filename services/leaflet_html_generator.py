@@ -9,6 +9,8 @@ including clustering, drawing tools, and viewport-based loading.
 import json
 from pathlib import Path
 from typing import Dict, Optional
+
+from folium import TileLayer
 from utils.logger import get_logger
 from ui.constants.map_constants import MapConstants
 
@@ -82,6 +84,7 @@ class LeafletHTMLGenerator:
         places_json: str = None,  # JSON array of populated places for map labels
         landmarks_json: str = None,  # JSON array of landmarks for map overlay
         streets_json: str = None,  # JSON array of streets for map overlay
+        max_selection: Optional[int] = None,  # None=unlimited; 1=single-select replace mode
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -110,8 +113,20 @@ class LeafletHTMLGenerator:
         local_assets_url = get_local_server_url()
         _loading_text = _tr('page.map.loading_map')
 
-        drawing_css = f'<style>{LeafletHTMLGenerator._load_asset("leaflet.draw.css")}</style>' if enable_drawing else ''
-        drawing_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.draw.js")}</script>' if enable_drawing else ''
+        # [SIMPLIFY] Force-disable features the app no longer needs:
+        # drawing tools, boundary overlays, existing polygons, neighborhoods overlay, places labels.
+        # Buildings are always rendered as markers/clusters (not polygons).
+        enable_drawing = False
+        drawing_mode = 'point'
+        existing_polygons_geojson = None
+        neighborhoods_geojson = None
+        selected_neighborhood_code = None
+        boundaries_geojson = None
+        boundary_level = None
+        places_json = None
+
+        drawing_css = ''
+        drawing_js = ''
         clustering_css = f'''
     <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.css")}</style>
     <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.Default.css")}</style>'''
@@ -171,7 +186,8 @@ class LeafletHTMLGenerator:
         places_json,
         landmarks_json,
         streets_json,
-        local_assets_url=local_assets_url
+        local_assets_url=local_assets_url,
+        max_selection=max_selection,
     )}
 </body>
 </html>
@@ -533,6 +549,24 @@ class LeafletHTMLGenerator:
         {drawing_styles}
         {multiselect_styles}
 
+        /* [UNIFIED-DIALOG] Building ID tooltip (shown on pin hover) */
+        .building-id-tooltip {{
+            background: rgba(30, 41, 59, 0.92) !important;
+            color: #F9FAFB !important;
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 4px 10px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            direction: rtl !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+            white-space: nowrap !important;
+        }}
+        .building-id-tooltip::before {{
+            border-top-color: rgba(30, 41, 59, 0.92) !important;
+        }}
+
         /* Neighborhood Layer Styles */
         .neighborhood-tooltip {{
             background: rgba(255, 255, 255, 0.92) !important;
@@ -651,7 +685,8 @@ class LeafletHTMLGenerator:
         places_json: str = None,
         landmarks_json: str = None,
         streets_json: str = None,
-        local_assets_url: str = ''
+        local_assets_url: str = '',
+        max_selection: Optional[int] = None,
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -794,14 +829,17 @@ class LeafletHTMLGenerator:
                 "                }"
             )
 
+        _max_selection_js = 'null' if max_selection is None else str(int(max_selection))
         return f'''
     <script>
+        // [UNIFIED-DIALOG] Max selection count: null=unlimited, 1=single-select replace mode.
+        window.maxSelection = {_max_selection_js};
+
         L.Icon.Default.imagePath = '{local_assets_url}/images/';
 
-        // Initialize map centered on Aleppo with zoom constraints
-        // preferCanvas for faster rendering
+        // Initialize map. Leaflet 1.x vector canvas not used (no polygons drawn);
+        // buildings render as DOM divIcons via pointToLayer.
         var map = L.map('map', {{
-            preferCanvas: true,
             maxZoom: {effective_max_zoom},
             minZoom: {effective_min_zoom},
             fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
@@ -827,8 +865,15 @@ class LeafletHTMLGenerator:
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
 
-        tileLayer.addTo(map);
+       function addTileLayerDeferred() {{
+            if (!map.hasLayer(tileLayer)) {{
+                tileLayer.addTo(map);
+            }}
+       }}
 
+        setTimeout(addTileLayerDeferred, 300);
+
+        setTimeout(addTileLayerDeferred, 0);
         // GeoServer WMS overlay (optional, configured via .env)
         var geoserverWmsUrl = '{geoserver_wms_url}';
         if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
@@ -843,7 +888,8 @@ class LeafletHTMLGenerator:
             L.control.layers(null, gsOverlays).addTo(map);
         }}
 
-        // Loading overlay removal - hide when initial tiles are loaded
+        // Loading overlay removal - hide ONLY when real tiles finish loading,
+        // to avoid the white-flash when the dialog opens but tiles aren't drawn yet.
         (function() {{
             var overlay = document.getElementById('map-loading-overlay');
             if (!overlay) return;
@@ -853,19 +899,21 @@ class LeafletHTMLGenerator:
                 if (removed) return;
                 removed = true;
                 overlay.classList.add('fade-out');
-                setTimeout(function() {{ overlay.style.display = 'none'; }}, 600);
+                setTimeout(function() {{ overlay.style.display = 'none'; }}, 400);
             }}
 
-            // Remove when all visible tiles finish loading
+            // Primary: remove when ALL visible tiles are loaded (real map drawn).
             tileLayer.on('load', removeOverlay);
-
-            // Also remove when map itself is ready (covers offline/cached tiles)
-            map.whenReady(function() {{
-                setTimeout(removeOverlay, 500);
+            // Secondary: remove as soon as the first tile shows (perceived draw).
+            var _firstTileShown = false;
+            tileLayer.on('tileload', function() {{
+                if (_firstTileShown) return;
+                _firstTileShown = true;
+                // small delay so several tiles paint together, avoiding speckle
+                setTimeout(removeOverlay, 150);
             }});
-
-            // Fallback: remove after 1.5 seconds max
-            setTimeout(removeOverlay, 1500);
+            // Fallback: remove after 20 seconds max (network failure safety).
+            setTimeout(removeOverlay, 20000);
         }})();
 
         // Status colors and labels
@@ -897,6 +945,41 @@ class LeafletHTMLGenerator:
 
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
+
+        // [SIMPLIFY] Normalize every feature's geometry to a Point (centroid of polygon rings).
+        // Buildings are always rendered as markers — never as polygons — so L.geoJSON's
+        // pointToLayer callback fires for ALL features, regardless of what the API returned.
+        (function _toPoints() {{
+            if (!buildingsData || !buildingsData.features) return;
+            function _centroidOfRing(ring) {{
+                if (!ring || ring.length === 0) return null;
+                var sumLng = 0, sumLat = 0, n = 0;
+                // Skip the last point if it's a dup of the first (GeoJSON closed ring).
+                var lim = (ring.length > 1 && ring[0][0] === ring[ring.length-1][0] && ring[0][1] === ring[ring.length-1][1])
+                          ? ring.length - 1 : ring.length;
+                for (var i = 0; i < lim; i++) {{
+                    sumLng += ring[i][0];
+                    sumLat += ring[i][1];
+                    n++;
+                }}
+                return n > 0 ? [sumLng / n, sumLat / n] : null;
+            }}
+            for (var i = 0; i < buildingsData.features.length; i++) {{
+                var f = buildingsData.features[i];
+                if (!f || !f.geometry) continue;
+                var g = f.geometry;
+                if (g.type === 'Point') continue;
+                var pt = null;
+                if (g.type === 'Polygon' && g.coordinates && g.coordinates[0]) {{
+                    pt = _centroidOfRing(g.coordinates[0]);
+                }} else if (g.type === 'MultiPolygon' && g.coordinates && g.coordinates[0] && g.coordinates[0][0]) {{
+                    pt = _centroidOfRing(g.coordinates[0][0]);
+                }}
+                if (pt) {{
+                    f.geometry = {{ type: 'Point', coordinates: pt }};
+                }}
+            }}
+        }})();
 
         // Summary counts
         var _ptCount = buildingsData.features.length;
@@ -937,14 +1020,12 @@ class LeafletHTMLGenerator:
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
-                var isAssigned = feature.properties.is_assigned === true;
-                var innerSvg;
-                if (isAssigned) {{
+                // [VISUAL] Pre-assigned buildings are distinguished by color only (amber).
+                // They remain fully selectable — no special tooltip, no click block.
+                if (feature.properties.is_assigned === true) {{
                     color = '#F59E0B';
-                    innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
-                }} else {{
-                    innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                 }}
+                var innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
                     html: '<div style="position:relative;width:24px;height:36px;">' +
@@ -956,7 +1037,18 @@ class LeafletHTMLGenerator:
                     iconAnchor: [12, 36],
                     popupAnchor: [0, -36]
                 }});
-                return L.marker(latlng, {{icon: pinIcon}});
+                var _marker = L.marker(latlng, {{icon: pinIcon}});
+                // [UNIFIED-DIALOG] Show building ID on hover
+                var _idLabel = feature.properties.building_id_display || feature.properties.building_id;
+                if (_idLabel) {{
+                    _marker.bindTooltip(String(_idLabel), {{
+                        permanent: false,
+                        direction: 'top',
+                        offset: [0, -36],
+                        className: 'building-id-tooltip'
+                    }});
+                }}
+                return _marker;
             }},
 
             onEachFeature: function(feature, layer) {{
@@ -1029,17 +1121,31 @@ class LeafletHTMLGenerator:
                         map.fitBounds(layer.getBounds(), {{ padding: [100, 100] }});
                     }}
 
-                    // Highlight temporarily
-                    if (layer.feature.geometry.type !== 'Point') {{
-                        var originalStyle = {{
-                            fillOpacity: 0.6,
-                            weight: 2
-                        }};
-
+                    if (layer.feature.geometry.type === 'Point') {{
+                        // Temporarily replace pin with larger blue icon
+                        var _origIcon = layer.getIcon ? layer.getIcon() : null;
+                        layer.setIcon(L.divIcon({{
+                            className: 'building-pin-icon',
+                            html: '<div style="position:relative;width:36px;height:52px;' +
+                                  'filter:drop-shadow(0 4px 8px rgba(33,150,243,0.5));">' +
+                                  '<svg width="36" height="52" viewBox="0 0 32 48" xmlns="http://www.w3.org/2000/svg">' +
+                                  '<path d="M16 0C9.4 0 4 5.4 4 12c0 10 12 32 12 32s12-22 12-32c0-6.6-5.4-12-12-12z" ' +
+                                  'fill="#1976D2" stroke="#64B5F6" stroke-width="3"/>' +
+                                  '<circle cx="16" cy="12" r="6" fill="#64B5F6"/>' +
+                                  '</svg></div>',
+                            iconSize: [36, 52],
+                            iconAnchor: [18, 52],
+                            popupAnchor: [0, -52]
+                        }}));
+                        if (_origIcon) {{
+                            setTimeout(function() {{ layer.setIcon(_origIcon); }}, 2000);
+                        }}
+                    }} else {{
+                        // Highlight polygon temporarily
                         layer.setStyle({{
                             fillOpacity: 1.0,
                             weight: 4,
-                            color: '#FF0000'
+                            color: '#1976D2'
                         }});
 
                         setTimeout(function() {{

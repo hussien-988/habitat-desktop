@@ -232,8 +232,6 @@ class TRRCMSApiClient:
         url = f"{self.base_url}{endpoint}"
 
         import json as _json
-        _MAP_ENDPOINTS = ('/buildings/map', '/BuildingAssignments/buildings', '/buildings/search')
-        _is_map_endpoint = any(ep in endpoint for ep in _MAP_ENDPOINTS)
 
         logger.info(f"[API REQ] {method} {endpoint}")
         if params:
@@ -243,16 +241,6 @@ class TRRCMSApiClient:
                 logger.info(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
             except Exception:
                 logger.info(f"[API REQ] Body: {json_data}")
-
-        if _is_map_endpoint:
-            print(f"[HTTP REQ] {method} {endpoint}")
-            if json_data:
-                try:
-                    print(f"[HTTP REQ] Body: {_json.dumps(json_data, ensure_ascii=False, default=str)}")
-                except Exception:
-                    print(f"[HTTP REQ] Body: {json_data}")
-            if params:
-                print(f"[HTTP REQ] Params: {params}")
 
         last_error = None
         for attempt in range(self._MAX_RETRIES + 1):
@@ -288,14 +276,6 @@ class TRRCMSApiClient:
                             logger.info(f"[API RES] Body: {res_str}")
                     except Exception:
                         logger.info(f"[API RES] Body: {result}")
-
-                if _is_map_endpoint:
-                    _items = []
-                    _total = '?'
-                    if isinstance(result, dict):
-                        _items = result.get('items', result.get('features', []))
-                        _total = result.get('totalCount', result.get('total', '?'))
-                    print(f"[HTTP RES] {response.status_code} {endpoint} | items={len(_items)} total={_total}")
 
                 return result
 

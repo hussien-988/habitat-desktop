@@ -35,6 +35,11 @@ except ImportError:
     HAS_WEBCHANNEL = False
 
 
+# No-op shim for legacy _perf() calls — instrumentation has been removed.
+def _perf(*args, **kwargs):
+    pass
+
+
 class RoundedDialog(QDialog):
     """Custom QDialog with rounded corners."""
 
@@ -149,7 +154,6 @@ class _ViewportWorker(QThread):
 
     def run(self):
         try:
-            print(f"[MAP] ViewportWorker start  | zoom={self._zoom} bounds={self._bounds}")
             buildings = self._viewport_loader.load_buildings_for_viewport(
                 north_east_lat=self._bounds[0],
                 north_east_lng=self._bounds[1],
@@ -158,7 +162,6 @@ class _ViewportWorker(QThread):
                 zoom_level=self._zoom,
                 auth_token=self._auth_token
             )
-            print(f"[MAP] ViewportWorker api    | buildings={len(buildings)}")
             if self.isInterruptionRequested():
                 return
             from services.geojson_converter import GeoJSONConverter
@@ -170,7 +173,6 @@ class _ViewportWorker(QThread):
                 _feat_count = len(_json.loads(geojson).get('features', []))
             except Exception:
                 _feat_count = 0
-            print(f"[MAP] ViewportWorker done   | geojson_features={_feat_count}")
             if self.isInterruptionRequested():
                 return
             self.buildings_loaded.emit(buildings)
@@ -267,10 +269,13 @@ class BaseMapDialog(QDialog):
         if not self._auth_token and parent:
             self._auth_token = self._get_auth_token_from_parent(parent)
 
-        # Create overlay (gray transparent layer)
+        # Create overlay (gray transparent layer) — kept hidden until the dialog
+        # actually becomes visible (showEvent). This is critical for pre-warm flows
+        # where the dialog widget is instantiated but never exec_()-ed — showing the
+        # overlay in __init__ would dim the parent (MainWindow) with no dialog on top.
         if parent:
             self._overlay = self._create_overlay(parent)
-            self._overlay.show()
+            self._overlay.hide()
 
         # Create UI
         self._setup_ui()
@@ -342,10 +347,10 @@ class BaseMapDialog(QDialog):
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanOpenWindows, True)
-            settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
-
-            # Setup WebChannel
+            # Leaflet 1.x doesn't use WebGL; disabling skips GPU context init (fewer
+            # conflicts with other Chromium apps sharing the GPU).
+            settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
+            settings.setAttribute(QWebEngineSettings.WebGLEnabled, False)
             if HAS_WEBCHANNEL:
                 self._setup_webchannel()
 
@@ -547,7 +552,14 @@ class BaseMapDialog(QDialog):
         return search_frame
 
     def _create_multiselect_ui(self) -> QFrame:
-        """Create multi-select UI with chips bar below the map."""
+        """Create multi-select UI with chips bar below the map.
+
+        [UNIFIED-DIALOG] When self._max_selection == 1, the UI adapts:
+        - Counter label shows selected building ID instead of count
+        - Clear-all button is hidden (clicking another building replaces)
+        """
+        is_single_select = getattr(self, '_max_selection', None) == 1
+
         multiselect_frame = QFrame()
         multiselect_frame.setObjectName("multiselectUI")
         multiselect_frame.setFixedHeight(ScreenScale.h(44))
@@ -562,11 +574,19 @@ class BaseMapDialog(QDialog):
         multiselect_layout = QHBoxLayout(multiselect_frame)
         multiselect_layout.setContentsMargins(12, 4, 12, 4)
         multiselect_layout.setSpacing(8)
-        multiselect_layout.setDirection(QHBoxLayout.RightToLeft)
 
-        # Counter label (right side in RTL)
-        self.selection_counter_label = QLabel(tr("dialog.map.zero_buildings_selected"))
-        self.selection_counter_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        from services.translation_manager import get_layout_direction as _get_dir, is_rtl as _is_rtl
+        _dir_qt = _get_dir()
+        _rtl = _is_rtl()
+
+        # Counter label
+        _initial_text = (
+            tr("dialog.map.select_building_prompt") if is_single_select
+            else tr("dialog.map.zero_buildings_selected")
+        )
+        self.selection_counter_label = QLabel(_initial_text)
+        self.selection_counter_label.setLayoutDirection(_dir_qt)
+        self.selection_counter_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
         self.selection_counter_label.setStyleSheet(f"""
             QLabel {{
                 color: {Colors.PRIMARY_BLUE};
@@ -574,52 +594,76 @@ class BaseMapDialog(QDialog):
                 padding: 2px 4px;
             }}
         """)
-        self.selection_counter_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-        multiselect_layout.addWidget(self.selection_counter_label)
 
-        # Scrollable chips area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFixedHeight(ScreenScale.h(34))
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        if is_single_select:
+            # Single-select: label fills the full bar width and is always centered.
+            self.selection_counter_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.selection_counter_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        self._chips_container = QWidget()
-        self._chips_container.setStyleSheet("background: transparent;")
-        self._chips_layout = QHBoxLayout(self._chips_container)
-        self._chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._chips_layout.setSpacing(6)
-        self._chips_layout.setDirection(QHBoxLayout.RightToLeft)
-        self._chips_layout.addStretch()
+            # Dummy chips objects so the rest of the class doesn't break
+            self._chips_container = QWidget()
+            self._chips_layout = QHBoxLayout(self._chips_container)
+            self._chips_layout.setContentsMargins(0, 0, 0, 0)
 
-        scroll.setWidget(self._chips_container)
-        multiselect_layout.addWidget(scroll, 1)
+            self.clear_all_btn = QPushButton()
+            self.clear_all_btn.hide()
+            self.clear_all_btn.clicked.connect(self._on_clear_all_clicked)
 
-        # Clear all button (left side in RTL)
-        self.clear_all_btn = QPushButton(tr("dialog.map.clear_all"))
-        self.clear_all_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(28))
-        self.clear_all_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_all_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-        self.clear_all_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Colors.ERROR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 2px 6px;
-            }}
-            QPushButton:hover {{
-                background-color: #c82333;
-            }}
-            QPushButton:disabled {{
-                background-color: {Colors.LIGHT_GRAY_BG};
-                color: {Colors.TEXT_SECONDARY};
-            }}
-        """)
-        self.clear_all_btn.setEnabled(False)
-        self.clear_all_btn.clicked.connect(self._on_clear_all_clicked)
-        multiselect_layout.addWidget(self.clear_all_btn)
+            multiselect_layout.addWidget(self.selection_counter_label)
+        else:
+            # Multi-select: label on right (RTL) or left (LTR), chips in middle, clear btn on other side.
+            self.selection_counter_label.setAlignment(Qt.AlignVCenter | (Qt.AlignRight if _rtl else Qt.AlignLeft))
+            self.selection_counter_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setFixedHeight(ScreenScale.h(34))
+            scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+
+            self._chips_container = QWidget()
+            self._chips_container.setStyleSheet("background: transparent;")
+            self._chips_layout = QHBoxLayout(self._chips_container)
+            self._chips_layout.setContentsMargins(0, 0, 0, 0)
+            self._chips_layout.setSpacing(6)
+            self._chips_layout.setDirection(QHBoxLayout.RightToLeft)
+            self._chips_layout.addStretch()
+            scroll.setWidget(self._chips_container)
+
+            self.clear_all_btn = QPushButton(tr("dialog.map.clear_all"))
+            self.clear_all_btn.setFixedSize(ScreenScale.w(80), ScreenScale.h(28))
+            self.clear_all_btn.setCursor(Qt.PointingHandCursor)
+            self.clear_all_btn.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            self.clear_all_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {Colors.ERROR};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 2px 6px;
+                }}
+                QPushButton:hover {{
+                    background-color: #c82333;
+                }}
+                QPushButton:disabled {{
+                    background-color: {Colors.LIGHT_GRAY_BG};
+                    color: {Colors.TEXT_SECONDARY};
+                }}
+            """)
+            self.clear_all_btn.setEnabled(False)
+            self.clear_all_btn.clicked.connect(self._on_clear_all_clicked)
+
+            # RTL: [clear_btn LEFT] [scroll MIDDLE] [label RIGHT]
+            # LTR: [label LEFT] [scroll MIDDLE] [clear_btn RIGHT]
+            if _rtl:
+                multiselect_layout.addWidget(self.clear_all_btn)
+                multiselect_layout.addWidget(scroll, 1)
+                multiselect_layout.addWidget(self.selection_counter_label)
+            else:
+                multiselect_layout.addWidget(self.selection_counter_label)
+                multiselect_layout.addWidget(scroll, 1)
+                multiselect_layout.addWidget(self.clear_all_btn)
 
         return multiselect_frame
 
@@ -726,7 +770,13 @@ class BaseMapDialog(QDialog):
         buttons_row.addWidget(cancel_btn)
 
         # Confirm button
-        self.confirm_btn = QPushButton(tr("dialog.map.confirm_coordinates"))
+        # [UNIFIED-DIALOG] In single-select mode the button confirms a building choice.
+        _is_single_select = getattr(self, '_max_selection', None) == 1
+        _confirm_text = (
+            tr("dialog.map.confirm_building_selection") if _is_single_select
+            else tr("dialog.map.confirm_coordinates")
+        )
+        self.confirm_btn = QPushButton(_confirm_text)
         self.confirm_btn.setFixedSize(ScreenScale.w(160), ScreenScale.h(40))
         self.confirm_btn.setCursor(Qt.PointingHandCursor)
         self.confirm_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -822,6 +872,26 @@ class BaseMapDialog(QDialog):
         if hasattr(self, '_loading_label') and self._loading_label:
             self._loading_label.setFixedSize(map_w, map_h)
 
+    def showEvent(self, event):
+        """Show the gray overlay only when the dialog actually becomes visible.
+        Supports pre-warm flows where the dialog is instantiated but not shown."""
+        super().showEvent(event)
+        if getattr(self, '_overlay', None) is not None:
+            try:
+                self._overlay.show()
+                self._overlay.raise_()
+            except Exception:
+                pass
+
+    def hideEvent(self, event):
+        """Hide the overlay when the dialog is hidden (on close/reject/accept)."""
+        if getattr(self, '_overlay', None) is not None:
+            try:
+                self._overlay.hide()
+            except Exception:
+                pass
+        super().hideEvent(event)
+
     def _on_load_finished(self, success):
         """Called when web_view finishes loading HTML."""
         if success:
@@ -884,23 +954,36 @@ class BaseMapDialog(QDialog):
             logger.error(f"Error parsing building IDs: {e}")
 
     def _on_selection_count_updated(self, count: int):
-        """Handle selection count update from JavaScript."""
-        if hasattr(self, 'selection_counter_label'):
-            if count == 0:
-                self.selection_counter_label.setText(tr("dialog.map.zero_buildings_selected"))
-                self.clear_all_btn.setEnabled(False)
-            elif count == 1:
-                self.selection_counter_label.setText(tr("dialog.map.one_building_selected"))
-                self.clear_all_btn.setEnabled(True)
-            elif count == 2:
-                self.selection_counter_label.setText(tr("dialog.map.two_buildings_selected"))
-                self.clear_all_btn.setEnabled(True)
-            elif count <= 10:
-                self.selection_counter_label.setText(tr("dialog.map.plural_buildings_selected", count=count))
-                self.clear_all_btn.setEnabled(True)
-            else:
-                self.selection_counter_label.setText(tr("dialog.map.many_buildings_selected", count=count))
-                self.clear_all_btn.setEnabled(True)
+        """Handle selection count update from JavaScript.
+
+        [UNIFIED-DIALOG] In single-select mode the label text is driven by
+        _on_buildings_multiselected (which has access to building display names),
+        so we only toggle the clear-all button here — the label is overwritten later.
+        """
+        if not hasattr(self, 'selection_counter_label'):
+            return
+        is_single_select = getattr(self, '_max_selection', None) == 1
+        if is_single_select:
+            # Label is updated by subclass from building info (not a raw count).
+            # Only manage enable state of clear-all (which is hidden in this mode anyway).
+            if hasattr(self, 'clear_all_btn'):
+                self.clear_all_btn.setEnabled(count > 0)
+            return
+        if count == 0:
+            self.selection_counter_label.setText(tr("dialog.map.zero_buildings_selected"))
+            self.clear_all_btn.setEnabled(False)
+        elif count == 1:
+            self.selection_counter_label.setText(tr("dialog.map.one_building_selected"))
+            self.clear_all_btn.setEnabled(True)
+        elif count == 2:
+            self.selection_counter_label.setText(tr("dialog.map.two_buildings_selected"))
+            self.clear_all_btn.setEnabled(True)
+        elif count <= 10:
+            self.selection_counter_label.setText(tr("dialog.map.plural_buildings_selected", count=count))
+            self.clear_all_btn.setEnabled(True)
+        else:
+            self.selection_counter_label.setText(tr("dialog.map.many_buildings_selected", count=count))
+            self.clear_all_btn.setEnabled(True)
 
     def _on_refresh_map(self):
         """Clear all caches, reset JS state, and reload buildings from API."""
@@ -1040,11 +1123,8 @@ class BaseMapDialog(QDialog):
             try:
                 _feats = _json.loads(geojson).get('features', [])
                 has_buildings = bool(_feats)
-                print(f"[MAP] _on_viewport_geojson  | features={len(_feats)}")
             except Exception:
-                print(f"[MAP] _on_viewport_geojson  | parse_error geojson={str(geojson)[:80]}")
-        else:
-            print("[MAP] _on_viewport_geojson  | empty geojson")
+                pass
         if has_buildings:
             self._update_map_buildings(geojson)
         else:
@@ -1092,12 +1172,6 @@ class BaseMapDialog(QDialog):
                 return
 
             import json as _json
-            try:
-                _feats = _json.loads(buildings_geojson).get('features', [])
-            except Exception:
-                _feats = []
-            print(f"[MAP] _update_map_buildings | features={len(_feats)} → calling JS updateBuildingsOnMap")
-
             js_code = f"if (typeof updateBuildingsOnMap === 'function') {{ updateBuildingsOnMap({buildings_geojson}); }}"
             self.web_view.page().runJavaScript(js_code)
 

@@ -236,6 +236,8 @@ class BuildingInfoStep(BaseStep):
         map_button.setGraphicsEffect(shadow)
         map_button.clicked.connect(self._open_map_view)
         self._map_button = map_button
+        # [PREWARM-FLOW] Hide view-only map button until a building is actually selected
+        map_button.setVisible(False)
 
         card_layout.addWidget(self._map_container, stretch=1)
 
@@ -269,6 +271,8 @@ class BuildingInfoStep(BaseStep):
         """)
         self._docs_btn.clicked.connect(self._on_show_documents)
         meta_row.addWidget(self._docs_btn, stretch=0)
+        # [PREWARM-FLOW] Hide documents button until a building is selected
+        self._docs_btn.setVisible(False)
         card_layout.addLayout(meta_row)
 
         desc_lbl = QLabel(tr("wizard.building_info.description_label"))
@@ -353,6 +357,28 @@ class BuildingInfoStep(BaseStep):
     def populate_data(self):
         b = self.context.building
         if not b:
+            # [PREWARM-FLOW] Empty state: hide view-only map button + docs button + clear fields
+            if hasattr(self, '_map_button') and self._map_button is not None:
+                self._map_button.setVisible(False)
+            if hasattr(self, '_docs_btn') and self._docs_btn is not None:
+                self._docs_btn.setVisible(False)
+            for field_attr in ('f_governorate', 'f_district', 'f_subdistrict', 'f_community',
+                               'f_neighborhood', 'f_bldg_number', 'f_bldg_code',
+                               'f_status', 'f_type', 'f_apartments', 'f_shops',
+                               'f_floors', 'f_total', 'f_location_status'):
+                w = getattr(self, field_attr, None)
+                if w is not None:
+                    try:
+                        w.setText("")
+                    except Exception:
+                        pass
+            if hasattr(self, 'f_description') and self.f_description is not None:
+                try:
+                    self.f_description.setPlainText("")
+                except Exception:
+                    pass
+            # Swap header save button to "اختيار مبنى" call-to-action
+            self._refresh_header_action()
             return
 
         def _s(attr: str, fallback: str = "") -> str:
@@ -399,6 +425,14 @@ class BuildingInfoStep(BaseStep):
             or ""
         )
         self.f_description.setPlainText(desc)
+
+        # [PREWARM-FLOW] Building is selected → show view-only map button + docs button
+        if hasattr(self, '_map_button') and self._map_button is not None:
+            self._map_button.setVisible(True)
+        if hasattr(self, '_docs_btn') and self._docs_btn is not None:
+            self._docs_btn.setVisible(True)
+        # Header button stays as "اختيار مبنى" (override-selection pattern) on step 0
+        self._refresh_header_action()
 
     def _on_show_documents(self):
         """Fetch building documents from API (non-blocking) and show in dialog."""
@@ -581,6 +615,112 @@ class BuildingInfoStep(BaseStep):
             dialog.exec_()
         except Exception as e:
             logger.warning(f"Could not open map view: {e}")
+    # --- [PREWARM-FLOW] Header button adaptation + step visibility hooks ---
+
+    def _find_wizard(self):
+        """Walk up parent chain to find the wizard (has save_btn + _handle_header_save)."""
+        node = self.parent() if hasattr(self, 'parent') else None
+        depth = 0
+        while node is not None and depth < 20:
+            depth += 1
+            if hasattr(node, 'save_btn') and hasattr(node, '_handle_header_save'):
+                return node
+            node = node.parent() if hasattr(node, 'parent') else None
+        return None
+
+    def _find_main_window(self):
+        """Walk up parent chain until MainWindow (has current_user attr)."""
+        node = self
+        while node is not None and not hasattr(node, 'current_user'):
+            node = node.parent() if hasattr(node, 'parent') else None
+        return node
+
+    def _refresh_header_action(self):
+        """On step 0, the header button is ALWAYS 'اختيار مبنى' (no icon).
+        Clicking it opens the selection dialog — acts as 'select' before selection,
+        and as 'change/override selection' after. Save button is never shown on step 0
+        because no survey has been created yet at this stage."""
+        from PyQt5.QtGui import QIcon
+        wiz = self._find_wizard()
+        if wiz is None or not hasattr(wiz, 'save_btn'):
+            return
+        try:
+            wiz.save_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        # Always "اختيار مبنى" on step 0 — no save icon
+        wiz.save_btn.setIcon(QIcon())
+        wiz.save_btn.setText(tr("wizard.building_info.pick_building"))
+        wiz.save_btn.clicked.connect(self._open_map_selection_dialog)
+
+    def _restore_header_save_default(self):
+        """Restore the header button to default Save behavior + icon when leaving step 0."""
+        from PyQt5.QtGui import QIcon
+        from PyQt5.QtCore import QSize
+        import os
+        wiz = self._find_wizard()
+        if wiz is None or not hasattr(wiz, 'save_btn'):
+            return
+        try:
+            wiz.save_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        save_icon_path = os.path.join("assets", "images", "save.png")
+        if os.path.exists(save_icon_path):
+            wiz.save_btn.setIcon(QIcon(save_icon_path))
+            try:
+                from ui.wizards.office_survey.office_survey_wizard_refactored import ButtonDimensions
+                wiz.save_btn.setIconSize(QSize(ButtonDimensions.SAVE_ICON_SIZE, ButtonDimensions.SAVE_ICON_SIZE))
+            except Exception:
+                pass
+        wiz.save_btn.setText(f" {tr('wizard.button.save')}")
+        wiz.save_btn.clicked.connect(wiz._handle_header_save)
+
+    def _open_map_selection_dialog(self):
+        """Open the unified map dialog in single-select mode (uses the pre-warmed
+        dialog on MainWindow if available). On success, populate step data."""
+        from PyQt5.QtWidgets import QDialog
+        from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
+
+        main_window = self._find_main_window()
+        auth_token = None
+        if main_window and getattr(main_window, 'current_user', None):
+            auth_token = getattr(main_window.current_user, '_api_token', None)
+
+        dialog = getattr(main_window, '_prewarmed_claim_dialog', None) if main_window else None
+        if dialog is not None:
+            logger.info("[PREWARM] Using pre-warmed dialog for building selection from step0")
+        else:
+            logger.info("[PREWARM] No pre-warmed dialog; creating fresh")
+            dialog = MultiSelectBuildingMapDialog(
+                db=self.context.db,
+                auth_token=auth_token,
+                parent=self,
+                max_selection=1,
+            )
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        buildings = dialog.get_selected_buildings()
+        if not buildings:
+            return
+        selected_building = buildings[0]
+        self.context.building = selected_building
+        # Re-populate UI with selected building — populate_data handles show-cards + header restore
+        self.populate_data()
+
+    def on_show(self):
+        """Called by the wizard navigator when this step becomes active."""
+        super().on_show()   # → populate_data (handles empty vs. populated)
+        # Ensure header button reflects current state (populate_data calls this too,
+        # but we call explicitly for safety in case populate_data early-returns).
+        self._refresh_header_action()
+
+    def on_hide(self):
+        """Called by the wizard navigator when leaving this step."""
+        self._restore_header_save_default()
+        super().on_hide()
+
     # BaseStep interface
 
     def validate(self) -> StepValidationResult:

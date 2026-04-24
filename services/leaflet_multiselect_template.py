@@ -28,10 +28,15 @@ MULTISELECT_JS_TEMPLATE = """
         };
 
         // Function to create custom pin icon for selected buildings (larger, blue)
+        // Animation is applied to the inner div — NOT the className — to avoid
+        // conflicting with Leaflet's own transform used for marker positioning.
         function createSelectedPinIcon() {
             return L.divIcon({
-                className: 'building-pin-icon selected-pin',
-                html: '<div style="position: relative; width: 36px; height: 52px;">' +
+                className: 'building-pin-icon',
+                html: '<div style="position:relative;width:36px;height:52px;' +
+                      'filter:drop-shadow(0 4px 8px rgba(33,150,243,0.5));' +
+                      'animation:pulse-selection 1.5s ease-in-out infinite;' +
+                      'transform-origin:bottom center;">' +
                       '<svg width="36" height="52" viewBox="0 0 32 48" xmlns="http://www.w3.org/2000/svg">' +
                       '<path d="M16 0C9.4 0 4 5.4 4 12c0 10 12 32 12 32s12-22 12-32c0-6.6-5.4-12-12-12z" ' +
                       'fill="#1976D2" stroke="#64B5F6" stroke-width="3"/>' +
@@ -45,10 +50,18 @@ MULTISELECT_JS_TEMPLATE = """
         }
 
         // Toggle building selection
+        // [UNIFIED-DIALOG] When window.maxSelection === 1 (single-select mode),
+        // selecting a new building REPLACES the current one (auto-deselect existing).
+        // Clicking the currently selected building still deselects it (standard toggle).
         function toggleBuildingMultiSelect(buildingId, layer, feature) {
             if (selectedBuildings.has(buildingId)) {
                 deselectBuildingMulti(buildingId);
             } else {
+                // Single-select: clear any existing selection before adding the new one.
+                if (window.maxSelection === 1 && selectedBuildings.size > 0) {
+                    var _existingIds = Array.from(selectedBuildings.keys());
+                    _existingIds.forEach(function(id) { deselectBuildingMulti(id); });
+                }
                 selectBuildingMulti(buildingId, layer, feature);
             }
 
@@ -62,24 +75,18 @@ MULTISELECT_JS_TEMPLATE = """
 
             selectedBuildings.set(buildingId, {layer: layer, feature: feature});
 
-            // Create highlight layer
-            var highlightLayer;
             var geomType = feature.geometry.type;
 
             if (geomType === 'Point') {
-                var latlng = layer.getLatLng();
-                highlightLayer = L.marker(latlng, {
-                    icon: createSelectedPinIcon(),
-                    interactive: false
-                });
+                // Replace the original pin icon directly so the old color doesn't show through
+                var originalIcon = layer.getIcon ? layer.getIcon() : null;
+                layer.setIcon(createSelectedPinIcon());
+                selectedBuildings.get(buildingId).originalIcon = originalIcon;
             } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
-                highlightLayer = L.geoJSON(feature, {
+                var highlightLayer = L.geoJSON(feature, {
                     style: SELECTED_STYLE,
                     interactive: false
                 });
-            }
-
-            if (highlightLayer) {
                 selectedLayersGroup.addLayer(highlightLayer);
                 selectedBuildings.get(buildingId).highlightLayer = highlightLayer;
             }
@@ -92,6 +99,10 @@ MULTISELECT_JS_TEMPLATE = """
             var selection = selectedBuildings.get(buildingId);
             if (selection.highlightLayer) {
                 selectedLayersGroup.removeLayer(selection.highlightLayer);
+            }
+            // Restore original pin icon for point markers
+            if (selection.originalIcon && selection.layer && selection.layer.setIcon) {
+                selection.layer.setIcon(selection.originalIcon);
             }
             selectedBuildings.delete(buildingId);
         }
@@ -160,57 +171,36 @@ MULTISELECT_JS_TEMPLATE = """
             }, 2500);
         }
 
-        // Attach multi-select click handler to a building layer
-        // Exported to window so viewport template can call it for dynamic buildings
+        // Attach multi-select click handler to a building layer.
+        // Assigned/locked buildings are SELECTABLE \u2014 only distinguished visually by color.
+        // No filtering or click blocking based on assignment state.
         function attachMultiselectHandler(layer) {
             if (!layer.feature || !layer.feature.properties) return;
 
             var buildingId = layer.feature.properties.building_id;
             if (!buildingId) return;
 
-            var isAssigned = layer.feature.properties.is_assigned === true;
-            var isLocked = layer.feature.properties.is_locked === true;
-
             // Unbind any popup to prevent it from showing
             layer.unbindPopup();
 
-            // Tooltip for assigned buildings (not selectable)
-            if (isAssigned) {
-                layer.bindTooltip('\u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b', {
-                    permanent: false,
-                    direction: 'top',
-                    className: 'disabled-building-tooltip'
-                });
-            }
-
-            // Add click handler for toggle selection
+            // Click handler \u2014 every building is selectable regardless of is_assigned/is_locked
             layer.on('click', function(e) {
                 L.DomEvent.stopPropagation(e);
-
-                if (isAssigned) {
-                    showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u0639\u064a\u0651\u0646 \u0645\u0633\u0628\u0642\u0627\u064b \u0644\u0641\u0631\u064a\u0642 \u0622\u062e\u0631');
-                    return false;
-                }
-
                 toggleBuildingMultiSelect(buildingId, layer, layer.feature);
                 return false;
             });
 
-            // Hover effects
+            // Hover \u2014 uniform cursor for all buildings
             layer.on('mouseover', function(e) {
-                if (isAssigned) {
-                    map.getContainer().style.cursor = 'pointer';
-                } else {
-                    var geomType = layer.feature.geometry.type;
-                    if (geomType !== 'Point') {
-                        this.setStyle({
-                            fillOpacity: 0.8,
-                            weight: 3,
-                            color: selectedBuildings.has(buildingId) ? '#2196F3' : '#00BFFF'
-                        });
-                    }
-                    map.getContainer().style.cursor = 'pointer';
+                var geomType = layer.feature.geometry.type;
+                if (geomType !== 'Point') {
+                    this.setStyle({
+                        fillOpacity: 0.8,
+                        weight: 3,
+                        color: selectedBuildings.has(buildingId) ? '#2196F3' : '#00BFFF'
+                    });
                 }
+                map.getContainer().style.cursor = 'pointer';
             });
 
             layer.on('mouseout', function(e) {

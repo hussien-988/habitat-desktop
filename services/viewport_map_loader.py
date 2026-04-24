@@ -214,8 +214,6 @@ class ViewportMapLoader:
                 )
                 logger.debug(f"Loaded {len(buildings)} buildings for viewport (no cache)")
 
-            print(f"[MAP] ViewportLoader api    | returned={len(buildings)} buildings")
-
             # Spatial Sampling — only when buildings exceed the display limit.
             # SpatialSampler._create_grid skips buildings with no direct lat/lng
             # (only geo_location WKT), so bypassing it for small datasets prevents

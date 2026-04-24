@@ -1450,17 +1450,19 @@ class MainWindow(QMainWindow):
         self._page_anim = anim
 
     def _has_unsaved_wizard_data(self) -> bool:
-        """Check if wizard has unsaved data."""
+        """Check if wizard has unsaved data worth confirming before leaving.
+
+        Step 0 (building selection) does NOT count as unsaved data even if a
+        building is selected — the survey record is only created when validate()
+        runs on Next (step 0 → step 1 transition). Before that, there is nothing
+        to save as a draft, so the confirmation bottom sheet would be misleading.
+        """
         # If finalization was completed, no need to show save dialog
         if hasattr(self.office_survey_wizard, '_finalization_complete') and self.office_survey_wizard._finalization_complete:
             return False
 
-        # Check if beyond step 1 (step 2+)
+        # Only ask if we're past step 0 (i.e., validate() has run, survey created)
         if self.office_survey_wizard.navigator.current_index >= 1:
-            return True
-
-        # Check if building selected in step 1
-        if hasattr(self.office_survey_wizard.context, 'building') and self.office_survey_wizard.context.building:
             return True
 
         return False
@@ -1774,33 +1776,90 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
 
     def _start_new_office_survey(self):
-        """Start a new office survey."""
-        from PyQt5.QtWidgets import QDialog
-        from ui.components.building_map_dialog_v2 import BuildingMapDialog
+        """Start a new office survey.
 
-        logger.info("Starting new office survey — opening building map dialog")
+        [PREWARM-FLOW] Instead of opening the map dialog first (and making the user
+        stare at cases_page for 4-13s of Chromium init), we:
+        1. Reset and show the wizard step 0 immediately (native Qt, ~300ms).
+        2. Kick off a hidden pre-warm of the map dialog in background.
+        3. User sees empty cards + "اختر مبنى" button, can orient themselves.
+        4. When they click "اختر مبنى" (building_selection_step._open_map_search_dialog),
+           the pre-warmed dialog is consumed — Chromium is already loaded or nearly so.
 
-        auth_token = getattr(self, '_api_token', None)
-        dialog = BuildingMapDialog(
-            db=self.db,
-            auth_token=auth_token,
-            read_only=False,
-            parent=self
-        )
-        if dialog.exec_() != QDialog.Accepted:
-            logger.debug("Building selection cancelled")
-            return
+        Net effect: the *real* dialog open time is unchanged, but the user's
+        *visible* wait shrinks because Chromium init happens behind the wizard UI.
+        """
+        logger.info("Starting new office survey — wizard-first flow with background map prewarm")
 
-        selected_building = dialog.get_selected_building()
-        if not selected_building:
-            logger.warning("Map dialog accepted but no building selected")
-            return
-
-        logger.info(f"Building selected: {selected_building.building_id}")
-
-        # Reset wizard with building pre-set so populate_data() runs correctly on Step 0
-        self._reset_wizard(building=selected_building)
+        # 1. Empty wizard + show it
+        self._reset_wizard(building=None)
         self.stack.setCurrentWidget(self.office_survey_wizard)
+
+        # Force-apply step 0 empty state (don't rely on on_show firing).
+        try:
+            step0 = self.office_survey_wizard.steps[0]
+            step0.populate_data()
+            if hasattr(step0, '_refresh_header_action'):
+                step0._refresh_header_action()
+        except Exception as e:
+            logger.warning(f"Failed to refresh step0 empty state: {e}")
+
+        # 2. Schedule prewarm after UI settles (200ms enough for Qt paint + layout)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self._prewarm_claim_map_dialog)
+
+    def _prewarm_claim_map_dialog(self):
+        """Instantiate MultiSelectBuildingMapDialog hidden so Chromium loads in background.
+
+        The dialog widget is created but never `exec_()`-ed here. Its __init__ schedules
+        QTimer.singleShot(0, _prefetch_buildings_early) and QTimer.singleShot(50, _start_map_load),
+        which fire on the event loop and trigger Chromium subprocess spawn + setHtml.
+        The QWebEngineView loads independently of widget visibility.
+
+        The dialog is kept alive on MainWindow (`self._prewarmed_claim_dialog`) and REUSED
+        across multiple "add claim" flows. Cancel/accept leaves it hidden but ready.
+        Parent = MainWindow so it persists regardless of wizard step widget lifecycle.
+        """
+        if getattr(self, '_prewarmed_claim_dialog', None) is not None:
+            # Already exists — just reset its state for the new flow.
+            logger.info("[PREWARM] Reusing existing pre-warmed dialog (resetting state)")
+            self._reset_prewarmed_claim_dialog_state()
+            return
+        try:
+            from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
+            auth_token = getattr(self, '_api_token', None)
+            self._prewarmed_claim_dialog = MultiSelectBuildingMapDialog(
+                db=self.db,
+                auth_token=auth_token,
+                parent=self,
+                max_selection=1,
+            )
+            logger.info("[PREWARM] Map dialog pre-warming started for claims flow")
+        except Exception as e:
+            logger.warning(f"[PREWARM] Failed to start prewarm: {e}")
+            self._prewarmed_claim_dialog = None
+
+    def _reset_prewarmed_claim_dialog_state(self):
+        """Clear previous selection from the persistent pre-warmed dialog so it's ready
+        for the next claim flow. Keeps the widget + QWebEngineView alive."""
+        dialog = getattr(self, '_prewarmed_claim_dialog', None)
+        if dialog is None:
+            return
+        try:
+            dialog._multi_selected_buildings.clear()
+        except Exception:
+            pass
+        try:
+            if hasattr(dialog, 'confirm_btn') and dialog.confirm_btn:
+                dialog.confirm_btn.setEnabled(False)
+            if hasattr(dialog, 'selection_counter_label') and dialog.selection_counter_label:
+                dialog.selection_counter_label.setText("اختر مبنى من الخريطة")
+            if getattr(dialog, 'web_view', None):
+                dialog.web_view.page().runJavaScript(
+                    "if (typeof clearAllSelections === 'function') { try { clearAllSelections(); } catch(e){} }"
+                )
+        except Exception as e:
+            logger.debug(f"[PREWARM] state reset partial: {e}")
 
     def _on_survey_completed(self, data):
         """Handle survey completion from wizard — navigate to surveys page."""
