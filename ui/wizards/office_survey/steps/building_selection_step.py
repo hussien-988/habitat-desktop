@@ -549,6 +549,10 @@ class BuildingSelectionStep(BaseStep):
         map_button.setGraphicsEffect(shadow)
 
         map_button.clicked.connect(self._open_map_dialog)
+        # Keep a reference — this button is for VIEW-ONLY of an already-selected
+        # building. Hide it until a building is actually selected.
+        self._view_map_button = map_button
+        map_button.setVisible(False)
 
         # Location icon in center of map
         # carbon_location-filled.png - larger size for better visibility
@@ -613,20 +617,23 @@ class BuildingSelectionStep(BaseStep):
         """
         Open professional map search dialog for building selection.
 
-        Uses BuildingMapDialog V2 - unified component with:
-        - Clean design (no clutter, matches screenshot 2)
-        - Live coordinate updates
-        - PostGIS-compatible WKT output
-        - Always in selection mode (user can search again)
+        [PREWARM-FLOW] Uses the unified MultiSelectBuildingMapDialog with max_selection=1.
+        If MainWindow has pre-warmed a dialog (via _prewarm_claim_map_dialog), we reuse it
+        — its Chromium is already initialized so the dialog appears much faster.
+        The pre-warmed dialog is NOT destroyed after use; it persists on MainWindow for
+        subsequent claim flows (state reset happens at prewarm time, not here).
         """
-        from ui.components.building_map_dialog_v2 import show_building_map_dialog
+        from PyQt5.QtWidgets import QDialog
+        from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
 
-        # Get auth token from parent window
+        # Find MainWindow to locate any pre-warmed dialog
+        main_window = self
+        while main_window and not hasattr(main_window, 'current_user'):
+            main_window = main_window.parent()
+
+        # Get auth token
         auth_token = None
         try:
-            main_window = self
-            while main_window and not hasattr(main_window, 'current_user'):
-                main_window = main_window.parent()
             if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
                 auth_token = getattr(main_window.current_user, '_api_token', None)
                 logger.debug(f"Got auth token from MainWindow.current_user: {bool(auth_token)}")
@@ -634,14 +641,27 @@ class BuildingSelectionStep(BaseStep):
             logger.warning(f"Could not get auth token from parent: {e}")
             Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
 
-        # Always open in selection mode (not view-only)
-        # User can search and select building even if already selected
-        selected_building = show_building_map_dialog(
-            db=self.context.db,
-            selected_building_id=None,  # Always selection mode
-            auth_token=auth_token,
-            parent=self
-        )
+        # Use pre-warmed dialog if available (kept alive on MainWindow)
+        dialog = getattr(main_window, '_prewarmed_claim_dialog', None) if main_window else None
+        if dialog is not None:
+            logger.info("[PREWARM] Using pre-warmed dialog for map open")
+        else:
+            logger.info("[PREWARM] No pre-warmed dialog found — creating fresh")
+            dialog = MultiSelectBuildingMapDialog(
+                db=self.context.db,
+                auth_token=auth_token,
+                parent=self,
+                max_selection=1,
+            )
+
+        # Run modal. Dialog stays alive after close (prewarmed pool) — don't destroy.
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        buildings = dialog.get_selected_buildings()
+        if not buildings:
+            return
+        selected_building = buildings[0]
 
         if selected_building:
             # Update context and UI
@@ -672,6 +692,13 @@ class BuildingSelectionStep(BaseStep):
 
             # UX Enhancement: Clear search field to allow searching again
             self.building_search.clear()
+
+            # [PREWARM-FLOW] After a building is selected:
+            #   1. Show the view-only map button (was hidden while no building)
+            #   2. Restore header Save button (was replaced by "Open Map" while no building)
+            if getattr(self, '_view_map_button', None):
+                self._view_map_button.setVisible(True)
+            self._refresh_header_action()
 
             # Emit validation changed
             self.emit_validation_changed(True)
@@ -1124,6 +1151,74 @@ class BuildingSelectionStep(BaseStep):
         self._code_label.setText(tr("wizard.building.code_label"))
         self.building_search.setPlaceholderText(tr("wizard.building.search_placeholder"))
         self.search_on_map_btn.setText(tr("wizard.building.search_on_map"))
+
+    # --- [PREWARM-FLOW] Header button adaptation + step visibility hooks ---
+
+    def _find_main_window(self):
+        """Walk up parent chain until we find the MainWindow (has current_user attr)."""
+        node = self
+        while node is not None and not hasattr(node, 'current_user'):
+            node = node.parent() if hasattr(node, 'parent') else None
+        return node
+
+    def _find_wizard(self):
+        """Walk up parent chain to find the wizard (has save_btn + _handle_header_save)."""
+        node = self.parent() if hasattr(self, 'parent') else None
+        depth = 0
+        while node is not None and depth < 20:
+            depth += 1
+            if hasattr(node, 'save_btn') and hasattr(node, '_handle_header_save'):
+                return node
+            node = node.parent() if hasattr(node, 'parent') else None
+        return None
+
+    def _refresh_header_action(self):
+        """Swap the wizard's header save button between 'Save' and 'Open Map' based on
+        whether a building is selected. Before selection: button opens the map dialog.
+        After selection: normal Save behavior."""
+        wiz = self._find_wizard()
+        if wiz is None or not hasattr(wiz, 'save_btn'):
+            return
+        has_building = getattr(self.context, 'building', None) is not None
+        try:
+            wiz.save_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        if has_building:
+            wiz.save_btn.setText(f" {tr('wizard.button.save')}")
+            wiz.save_btn.clicked.connect(wiz._handle_header_save)
+        else:
+            wiz.save_btn.setText(tr("wizard.building.open_map"))
+            wiz.save_btn.clicked.connect(self._open_map_search_dialog)
+
+    def _restore_header_save_default(self):
+        """Restore the header button to default Save behavior. Called when leaving step 0
+        so other steps see the normal Save button."""
+        wiz = self._find_wizard()
+        if wiz is None or not hasattr(wiz, 'save_btn'):
+            return
+        try:
+            wiz.save_btn.clicked.disconnect()
+        except TypeError:
+            pass
+        wiz.save_btn.setText(f" {tr('wizard.button.save')}")
+        wiz.save_btn.clicked.connect(wiz._handle_header_save)
+
+    def on_show(self):
+        """Called by the wizard navigator when this step becomes active.
+        (The wizard uses on_show/on_hide — Qt's showEvent is not triggered here.)"""
+        super().on_show()   # triggers populate_data → hides cards when no building
+        # Reflect current selection state on the header button
+        self._refresh_header_action()
+        # Keep the view-only map button in sync (hidden when no building)
+        has_building = getattr(self.context, 'building', None) is not None
+        if getattr(self, '_view_map_button', None):
+            self._view_map_button.setVisible(has_building)
+
+    def on_hide(self):
+        """Called by the wizard navigator when leaving this step."""
+        self._restore_header_save_default()
+        super().on_hide()
 
     def validate(self) -> StepValidationResult:
         """Validate building selection and create survey via API (blocks navigation on failure)."""

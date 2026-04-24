@@ -13,8 +13,8 @@ import sqlite3
 import threading
 import urllib.request
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from socketserver import ThreadingMixIn
 from typing import Optional, Dict, Any
 
 from app.config import Config
@@ -31,9 +31,27 @@ def find_free_port() -> int:
         return s.getsockname()[1]
 
 
-class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    """HTTP server that handles each request in a separate thread."""
-    daemon_threads = True
+class _ThreadPoolHTTPServer(HTTPServer):
+    """HTTP server with a bounded thread pool (8 workers) — prevents thread storms on zoom-out."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='tile-worker')
+
+    def process_request(self, request, client_address):
+        self._pool.submit(self._handle_in_thread, request, client_address)
+
+    def _handle_in_thread(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+
+    def server_close(self):
+        self._pool.shutdown(wait=False)
+        super().server_close()
 
 
 class TileServer(BaseHTTPRequestHandler):
@@ -41,8 +59,8 @@ class TileServer(BaseHTTPRequestHandler):
 
     mbtiles_path = None
     assets_path = None
-    _tile_cache = {}  # In-memory tile cache
-    _db_connection = None  # Persistent database connection
+    _tile_cache = {}        # In-memory tile cache (shared, GIL-safe for dict ops)
+    _thread_local = threading.local()  # Per-thread SQLite connections (no contention)
     _static_cache = {}  # Cache for static files
     _html_cache = {}  # Cache for dynamically generated HTML pages
     _perf_stats = {
@@ -58,27 +76,24 @@ class TileServer(BaseHTTPRequestHandler):
 
     @classmethod
     def _get_db_connection(cls):
-        """Get persistent database connection."""
-        if cls._db_connection is None and cls.mbtiles_path:
+        """Get a per-thread SQLite connection — one connection per worker thread, no contention."""
+        conn = getattr(cls._thread_local, 'conn', None)
+        if conn is None and cls.mbtiles_path:
             if not Path(str(cls.mbtiles_path)).exists():
                 return None
-            cls._db_connection = sqlite3.connect(
-                str(cls.mbtiles_path),
-                check_same_thread=False,
-                timeout=10.0
-            )
-            cls._db_connection.execute("PRAGMA mmap_size = 268435456")
-            cls._db_connection.execute("PRAGMA page_size = 4096")
-            cls._db_connection.execute("PRAGMA cache_size = -64000")
-        return cls._db_connection
+            conn = sqlite3.connect(str(cls.mbtiles_path), check_same_thread=True, timeout=5.0)
+            conn.execute("PRAGMA mmap_size = 268435456")
+            conn.execute("PRAGMA cache_size = -32000")   # 32MB per thread × 8 threads = 256MB total
+            conn.execute("PRAGMA query_only = 1")         # MBTiles is read-only
+            cls._thread_local.conn = conn
+        return conn
 
     def do_GET(self):
         """Handle GET requests for tiles and static files."""
         try:
             path = self.path.split('?')[0]
 
-            # Log requests
-            logger.info(f"Tile server request: {path}")
+            logger.debug(f"Tile server request: {path}")
 
             if path == '/leaflet.js':
                 self._serve_static_file_cached(self.assets_path / 'leaflet.js', 'application/javascript')
@@ -461,7 +476,7 @@ class TileServerManager:
         # Create server - listen on all interfaces (0.0.0.0) to allow network access
         # NETWORK ACCESS: 0.0.0.0 allows other team members to connect
         # SECURITY: Only use on trusted networks (not public Wi-Fi!)
-        self._server = _ThreadedHTTPServer(('0.0.0.0', self._port), TileServer)
+        self._server = _ThreadPoolHTTPServer(('0.0.0.0', self._port), TileServer)
 
         # Start server in background thread
         self._server_thread = threading.Thread(

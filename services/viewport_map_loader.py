@@ -54,8 +54,8 @@ class ViewportBounds:
         )
 
     def get_cache_key(self) -> str:
-        """Generate unique cache key for this viewport."""
-        rounded = tuple(round(x, 3) for x in self.to_tuple())
+        """Generate cache key (2 decimals ~1.1km — allows small pans to hit cache)."""
+        rounded = tuple(round(x, 2) for x in self.to_tuple())
         key_str = f"{rounded[0]}_{rounded[1]}_{rounded[2]}_{rounded[3]}"
         return hashlib.md5(key_str.encode()).hexdigest()
 
@@ -195,38 +195,30 @@ class ViewportMapLoader:
                     buildings = cached.buildings
                     logger.debug(f"Loaded {len(buildings)} buildings from viewport cache")
                 else:
-                    api = get_api_client()
-                    response = api.search_buildings_in_bbox(
+                    buildings = self.map_service.get_buildings_in_bbox(
                         north_east_lat=north_east_lat,
                         north_east_lng=north_east_lng,
                         south_west_lat=south_west_lat,
                         south_west_lng=south_west_lng,
                         page_size=max_markers
                     )
-                    buildings = [
-                        self._dto_to_building(item)
-                        for item in response.get("items", [])
-                    ]
                     self._store_in_cache(bounds, buildings)
-                    logger.debug(f"Loaded {len(buildings)} buildings from BuildingAssignments API")
+                    logger.debug(f"Loaded {len(buildings)} buildings for viewport")
             else:
-                api = get_api_client()
-                response = api.search_buildings_in_bbox(
+                buildings = self.map_service.get_buildings_in_bbox(
                     north_east_lat=north_east_lat,
                     north_east_lng=north_east_lng,
                     south_west_lat=south_west_lat,
                     south_west_lng=south_west_lng,
                     page_size=max_markers
                 )
-                buildings = [
-                    self._dto_to_building(item)
-                    for item in response.get("items", [])
-                ]
-                logger.debug(f"Loaded {len(buildings)} buildings from BuildingAssignments API (no cache)")
+                logger.debug(f"Loaded {len(buildings)} buildings for viewport (no cache)")
 
-            # Spatial Sampling (Grid-based distribution)
-            if self.use_spatial_sampling and zoom_level is not None and len(buildings) > 0:
-                # Apply spatial sampling for even distribution
+            # Spatial Sampling — only when buildings exceed the display limit.
+            # SpatialSampler._create_grid skips buildings with no direct lat/lng
+            # (only geo_location WKT), so bypassing it for small datasets prevents
+            # silently dropping most buildings.
+            if self.use_spatial_sampling and zoom_level is not None and len(buildings) > max_markers:
                 sampled_buildings = SpatialSampler.sample_buildings(
                     buildings=buildings,
                     north_east_lat=north_east_lat,
@@ -234,11 +226,10 @@ class ViewportMapLoader:
                     south_west_lat=south_west_lat,
                     south_west_lng=south_west_lng,
                     zoom_level=zoom_level,
-                    use_priority=True  # Prefer damaged buildings
+                    use_priority=True
                 )
                 return sampled_buildings
             else:
-                # No sampling: return limited results
                 return buildings[:max_markers]
 
         except Exception as e:
@@ -318,3 +309,38 @@ class ViewportMapLoader:
         )
         building.has_active_assignment = dto.get("hasActiveAssignment", False)
         return building
+
+
+# ─── Session-level singleton registry (persists for the entire app session) ───
+_viewport_loaders: Dict[str, 'ViewportMapLoader'] = {}
+
+
+def get_shared_viewport_loader(
+    provider_key: str,
+    map_service=None,
+    cache_max_age_minutes: int = 30,
+) -> 'ViewportMapLoader':
+    """
+    Return a shared ViewportMapLoader for the given provider type.
+    The cache persists for the entire app session — reopening the map dialog
+    reuses the same loader and serves cached viewport data instantly.
+
+    Args:
+        provider_key: Unique key per data provider type (e.g. class name).
+        map_service: MapServiceAPI instance with updated auth token.
+        cache_max_age_minutes: Cache TTL (default 30 min for session cache).
+    """
+    global _viewport_loaders
+    if provider_key not in _viewport_loaders:
+        _viewport_loaders[provider_key] = ViewportMapLoader(
+            map_service=map_service,
+            cache_enabled=True,
+            cache_max_size=100,
+            cache_max_age_minutes=cache_max_age_minutes,
+            use_spatial_sampling=False,
+        )
+        logger.info(f"Session ViewportMapLoader created for provider: {provider_key}")
+    else:
+        if map_service:
+            _viewport_loaders[provider_key].map_service = map_service
+    return _viewport_loaders[provider_key]

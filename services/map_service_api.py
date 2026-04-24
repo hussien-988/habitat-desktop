@@ -9,7 +9,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import json
-
+import time
 from app.config import Config
 from services.api_client import TRRCMSApiClient, get_api_client, ApiConfig
 from services.map_service import GeoPoint, GeoPolygon, BuildingGeoData
@@ -33,7 +33,9 @@ class MapServiceAPI:
         "min_lon": Config.MAP_BOUNDS_MIN_LNG,
         "max_lon": Config.MAP_BOUNDS_MAX_LNG
     }
-
+    _resolved_address_cache = {}
+    _neighborhoods_by_code_cache = None
+    _divisions_service = None
     # Class-level caches for address lookups (loaded once)
     # Class-level attributes
 
@@ -180,10 +182,10 @@ class MapServiceAPI:
 
             buildings_data = self.data_provider.get_buildings_for_viewport(bounds=bounds, max_results=page_size)
 
-            buildings = []
-            for data in buildings_data:
-                building = self._convert_api_building_to_model(data)
-                buildings.append(building)
+            buildings = [
+                self._convert_api_building_to_model(data, resolve_address_names=False)
+                for data in buildings_data
+            ]
 
             logger.info(f"Loaded {len(buildings)} buildings")
             return buildings
@@ -386,13 +388,22 @@ class MapServiceAPI:
             قائمة بـ BuildingGeoData
         """
         try:
-            result = self.api.search_buildings(
-                neighborhood_code=neighborhood_code,
-                page_size=1000
-            )
+            all_buildings = []
+            page = 1
+            while True:
+                result = self.api.search_buildings(
+                    neighborhood_code=neighborhood_code,
+                    page_size=100,
+                    page=page
+                )
+                items = result.get("items", result.get("buildings", []))
+                all_buildings.extend(items)
+                total = result.get("totalCount", len(items))
+                if not items or len(all_buildings) >= total or page >= 10:
+                    break
+                page += 1
 
-            buildings = result.get("items", [])
-            return [self._convert_api_building_to_geodata(b) for b in buildings]
+            return [self._convert_api_building_to_geodata(b) for b in all_buildings]
 
         except Exception as e:
             logger.error(f"Error fetching buildings by neighborhood: {e}")
@@ -607,15 +618,43 @@ class MapServiceAPI:
         except Exception as e:
             logger.error(f"Error getting building with polygon: {e}", exc_info=True)
             return None
+    @classmethod
+    def _get_divisions_service_cached(cls):
+        if cls._divisions_service is None:
+            from services.divisions_service import DivisionsService
+            cls._divisions_service = DivisionsService()
+        return cls._divisions_service
 
     @classmethod
+    def _get_neighborhoods_by_code_cached(cls):
+        if cls._neighborhoods_by_code_cache is None:
+            cls._neighborhoods_by_code_cache = {}
+            try:
+                from services.api_client import get_api_client
+                api = get_api_client()
+                if api:
+                    neighborhoods = api.get_neighborhoods()
+                    for n in neighborhoods:
+                        code = n.get("neighborhoodCode")
+                        if code:
+                            cls._neighborhoods_by_code_cache[code] = n.get("nameArabic", "")
+            except Exception as e:
+                logger.warning(f"Failed to warm neighborhoods cache: {e}")
+
+        return cls._neighborhoods_by_code_cache
+    
+    
+    @classmethod
     def _resolve_address_names(cls, gov_code: str, dist_code: str, subdist_code: str,
-                                community_code: str, neighborhood_code: str) -> Dict[str, str]:
+                               community_code: str, neighborhood_code: str) -> Dict[str, str]:
         """
-        Resolve address names from codes.
-        Uses DivisionsService (API-first) for admin divisions,
-        and API/JSON for neighborhood names.
+        Resolve address names from codes using cached lookups.
         """
+        cache_key = (gov_code, dist_code, subdist_code, community_code, neighborhood_code)
+
+        if cache_key in cls._resolved_address_cache:
+            return cls._resolved_address_cache[cache_key]
+
         result = {
             "governorate_name_ar": "",
             "district_name_ar": "",
@@ -623,11 +662,10 @@ class MapServiceAPI:
             "community_name_ar": "",
             "neighborhood_name_ar": ""
         }
-
-        # Resolve admin divisions via DivisionsService (API-first with JSON fallback)
+        addr_perf_start = time.perf_counter()
+        # Resolve admin divisions via cached singleton service
         try:
-            from services.divisions_service import DivisionsService
-            service = DivisionsService()
+            service = cls._get_divisions_service_cached()
 
             if gov_code:
                 _, name_ar = service.get_governorate_name(gov_code)
@@ -647,24 +685,19 @@ class MapServiceAPI:
 
         except Exception as e:
             logger.warning(f"Error resolving admin division names: {e}")
-
-        # Resolve neighborhood name via API
+        
+        # Resolve neighborhood name from cache loaded once
         if neighborhood_code:
             try:
-                from services.api_client import get_api_client
-                api = get_api_client()
-                if api:
-                    neighborhoods = api.get_neighborhoods()
-                    for n in neighborhoods:
-                        if n.get("neighborhoodCode") == neighborhood_code:
-                            result["neighborhood_name_ar"] = n.get("nameArabic", "")
-                            break
+                neighborhoods_map = cls._get_neighborhoods_by_code_cached()
+                result["neighborhood_name_ar"] = neighborhoods_map.get(neighborhood_code, "")
             except Exception as e:
                 logger.warning(f"Failed to resolve neighborhood name: {e}")
-
+        
+        cls._resolved_address_cache[cache_key] = result
         return result
 
-    def _convert_api_building_to_model(self, data: Dict[str, Any]) -> Building:
+    def _convert_api_building_to_model(self, data: Dict[str, Any],resolve_address_names: bool = True) -> Building:
         """
         تحويل API response إلى Building model.
 
@@ -700,11 +733,13 @@ class MapServiceAPI:
         community_name = data.get("communityNameAr") or data.get("communityName", "")
         neighborhood_name = data.get("neighborhoodNameAr") or data.get("neighborhoodName") or data.get("nameArabic", "")
 
-        # If any name is missing, resolve from local JSON files
-        if not gov_name or not dist_name or not subdist_name or not neighborhood_name:
+        
+        # If any name is missing, resolve only when enabled
+        if resolve_address_names and (not gov_name or not dist_name or not subdist_name or not neighborhood_name):
             resolved = self._resolve_address_names(
                 gov_code, dist_code, subdist_code, community_code, neighborhood_code
             )
+
             gov_name = gov_name or resolved["governorate_name_ar"]
             dist_name = dist_name or resolved["district_name_ar"]
             subdist_name = subdist_name or resolved["subdistrict_name_ar"]

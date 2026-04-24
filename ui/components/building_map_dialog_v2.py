@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Building Map Dialog V2 - dialog for building selection via interactive map."""
-
+from cProfile import label
+import time
 import json
 from typing import Optional, List
 from ui.error_handler import ErrorHandler
@@ -9,7 +10,7 @@ from PyQt5.QtCore import QTimer, QThread, pyqtSignal
 from repositories.database import Database
 from controllers.building_controller import BuildingController, BuildingFilter
 from models.building import Building
-from ui.components.base_map_dialog import BaseMapDialog
+from ui.components.base_map_dialog import BaseMapDialog, _perf  # [PERF] diagnostic
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
 from utils.logger import get_logger
@@ -34,6 +35,7 @@ class _BuildingsWorker(QThread):
         self._center_lon = center_lon
         self._data_provider = data_provider
 
+
     def run(self):
         try:
             result = {}
@@ -53,13 +55,14 @@ class _BuildingsWorker(QThread):
                     result['view_buildings'] = [building] if building else []
             else:
                 try:
-                    delta_lat, delta_lng = 0.015, 0.02
+                    # ~15km radius to cover the full screen at zoom 15
+                    delta_lat, delta_lng = 0.15, 0.15
                     buildings = map_service.get_buildings_in_bbox(
                         north_east_lat=self._center_lat + delta_lat,
                         north_east_lng=self._center_lon + delta_lng,
                         south_west_lat=self._center_lat - delta_lat,
                         south_west_lng=self._center_lon - delta_lng,
-                        page_size=200
+                        page_size=2000
                     )
                 except Exception as e:
                     logger.warning(f"API map loading failed: {e}")
@@ -89,105 +92,51 @@ class _LayersWorker(QThread):
 
             result = {}
 
-            def _load_neighborhoods():
-                nh_geojson = None
-                bd_geojson = None
+            def _load_landmarks():
                 try:
                     from services.api_client import get_api_client
-                    api = get_api_client()
-                    if api and self._auth_token:
-                        from app.config import Config
-                        neighborhoods = api.get_neighborhoods_by_bounds(
-                            sw_lat=Config.MAP_BOUNDS_MIN_LAT,
-                            sw_lng=Config.MAP_BOUNDS_MIN_LNG,
-                            ne_lat=Config.MAP_BOUNDS_MAX_LAT,
-                            ne_lng=Config.MAP_BOUNDS_MAX_LNG,
-                        )
-                        if neighborhoods:
-                            import re
-                            features = []
-                            for n in neighborhoods:
-                                wkt = n.get('boundaries') or n.get('boundary') or n.get('boundaryWkt') or ''
-                                coords = re.findall(r'([-\d.]+)\s+([-\d.]+)', wkt)
-                                if coords:
-                                    lngs = [float(c[0]) for c in coords]
-                                    lats = [float(c[1]) for c in coords]
-                                    center = (sum(lats)/len(lats), sum(lngs)/len(lngs))
-                                    features.append({
-                                        "type": "Feature",
-                                        "properties": {
-                                            "code": n.get('neighborhoodCode') or n.get('code', ''),
-                                            "center_lat": center[0], "center_lng": center[1],
-                                            "name_ar": n.get('nameArabic') or n.get('name_ar', '')
-                                        },
-                                        "geometry": None
-                                    })
-                            nh_geojson = json.dumps(
-                                {"type": "FeatureCollection", "features": features}
-                            )
-                except Exception as e:
-                    logger.warning(f"Could not load neighborhoods: {e}")
-
-                try:
-                    from services import boundary_service
-                    if boundary_service.is_available('neighbourhoods'):
-                        raw = boundary_service.get('neighbourhoods')
-                        if raw:
-                            boundary_data = json.loads(raw)
-                            boundary_data['features'] = [
-                                f for f in boundary_data['features']
-                                if f.get('properties', {}).get('ADM1_PCODE') == 'SY02'
-                            ]
-                            bd_geojson = json.dumps(boundary_data, ensure_ascii=False)
-                except Exception as e:
-                    logger.warning(f"Failed to load boundaries: {e}")
-
-                return nh_geojson, bd_geojson
-
-            def _load_landmarks_streets():
-                lm_json = None
-                st_json = None
-                try:
-                    from services.api_client import get_api_client
-                    from services.map_utils import normalize_landmark, normalize_street
+                    from services.map_utils import normalize_landmark
                     from app.config import Config
                     api = get_api_client()
-                    sw_lat = Config.MAP_BOUNDS_MIN_LAT
-                    sw_lng = Config.MAP_BOUNDS_MIN_LNG
-                    ne_lat = Config.MAP_BOUNDS_MAX_LAT
-                    ne_lng = Config.MAP_BOUNDS_MAX_LNG
-
-                    landmarks = api.get_landmarks_for_map(
-                        south_west_lat=sw_lat, south_west_lng=sw_lng,
-                        north_east_lat=ne_lat, north_east_lng=ne_lng
+                    items = api.get_landmarks_for_map(
+                        south_west_lat=Config.MAP_BOUNDS_MIN_LAT,
+                        south_west_lng=Config.MAP_BOUNDS_MIN_LNG,
+                        north_east_lat=Config.MAP_BOUNDS_MAX_LAT,
+                        north_east_lng=Config.MAP_BOUNDS_MAX_LNG
                     )
-                    if landmarks and isinstance(landmarks, list):
-                        landmarks = [normalize_landmark(lm) for lm in landmarks]
-                        lm_json = json.dumps(landmarks, ensure_ascii=False)
-                        logger.info(f"Loaded {len(landmarks)} landmarks for map")
-
-                    streets = api.get_streets_for_map(
-                        south_west_lat=sw_lat, south_west_lng=sw_lng,
-                        north_east_lat=ne_lat, north_east_lng=ne_lng
-                    )
-                    if streets and isinstance(streets, list):
-                        streets = [normalize_street(s) for s in streets]
-                        st_json = json.dumps(streets, ensure_ascii=False)
-                        logger.info(f"Loaded {len(streets)} streets for map")
+                    if items and isinstance(items, list):
+                        logger.info(f"Loaded {len(items)} landmarks for map")
+                        return json.dumps([normalize_landmark(lm) for lm in items], ensure_ascii=False)
                 except Exception as e:
-                    logger.warning(f"Failed to load landmarks/streets: {e}")
+                    logger.warning(f"Failed to load landmarks: {e}")
+                return None
 
-                return lm_json, st_json
+            def _load_streets():
+                try:
+                    from services.api_client import get_api_client
+                    from services.map_utils import normalize_street
+                    from app.config import Config
+                    api = get_api_client()
+                    items = api.get_streets_for_map(
+                        south_west_lat=Config.MAP_BOUNDS_MIN_LAT,
+                        south_west_lng=Config.MAP_BOUNDS_MIN_LNG,
+                        north_east_lat=Config.MAP_BOUNDS_MAX_LAT,
+                        north_east_lng=Config.MAP_BOUNDS_MAX_LNG
+                    )
+                    if items and isinstance(items, list):
+                        logger.info(f"Loaded {len(items)} streets for map")
+                        return json.dumps([normalize_street(s) for s in items], ensure_ascii=False)
+                except Exception as e:
+                    logger.warning(f"Failed to load streets: {e}")
+                return None
 
             with ThreadPoolExecutor(max_workers=2) as executor:
-                f_nh = executor.submit(_load_neighborhoods)
-                f_ls = executor.submit(_load_landmarks_streets)
+                f_lm = executor.submit(_load_landmarks)
+                f_st = executor.submit(_load_streets)
 
-                nh_geojson, bd_geojson = f_nh.result()
-                lm_json, st_json = f_ls.result()
+                lm_json = f_lm.result()
+                st_json = f_st.result()
 
-            result['neighborhoods_geojson'] = nh_geojson
-            result['boundaries_geojson'] = bd_geojson
             result['landmarks_json'] = lm_json
             result['streets_json'] = st_json
 
@@ -276,7 +225,7 @@ class _SearchWorker(QThread):
                     if self._auth_token:
                         api.set_access_token(self._auth_token)
                     response = api.search_buildings(
-                        neighborhood_code=match["code"], page_size=200
+                        neighborhood_code=match["code"], page_size=100
                     )
                     buildings_data = response.get('buildings', response.get('data', []))
                     lats, lons = [], []
@@ -330,7 +279,7 @@ class _SearchWorker(QThread):
 
 class BuildingMapDialog(BaseMapDialog):
     """Dialog for selecting a single building by clicking on map."""
-
+    
     def __init__(
         self,
         db: Database,
@@ -350,6 +299,12 @@ class BuildingMapDialog(BaseMapDialog):
         self._selected_building_id = selected_building_id
         self._is_view_only = read_only or bool(selected_building_id)  # Support explicit read_only
         self._buildings_cache = []  # Cache loaded buildings for quick lookup
+
+        # Subclass hooks (preserve if subclass set them before super().__init__)
+        # Use __dict__.get to avoid PyQt's __getattr__ before Qt C++ is initialized
+        self._map_data_provider = self.__dict__.get('_map_data_provider', None)
+        self._enable_multiselect_in_map = self.__dict__.get('_enable_multiselect_in_map', False)
+        self._initial_zoom = self.__dict__.get('_initial_zoom', None)
 
         # Use provided auth token first, fallback to parent window
         self._auth_token = auth_token
@@ -394,7 +349,6 @@ class BuildingMapDialog(BaseMapDialog):
             enable_viewport_loading=True,
             parent=parent
         )
-
         # Restore auth token after BaseMapDialog.__init__
         self._auth_token = temp_auth_token
         logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
@@ -418,6 +372,30 @@ class BuildingMapDialog(BaseMapDialog):
         self._page_loaded = False
         self._pending_layers_data = None
         self._pending_buildings_data = None
+
+        # Pre-compute initial center for use in prefetch and _start_map_load
+        from ui.constants.map_constants import MapConstants as _MC
+        self._initial_center_lat = _MC.DEFAULT_CENTER_LAT
+        self._initial_center_lon = _MC.DEFAULT_CENTER_LON
+        self._has_building_center = False
+        if self._is_view_only and self._fallback_building:
+            fb = self._fallback_building
+            if fb.latitude is not None and fb.longitude is not None:
+                self._initial_center_lat = fb.latitude
+                self._initial_center_lon = fb.longitude
+                self._has_building_center = True
+            elif fb.geo_location:
+                from services.geojson_converter import GeoJSONConverter
+                _geo, _ = GeoJSONConverter._parse_geo_location(fb.geo_location)
+                if _geo:
+                    _pt = _geo if _geo.get('type') == 'Point' else GeoJSONConverter._calculate_centroid(_geo)
+                    if _pt and len(_pt.get('coordinates', [])) >= 2:
+                        self._initial_center_lon = _pt['coordinates'][0]
+                        self._initial_center_lat = _pt['coordinates'][1]
+                        self._has_building_center = True
+
+        # Start buildings fetch immediately (parallel with HTML generation)
+        QTimer.singleShot(0, self._prefetch_buildings_early)
         QTimer.singleShot(50, self._start_map_load)
 
     def _start_map_load(self):
@@ -428,16 +406,13 @@ class BuildingMapDialog(BaseMapDialog):
         tile_url = get_tile_server_url()
         logger.info(f"Map tile server URL: {tile_url}")
 
-        center_lat = MapConstants.DEFAULT_CENTER_LAT
-        center_lon = MapConstants.DEFAULT_CENTER_LON
-        zoom = 15
+        center_lat = self._initial_center_lat or MapConstants.DEFAULT_CENTER_LAT
+        center_lon = self._initial_center_lon or MapConstants.DEFAULT_CENTER_LON
+        zoom = self._initial_zoom or 15
 
-        # For view-only with fallback building, center on it
-        if self._is_view_only and self._fallback_building:
-            fb = self._fallback_building
-            if fb.latitude is not None and fb.longitude is not None:
-                center_lat, center_lon = fb.latitude, fb.longitude
-                zoom = 18
+        # For view-only with a located building, zoom in close
+        if self._is_view_only and getattr(self, '_has_building_center', False):
+            zoom = 18
 
         # Show map immediately with empty buildings
         empty_geojson = '{"type":"FeatureCollection","features":[]}'
@@ -452,13 +427,15 @@ class BuildingMapDialog(BaseMapDialog):
                 show_legend=False,
                 show_layer_control=False,
                 enable_selection=(not self._is_view_only),
-                enable_viewport_loading=(not self._is_view_only),
+                enable_multiselect=self._enable_multiselect_in_map,
+                enable_viewport_loading=True,
                 enable_drawing=False,
                 neighborhoods_geojson=None,
                 landmarks_json='[]',
                 streets_json='[]',
                 boundaries_geojson=None,
                 boundary_level='neighbourhoods',
+                max_selection=getattr(self, '_max_selection', None),
             )
             if not html:
                 logger.error("generate_leaflet_html returned empty HTML")
@@ -474,39 +451,68 @@ class BuildingMapDialog(BaseMapDialog):
         if self.web_view:
             self.web_view.loadFinished.connect(self._on_page_ready)
 
-        # Show loading overlay on map
-        if self.web_view:
-            js_overlay = """
-            (function() {
-                var overlay = document.createElement('div');
-                overlay.id = 'loadingOverlay';
-                overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
-                    'background:rgba(27,43,77,0.85);color:white;padding:8px 20px;border-radius:20px;' +
-                    'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;';
-                overlay.textContent = '{tr("dialog.map.loading_buildings")}';
-                document.body.appendChild(overlay);
-            })();
-            """
-            QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
+        # Build overlay JS now (injected in _on_page_ready, not via timer)
+        loading_text = tr("dialog.map.loading_buildings") or "جاري تحميل المباني..."
+        self._js_loading_overlay = f"""
+        (function() {{
+            if (document.getElementById('loadingOverlay')) return;
+            var overlay = document.createElement('div');
+            overlay.id = 'loadingOverlay';
+            overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
+                'background:rgba(27,43,77,0.92);color:white;padding:8px 20px;border-radius:20px;' +
+                'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;' +
+                'display:flex;align-items:center;gap:8px;';
+            overlay.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></span>' +
+                '<span>{loading_text}</span>';
+            if (!document.getElementById('mapSpinStyle')) {{
+                var s = document.createElement('style');
+                s.id = 'mapSpinStyle';
+                s.textContent = '@keyframes spin{{to{{transform:rotate(360deg)}}}}';
+                document.head.appendChild(s);
+            }}
+            document.body.appendChild(overlay);
+        }})();
+        """
 
+        # Buildings worker started early in _prefetch_buildings_early; start here only if missed
+        if self._buildings_worker is None:
+            self._buildings_worker = _BuildingsWorker(
+                self._auth_token, self._selected_building_id,
+                self._is_view_only, self._fallback_building,
+                center_lat, center_lon,
+                data_provider=self._map_data_provider,
+            )
+            self._buildings_worker.finished.connect(self._on_buildings_ready)
+            self._buildings_worker.error.connect(self._on_map_data_error)
+            self._buildings_worker.start()
+
+        # _LayersWorker is deferred to _on_page_ready — its CPU-bound JSON
+        # parsing (neighborhoods 2.9MB + normalize_landmark/normalize_street
+        # per feature) holds the Python GIL and starves Qt's event loop
+        # during the critical setHtml -> loadFinished window.
+
+    def _prefetch_buildings_early(self):
+        """Start fetching buildings immediately on dialog open, before HTML is ready."""
+        if self._is_view_only or self._buildings_worker is not None:
+            return
         self._buildings_worker = _BuildingsWorker(
             self._auth_token, self._selected_building_id,
             self._is_view_only, self._fallback_building,
-            center_lat, center_lon
+            self._initial_center_lat, self._initial_center_lon,
+            data_provider=self._map_data_provider,
         )
         self._buildings_worker.finished.connect(self._on_buildings_ready)
         self._buildings_worker.error.connect(self._on_map_data_error)
         self._buildings_worker.start()
 
-        self._layers_worker = _LayersWorker(self._auth_token)
-        self._layers_worker.finished.connect(self._on_layers_ready)
-        self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
-        self._layers_worker.start()
-
     def _on_map_data_error(self, error_msg):
-        """Handle map data loading error."""
+        """Handle map data loading error — show banner for network issues, modal for others."""
         logger.error(f"Map data loading failed: {error_msg}")
-        ErrorHandler.show_error(self, f"{tr('dialog.map.error_loading_map')}\n{error_msg}", tr("dialog.map.error_title"))
+        is_network = any(k in error_msg for k in ("SSL", "ConnectionError", "Timeout", "Max retries", "Connection refused"))
+        if is_network and self.web_view and self._page_loaded:
+            self._on_map_network_error("network")
+        else:
+            ErrorHandler.show_error(self, f"{tr('dialog.map.error_loading_map')}\n{error_msg}", tr("dialog.map.error_title"))
 
     def _on_buildings_ready(self, data):
         """Inject buildings into the already-visible map, or buffer if page not loaded."""
@@ -517,7 +523,11 @@ class BuildingMapDialog(BaseMapDialog):
         self._inject_buildings(data)
 
     def _inject_buildings(self, data):
-        """Inject buildings GeoJSON into the map page via JavaScript."""
+        """Inject buildings GeoJSON into the map via the shared updateBuildingsOnMap JS.
+
+        Unified path: Path A (initial load) and Path B (viewport reload) both render
+        through `updateBuildingsOnMap`, using the same cluster/layer variables.
+        """
         try:
             buildings_geojson = data.get('buildings_geojson', '{"type":"FeatureCollection","features":[]}')
 
@@ -525,23 +535,26 @@ class BuildingMapDialog(BaseMapDialog):
                 self._buildings_cache = data['buildings_list']
                 logger.info(f"Cached {len(self._buildings_cache)} buildings for selection")
 
-            geojson_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
-
             focus_building_id = None
             center_lat = center_lon = None
 
+            # View-only: merge the selected building into the GeoJSON so it appears even outside the bbox
             if self._is_view_only and self._selected_building_id:
                 buildings = data.get('view_buildings', [])
                 if buildings:
                     selected_geojson = GeoJSONConverter.buildings_to_geojson(buildings, force_points=True)
-                    selected_data = json.loads(selected_geojson)
-                    if selected_data.get('features'):
-                        existing_ids = {f.get('properties', {}).get('building_id') for f in geojson_data.get('features', [])}
-                        for feature in selected_data['features']:
-                            bid = feature.get('properties', {}).get('building_id')
-                            if bid not in existing_ids:
-                                geojson_data['features'].append(feature)
-                        buildings_geojson = json.dumps(geojson_data)
+                    try:
+                        selected_data = json.loads(selected_geojson)
+                        base_data = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
+                        if selected_data.get('features'):
+                            existing_ids = {f.get('properties', {}).get('building_id') for f in base_data.get('features', [])}
+                            for feature in selected_data['features']:
+                                bid = feature.get('properties', {}).get('building_id')
+                                if bid not in existing_ids:
+                                    base_data['features'].append(feature)
+                            buildings_geojson = json.dumps(base_data)
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Failed to merge selected building into geojson: {e}")
 
                 focus_building = next(
                     (b for b in buildings
@@ -557,67 +570,42 @@ class BuildingMapDialog(BaseMapDialog):
                     elif focus_building.geo_location:
                         geometry, _ = GeoJSONConverter._parse_geo_location(focus_building.geo_location)
                         if geometry:
-                            centroid = GeoJSONConverter._calculate_centroid(geometry)
-                            if centroid:
-                                center_lon, center_lat = centroid['coordinates']
+                            if geometry.get('type') == 'Point':
+                                coords = geometry.get('coordinates', [])
+                                if len(coords) >= 2:
+                                    center_lon, center_lat = coords[0], coords[1]
+                            else:
+                                centroid = GeoJSONConverter._calculate_centroid(geometry)
+                                if centroid:
+                                    center_lon, center_lat = centroid['coordinates']
                     focus_building_id = self._selected_building_id
 
-            safe_geojson = json.dumps(buildings_geojson) if isinstance(buildings_geojson, str) else json.dumps(json.dumps(buildings_geojson))
+            if isinstance(buildings_geojson, dict):
+                buildings_geojson = json.dumps(buildings_geojson)
+
+            try:
+                _parsed = json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else buildings_geojson
+                _has_buildings = bool(_parsed.get('features'))
+            except Exception:
+                _has_buildings = False
+
             js_inject = f"""
             (function() {{
                 var overlay = document.getElementById('loadingOverlay');
                 if (overlay) overlay.remove();
 
-                var geojsonStr = {safe_geojson};
-                var geojsonData = (typeof geojsonStr === 'string') ? JSON.parse(geojsonStr) : geojsonStr;
-                if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
-                    buildingsLayer.clearLayers();
-                    L.geoJSON(geojsonData, buildingsLayer.options).eachLayer(function(layer) {{
-                        buildingsLayer.addLayer(layer);
-                    }});
-                }} else if (typeof L !== 'undefined' && typeof map !== 'undefined') {{
-                    window.buildingsLayer = L.geoJSON(geojsonData, {{
-                        style: function(feature) {{
-                            return {{color: '#1a73e8', weight: 2, fillOpacity: 0.3}};
-                        }},
-                        onEachFeature: function(feature, layer) {{
-                            if (feature.properties && feature.properties.building_id) {{
-                                layer.on('click', function() {{
-                                    if (typeof bridge !== 'undefined') {{
-                                        bridge.onBuildingSelected(feature.properties.building_id);
-                                    }}
-                                }});
-                            }}
-                        }}
-                    }}).addTo(map);
-                }}
-                console.log('Buildings injected: ' + (geojsonData.features ? geojsonData.features.length : 0));
-
-                // Attach multiselect handlers to newly injected buildings
-                if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {{
-                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
-                        buildingsLayer.eachLayer(function(layer) {{
-                            window.attachMultiselectHandler(layer);
-                        }});
+                if (typeof window.updateBuildingsOnMap === 'function') {{
+                    window.updateBuildingsOnMap({buildings_geojson});
+                    if ({str(_has_buildings).lower()}) {{
+                        window.initialBuildingsLoaded = true;
                     }}
-                    console.log('Multi-select handlers attached to injected buildings');
+                }} else {{
+                    console.warn('updateBuildingsOnMap not available yet');
                 }}
             }})();
             """
             if self.web_view:
                 self.web_view.page().runJavaScript(js_inject)
-
-                update_count_js = """
-                (function() {
-                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {
-                        var count = buildingsLayer.getLayers().length;
-                        if (typeof window.updateBuildingCount === 'function') {
-                            window.updateBuildingCount(count);
-                        }
-                    }
-                })();
-                """
-                QTimer.singleShot(500, lambda: self.web_view.page().runJavaScript(update_count_js))
 
             if self._is_view_only and focus_building_id and center_lat and center_lon:
                 self._fly_to(center_lat, center_lon, 18)
@@ -631,12 +619,24 @@ class BuildingMapDialog(BaseMapDialog):
         """Called when HTML page finishes loading - inject any buffered data."""
         if success:
             self._page_loaded = True
+            # Show loading overlay now (page DOM is ready)
+            if not self._is_view_only and self.web_view and hasattr(self, '_js_loading_overlay'):
+                self.web_view.page().runJavaScript(self._js_loading_overlay)
             if self._pending_buildings_data:
                 self._inject_buildings(self._pending_buildings_data)
                 self._pending_buildings_data = None
             if self._pending_layers_data:
                 self._inject_layers(self._pending_layers_data)
                 self._pending_layers_data = None
+
+            # Start layers worker now that the page is visible. Running it
+            # earlier caused its JSON parsing / normalize_* loops to hold the
+            # GIL and starve Qt/Chromium during the critical render window.
+            if self._layers_worker is None:
+                self._layers_worker = _LayersWorker(self._auth_token)
+                self._layers_worker.finished.connect(self._on_layers_ready)
+                self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
+                self._layers_worker.start()
 
     def _on_layers_ready(self, data):
         """Inject landmarks and streets, or buffer if page not loaded yet."""
@@ -672,64 +672,52 @@ class BuildingMapDialog(BaseMapDialog):
                 map.whenReady(function() {{
                     console.log('Map ready, focusing on building {building_id}');
 
-                    // Find and enhance building marker
-                    if (typeof buildingsLayer !== 'undefined' && buildingsLayer) {{
-                        buildingsLayer.eachLayer(function(layer) {{
+                    // Find and enhance building marker (search cluster or fallback layer)
+                    var _searchLayer = (typeof currentMarkersCluster !== 'undefined' && currentMarkersCluster)
+                        ? currentMarkersCluster
+                        : (typeof buildingsLayer !== 'undefined' ? buildingsLayer : null);
+                    if (_searchLayer) {{
+                        _searchLayer.eachLayer(function(layer) {{
                             if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
                                 console.log('Found building marker');
 
-                                // Enhanced marker for visibility
+                                // Show pre-selected building: large blue pin + permanent ID tooltip, no popup
                                 if (layer.setIcon) {{
-                                    // FIX: Convert status from int to string key if needed
-                                    var rawStatus = layer.feature.properties.status || 1;
-                                    var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
-                                        ? getStatusKey(rawStatus)
-                                        : (typeof rawStatus === 'string' ? rawStatus : 'intact');
-
-                                    var statusColors = {{
-                                        'intact': '#28a745',
-                                        'minor_damage': '#ffc107',
-                                        'major_damage': '#fd7e14',
-                                        'severely_damaged': '#dc3545',
-                                        'destroyed': '#dc3545',
-                                        'under_construction': '#17a2b8',
-                                        'demolished': '#6c757d'
-                                    }};
-                                    var color = statusColors[status] || '#0072BC';
-
-                                    // Large icon: 2x size (72x108)
-                                    var largeIcon = L.divIcon({{
+                                    var largeBlueIcon = L.divIcon({{
                                         className: 'building-pin-icon-huge',
-                                        html: '<div style="width: 72px; height: 108px;">' +
+                                        html: '<div style="position:relative;width:72px;height:108px;' +
+                                              'filter:drop-shadow(0 4px 12px rgba(25,118,210,0.5));">' +
                                               '<svg width="72" height="108" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                                               '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
-                                              'fill="' + color + '" stroke="#fff" stroke-width="3"/>' +
-                                              '<circle cx="12" cy="12" r="5" fill="#fff"/>' +
+                                              'fill="#1976D2" stroke="#64B5F6" stroke-width="2"/>' +
+                                              '<circle cx="12" cy="12" r="5" fill="#64B5F6"/>' +
                                               '</svg></div>',
                                         iconSize: [72, 108],
                                         iconAnchor: [36, 108],
                                         popupAnchor: [0, -108]
                                     }});
-                                    layer.setIcon(largeIcon);
+                                    layer.setIcon(largeBlueIcon);
 
-                                    // Bring marker to front (above all other buildings)
                                     if (layer.setZIndexOffset) {{
-                                        layer.setZIndexOffset(10000);  // Very high z-index
+                                        layer.setZIndexOffset(10000);
                                     }}
-
-                                    console.log('Enhanced icon set with color: ' + color);
                                 }}
 
-                                // Bring layer to front
                                 if (layer.bringToFront) {{
                                     layer.bringToFront();
                                 }}
 
-                                // Open popup immediately (no delay!)
-                                setTimeout(function() {{
-                                    layer.openPopup();
-                                    console.log('Popup opened');
-                                }}, 100);  // Minimal delay for rendering
+                                // Permanent tooltip showing building ID — no popup
+                                var _displayId = layer.feature.properties.building_id_display
+                                    || layer.feature.properties.building_id
+                                    || '{building_id}';
+                                layer.unbindTooltip();
+                                layer.bindTooltip(_displayId, {{
+                                    permanent: true,
+                                    direction: 'top',
+                                    offset: [0, -112],
+                                    className: 'building-id-tooltip'
+                                }}).openTooltip();
                             }}
                         }});
                     }}
@@ -752,13 +740,15 @@ class BuildingMapDialog(BaseMapDialog):
                     duration: 0.8
                 }});
 
-                // Find and open popup
-                if (typeof buildingsLayer !== 'undefined') {{
-                    buildingsLayer.eachLayer(function(layer) {{
+                // Find and open popup (search cluster or fallback layer)
+                var _searchLayer2 = (typeof currentMarkersCluster !== 'undefined' && currentMarkersCluster)
+                    ? currentMarkersCluster
+                    : (typeof buildingsLayer !== 'undefined' ? buildingsLayer : null);
+                if (_searchLayer2) {{
+                    _searchLayer2.eachLayer(function(layer) {{
                         if (layer.feature && layer.feature.properties.building_id === '{building_id}') {{
                             // Enhanced marker for visibility
                             if (layer.setIcon) {{
-                                // FIX: Convert status from int to string key if needed
                                 var rawStatus = layer.feature.properties.status || 1;
                                 var status = (typeof rawStatus === 'number' && typeof getStatusKey === 'function')
                                     ? getStatusKey(rawStatus)
@@ -790,7 +780,6 @@ class BuildingMapDialog(BaseMapDialog):
                                 layer.setIcon(largeIcon);
                             }}
 
-                            // Open popup
                             setTimeout(function() {{
                                 layer.openPopup();
                                 console.log('Popup opened');
@@ -1008,6 +997,7 @@ class BuildingMapDialog(BaseMapDialog):
         return self._selected_building
 
 
+
 def show_building_map_dialog(
     db: Database,
     selected_building_id: Optional[str] = None,
@@ -1036,12 +1026,27 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
     def __init__(self, db: Database, auth_token: Optional[str] = None, parent=None,
                  center_lat: Optional[float] = None, center_lon: Optional[float] = None,
                  initial_zoom: Optional[int] = None,
-                 already_selected_ids: Optional[list] = None):
+                 already_selected_ids: Optional[list] = None,
+                 max_selection: Optional[int] = None):
         self._multi_selected_buildings: List[Building] = []
         self._already_selected_ids = set(already_selected_ids or [])
+        # [UNIFIED-DIALOG] None = unlimited (Field Work), 1 = single-select replace mode (Claims).
+        self._max_selection = max_selection
+
+        # Hooks consumed by parent __init__ / _start_map_load (see BuildingMapDialog)
         self._initial_center_lat = center_lat
         self._initial_center_lon = center_lon
         self._initial_zoom = initial_zoom
+        self._enable_multiselect_in_map = True
+
+        # FieldAssignmentMapProvider gives hasActiveAssignment + isLocked
+        try:
+            from services.map_data_provider import FieldAssignmentMapProvider
+            from services.api_client import get_api_client
+            self._map_data_provider = FieldAssignmentMapProvider(get_api_client())
+        except Exception as e:
+            logger.warning(f"Could not create FieldAssignmentMapProvider: {e}")
+            self._map_data_provider = None
 
         # Invalidate building cache on open so is_assigned status is fresh from API
         try:
@@ -1061,99 +1066,16 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
             show_multiselect_ui=True,
         )
 
-        # Use FieldAssignmentMapProvider for assignment data (hasActiveAssignment, isLocked)
-        try:
-            from services.map_data_provider import FieldAssignmentMapProvider
-            from services.api_client import get_api_client
-            from services.map_service_api import MapServiceAPI
-            fa_provider = FieldAssignmentMapProvider(get_api_client())
-            fa_service = MapServiceAPI(data_provider=fa_provider)
-            if self._auth_token:
-                fa_service.set_auth_token(self._auth_token)
-            if self._viewport_loader:
+        # Wire the same provider into the viewport loader so viewport pans also carry assignment data
+        if self._map_data_provider is not None and self._viewport_loader:
+            try:
+                from services.map_service_api import MapServiceAPI
+                fa_service = MapServiceAPI(data_provider=self._map_data_provider)
+                if self._auth_token:
+                    fa_service.set_auth_token(self._auth_token)
                 self._viewport_loader.map_service = fa_service
-        except Exception as e:
-            logger.warning(f"Could not set FieldAssignmentMapProvider: {e}")
-
-    def _start_map_load(self):
-        """Override to enable multiselect in the generated HTML."""
-        from services.tile_server_manager import get_tile_server_url
-        from ui.constants.map_constants import MapConstants
-
-        tile_url = get_tile_server_url()
-        center_lat = getattr(self, '_initial_center_lat', None) or MapConstants.DEFAULT_CENTER_LAT
-        center_lon = getattr(self, '_initial_center_lon', None) or MapConstants.DEFAULT_CENTER_LON
-        zoom = getattr(self, '_initial_zoom', None) or 15
-
-        empty_geojson = '{"type":"FeatureCollection","features":[]}'
-        try:
-            html = generate_leaflet_html(
-                tile_server_url=tile_url.rstrip('/'),
-                buildings_geojson=empty_geojson,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                zoom=zoom,
-                max_zoom=20,
-                show_legend=False,
-                show_layer_control=False,
-                enable_selection=True,
-                enable_multiselect=True,
-                enable_viewport_loading=True,
-                enable_drawing=False,
-                neighborhoods_geojson=None,
-                landmarks_json='[]',
-                streets_json='[]',
-                boundaries_geojson=None,
-                boundary_level='neighbourhoods',
-            )
-            if not html:
-                logger.error("generate_leaflet_html returned empty HTML")
-                self._show_map_error(tr("dialog.map.map_load_failed"))
-                return
-            self.load_map_html(html)
-        except Exception as e:
-            logger.error(f"Failed to generate map HTML: {e}", exc_info=True)
-            self._show_map_error(tr("dialog.map.map_load_failed"))
-            return
-
-        if self.web_view:
-            self.web_view.loadFinished.connect(self._on_page_ready)
-
-        if self.web_view:
-            js_overlay = (
-                "(function() {"
-                "var overlay = document.createElement('div');"
-                "overlay.id = 'loadingOverlay';"
-                "overlay.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +"
-                "'background:rgba(27,43,77,0.85);color:white;padding:8px 20px;border-radius:20px;' +"
-                "'font-size:13px;font-family:Arial;z-index:9999;direction:rtl;';"
-                f"overlay.textContent = '{tr('dialog.map.loading_buildings')}';"
-                "document.body.appendChild(overlay);"
-                "})();"
-            )
-            QTimer.singleShot(300, lambda: self.web_view.page().runJavaScript(js_overlay))
-
-        fa_provider = None
-        try:
-            from services.map_data_provider import FieldAssignmentMapProvider
-            from services.api_client import get_api_client
-            fa_provider = FieldAssignmentMapProvider(get_api_client())
-        except Exception:
-            pass
-
-        self._buildings_worker = _BuildingsWorker(
-            self._auth_token, None, False, None,
-            center_lat, center_lon,
-            data_provider=fa_provider
-        )
-        self._buildings_worker.finished.connect(self._on_buildings_ready)
-        self._buildings_worker.error.connect(self._on_map_data_error)
-        self._buildings_worker.start()
-
-        self._layers_worker = _LayersWorker(self._auth_token)
-        self._layers_worker.finished.connect(self._on_layers_ready)
-        self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
-        self._layers_worker.start()
+            except Exception as e:
+                logger.warning(f"Could not wire FieldAssignmentMapProvider to viewport loader: {e}")
 
     def _on_buildings_multiselected(self, building_ids_json: str):
         """Override: process batch building IDs from multiselect JS."""
@@ -1189,6 +1111,20 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
 
         self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
         logger.info(f"Multi-select: {len(self._multi_selected_buildings)} buildings selected")
+
+        # [UNIFIED-DIALOG] In single-select mode, show the chosen building's ID in the
+        # counter label. Building ID stays in Latin digits regardless of UI language;
+        # Qt's bidi rendering places it on the correct side based on the label's
+        # layoutDirection (Arabic \u2192 left of RTL label, English \u2192 right of LTR label).
+        if self._max_selection == 1 and hasattr(self, 'selection_counter_label'):
+            if self._multi_selected_buildings:
+                b = self._multi_selected_buildings[0]
+                display = getattr(b, 'building_id_display', None) or b.building_id or '\u2014'
+                self.selection_counter_label.setText(
+                    f"{tr('dialog.map.selected_building_label')}: ‪{display}‬"
+                )
+            else:
+                self.selection_counter_label.setText(tr("dialog.map.select_building_prompt"))
 
     def _find_building_in_cache(self, building_id: str) -> Optional[Building]:
         """Find building in caches or fetch from API."""
@@ -1241,14 +1177,23 @@ def show_multiselect_map_dialog(
     center_lon: Optional[float] = None,
     initial_zoom: Optional[int] = None,
     already_selected_ids: Optional[list] = None,
+    max_selection: Optional[int] = None,
 ) -> Optional[List[Building]]:
-    """Show multi-select building map dialog. Returns list of buildings or None."""
+    """Show the unified building map dialog.
+
+    Args:
+        max_selection: None (default) = multi-select (Field Work mode).
+                       1 = single-select replace mode (Claims mode).
+
+    Returns list of selected buildings, or None if cancelled.
+    """
     dialog = MultiSelectBuildingMapDialog(
         db, auth_token, parent,
         center_lat=center_lat,
         center_lon=center_lon,
         initial_zoom=initial_zoom,
         already_selected_ids=already_selected_ids,
+        max_selection=max_selection,
     )
     result = dialog.exec_()
 
@@ -1258,3 +1203,5 @@ def show_multiselect_map_dialog(
             return selected
 
     return None
+
+

@@ -35,6 +35,10 @@ class DivisionsService:
         if self._initialized:
             return
         self._initialized = True
+        self._governorates_cache = None
+        self._districts_cache = {}
+        self._subdistricts_cache = {}
+        self._communities_cache = {}
 
     def _get_api_client(self):
         """Get API client if available."""
@@ -46,39 +50,57 @@ class DivisionsService:
 
     def get_governorates(self) -> List[Tuple[str, str, str]]:
         """Get all governorates as [(code, name_en, name_ar)]."""
+        if self._governorates_cache is not None:
+            return self._governorates_cache
+
         api = self._get_api_client()
         items = api.get_governorates()
-        return [
+        self._governorates_cache = [
             (g.get("code", ""), g.get("nameEnglish", ""), g.get("nameArabic", ""))
             for g in items if g.get("isActive", True)
         ]
+        return self._governorates_cache
 
     def get_districts(self, gov_code: str) -> List[Tuple[str, str, str]]:
         """Get districts for a governorate as [(code, name_en, name_ar)]."""
+        if gov_code in self._districts_cache:
+            return self._districts_cache[gov_code]
+
         api = self._get_api_client()
         items = api.get_districts(governorate_code=gov_code)
-        return [
+        self._districts_cache[gov_code] = [
             (d.get("code", ""), d.get("nameEnglish", ""), d.get("nameArabic", ""))
             for d in items if d.get("isActive", True)
         ]
+        return self._districts_cache[gov_code]
 
     def get_subdistricts(self, gov_code: str, dist_code: str) -> List[Tuple[str, str, str]]:
         """Get subdistricts for a district as [(code, name_en, name_ar)]."""
+        cache_key = (gov_code, dist_code)
+        if cache_key in self._subdistricts_cache:
+            return self._subdistricts_cache[cache_key]
+
         api = self._get_api_client()
         items = api.get_sub_districts(
             governorate_code=gov_code, district_code=dist_code
         )
-        return [
+        self._subdistricts_cache[cache_key] = [
             (s.get("code", ""), s.get("nameEnglish", ""), s.get("nameArabic", ""))
             for s in items if s.get("isActive", True)
         ]
+        return self._subdistricts_cache[cache_key]
 
     def get_communities(self, gov_code: str, dist_code: str, subdist_code: str) -> List[Tuple[str, str, str]]:
         """Get communities for a subdistrict as [(code, name_en, name_ar)]."""
+        cache_key = (gov_code, dist_code, subdist_code)
+        if cache_key in self._communities_cache:
+            return self._communities_cache[cache_key]
+
         try:
             api = self._get_api_client()
             items = api.get_communities(
-                governorate_code=gov_code, district_code=dist_code,
+                governorate_code=gov_code,
+                district_code=dist_code,
                 sub_district_code=subdist_code
             )
             result = [
@@ -86,22 +108,26 @@ class DivisionsService:
                 for c in items if c.get("isActive", True)
             ]
             if result:
+                self._communities_cache[cache_key] = result
                 return result
         except Exception:
             pass
 
-        # Local fallback from populated places dataset
+    # Local fallback from populated places dataset
         try:
             from services import boundary_service
             places = boundary_service.get_places_list(admin3_pcode=subdist_code)
             if places:
-                return [
+                result = [
                     (p.get('pcode', ''), p.get('name_en', ''), p.get('name_ar', ''))
                     for p in places
                 ]
+                self._communities_cache[cache_key] = result
+                return result
         except Exception:
             pass
 
+        self._communities_cache[cache_key] = []
         return []
 
     def get_governorate_name(self, gov_code: str) -> Tuple[str, str]:
@@ -131,4 +157,3 @@ class DivisionsService:
             if code == comm_code:
                 return (name_en, name_ar)
         return ("", "")
-

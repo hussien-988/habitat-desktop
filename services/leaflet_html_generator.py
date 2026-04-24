@@ -7,7 +7,10 @@ including clustering, drawing tools, and viewport-based loading.
 """
 
 import json
+from pathlib import Path
 from typing import Dict, Optional
+
+from folium import TileLayer
 from utils.logger import get_logger
 from ui.constants.map_constants import MapConstants
 
@@ -20,6 +23,39 @@ class LeafletHTMLGenerator:
     # Import status colors from MapConstants
     STATUS_COLORS = MapConstants.STATUS_COLORS
     STATUS_LABELS_AR = MapConstants.STATUS_LABELS_AR
+
+    _assets_cache: Dict[str, str] = {}
+
+    @classmethod
+    def _load_asset(cls, filename: str) -> str:
+        """Read a leaflet asset file and cache it. Returns empty string on failure."""
+        if filename not in cls._assets_cache:
+            asset_path = Path(__file__).parent.parent / "assets" / "leaflet" / filename
+            try:
+                cls._assets_cache[filename] = asset_path.read_text(encoding='utf-8')
+            except Exception as e:
+                logger.warning(f"Failed to load asset {filename}: {e}")
+                cls._assets_cache[filename] = ""
+        return cls._assets_cache[filename]
+
+    @classmethod
+    def _get_qwebchannel_content(cls) -> str:
+        """Read qwebchannel.js from Qt resources and cache it."""
+        cache_key = '_qwebchannel'
+        if cache_key not in cls._assets_cache:
+            try:
+                from PyQt5.QtCore import QFile, QIODevice
+                f = QFile(":/qtwebchannel/qwebchannel.js")
+                if f.open(QIODevice.ReadOnly):
+                    cls._assets_cache[cache_key] = bytes(f.readAll()).decode('utf-8')
+                    f.close()
+                else:
+                    cls._assets_cache[cache_key] = ""
+                    logger.warning("Could not open qrc:///qtwebchannel/qwebchannel.js")
+            except Exception as e:
+                cls._assets_cache[cache_key] = ""
+                logger.warning(f"Failed to load qwebchannel.js: {e}")
+        return cls._assets_cache[cache_key]
 
     @staticmethod
     def generate(
@@ -48,6 +84,7 @@ class LeafletHTMLGenerator:
         places_json: str = None,  # JSON array of populated places for map labels
         landmarks_json: str = None,  # JSON array of landmarks for map overlay
         streets_json: str = None,  # JSON array of streets for map overlay
+        max_selection: Optional[int] = None,  # None=unlimited; 1=single-select replace mode
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -76,12 +113,30 @@ class LeafletHTMLGenerator:
         local_assets_url = get_local_server_url()
         _loading_text = _tr('page.map.loading_map')
 
-        drawing_css = f'<link rel="stylesheet" href="{local_assets_url}/leaflet-draw.css" />' if enable_drawing else ''
-        drawing_js = f'<script src="{local_assets_url}/leaflet-draw.js"></script>' if enable_drawing else ''
+        # [SIMPLIFY] Force-disable features the app no longer needs:
+        # drawing tools, boundary overlays, existing polygons, neighborhoods overlay, places labels.
+        # Buildings are always rendered as markers/clusters (not polygons).
+        enable_drawing = False
+        drawing_mode = 'point'
+        existing_polygons_geojson = None
+        neighborhoods_geojson = None
+        selected_neighborhood_code = None
+        boundaries_geojson = None
+        boundary_level = None
+        places_json = None
+
+        drawing_css = ''
+        drawing_js = ''
         clustering_css = f'''
-    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.css" />
-    <link rel="stylesheet" href="{local_assets_url}/MarkerCluster.Default.css" />'''
-        clustering_js = f'<script src="{local_assets_url}/leaflet.markercluster.js"></script>'
+    <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.css")}</style>
+    <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.Default.css")}</style>'''
+        clustering_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.markercluster.js")}</script>'
+        qwebchannel_content = LeafletHTMLGenerator._get_qwebchannel_content()
+        qwebchannel_tag = (
+            f'<script>{qwebchannel_content}</script>'
+            if qwebchannel_content else
+            '<script src="qrc:///qtwebchannel/qwebchannel.js"></script>'
+        )
 
         html = f'''
 <!DOCTYPE html>
@@ -90,13 +145,13 @@ class LeafletHTMLGenerator:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
-    <link rel="stylesheet" href="{local_assets_url}/leaflet.css" />
+    <style>{LeafletHTMLGenerator._load_asset("leaflet.css")}</style>
     {clustering_css}
     {drawing_css}
-    <script src="{local_assets_url}/leaflet.js"></script>
+    <script>{LeafletHTMLGenerator._load_asset("leaflet.js")}</script>
     {clustering_js}
     {drawing_js}
-    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    {qwebchannel_tag}
     {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing, enable_multiselect)}
 </head>
 <body>
@@ -131,7 +186,8 @@ class LeafletHTMLGenerator:
         places_json,
         landmarks_json,
         streets_json,
-        local_assets_url=local_assets_url
+        local_assets_url=local_assets_url,
+        max_selection=max_selection,
     )}
 </body>
 </html>
@@ -472,13 +528,11 @@ class LeafletHTMLGenerator:
         }}
 
         .building-pin-icon svg {{
-            transition: transform 0.2s ease-in-out;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            transition: transform 0.15s ease-in-out;
         }}
 
         .building-pin-icon:hover svg {{
             transform: scale(1.1);
-            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
         }}
 
         /* Polygon Styles */
@@ -494,6 +548,24 @@ class LeafletHTMLGenerator:
         {selection_styles}
         {drawing_styles}
         {multiselect_styles}
+
+        /* [UNIFIED-DIALOG] Building ID tooltip (shown on pin hover) */
+        .building-id-tooltip {{
+            background: rgba(30, 41, 59, 0.92) !important;
+            color: #F9FAFB !important;
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 4px 10px !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            direction: rtl !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+            white-space: nowrap !important;
+        }}
+        .building-id-tooltip::before {{
+            border-top-color: rgba(30, 41, 59, 0.92) !important;
+        }}
 
         /* Neighborhood Layer Styles */
         .neighborhood-tooltip {{
@@ -613,7 +685,8 @@ class LeafletHTMLGenerator:
         places_json: str = None,
         landmarks_json: str = None,
         streets_json: str = None,
-        local_assets_url: str = ''
+        local_assets_url: str = '',
+        max_selection: Optional[int] = None,
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -664,12 +737,12 @@ class LeafletHTMLGenerator:
         status_colors_json = json.dumps(status_colors)
         status_labels_json = json.dumps(status_labels)
 
-        # Parse buildings GeoJSON string to dict, then embed directly in JavaScript
-        try:
-            buildings_dict = json.loads(buildings_geojson)
-            buildings_json = json.dumps(buildings_dict)
-        except Exception as e:
-            logger.warning(f"Failed to parse buildings GeoJSON: {e}")
+        # Embed buildings GeoJSON directly — it's already a valid JSON string
+        if isinstance(buildings_geojson, str) and buildings_geojson.strip():
+            buildings_json = buildings_geojson
+        elif isinstance(buildings_geojson, dict):
+            buildings_json = json.dumps(buildings_geojson)
+        else:
             buildings_json = '{"type":"FeatureCollection","features":[]}'
 
         # Parse existing polygons if provided
@@ -756,14 +829,17 @@ class LeafletHTMLGenerator:
                 "                }"
             )
 
+        _max_selection_js = 'null' if max_selection is None else str(int(max_selection))
         return f'''
     <script>
+        // [UNIFIED-DIALOG] Max selection count: null=unlimited, 1=single-select replace mode.
+        window.maxSelection = {_max_selection_js};
+
         L.Icon.Default.imagePath = '{local_assets_url}/images/';
 
-        // Initialize map centered on Aleppo with zoom constraints
-        // preferCanvas for faster rendering
+        // Initialize map. Leaflet 1.x vector canvas not used (no polygons drawn);
+        // buildings render as DOM divIcons via pointToLayer.
         var map = L.map('map', {{
-            preferCanvas: true,
             maxZoom: {effective_max_zoom},
             minZoom: {effective_min_zoom},
             fadeAnimation: {'true' if MapConstants.MAP_FADE_ANIMATION else 'false'},
@@ -786,12 +862,18 @@ class LeafletHTMLGenerator:
             keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
             updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
             updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
-            loading: 'lazy',
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
 
-        tileLayer.addTo(map);
+       function addTileLayerDeferred() {{
+            if (!map.hasLayer(tileLayer)) {{
+                tileLayer.addTo(map);
+            }}
+       }}
 
+        setTimeout(addTileLayerDeferred, 300);
+
+        setTimeout(addTileLayerDeferred, 0);
         // GeoServer WMS overlay (optional, configured via .env)
         var geoserverWmsUrl = '{geoserver_wms_url}';
         if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
@@ -806,7 +888,8 @@ class LeafletHTMLGenerator:
             L.control.layers(null, gsOverlays).addTo(map);
         }}
 
-        // Loading overlay removal - hide when initial tiles are loaded
+        // Loading overlay removal - hide ONLY when real tiles finish loading,
+        // to avoid the white-flash when the dialog opens but tiles aren't drawn yet.
         (function() {{
             var overlay = document.getElementById('map-loading-overlay');
             if (!overlay) return;
@@ -816,19 +899,21 @@ class LeafletHTMLGenerator:
                 if (removed) return;
                 removed = true;
                 overlay.classList.add('fade-out');
-                setTimeout(function() {{ overlay.style.display = 'none'; }}, 600);
+                setTimeout(function() {{ overlay.style.display = 'none'; }}, 400);
             }}
 
-            // Remove when all visible tiles finish loading
+            // Primary: remove when ALL visible tiles are loaded (real map drawn).
             tileLayer.on('load', removeOverlay);
-
-            // Also remove when map itself is ready (covers offline/cached tiles)
-            map.whenReady(function() {{
-                setTimeout(removeOverlay, 500);
+            // Secondary: remove as soon as the first tile shows (perceived draw).
+            var _firstTileShown = false;
+            tileLayer.on('tileload', function() {{
+                if (_firstTileShown) return;
+                _firstTileShown = true;
+                // small delay so several tiles paint together, avoiding speckle
+                setTimeout(removeOverlay, 150);
             }});
-
-            // Fallback: remove after 1.5 seconds max
-            setTimeout(removeOverlay, 1500);
+            // Fallback: remove after 20 seconds max (network failure safety).
+            setTimeout(removeOverlay, 20000);
         }})();
 
         // Status colors and labels
@@ -861,30 +946,57 @@ class LeafletHTMLGenerator:
         // Buildings GeoJSON - Direct embedding (Simple & Works)
         var buildingsData = {buildings_json};
 
-        // Convert all Polygon/MultiPolygon geometries to Point (centroid) for pin-only display
-        if (buildingsData && buildingsData.features) {{
-            buildingsData.features.forEach(function(f) {{
-                if (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') {{
-                    var bounds = L.geoJSON(f).getBounds();
-                    var center = bounds.getCenter();
-                    f.geometry = {{ type: 'Point', coordinates: [center.lng, center.lat] }};
+        // [SIMPLIFY] Normalize every feature's geometry to a Point (centroid of polygon rings).
+        // Buildings are always rendered as markers — never as polygons — so L.geoJSON's
+        // pointToLayer callback fires for ALL features, regardless of what the API returned.
+        (function _toPoints() {{
+            if (!buildingsData || !buildingsData.features) return;
+            function _centroidOfRing(ring) {{
+                if (!ring || ring.length === 0) return null;
+                var sumLng = 0, sumLat = 0, n = 0;
+                // Skip the last point if it's a dup of the first (GeoJSON closed ring).
+                var lim = (ring.length > 1 && ring[0][0] === ring[ring.length-1][0] && ring[0][1] === ring[ring.length-1][1])
+                          ? ring.length - 1 : ring.length;
+                for (var i = 0; i < lim; i++) {{
+                    sumLng += ring[i][0];
+                    sumLat += ring[i][1];
+                    n++;
                 }}
-            }});
-        }}
+                return n > 0 ? [sumLng / n, sumLat / n] : null;
+            }}
+            for (var i = 0; i < buildingsData.features.length; i++) {{
+                var f = buildingsData.features[i];
+                if (!f || !f.geometry) continue;
+                var g = f.geometry;
+                if (g.type === 'Point') continue;
+                var pt = null;
+                if (g.type === 'Polygon' && g.coordinates && g.coordinates[0]) {{
+                    pt = _centroidOfRing(g.coordinates[0]);
+                }} else if (g.type === 'MultiPolygon' && g.coordinates && g.coordinates[0] && g.coordinates[0][0]) {{
+                    pt = _centroidOfRing(g.coordinates[0][0]);
+                }}
+                if (pt) {{
+                    f.geometry = {{ type: 'Point', coordinates: pt }};
+                }}
+            }}
+        }})();
 
         // Summary counts
         var _ptCount = buildingsData.features.length;
 
         // Marker Clustering Configuration
-
         var markers;
         if (typeof L.markerClusterGroup === 'function') {{
             markers = L.markerClusterGroup({{
-                maxClusterRadius: 60,
+                maxClusterRadius: function(zoom) {{
+                    if (zoom <= 15) return 80;
+                    if (zoom <= 16) return 50;
+                    return 30;
+                }},
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
                 zoomToBoundsOnClick: true,
-                disableClusteringAtZoom: 18,
+                disableClusteringAtZoom: {MapConstants.DISABLE_CLUSTERING_AT_ZOOM},
                 spiderfyDistanceMultiplier: 1.5,
                 chunkedLoading: true,
                 chunkInterval: {MapConstants.CHUNK_INTERVAL},
@@ -898,42 +1010,47 @@ class LeafletHTMLGenerator:
             markers = L.featureGroup();
         }}
 
-        // Points layer for all buildings (all converted to Point above)
+        // Points layer for all buildings
         var pointsLayer = L.featureGroup();
 
-        // Add buildings layer (all features are Points after conversion)
+        // Batch collection for addLayers (faster than per-marker addLayer)
+        var _initialMarkerList = [];
+
         var buildingsLayer = L.geoJSON(buildingsData, {{
-            // pointToLayer for Point features
             pointToLayer: function(feature, latlng) {{
                 var status = getStatusKey(feature.properties.status || 1);
                 var color = statusColors[status] || '#0072BC';
-                var isAssigned = feature.properties.is_assigned === true;
-
-                var innerSvg;
-                if (isAssigned) {{
+                // [VISUAL] Pre-assigned buildings are distinguished by color only (amber).
+                // They remain fully selectable — no special tooltip, no click block.
+                if (feature.properties.is_assigned === true) {{
                     color = '#F59E0B';
-                    innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
-                }} else {{
-                    innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                 }}
-
+                var innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
                     html: '<div style="position:relative;width:24px;height:36px;">' +
                           '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                           '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                           'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
-                          innerSvg +
-                          '</svg></div>',
+                          innerSvg + '</svg></div>',
                     iconSize: [24, 36],
                     iconAnchor: [12, 36],
                     popupAnchor: [0, -36]
                 }});
-
-                return L.marker(latlng, {{icon: pinIcon}});
+                var _marker = L.marker(latlng, {{icon: pinIcon}});
+                // [UNIFIED-DIALOG] Show building ID on hover
+                var _idLabel = feature.properties.building_id_display || feature.properties.building_id;
+                if (_idLabel) {{
+                    _marker.bindTooltip(String(_idLabel), {{
+                        permanent: false,
+                        direction: 'top',
+                        offset: [0, -36],
+                        className: 'building-id-tooltip'
+                    }});
+                }}
+                return _marker;
             }},
 
-            // onEachFeature for popups and events
             onEachFeature: function(feature, layer) {{
                 var props = feature.properties;
                 var status = props.status || 'intact';
@@ -942,23 +1059,19 @@ class LeafletHTMLGenerator:
                 var geomType = props.geometry_type || 'Point';
                 var actualGeomType = feature.geometry.type;
 
-                // Per-building logging removed for performance
-
-                // Use building_id_display (with dashes) for UI, building_id (no dashes) for API
                 var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
-                var buildingIdForApi = props.building_id;  // No dashes for API
+                var buildingIdForApi = props.building_id;
 
                 {popup_js_block}
 
-                // All buildings are Points — add to marker cluster
                 pointsLayer.addLayer(layer);
-                markers.addLayer(layer);
+                _initialMarkerList.push(layer);
 
                 {hover_js_block}
             }}
         }});
 
-        // Add marker cluster group to map (contains all markers)
+        markers.addLayers(_initialMarkerList);
         map.addLayer(markers);
 
         // Add existing polygons layer (displayed in blue)
@@ -1008,17 +1121,31 @@ class LeafletHTMLGenerator:
                         map.fitBounds(layer.getBounds(), {{ padding: [100, 100] }});
                     }}
 
-                    // Highlight temporarily
-                    if (layer.feature.geometry.type !== 'Point') {{
-                        var originalStyle = {{
-                            fillOpacity: 0.6,
-                            weight: 2
-                        }};
-
+                    if (layer.feature.geometry.type === 'Point') {{
+                        // Temporarily replace pin with larger blue icon
+                        var _origIcon = layer.getIcon ? layer.getIcon() : null;
+                        layer.setIcon(L.divIcon({{
+                            className: 'building-pin-icon',
+                            html: '<div style="position:relative;width:36px;height:52px;' +
+                                  'filter:drop-shadow(0 4px 8px rgba(33,150,243,0.5));">' +
+                                  '<svg width="36" height="52" viewBox="0 0 32 48" xmlns="http://www.w3.org/2000/svg">' +
+                                  '<path d="M16 0C9.4 0 4 5.4 4 12c0 10 12 32 12 32s12-22 12-32c0-6.6-5.4-12-12-12z" ' +
+                                  'fill="#1976D2" stroke="#64B5F6" stroke-width="3"/>' +
+                                  '<circle cx="16" cy="12" r="6" fill="#64B5F6"/>' +
+                                  '</svg></div>',
+                            iconSize: [36, 52],
+                            iconAnchor: [18, 52],
+                            popupAnchor: [0, -52]
+                        }}));
+                        if (_origIcon) {{
+                            setTimeout(function() {{ layer.setIcon(_origIcon); }}, 2000);
+                        }}
+                    }} else {{
+                        // Highlight polygon temporarily
                         layer.setStyle({{
                             fillOpacity: 1.0,
                             weight: 4,
-                            color: '#FF0000'
+                            color: '#1976D2'
                         }});
 
                         setTimeout(function() {{
@@ -1706,8 +1833,8 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        // Start initialization after a small delay to ensure DOM is ready
-        setTimeout(initializeQWebChannel, 100);
+        // qwebchannel.js is inlined — start bridge init immediately
+        initializeQWebChannel();
 
         // Function to select building (called from popup button)
         // Wait for bridge or retry with timeout
