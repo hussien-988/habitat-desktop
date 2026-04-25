@@ -1644,7 +1644,7 @@ class TRRCMSApiClient:
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
 
-        endpoint = f"/v1/Surveys/{survey_id}/identification-documents"
+        endpoint = f"/v1/surveys/{survey_id}/evidence/identification"
         url = f"{self.base_url}{endpoint}"
 
         file_name = os.path.basename(file_path)
@@ -1677,7 +1677,7 @@ class TRRCMSApiClient:
         if document_type is not None:
             form_fields["DocumentType"] = (None, str(document_type))
 
-        logger.info(f"[API REQ] POST {endpoint} File: {file_name} for person {person_id}")
+        logger.warning(f"[ID-DOCS UPLOAD] POST {endpoint} file={file_name} person={person_id} survey={survey_id}")
 
         try:
             with open(file_path, "rb") as f:
@@ -1693,7 +1693,13 @@ class TRRCMSApiClient:
 
             response.raise_for_status()
             result = response.json() if response.text else {}
-            logger.info(f"Identification uploaded: {file_name} for person {person_id}")
+            doc_id = result.get("id") or result.get("Id") or "?"
+            returned_person = result.get("personId") or result.get("PersonId") or "?"
+            logger.warning(
+                f"[ID-DOCS UPLOAD] OK status={response.status_code} "
+                f"docId={doc_id} returnedPersonId={returned_person} "
+                f"raw={result!r}"
+            )
             return result
 
         except requests.exceptions.HTTPError as e:
@@ -1703,6 +1709,7 @@ class TRRCMSApiClient:
                 response_data = e.response.json() if e.response is not None else {}
             except (ValueError, AttributeError):
                 pass
+            logger.warning(f"[ID-DOCS UPLOAD] FAILED status={status_code} response={response_data!r}")
             logger.error(f"[API ERR] {status_code} POST {endpoint}: {response_data}")
             upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
@@ -1815,8 +1822,9 @@ class TRRCMSApiClient:
             raise ValueError("person_id is required")
         endpoint = f"/v1/persons/{person_id}/identification-documents"
         result = self._request("GET", endpoint)
+        logger.warning(f"[ID-DOCS] RAW response from {endpoint}: type={type(result).__name__} value={result!r}")
         if isinstance(result, dict):
-            return result.get("items", result.get("$values", []))
+            return result.get("items", result.get("$values", result.get("data", [])))
         return result if isinstance(result, list) else []
 
     def download_identification_document(
@@ -1840,11 +1848,22 @@ class TRRCMSApiClient:
             "Authorization": f"Bearer {self.access_token}",
             "Accept": "*/*",
         }
+        logger.warning(f"[ID-DOCS DOWNLOAD] GET {url}")
         try:
             with requests.get(
                 url, headers=headers, stream=True,
                 timeout=self.config.timeout, verify=False,
             ) as resp:
+                if resp.status_code >= 400:
+                    body_preview = ""
+                    try:
+                        body_preview = resp.text[:1000]
+                    except Exception:
+                        pass
+                    logger.warning(
+                        f"[ID-DOCS DOWNLOAD] HTTP {resp.status_code} "
+                        f"headers={dict(resp.headers)!r} body={body_preview!r}"
+                    )
                 resp.raise_for_status()
                 parent = _os.path.dirname(save_path)
                 if parent:

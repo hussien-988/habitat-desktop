@@ -955,9 +955,15 @@ class ApplicantInfoStep(BaseStep):
         self.uploaded_files = list(valid_photos)
         if valid_photos:
             self._update_upload_thumbnails("id_upload", valid_photos)
-        elif photos:
+        elif photos or a.get("id_photo_evidences"):
             # Had photos in draft but local temp files are gone — fetch from server
+            logger.warning(
+                f"[ID-DOCS] populate_data triggering download "
+                f"(paths={len(photos)}, evidences={len(a.get('id_photo_evidences') or [])})"
+            )
             self._download_id_photos_from_api()
+        else:
+            logger.warning("[ID-DOCS] populate_data: no id_photo_paths and no id_photo_evidences — nothing to download")
 
     def _download_id_photos_from_api(self):
         """Download ID photos from server when resuming a draft (local paths gone)."""
@@ -992,7 +998,12 @@ class ApplicantInfoStep(BaseStep):
                 except Exception as e:
                     logger.warning(f"get_survey_evidences fallback failed: {e}")
             if not docs:
+                logger.warning(
+                    f"[ID-DOCS] _do_fetch found no documents "
+                    f"(evidences_seed={len(evidences)}, person_id={person_id}, survey_id={survey_id})"
+                )
                 return []
+            logger.warning(f"[ID-DOCS] _do_fetch processing {len(docs)} document(s)")
             downloaded = []
             for doc in docs:
                 ev_id = doc.get("id") or doc.get("evidenceId", "")
@@ -1003,6 +1014,7 @@ class ApplicantInfoStep(BaseStep):
                     or f"{ev_id}.jpg"
                 )
                 file_path_val = doc.get("filePath") or doc.get("file_path") or ""
+                logger.warning(f"[ID-DOCS] Downloading doc id={ev_id} person={doc_person_id} file={file_name}")
                 try:
                     result_path = None
                     # 1) New dedicated endpoint (preferred when both ids known).
@@ -1010,6 +1022,7 @@ class ApplicantInfoStep(BaseStep):
                         result_path = download_identification_document_file(
                             doc_person_id, ev_id, file_name
                         )
+                        logger.warning(f"[ID-DOCS] Dedicated endpoint result: {result_path}")
                     # 2) Legacy static-file path fallback.
                     if not result_path and file_path_val:
                         result_path = download_static_file(file_path_val, file_name)

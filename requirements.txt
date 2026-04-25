@@ -35,6 +35,9 @@ geojson>=3.0.0         # GeoJSON export
 # =============================================================================
 # API & Web Services - FSD FR-D-13, FR-D-15
 # =============================================================================
+requests>=2.31.0       # HTTP client for API calls
+urllib3>=2.0.0         # HTTP library (requests dependency)
+folium>=0.15.0         # Interactive map generation
 flask>=3.0.0           # REST API server
 flask-cors>=4.0.0      # CORS support
 flask-jwt-extended>=4.6.0  # JWT authentication

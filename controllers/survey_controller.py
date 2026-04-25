@@ -214,21 +214,30 @@ class SurveyController:
                     "nationality": contact_person_dto.get("nationality"),
                     "birth_date": contact_person_dto.get("dateOfBirth") or "",
                 }
-                # Save identification evidence metadata (download on demand)
-                try:
-                    evidences = api.get_survey_evidences(survey_id, evidence_type="identification")
-                    if evidences:
-                        applicant["id_photo_evidences"] = [
-                            {
-                                "id": ev.get("id", ""),
-                                "fileName": ev.get("fileName") or ev.get("originalFileName") or "",
-                                "mimeType": ev.get("mimeType") or "",
-                                "filePath": ev.get("filePath") or "",
-                            }
-                            for ev in evidences
-                        ]
-                except Exception as e:
-                    logger.warning(f"Could not fetch ID photo metadata: {e}")
+                # Save identification document metadata (download on demand)
+                # Identification documents belong to the person, not the survey
+                target_person_id = contact_person_id or contact_person_dto.get("id", "")
+                logger.warning(f"[ID-DOCS] Fetching identification documents for person={target_person_id}")
+                if target_person_id:
+                    try:
+                        id_docs = api.get_person_identification_documents(target_person_id)
+                        logger.warning(f"[ID-DOCS] API returned {len(id_docs) if id_docs else 0} document(s)")
+                        if id_docs:
+                            applicant["id_photo_evidences"] = [
+                                {
+                                    "id": doc.get("id", ""),
+                                    "personId": doc.get("personId", target_person_id),
+                                    "fileName": doc.get("fileName") or doc.get("originalFileName") or "",
+                                    "mimeType": doc.get("mimeType") or "",
+                                    "filePath": doc.get("filePath") or "",
+                                }
+                                for doc in id_docs
+                            ]
+                            logger.warning(f"[ID-DOCS] Stored {len(applicant['id_photo_evidences'])} entries in applicant.id_photo_evidences")
+                    except Exception as e:
+                        logger.warning(f"[ID-DOCS] Could not fetch identification documents: {e}")
+                else:
+                    logger.warning("[ID-DOCS] No target_person_id available — skipping fetch")
 
             resolved_cp_id = contact_person_id or (
                 contact_person_dto.get("id", "") if contact_person_dto else ""
