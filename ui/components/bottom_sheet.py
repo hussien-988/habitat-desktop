@@ -66,8 +66,30 @@ class BottomSheet(QWidget):
         self._anim_overlay = None
         self._result = None
         self._form_fields = {}
+        self._loading_overlay = None  # Lazy LoadingSpinnerOverlay over the sheet
         self._setup_panel()
         self.hide()
+
+    def show_loading(self, message: str = None):
+        """Show a spinner overlay parented to THIS sheet, on top of the panel.
+
+        Without this, callers trying to show a wizard-page spinner while a
+        BottomSheet is open would have the spinner painted UNDER the sheet's
+        backdrop. The overlay covers the full sheet (panel + dimmer) so the
+        user can't interact with the form while the API call is in flight.
+        """
+        if self._loading_overlay is None:
+            from ui.components.loading_spinner import LoadingSpinnerOverlay
+            self._loading_overlay = LoadingSpinnerOverlay(parent=self)
+        # Always reset geometry to match current sheet size, then raise
+        # above the panel so it covers buttons/form fields.
+        self._loading_overlay.setGeometry(self.rect())
+        self._loading_overlay.show_loading(message)
+        self._loading_overlay.raise_()
+
+    def hide_loading(self):
+        if self._loading_overlay is not None:
+            self._loading_overlay.hide_loading()
 
     def _setup_panel(self):
         self._panel.setStyleSheet(f"""

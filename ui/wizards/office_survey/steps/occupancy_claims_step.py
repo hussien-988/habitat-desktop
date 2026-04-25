@@ -12,7 +12,7 @@ import uuid
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QWidget, QMenu,
+    QFrame, QWidget,
     QDialog, QGridLayout
 )
 from PyQt5.QtCore import Qt
@@ -31,7 +31,7 @@ from ui.design_system import Colors, ScreenScale
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, IN_CARD_ACTION_STYLE,
     make_step_card, make_icon_header, PERSON_CARD_STYLE,
-    CONTEXT_MENU_STYLE, MENU_DOTS_STYLE, EMPTY_STATE_ICON_STYLE,
+    EMPTY_STATE_ICON_STYLE,
 )
 
 
@@ -446,33 +446,9 @@ class OccupancyClaimsStep(BaseStep):
             vl.addWidget(value_widget)
             return wrap
 
-        # ── Top strip: ⋮ menu on trailing edge (mirrors unit card's checkmark strip) ──
-        top_strip = QWidget()
-        top_strip.setLayoutDirection(card.layoutDirection())
-        top_strip.setFixedHeight(ScreenScale.h(16))
-        top_strip.setStyleSheet("background: transparent;")
-        ts_layout = QHBoxLayout(top_strip)
-        ts_layout.setContentsMargins(0, 0, 0, 0)
-        ts_layout.setSpacing(0)
-
-        menu_btn = QPushButton("⋮")
-        menu_btn.setFixedSize(ScreenScale.w(24), ScreenScale.h(18))
-        menu_btn.setStyleSheet(MENU_DOTS_STYLE)
-        menu_btn.setCursor(Qt.PointingHandCursor)
-        menu = QMenu(menu_btn)
-        menu.setLayoutDirection(get_layout_direction())
-        menu.setFixedSize(ScreenScale.w(99), ScreenScale.h(80))
-        menu.setStyleSheet(CONTEXT_MENU_STYLE)
-        eye_icon = QIcon(str(Config.IMAGES_DIR / "Eye.png"))
-        view_action = menu.addAction(eye_icon, tr("wizard.occupancy_claims.view"))
-        view_action.triggered.connect(lambda _, pid=person_id: self._view_person(pid))
-        menu_btn.clicked.connect(
-            lambda: menu.exec_(menu_btn.mapToGlobal(menu_btn.rect().bottomRight()))
-        )
-
-        ts_layout.addStretch(1)
-        ts_layout.addWidget(menu_btn, 0, Qt.AlignVCenter)
-        layout.addWidget(top_strip)
+        # Three-dot menu removed per UX request — clicking the card itself
+        # already opens the person view (see card.mousePressEvent below),
+        # so the "⋮ → عرض" affordance was redundant.
 
         # ── 3 rows × 2 cols info grid (identical structure to unit card) ──
         info_grid = QGridLayout()

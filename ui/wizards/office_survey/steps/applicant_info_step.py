@@ -345,12 +345,13 @@ class ApplicantInfoStep(BaseStep):
         land_layout = QHBoxLayout(self._landline_container)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
-        self.landline_prefix = RtlCombo()
+        self.landline_prefix = QComboBox()
         self.landline_prefix.setFixedWidth(ScreenScale.w(130))
         self.landline_prefix.setCursor(Qt.PointingHandCursor)
         self.landline_prefix.setToolTip(tr("wizard.person_dialog.select"))
         for _code, _display in _area_codes:
             self.landline_prefix.addItem(_display, _code)
+        self.landline_prefix.setMaxVisibleItems(len(_area_codes))
         self.landline_prefix.setStyleSheet(f"""
             QComboBox {{
                 border: none;
@@ -1013,11 +1014,14 @@ class ApplicantInfoStep(BaseStep):
             self.landline_digits.setText(_land_val)
         self.in_person_check.setChecked(a.get("in_person", True))
 
+        import os as _os
         photos = a.get("id_photo_paths", [])
-        self.uploaded_files = list(photos)
-        if photos:
-            self._update_upload_thumbnails("id_upload", photos)
-        else:
+        valid_photos = [p for p in photos if p and _os.path.exists(p)]
+        self.uploaded_files = list(valid_photos)
+        if valid_photos:
+            self._update_upload_thumbnails("id_upload", valid_photos)
+        elif photos:
+            # Had photos in draft but local temp files are gone — fetch from server
             self._download_id_photos_from_api()
 
     def _download_id_photos_from_api(self):
@@ -1029,26 +1033,39 @@ class ApplicantInfoStep(BaseStep):
         evidences = applicant.get("id_photo_evidences", [])
 
         person_id = self.context.get_data("contact_person_id")
-        if not evidences and not person_id:
+        survey_id = self.context.get_data("survey_id") or ""
+        if not evidences and not person_id and not survey_id:
             return
 
         self._set_auth_token()
 
         def _do_fetch():
-            from utils.helpers import download_evidence_file
-            docs = evidences
+            from utils.helpers import download_evidence_file, download_static_file
+            docs = list(evidences)
             if not docs and person_id:
-                docs = self._api_client.get_person_identification_documents(person_id)
+                try:
+                    docs = self._api_client.get_person_identification_documents(person_id)
+                except Exception as e:
+                    logger.warning(f"get_person_identification_documents failed: {e}")
+            if not docs and survey_id:
+                try:
+                    docs = self._api_client.get_survey_evidences(survey_id, evidence_type="identification")
+                except Exception as e:
+                    logger.warning(f"get_survey_evidences fallback failed: {e}")
             if not docs:
                 return []
             downloaded = []
             for doc in docs:
                 ev_id = doc.get("id") or doc.get("evidenceId", "")
-                if not ev_id:
-                    continue
                 file_name = doc.get("fileName") or doc.get("originalFileName") or f"{ev_id}.jpg"
+                file_path_val = doc.get("filePath") or doc.get("file_path") or ""
                 try:
-                    result_path = download_evidence_file(ev_id, file_name)
+                    if file_path_val:
+                        result_path = download_static_file(file_path_val, file_name)
+                    elif ev_id:
+                        result_path = download_evidence_file(ev_id, file_name)
+                    else:
+                        result_path = None
                     if result_path:
                         downloaded.append(result_path)
                 except Exception as e:

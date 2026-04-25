@@ -468,6 +468,7 @@ class CasesPage(QWidget):
         self._user_role = None
         self._user_id = None
         self._search_mode = False
+        self._pending_reload = False
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -538,7 +539,7 @@ class CasesPage(QWidget):
 
         # Search field (row 1)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
+        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
@@ -711,7 +712,10 @@ class CasesPage(QWidget):
         name = self._search.text().strip()
         if name:
             self._enter_search_mode()
-            self._load_surveys()
+            if self._loading:
+                self._pending_reload = True
+            else:
+                self._load_surveys()
         else:
             self._exit_search_mode()
 
@@ -802,31 +806,46 @@ class CasesPage(QWidget):
         api = get_api_client()
         total_count = 0
 
-        # Fetch paginated surveys
+        # Fetch surveys
+        surveys = []
         try:
-            params = {
-                "page": self._current_page,
-                "pageSize": self._page_size,
-                "sortBy": "SurveyDate",
-                "sortDirection": "desc",
-            }
             if name:
-                params["referenceCode"] = name
-                # No status filter — search across all statuses
-            else:
-                params["status"] = status
-            if clerk_id:
-                params["clerkId"] = clerk_id
-
-            raw = api._request("GET", "/v1/Surveys/office", params=params)
-            if isinstance(raw, dict):
-                surveys = raw.get("surveys", [])
-                total_count = raw.get("totalCount", len(surveys))
-            else:
-                surveys = raw if isinstance(raw, list) else []
+                # Direct lookup via Claims endpoint — exact CLM number match
+                claim = api.get_claim_by_number(name.strip())
+                if isinstance(claim, dict):
+                    survey_id = (
+                        claim.get("originatingSurveyId") or
+                        claim.get("surveyId") or
+                        claim.get("SurveyId") or
+                        claim.get("survey_id")
+                    )
+                    if survey_id:
+                        try:
+                            survey = api._request("GET", f"/v1/Surveys/office/{survey_id}")
+                            if isinstance(survey, dict):
+                                surveys = [survey]
+                        except Exception as exc:
+                            logger.warning(f"Survey fetch for {survey_id} failed: {exc}")
                 total_count = len(surveys)
+            else:
+                params = {
+                    "page": self._current_page,
+                    "pageSize": self._page_size,
+                    "sortBy": "SurveyDate",
+                    "sortDirection": "desc",
+                    "status": status,
+                }
+                if clerk_id:
+                    params["clerkId"] = clerk_id
+                raw = api._request("GET", "/v1/Surveys/office", params=params)
+                if isinstance(raw, dict):
+                    surveys = raw.get("surveys", [])
+                    total_count = raw.get("totalCount", len(surveys))
+                else:
+                    surveys = raw if isinstance(raw, list) else []
+                    total_count = len(surveys)
         except Exception as e:
-            logger.warning(f"Paginated surveys fetch failed: {e}")
+            logger.warning(f"Surveys fetch failed: {e}")
             surveys = []
 
         # Fetch counts for stat pills
@@ -902,6 +921,9 @@ class CasesPage(QWidget):
         finally:
             self._loading = False
             self._spinner.hide_loading()
+            if self._pending_reload:
+                self._pending_reload = False
+                self._load_surveys()
 
     def _on_surveys_load_error(self, error_msg):
         self._loading = False
@@ -1077,7 +1099,7 @@ class CasesPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("cases.page.title"))
-        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
+        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
         self._add_btn.setText(tr("wizard.button.add_case"))
 
         self._search_bar.update_language()

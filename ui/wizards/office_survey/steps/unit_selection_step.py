@@ -779,11 +779,28 @@ class UnitSelectionStep(BaseStep):
             form_widget,
             no_buttons=True
         )
+        # Hide wizard header save button while the unit form sheet is open
+        wizard = self.window()
+        if hasattr(wizard, 'save_btn'):
+            self._wizard_save_was_visible = wizard.save_btn.isVisible()
+            wizard.save_btn.setVisible(False)
+        else:
+            self._wizard_save_was_visible = False
 
     def _cancel_inline_unit(self):
         """Close the BottomSheet."""
         if self._unit_sheet:
             self._unit_sheet.close_sheet()
+        self._restore_wizard_save_btn()
+
+    def _restore_wizard_save_btn(self):
+        """Restore wizard header save button after the unit sheet closes."""
+        wizard = self.window()
+        if hasattr(wizard, '_sync_header_save_visibility'):
+            wizard._sync_header_save_visibility()
+        elif hasattr(wizard, 'save_btn') and getattr(self, '_wizard_save_was_visible', False):
+            wizard.save_btn.setVisible(True)
+        self._wizard_save_was_visible = False
 
     def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
         """Create a spinbox widget with icon arrows."""
@@ -1006,12 +1023,27 @@ class UnitSelectionStep(BaseStep):
             self._api_service.set_access_token(main_window._api_token)
             self.unit_controller.set_auth_token(main_window._api_token)
 
-        # Check uniqueness then create
+        # Check uniqueness then create.
+        # Use a single spinner target throughout: the sheet overlay if the
+        # sheet is open (so it renders above the backdrop), otherwise the
+        # step spinner. The same target is used for the creation call in
+        # _do_create_unit so the spinner never appears twice.
+        _sheet = self._unit_sheet
+        _use_sheet = _sheet is not None and hasattr(_sheet, "show_loading")
+
+        def _hide_check_spinner():
+            if _use_sheet and _sheet is not None:
+                try:
+                    _sheet.hide_loading()
+                except Exception:
+                    pass
+            else:
+                self._spinner.hide_loading()
+
         def _do_fetch():
             return self.unit_controller.get_units_for_building(self.context.building.building_uuid)
 
         def _on_fetched(result):
-            self._spinner.hide_loading()
             if result.success and result.data:
                 unit_number = str(self._if_unit_num.value())
                 floor = self._if_floor.value()
@@ -1019,16 +1051,19 @@ class UnitSelectionStep(BaseStep):
                     u_num = getattr(u, 'apartment_number', None) or getattr(u, 'unit_number', None)
                     u_floor = getattr(u, 'floor_number', None)
                     if u_num == unit_number and u_floor == floor:
+                        _hide_check_spinner()
                         Toast.show_toast(self._unit_sheet or self, tr("wizard.unit_dialog.number_taken"), Toast.WARNING)
                         return
             self._do_create_unit()
 
         def _on_fetch_error(msg):
-            self._spinner.hide_loading()
             logger.error(f"Error checking uniqueness: {msg}")
             self._do_create_unit()
 
-        self._spinner.show_loading(tr("component.loading.default"))
+        if _use_sheet:
+            _sheet.show_loading(tr("component.loading.default"))
+        else:
+            self._spinner.show_loading(tr("component.loading.default"))
         self._save_worker = ApiWorker(_do_fetch)
         self._save_worker.finished.connect(_on_fetched)
         self._save_worker.error.connect(_on_fetch_error)
@@ -1057,12 +1092,9 @@ class UnitSelectionStep(BaseStep):
         if survey_id:
             unit_data['survey_id'] = survey_id
 
-        # Show spinner on BottomSheet so it's visible above the form
-        spinner_target = self._unit_sheet or self
-        if hasattr(spinner_target, '_spinner'):
-            spinner_target._spinner.show_loading(tr("component.loading.default"))
-        else:
-            self._spinner.show_loading(tr("component.loading.default"))
+        # Spinner is already shown by _save_inline_unit — do not show again.
+        sheet = self._unit_sheet
+
         try:
             response = self._api_service.create_property_unit(unit_data)
             logger.info("Property unit created successfully via inline form")
@@ -1080,6 +1112,7 @@ class UnitSelectionStep(BaseStep):
             # Close BottomSheet and refresh units list
             if self._unit_sheet:
                 self._unit_sheet.close_sheet()
+            self._restore_wizard_save_btn()
 
             # Store UUID for auto-selection after async load completes
             self._pending_auto_select_uuid = api_uuid
@@ -1094,8 +1127,11 @@ class UnitSelectionStep(BaseStep):
             else:
                 Toast.show_toast(target, str(e), Toast.ERROR)
         finally:
-            if hasattr(spinner_target, '_spinner'):
-                spinner_target._spinner.hide_loading()
+            if sheet is not None and hasattr(sheet, "hide_loading"):
+                try:
+                    sheet.hide_loading()
+                except Exception:
+                    pass
             else:
                 self._spinner.hide_loading()
 

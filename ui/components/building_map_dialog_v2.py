@@ -373,10 +373,12 @@ class BuildingMapDialog(BaseMapDialog):
         self._pending_layers_data = None
         self._pending_buildings_data = None
 
-        # Pre-compute initial center for use in prefetch and _start_map_load
+        # Pre-compute initial center for use in prefetch and _start_map_load.
+        # Preserve any value the subclass set BEFORE super().__init__() (same
+        # __dict__.get pattern used for _initial_zoom above).
         from ui.constants.map_constants import MapConstants as _MC
-        self._initial_center_lat = _MC.DEFAULT_CENTER_LAT
-        self._initial_center_lon = _MC.DEFAULT_CENTER_LON
+        self._initial_center_lat = self.__dict__.get('_initial_center_lat') or _MC.DEFAULT_CENTER_LAT
+        self._initial_center_lon = self.__dict__.get('_initial_center_lon') or _MC.DEFAULT_CENTER_LON
         self._has_building_center = False
         if self._is_view_only and self._fallback_building:
             fb = self._fallback_building

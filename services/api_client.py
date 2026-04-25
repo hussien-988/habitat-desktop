@@ -1644,7 +1644,7 @@ class TRRCMSApiClient:
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents"
         url = f"{self.base_url}{endpoint}"
 
         file_name = os.path.basename(file_path)
@@ -1739,7 +1739,7 @@ class TRRCMSApiClient:
         if not survey_id or not document_id:
             raise ValueError("survey_id and document_id are required")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification/{document_id}"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents/{document_id}"
         url = f"{self.base_url}{endpoint}"
 
         self._ensure_valid_token()
@@ -1942,11 +1942,8 @@ class TRRCMSApiClient:
         return result if isinstance(result, list) else []
 
     def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
-        """Get evidence metadata by ID. Tries v1 then v2."""
-        try:
-            return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
-        except Exception:
-            return self._request("GET", f"/v2/surveys/evidence/{evidence_id}")
+        """Get evidence metadata by ID."""
+        return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
 
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
         """Soft delete an evidence record."""
@@ -1963,9 +1960,12 @@ class TRRCMSApiClient:
             "Accept-Language": self._get_accept_language(),
         }
 
+        # Only the v1 endpoint is supported by the backend. The v2 path
+        # always returns 404 in this environment — keeping it caused noisy
+        # log spam and slow fallbacks. utils.helpers.download_evidence_file
+        # already retries via metadata (fileUrl / filePath) when v1 fails.
         urls = [
             f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download",
-            f"{self.base_url}/v2/surveys/evidence/{evidence_id}/download",
         ]
 
         last_error = None

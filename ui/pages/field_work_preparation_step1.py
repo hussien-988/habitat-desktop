@@ -1110,21 +1110,17 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _on_open_map(self):
-        """Open map dialog for multi-building selection."""
+        """Open map dialog for multi-building selection.
+
+        Uses the exact same entry point as Office Survey
+        (show_multiselect_map_dialog). The only behavioural difference is that
+        no max_selection is passed (defaults to None = unlimited multi-select).
+        Auth token is auto-discovered by the dialog from the parent.
+        """
         try:
             from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
 
-            auth_token = None
-            try:
-                main_window = self
-                while main_window and not hasattr(main_window, 'current_user'):
-                    main_window = main_window.parent()
-                if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                    auth_token = getattr(main_window.current_user, '_api_token', None)
-            except Exception as e:
-                logger.warning(f"Could not get auth token: {e}")
-
-            # Get center coordinates from selected neighborhood filter
+            # Pass neighborhood center if a neighborhood filter is selected
             filters = self.get_filters()
             center_lat, center_lon = None, None
             neighborhood_code = filters.get('neighborhood')
@@ -1133,7 +1129,6 @@ class FieldWorkPreparationStep1(QWidget):
 
             selected_buildings = show_multiselect_map_dialog(
                 db=self.building_controller.db,
-                auth_token=auth_token,
                 parent=self,
                 center_lat=center_lat,
                 center_lon=center_lon,

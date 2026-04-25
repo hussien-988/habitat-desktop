@@ -2545,7 +2545,7 @@ EN_TRANSLATIONS = {
     "page.claim_details.breadcrumb": "Claims > Details",
     "page.claim_details.building_number": "Building Number",
     "page.claim_details.cancel": "Cancel",
-    "page.claim_details.cannot_download": "Could not open file",
+    "page.claim_details.cannot_download": "Could not open the document. The file may not exist on the server or was not uploaded correctly.",
     "page.claim_details.downloading": "Opening document...",
     "page.claim_details.claim_closed": "Claim closed - cannot edit",
     "page.claim_details.claim_open": "Claim open",

@@ -610,36 +610,25 @@ class BuildingSelectionStep(BaseStep):
         self.buildings_list.setVisible(bool(text))
 
     def _open_map_search_dialog(self):
-        """Open the unified map dialog in single-select mode for building selection."""
-        from PyQt5.QtWidgets import QDialog
-        from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
+        """Open the unified map dialog in single-select mode for building selection.
 
-        # Get auth token from parent window
-        auth_token = None
-        try:
-            main_window = self
-            while main_window and not hasattr(main_window, 'current_user'):
-                main_window = main_window.parent()
-            if main_window and hasattr(main_window, 'current_user') and main_window.current_user:
-                auth_token = getattr(main_window.current_user, '_api_token', None)
-                logger.debug(f"Got auth token from MainWindow.current_user: {bool(auth_token)}")
-        except Exception as e:
-            logger.warning(f"Could not get auth token from parent: {e}")
-            Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
+        Uses the exact same entry point as Field Work Preparation
+        (show_multiselect_map_dialog). The only behavioural difference is
+        max_selection=1, which switches the dialog into single-select replace
+        mode. Auth token is auto-discovered by the dialog from the parent.
+        """
+        from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
 
-        dialog = MultiSelectBuildingMapDialog(
+        selected_buildings = show_multiselect_map_dialog(
             db=self.context.db,
-            auth_token=auth_token,
             parent=self,
             max_selection=1,
         )
-        if dialog.exec_() != QDialog.Accepted:
+
+        if not selected_buildings:
             return
 
-        buildings = dialog.get_selected_buildings()
-        if not buildings:
-            return
-        selected_building = buildings[0]
+        selected_building = selected_buildings[0]
 
         if selected_building:
             # Update context and UI

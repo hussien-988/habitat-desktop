@@ -312,7 +312,17 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
             self.btn_next.setText(tr("component.base_wizard.next"))
 
     def _on_validation_failed(self, result: StepValidationResult):
-        """Handle validation failure."""
+        """Handle validation failure.
+
+        Renders all errors/warnings in a single Toast. The toast is attached
+        to the top-most visible window (a BottomSheet, person dialog, or the
+        wizard itself) so it appears ABOVE any active overlay rather than
+        being painted under it. Without this, validation errors raised from
+        inside a BottomSheet or modal dialog were invisible.
+        """
+        from PyQt5.QtWidgets import QApplication
+        from ui.components.toast import Toast
+
         errors = "\n".join(f"• {error}" for error in result.errors)
         warnings = "\n".join(f"• {warning}" for warning in result.warnings)
 
@@ -324,8 +334,19 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
                 message += "\n"
             message += warnings
 
-        ErrorHandler.show_warning(
-            self.window() or self,
+        # Pick the visible widget on top so the toast doesn't get covered by
+        # an open dialog/sheet. activeModalWidget() catches BottomSheet/QDialog
+        # cases; activeWindow() catches the wizard window itself.
+        target = (
+            QApplication.activeModalWidget()
+            or QApplication.activePopupWidget()
+            or QApplication.activeWindow()
+            or self.window()
+            or self
+        )
+        Toast.show_toast(
+            target,
             message or tr("validation.check_data"),
-            tr("dialog.warning")
+            Toast.WARNING,
+            duration=6000,
         )

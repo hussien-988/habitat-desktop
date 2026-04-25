@@ -2545,7 +2545,7 @@ AR_TRANSLATIONS = {
     "page.claim_details.breadcrumb": "المطالبات > تفاصيل",
     "page.claim_details.building_number": "رقم المبنى",
     "page.claim_details.cancel": "إلغاء",
-    "page.claim_details.cannot_download": "تعذّر فتح الملف",
+    "page.claim_details.cannot_download": "تعذر فتح المستند. قد يكون الملف غير موجود على الخادم أو لم يتم رفعه بشكل صحيح.",
     "page.claim_details.downloading": "جاري فتح المستند...",
     "page.claim_details.claim_closed": "المطالبة مغلقة - لا يمكن التعديل",
     "page.claim_details.claim_open": "المطالبة مفتوحة",

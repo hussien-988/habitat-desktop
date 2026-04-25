@@ -193,6 +193,75 @@ def generate_building_id(
     return f"{governorate}-{district}-{subdistrict}-{community}-{neighborhood}-{building}"
 
 
+def _is_absolute_local_path(path: str) -> bool:
+    """Return True if path is an absolute local filesystem path (Windows or Unix)."""
+    import os
+    p = path.replace("\\", "/")
+    return os.path.isabs(path) or (len(p) > 1 and p[1] == ":")
+
+
+def _get_server_root(base_url: str) -> str:
+    """Strip /api suffix from base_url to get the static-files server root."""
+    b = base_url.rstrip("/")
+    if b.endswith("/api"):
+        return b[:-4]
+    idx = b.find("/api/")
+    if idx != -1:
+        return b[:idx]
+    return b
+
+
+def build_static_url(file_path_val: str, base_url: str) -> str:
+    """Build {serverRoot}/{filePath} where serverRoot = base_url minus /api.
+    Returns empty string for absolute local paths."""
+    if not file_path_val:
+        return ""
+    if file_path_val.startswith(("http://", "https://")):
+        return file_path_val
+    if _is_absolute_local_path(file_path_val):
+        return ""
+    fp = file_path_val.replace("\\", "/").lstrip("/")
+    return f"{_get_server_root(base_url)}/{fp}"
+
+
+def download_static_file(file_path_val: str, file_name: str) -> Optional[str]:
+    """Download a file via {serverRoot}/{filePath}. Returns local cache path or None.
+    If filePath is an absolute local path that exists on disk, returns it directly."""
+    import os, tempfile, logging
+    import requests as _requests
+    _logger = logging.getLogger(__name__)
+    if not file_path_val:
+        return None
+    if _is_absolute_local_path(file_path_val):
+        if os.path.exists(file_path_val):
+            return file_path_val
+        _logger.warning(f"Local filePath not found on disk: {file_path_val}")
+        return None
+    from services.api_client import get_api_client
+    api = get_api_client()
+    api._ensure_valid_token()
+    url = build_static_url(file_path_val, api.base_url)
+    if not url:
+        return None
+    cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_evidence")
+    os.makedirs(cache_dir, exist_ok=True)
+    safe_name = sanitize_filename(file_name) if file_name else file_path_val.replace("/", "_")
+    save_path = os.path.join(cache_dir, safe_name)
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        return save_path
+    headers = {"Authorization": f"Bearer {api.access_token}", "Accept": "*/*"}
+    try:
+        resp = _requests.get(url, headers=headers, timeout=30, verify=False)
+        resp.raise_for_status()
+        with open(save_path, "wb") as f:
+            f.write(resp.content)
+        if os.path.getsize(save_path) > 0:
+            return save_path
+    except Exception as e:
+        _logger.warning(f"Static file download failed {url}: {e}")
+    return None
+
+
 def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
     """Download evidence file to temp dir using multiple strategies. Returns local path or None."""
     if not evidence_id:
@@ -244,18 +313,21 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
                     pass
 
             if file_path_val:
-                base = api.base_url.rstrip("/")
-                server_root = base.rsplit("/api", 1)[0] if base.endswith("/api") else base
-                for url in [f"{base}/{file_path_val}", f"{server_root}/{file_path_val}"]:
-                    try:
-                        resp = _requests.get(url, headers=auth_headers, timeout=30, verify=False)
-                        resp.raise_for_status()
-                        with open(save_path, 'wb') as f:
-                            f.write(resp.content)
-                        if os.path.getsize(save_path) > 0:
-                            return save_path
-                    except Exception:
-                        continue
+                if _is_absolute_local_path(file_path_val):
+                    if os.path.exists(file_path_val):
+                        return file_path_val
+                else:
+                    static_url = build_static_url(file_path_val, api.base_url)
+                    if static_url:
+                        try:
+                            resp = _requests.get(static_url, headers=auth_headers, timeout=30, verify=False)
+                            resp.raise_for_status()
+                            with open(save_path, 'wb') as f:
+                                f.write(resp.content)
+                            if os.path.getsize(save_path) > 0:
+                                return save_path
+                        except Exception as exc:
+                            _logger.warning(f"Static filePath download failed {static_url}: {exc}")
     except Exception as e:
         _logger.warning(f"Metadata download failed for {evidence_id}: {e}")
 

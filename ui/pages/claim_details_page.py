@@ -1376,41 +1376,60 @@ class ClaimDetailsPage(QWidget):
         import threading
         from PyQt5.QtCore import QMetaObject, Qt
 
-        
-
         page_ref = self
         Toast.show_toast(self, tr("page.claim_details.downloading"), Toast.INFO)
 
         def _do_download():
-            
-
-            local_path = page_ref._download_evidence_file(evidence_id, file_name)
-            
-
-        # تخزين المسار
+            try:
+                local_path = page_ref._download_evidence_file(evidence_id, file_name)
+            except Exception as e:
+                logger.error(f"Evidence download error for {evidence_id}: {e}")
+                local_path = None
             page_ref._last_downloaded_path = local_path
-
-        # نفّذ الفتح ـ 
             QMetaObject.invokeMethod(
                 page_ref,
                 "_open_file_direct",
-                Qt.QueuedConnection
+                Qt.QueuedConnection,
             )
 
         threading.Thread(target=_do_download, daemon=True).start()
+
     @pyqtSlot()
     def _open_file_direct(self):
         local_path = getattr(self, "_last_downloaded_path", None)
-        if not local_path:
-            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
-            return
+        # Clear the latched path immediately so a follow-up failure can't
+        # accidentally re-open the previously-downloaded file.
+        try:
+            self._last_downloaded_path = None
+        except Exception:
+            pass
+
         import os
-        
-        if not os.path.exists(local_path):
-            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
+        if not local_path or not os.path.exists(local_path):
+            # User-visible failure — never silent.
+            Toast.show_toast(
+                self,
+                tr("page.claim_details.cannot_download"),
+                Toast.ERROR,
+                duration=6000,
+            )
             return
 
-        os.startfile(local_path)
+        try:
+            os.startfile(local_path)
+        except Exception as exc:
+            logger.warning(f"os.startfile failed for {local_path}: {exc}")
+            try:
+                from PyQt5.QtCore import QUrl
+                from PyQt5.QtGui import QDesktopServices
+                QDesktopServices.openUrl(QUrl.fromLocalFile(local_path))
+            except Exception:
+                Toast.show_toast(
+                    self,
+                    tr("page.claim_details.cannot_download"),
+                    Toast.ERROR,
+                    duration=6000,
+                )
 
     # -- Edit mode --
 

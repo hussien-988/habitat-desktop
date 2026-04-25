@@ -826,11 +826,12 @@ class PersonDialog(QDialog):
         land_layout = QHBoxLayout(landline_frame)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
-        self.landline_prefix = RtlCombo()
+        self.landline_prefix = QComboBox()
         self.landline_prefix.setFixedWidth(ScreenScale.w(130))
         self.landline_prefix.setCursor(Qt.PointingHandCursor)
         for _code, _display in _area_codes:
             self.landline_prefix.addItem(_display, _code)
+        self.landline_prefix.setMaxVisibleItems(len(_area_codes))
         self.landline_prefix.setStyleSheet("""
             QComboBox {
                 border: none;
@@ -1242,6 +1243,12 @@ class PersonDialog(QDialog):
         # Click to open image in system viewer
         from PyQt5.QtGui import QDesktopServices
         def _open_file(e, fp=file_path):
+            import os
+            if not os.path.exists(fp):
+                from ui.components.toast import Toast
+                from services.translation_manager import tr as _tr
+                Toast.show_toast(self, _tr("page.claim_details.cannot_download"), Toast.ERROR, duration=6000)
+                return
             QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
         thumb.mousePressEvent = _open_file
 
@@ -2016,15 +2023,49 @@ class PersonDialog(QDialog):
             import threading
             self._refresh_token()
             thumb.setEnabled(False)
-            def _download():
-                local = download_evidence_file(eid, fn or eid)
-                if local:
-                    import os
-                    os.startfile(local)
+            dialog_ref = self
 
-                from PyQt5.QtCore import QMetaObject, Q_ARG
-                QMetaObject.invokeMethod(thumb, "setEnabled", Qt.QueuedConnection,
-                                         Q_ARG(bool, True))
+            def _open_on_ui():
+                local = getattr(thumb, "_last_local_path", None)
+                ok = bool(local)
+                if ok:
+                    try:
+                        import os as _os
+                        _os.startfile(local)
+                    except Exception as exc:
+                        logger.warning(f"openUrl failed for {local}: {exc}")
+                        try:
+                            from PyQt5.QtCore import QUrl
+                            QDesktopServices.openUrl(QUrl.fromLocalFile(local))
+                        except Exception:
+                            ok = False
+                if not ok:
+                    from ui.components.toast import Toast as _T
+                    try:
+                        _T.show_toast(
+                            dialog_ref,
+                            tr("page.claim_details.cannot_download"),
+                            _T.ERROR,
+                            duration=6000,
+                        )
+                    except Exception:
+                        pass
+                thumb.setEnabled(True)
+                try:
+                    delattr(thumb, "_last_local_path")
+                except Exception:
+                    pass
+
+            def _download():
+                try:
+                    local = download_evidence_file(eid, fn or eid)
+                except Exception as exc:
+                    logger.error(f"View doc error for {eid}: {exc}")
+                    local = None
+                thumb._last_local_path = local
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, _open_on_ui)
+
             threading.Thread(target=_download, daemon=True).start()
         thumb.mousePressEvent = _open_doc
 

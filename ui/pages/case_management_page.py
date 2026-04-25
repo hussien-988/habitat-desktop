@@ -569,6 +569,11 @@ class CaseManagementPage(QWidget):
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_changed)
+        # Clearing the field must immediately restore the unfiltered list.
+        # Without this, _load_cases keeps using the stale text in the
+        # input, and the user can't get back to the normal view without
+        # pressing Enter.
+        self._search.textChanged.connect(self._on_search_text_changed)
         self._header.add_action_widget(self._search)
 
         main.addWidget(self._header)
@@ -669,6 +674,16 @@ class CaseManagementPage(QWidget):
         self._load_cases()
 
     def _on_search_changed(self):
+        self._current_page = 1
+        self._load_cases()
+
+    def _on_search_text_changed(self, text: str):
+        # Only react when the field is fully cleared. Auto-search per
+        # keystroke would spam the API; the existing UX is "Enter to
+        # search". Reset back to the unfiltered list as soon as the
+        # field is empty so the user doesn't have to press Enter.
+        if (text or "").strip():
+            return
         self._current_page = 1
         self._load_cases()
 

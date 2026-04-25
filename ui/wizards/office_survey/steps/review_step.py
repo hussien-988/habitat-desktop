@@ -1310,9 +1310,10 @@ class ReviewStep(BaseStep):
         add_field(tr("wizard.review.unit_claim_id"), unit_display, 0, 1)
         add_field(tr("wizard.review.claim_type"), get_claim_type_display(claim_data.get('claim_type', '')), 0, 2)
 
-        add_field(tr("wizard.review.case_status"), get_claim_status_display(claim_data.get('case_status', 'new')), 1, 0)
-        add_field(tr("wizard.review.source"), get_source_display(claim_data.get('source', '')), 1, 1)
-        add_field(tr("wizard.review.survey_date"), str(claim_data.get('survey_date', '-') or '-'), 1, 2)
+        # Case-status field removed from review card — backend owns it and
+        # we don't have a real value yet during creation.
+        add_field(tr("wizard.review.source"), get_source_display(claim_data.get('source', '')), 1, 0)
+        add_field(tr("wizard.review.survey_date"), str(claim_data.get('survey_date', '-') or '-'), 1, 1)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(4)
