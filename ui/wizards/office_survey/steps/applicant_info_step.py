@@ -101,12 +101,13 @@ class ApplicantInfoStep(BaseStep):
         card_layout.addWidget(self.section_personal_header)
         card_layout.addLayout(self._build_personal_section())
 
-        card_layout.addSpacing(ScreenScale.h(4))
-        card_layout.addWidget(make_divider())
-
         self.section_visit_header = make_sub_section_header(tr("wizard.section.visit_type"))
-        card_layout.addWidget(self.section_visit_header)
-        card_layout.addLayout(self._build_visit_section())
+        self.section_visit_header.hide()
+
+        self.in_person_check = QCheckBox()
+        self.in_person_check.setChecked(True)
+        self.in_person_check.hide()
+
         card_layout.addStretch()
 
         return card
@@ -132,6 +133,7 @@ class ApplicantInfoStep(BaseStep):
         self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
         self.lbl_id_doc_type.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
         self._id_doc_type_combo = QComboBox()
+        self._id_doc_type_combo.setFocusPolicy(Qt.ClickFocus)
         from services.display_mappings import get_identification_document_type_options
         for code, label in get_identification_document_type_options():
             if code == 0:
@@ -142,6 +144,7 @@ class ApplicantInfoStep(BaseStep):
                 border: 1px solid #D0D7E2; border-radius: 8px;
                 padding: 6px 10px; background: #F8FAFF; color: #2C3E50;
                 font-size: 13px; min-height: 28px;
+                outline: none;
             }
             QComboBox:focus { border: 1.5px solid #3890DF; }
             QComboBox::drop-down { border: none; width: 28px; }
@@ -240,7 +243,9 @@ class ApplicantInfoStep(BaseStep):
         row += 1
 
         self.nationality = RtlCombo()
+        self.nationality.setFocusPolicy(Qt.ClickFocus)
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+
         for code, display_name in get_nationality_options():
             self.nationality.addItem(display_name, code)
         self.nationality.setStyleSheet(self._input_style())

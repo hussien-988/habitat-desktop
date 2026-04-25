@@ -64,7 +64,7 @@ class MapConstants:
     # Reference: https://leafletjs.com/reference.html#tilelayer
     TILE_KEEP_BUFFER = 4              # Extra tile rows/cols beyond viewport (reduces blank areas during pan)
     TILE_UPDATE_WHEN_ZOOMING = False  # Don't update tiles mid-zoom animation
-    TILE_UPDATE_WHEN_IDLE = False     # Load tiles continuously during pan/zoom (better UX, local server handles load)
+    TILE_UPDATE_WHEN_IDLE = True      # Load tiles only after pan stops (prevents tile breaks and overload during pan)
     TILE_PANE_BACKGROUND = '#1a1a2e'  # Dark background for tile pane (matches satellite imagery)
     MAP_FADE_ANIMATION = True         # Fade tiles in (hides gray flashes)
     MAP_ZOOM_ANIMATION = True         # Animate zoom transitions

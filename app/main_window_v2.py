@@ -440,18 +440,20 @@ class MainWindow(QMainWindow):
         self.pages[Pages.SYNC_DATA].sync_notification.connect(self._on_sync_notification)
         self.navbar.import_requested.connect(self._on_import_requested)
 
-        # Import pages signals
-        self.pages[Pages.IMPORT_PACKAGES].open_wizard.connect(
-            lambda: self.navigate_to(Pages.IMPORT_WIZARD)
-        )
+        # Import pages signals. The wizard is always entered with a specific
+        # package id via `view_package`; there is no package-less entry point.
+        # Upload flows emit `view_package` with the new id after success.
         self.pages[Pages.IMPORT_PACKAGES].view_package.connect(
-            lambda pkg_id: self.navigate_to(Pages.IMPORT_WIZARD)
+            self._on_view_import_package
         )
         self.pages[Pages.IMPORT_WIZARD].completed.connect(
-            lambda _: self.navigate_to(Pages.IMPORT_PACKAGES)
+            self._on_import_completed_silent_refresh
         )
         self.pages[Pages.IMPORT_WIZARD].cancelled.connect(
             lambda: self.navigate_to(Pages.IMPORT_PACKAGES)
+        )
+        self.pages[Pages.IMPORT_WIZARD].terminal_state_message.connect(
+            self._on_import_terminal_state_message
         )
 
         # Buildings page - view details
@@ -1247,25 +1249,148 @@ class MainWindow(QMainWindow):
         """Handle import data request from navbar menu."""
         self.navigate_to(Pages.IMPORT_PACKAGES)
 
-    def _on_import_navigate_to_duplicates(self):
-        """Navigate from import wizard to duplicates page with return banner."""
+    def _on_view_import_package(self, pkg_id: str):
+        """Open the import wizard on a specific package id.
+
+        We pass the id through navigate_to's `data` so the wizard's delayed
+        refresh(data=pkg_id) routes by backend status atomically. Calling
+        set_package_id eagerly here would race the navigate_to refresh.
+        """
+        self.navigate_to(Pages.IMPORT_WIZARD, str(pkg_id) if pkg_id else None)
+
+    def _on_import_completed_silent_refresh(self, _data):
+        """Refresh the packages list in the background without leaving the report.
+
+        Connected to ImportWizard.completed. The wizard already switched
+        to its Final Report step internally; we only need to make sure
+        the IMPORT_PACKAGES page reflects the new Completed status for
+        when the user eventually presses "العودة إلى قائمة الحزم". Do
+        NOT call navigate_to here — that would yank the user off the
+        report they're trying to read.
+        """
+        pkg_page = self.pages.get(Pages.IMPORT_PACKAGES)
+        if pkg_page is None:
+            return
+        for method_name in ("_load_packages", "refresh"):
+            fn = getattr(pkg_page, method_name, None)
+            if callable(fn):
+                try:
+                    fn()
+                except Exception:
+                    pass
+                break
+
+    def _on_import_terminal_state_message(self, severity: str, message_ar: str):
+        """Show a Toast on the packages page after a wizard bounce.
+
+        Without this, silent bounces (Quarantined / Failed / etc.) made
+        users believe their package had completed successfully. The Toast
+        is shown with a longer duration (6s) so the user has time to read
+        the reason before it dismisses.
+        """
+        from ui.components.toast import Toast
+        if not message_ar:
+            return
+        sev = (severity or "info").lower()
+        kind = (
+            Toast.ERROR if sev == "error"
+            else Toast.WARNING if sev == "warning"
+            else Toast.INFO
+        )
+        target = self.pages.get(Pages.IMPORT_PACKAGES) or self
+        try:
+            Toast.show_toast(target, message_ar, kind, duration=6000)
+        except Exception:
+            try:
+                Toast.show_toast(target, message_ar, kind)
+            except Exception:
+                pass
+
+    def _on_import_navigate_to_duplicates(self, package_id: str = ""):
+        """Navigate from import wizard to duplicates page, scoped to this package."""
         dup_page = self.pages.get(Pages.DUPLICATES)
-        if dup_page:
+        import_page = self.pages.get(Pages.IMPORT_WIZARD)
+        if not dup_page:
+            return
+
+        pkg_id = str(package_id) if package_id else ""
+        pkg_name = ""
+        if import_page and hasattr(import_page, "current_package_name"):
+            try:
+                pkg_name = import_page.current_package_name() or ""
+            except Exception:
+                pkg_name = ""
+
+        if pkg_id:
+            dup_page.set_import_context(pkg_id, pkg_name)
+        else:
             dup_page.set_return_to_import(True)
             dup_page.refresh()
-            self.navbar.set_current_tab(3)
-            self.stack.setCurrentWidget(dup_page)
+        self.navbar.set_current_tab(4)
+        self.stack.setCurrentWidget(dup_page)
 
     def _on_duplicates_return_to_import(self):
-        """Return from duplicates page to import wizard without resetting."""
+        """Return from duplicates page to the import wizard.
+
+        Steps in order:
+          1. Capture the package id from the duplicates page (or wizard) so
+             we can re-route even if the wizard had been torn down.
+          2. Hide the duplicates banner. We do NOT call clear_import_context()
+             here — that triggers a wasted /conflicts reload BEFORE we
+             switch pages. The next time the user opens duplicates with a
+             different context (or no context) the import-context state will
+             be reset by set_import_context / set_return_to_import.
+          3. Switch the visible widget to the wizard FIRST, then refresh.
+          4. Force the wizard to re-fetch the package status and route to
+             the right step. Even if the wizard previously had no
+             _current_package_id, we re-seed it from the duplicates page's
+             import context.
+        """
         dup_page = self.pages.get(Pages.DUPLICATES)
-        if dup_page:
-            dup_page.set_return_to_import(False)
         import_page = self.pages.get(Pages.IMPORT_WIZARD)
-        if import_page:
-            self.navbar.set_current_tab(2)
-            self.stack.setCurrentWidget(import_page)
-            import_page.refresh_from_duplicates()
+
+        # Recover the package id — duplicates page knows it via import-context.
+        pkg_id = ""
+        if dup_page is not None and hasattr(dup_page, "_import_package_id"):
+            pkg_id = str(getattr(dup_page, "_import_package_id", "") or "")
+        if not pkg_id and import_page is not None:
+            pkg_id = str(getattr(import_page, "_current_package_id", "") or "")
+
+        if dup_page is not None:
+            try:
+                dup_page.set_return_to_import(False)
+            except Exception:
+                pass
+
+        if import_page is None:
+            return
+
+        # Tab 3 maps to IMPORT_PACKAGES, not the wizard, so we don't change
+        # the navbar tab here — switching the stack widget is enough and
+        # avoids a flicker through the packages list.
+        self.stack.setCurrentWidget(import_page)
+
+        # Re-route the wizard. Prefer the package id we captured above —
+        # set_package_id tears down stale step widgets, fetches the latest
+        # status, and routes to the right step (ReadyToCommit → Step 2,
+        # ReviewingConflicts → back to duplicates, etc.).
+        if pkg_id and hasattr(import_page, "set_package_id"):
+            import_page.set_package_id(pkg_id)
+        elif hasattr(import_page, "refresh_current_package"):
+            import_page.refresh_current_package()
+
+        # Now that the wizard owns the navigation, the duplicates page can
+        # safely drop its import context (no longer needs to be in import
+        # mode). This is async-safe because the dup_page is no longer the
+        # visible widget.
+        if dup_page is not None and hasattr(dup_page, "_import_package_id"):
+            try:
+                dup_page._import_package_id = None
+                dup_page._import_package_name = ""
+                if hasattr(dup_page, "_import_banner"):
+                    dup_page._import_banner.setVisible(False)
+            except Exception:
+                pass
 
     def _on_sync_requested(self):
         """Handle sync data request from navbar menu."""
@@ -1450,21 +1575,32 @@ class MainWindow(QMainWindow):
         self._page_anim = anim
 
     def _has_unsaved_wizard_data(self) -> bool:
-        """Check if wizard has unsaved data worth confirming before leaving.
+        
+        wizard = self.office_survey_wizard
 
-        Step 0 (building selection) does NOT count as unsaved data even if a
-        building is selected — the survey record is only created when validate()
-        runs on Next (step 0 → step 1 transition). Before that, there is nothing
-        to save as a draft, so the confirmation bottom sheet would be misleading.
-        """
         # If finalization was completed, no need to show save dialog
-        if hasattr(self.office_survey_wizard, '_finalization_complete') and self.office_survey_wizard._finalization_complete:
+        if hasattr(wizard, '_finalization_complete') and wizard._finalization_complete:
             return False
 
-        # Only ask if we're past step 0 (i.e., validate() has run, survey created)
-        if self.office_survey_wizard.navigator.current_index >= 1:
+        context = wizard.context
+
+        # Once a survey_id exists, there is a real backend survey that can be
+        # saved as draft or cancelled, so leaving must show the bottom sheet.
+        survey_id = None
+        if hasattr(context, "get_data"):
+            survey_id = context.get_data("survey_id")
+
+        if survey_id:
             return True
 
+        # If the user moved beyond Step 0, treat the wizard as an active flow.
+        # In the normal flow, Step 0 validation creates survey_id before moving on.
+        current_index = wizard.navigator.current_index
+        if current_index >= 1:
+            return True
+
+        # Step 0 + selected building only = no real survey yet.
+        # Do not block tab switching and do not show the bottom sheet.
         return False
 
     def _reset_wizard(self, building=None):
@@ -1776,90 +1912,33 @@ class MainWindow(QMainWindow):
         self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
 
     def _start_new_office_survey(self):
-        """Start a new office survey.
+        """Start a new office survey."""
+        from PyQt5.QtWidgets import QDialog
+        from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
 
-        [PREWARM-FLOW] Instead of opening the map dialog first (and making the user
-        stare at cases_page for 4-13s of Chromium init), we:
-        1. Reset and show the wizard step 0 immediately (native Qt, ~300ms).
-        2. Kick off a hidden pre-warm of the map dialog in background.
-        3. User sees empty cards + "اختر مبنى" button, can orient themselves.
-        4. When they click "اختر مبنى" (building_selection_step._open_map_search_dialog),
-           the pre-warmed dialog is consumed — Chromium is already loaded or nearly so.
+        logger.info("Starting new office survey — opening building map dialog")
 
-        Net effect: the *real* dialog open time is unchanged, but the user's
-        *visible* wait shrinks because Chromium init happens behind the wizard UI.
-        """
-        logger.info("Starting new office survey — wizard-first flow with background map prewarm")
+        auth_token = getattr(self, '_api_token', None)
+        dialog = MultiSelectBuildingMapDialog(
+            db=self.db,
+            auth_token=auth_token,
+            parent=self,
+            max_selection=1,
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            logger.debug("Building selection cancelled")
+            return
 
-        # 1. Empty wizard + show it
-        self._reset_wizard(building=None)
+        buildings = dialog.get_selected_buildings()
+        if not buildings:
+            logger.warning("Map dialog accepted but no building selected")
+            return
+        selected_building = buildings[0]
+
+        logger.info(f"Building selected: {selected_building.building_id}")
+
+        self._reset_wizard(building=selected_building)
         self.stack.setCurrentWidget(self.office_survey_wizard)
-
-        # Force-apply step 0 empty state (don't rely on on_show firing).
-        try:
-            step0 = self.office_survey_wizard.steps[0]
-            step0.populate_data()
-            if hasattr(step0, '_refresh_header_action'):
-                step0._refresh_header_action()
-        except Exception as e:
-            logger.warning(f"Failed to refresh step0 empty state: {e}")
-
-        # 2. Schedule prewarm after UI settles (200ms enough for Qt paint + layout)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(200, self._prewarm_claim_map_dialog)
-
-    def _prewarm_claim_map_dialog(self):
-        """Instantiate MultiSelectBuildingMapDialog hidden so Chromium loads in background.
-
-        The dialog widget is created but never `exec_()`-ed here. Its __init__ schedules
-        QTimer.singleShot(0, _prefetch_buildings_early) and QTimer.singleShot(50, _start_map_load),
-        which fire on the event loop and trigger Chromium subprocess spawn + setHtml.
-        The QWebEngineView loads independently of widget visibility.
-
-        The dialog is kept alive on MainWindow (`self._prewarmed_claim_dialog`) and REUSED
-        across multiple "add claim" flows. Cancel/accept leaves it hidden but ready.
-        Parent = MainWindow so it persists regardless of wizard step widget lifecycle.
-        """
-        if getattr(self, '_prewarmed_claim_dialog', None) is not None:
-            # Already exists — just reset its state for the new flow.
-            logger.info("[PREWARM] Reusing existing pre-warmed dialog (resetting state)")
-            self._reset_prewarmed_claim_dialog_state()
-            return
-        try:
-            from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
-            auth_token = getattr(self, '_api_token', None)
-            self._prewarmed_claim_dialog = MultiSelectBuildingMapDialog(
-                db=self.db,
-                auth_token=auth_token,
-                parent=self,
-                max_selection=1,
-            )
-            logger.info("[PREWARM] Map dialog pre-warming started for claims flow")
-        except Exception as e:
-            logger.warning(f"[PREWARM] Failed to start prewarm: {e}")
-            self._prewarmed_claim_dialog = None
-
-    def _reset_prewarmed_claim_dialog_state(self):
-        """Clear previous selection from the persistent pre-warmed dialog so it's ready
-        for the next claim flow. Keeps the widget + QWebEngineView alive."""
-        dialog = getattr(self, '_prewarmed_claim_dialog', None)
-        if dialog is None:
-            return
-        try:
-            dialog._multi_selected_buildings.clear()
-        except Exception:
-            pass
-        try:
-            if hasattr(dialog, 'confirm_btn') and dialog.confirm_btn:
-                dialog.confirm_btn.setEnabled(False)
-            if hasattr(dialog, 'selection_counter_label') and dialog.selection_counter_label:
-                dialog.selection_counter_label.setText("اختر مبنى من الخريطة")
-            if getattr(dialog, 'web_view', None):
-                dialog.web_view.page().runJavaScript(
-                    "if (typeof clearAllSelections === 'function') { try { clearAllSelections(); } catch(e){} }"
-                )
-        except Exception as e:
-            logger.debug(f"[PREWARM] state reset partial: {e}")
 
     def _on_survey_completed(self, data):
         """Handle survey completion from wizard — navigate to surveys page."""

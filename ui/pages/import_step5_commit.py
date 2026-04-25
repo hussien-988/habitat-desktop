@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Import wizard commit confirmation step."""
+"""Import wizard commit confirmation step.
+
+Used by the 3-step wizard as the inline commit-progress pane inside the
+Review & Approve pill.
+"""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

@@ -157,8 +157,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     chunkedLoading: true,
                     chunkInterval: 50,
                     chunkDelay: 5,
-                    removeOutsideVisibleBounds: true,
-                    animate: true,
+                    removeOutsideVisibleBounds: false,
+                    animate: false,
                     animateAddingMarkers: false
                 });
             }

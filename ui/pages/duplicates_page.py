@@ -397,16 +397,24 @@ class _GlowCard(QFrame):
 
 class _ConflictWorker(QThread):
     finished = Signal(dict)
-    error = Signal(str)
+    # Carries (humanized_message, trace_id) so the page can render an
+    # inline error panel without reparsing the exception itself.
+    error = Signal(str, str)
 
-    def __init__(self, service: DuplicateService, page=1, page_size=20, filters=None):
+    def __init__(self, service: DuplicateService, page=1, page_size=20,
+                 filters=None, import_package_id=None):
         super().__init__()
         self.service = service
         self.page = page
         self.page_size = page_size
         self.filters = filters or {}
+        self.import_package_id = import_package_id
 
     def run(self):
+        from services.exceptions import (
+            ApiException, NetworkException, humanize_exception,
+            log_exception, CTX_LOAD_CONFLICTS,
+        )
         try:
             result = self.service.get_conflicts(
                 page=self.page,
@@ -415,11 +423,30 @@ class _ConflictWorker(QThread):
                 status=self.filters.get("status"),
                 priority=self.filters.get("priority"),
                 is_escalated=self.filters.get("is_escalated"),
+                import_package_id=self.import_package_id,
             )
-            summary = self.service.get_conflicts_summary()
+            if self.import_package_id:
+                items = result.get("items", []) if isinstance(result, dict) else []
+                summary = DuplicateService.compute_local_summary(items)
+            else:
+                # Summary endpoint failure must NOT corrupt the conflicts view —
+                # we still emit the conflicts list with an empty summary if it
+                # fails, but log the structured error.
+                try:
+                    summary = self.service.get_conflicts_summary()
+                except (ApiException, NetworkException) as se:
+                    log_exception(se, logger, context="load_conflicts_summary")
+                    summary = {}
             self.finished.emit({"conflicts": result, "summary": summary})
+        except (ApiException, NetworkException) as e:
+            log_exception(e, logger, context=CTX_LOAD_CONFLICTS)
+            self.error.emit(
+                humanize_exception(e, context=CTX_LOAD_CONFLICTS),
+                getattr(e, "trace_id", "") or "",
+            )
         except Exception as e:
-            self.error.emit(str(e))
+            logger.error(f"Conflict load unexpected: {e}")
+            self.error.emit(str(e), "")
 
 
 class _ResolutionWorker(QThread):
@@ -436,6 +463,10 @@ class _ResolutionWorker(QThread):
         self.master_id = master_id
 
     def run(self):
+        from services.exceptions import (
+            ApiException, NetworkException, humanize_exception,
+            log_exception, CTX_RESOLVE_CONFLICT,
+        )
         try:
             if self.action == "merge":
                 result = self.service.merge_conflict(
@@ -446,7 +477,11 @@ class _ResolutionWorker(QThread):
             else:
                 result = False
             self.finished.emit(result)
+        except (ApiException, NetworkException) as e:
+            log_exception(e, logger, context=CTX_RESOLVE_CONFLICT)
+            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
         except Exception as e:
+            logger.error(f"Resolution unexpected error: {e}")
             self.error.emit(str(e))
 
 
@@ -477,6 +512,9 @@ class DuplicatesPage(QWidget):
         self._exclude_resolved = False
         self._loading = False
         self._conflict_cards = []
+        # Import-context mode state
+        self._import_package_id = None
+        self._import_package_name = ""
 
         # Shimmer timer for card animation (80ms)
         self._card_shimmer_timer = QTimer(self)
@@ -678,6 +716,37 @@ class DuplicatesPage(QWidget):
     def set_return_to_import(self, enabled: bool):
         self._import_banner.setVisible(enabled)
 
+    def set_import_context(self, package_id, package_name: str = ""):
+        """Activate import-context mode: filter conflicts by importPackageId
+        and show the return-to-import banner with the package name."""
+        self._import_package_id = str(package_id) if package_id else None
+        self._import_package_name = package_name or ""
+        if self._import_package_id:
+            if self._import_package_name:
+                self._banner_msg.setText(
+                    tr("page.duplicates.banner_import_context").format(
+                        name=self._import_package_name
+                    )
+                )
+            else:
+                self._banner_msg.setText(tr("page.duplicates.banner_import_context_no_name"))
+            self._import_banner.setVisible(True)
+            self._current_page = 1
+            self._load_conflicts()
+        else:
+            self.clear_import_context()
+
+    def clear_import_context(self):
+        """Leave import-context mode and restore global view."""
+        had_context = self._import_package_id is not None
+        self._import_package_id = None
+        self._import_package_name = ""
+        self._import_banner.setVisible(False)
+        if had_context:
+            self._banner_msg.setText(tr("page.duplicates.import_banner_msg"))
+            self._current_page = 1
+            self._load_conflicts()
+
     # -- Summary Cards -----------------------------------------------------
 
     def _build_summary_cards(self) -> QFrame:
@@ -837,11 +906,15 @@ class DuplicatesPage(QWidget):
         self._pagination_footer.setVisible(False)
         self._empty_state.setVisible(False)
 
+        # In import-context mode request a larger page so local aggregation
+        # reflects the full set of conflicts for this package in one call.
+        effective_page_size = 200 if self._import_package_id else self._page_size
         self._worker = _ConflictWorker(
             self.duplicate_service,
             page=self._current_page,
-            page_size=self._page_size,
+            page_size=effective_page_size,
             filters=self._get_active_filters(),
+            import_package_id=self._import_package_id,
         )
         self._spinner.show_loading(tr("page.duplicates.loading_conflicts"))
         self._worker.finished.connect(self._on_load_finished)
@@ -865,6 +938,13 @@ class DuplicatesPage(QWidget):
         self._card_property.update_count(pending_property)
         self._card_person.update_count(pending_person)
         self._card_resolved.update_count(summary.get("resolvedCount", 0))
+
+        # When in import-context mode, indicate counts are scoped to this package
+        suffix = f" {tr('page.duplicates.summary_suffix_package')}" if self._import_package_id else ""
+        self._card_total.title_label.setText(tr("page.duplicates.card_total") + suffix)
+        self._card_property.title_label.setText(tr("page.duplicates.card_property") + suffix)
+        self._card_person.title_label.setText(tr("page.duplicates.card_person") + suffix)
+        self._card_resolved.title_label.setText(tr("page.duplicates.card_resolved") + suffix)
 
         self._stat_pending.set_count(pending_total)
 
@@ -899,7 +979,30 @@ class DuplicatesPage(QWidget):
 
         self._update_pagination()
 
-    def _on_load_error(self, error_msg: str):
+        # Auto-return to the import wizard when no PENDING conflicts remain
+        # for this package. We rely on the server-side `pendingReviewCount`
+        # from the summary (scoped to importPackageId), NOT total_count —
+        # because total_count includes resolved conflicts and never reaches
+        # zero after resolution. Without this fix, auto-return never fired
+        # and the user had to click "Return to Import" manually.
+        if (
+            self._import_package_id
+            and not self._conflicts
+            and int(pending_total or 0) == 0
+        ):
+            logger.info(
+                "All conflicts resolved for package %s — auto-returning to import",
+                self._import_package_id,
+            )
+            Toast.show_toast(
+                self,
+                tr("page.duplicates.all_resolved_returning"),
+                Toast.SUCCESS,
+            )
+            # Defer one tick so the toast paints before the page switch.
+            QTimer.singleShot(400, self.return_to_import.emit)
+
+    def _on_load_error(self, user_message: str, trace_id: str = ""):
         self._loading = False
         self._spinner.hide_loading()
 
@@ -911,9 +1014,22 @@ class DuplicatesPage(QWidget):
         self._clear_cards()
         self._cards_container.setVisible(False)
         self._pagination_footer.setVisible(False)
+
+        # Render the error inside the page so the user understands why the
+        # list is empty (instead of showing fake "no conflicts" empty state).
+        if self._import_package_id:
+            headline = tr("duplicates.error.load_conflicts_failed_import_context")
+        else:
+            headline = tr("duplicates.error.load_conflicts_failed")
+        details = user_message or headline
+        if trace_id:
+            details = f"{details}\n{tr('api.error.trace_id_label')}: {trace_id}"
+        self._empty_state.set_title(headline)
+        self._empty_state.set_description(details)
         self._empty_state.setVisible(True)
-        Toast.show_toast(self, tr("page.duplicates.load_failed", error=error_msg), Toast.ERROR)
-        logger.error("Conflict load error: %s", error_msg)
+        # Keep a brief toast as well so the failure isn't easy to miss.
+        Toast.show_toast(self, headline, Toast.ERROR)
+        logger.error("Conflict load error: %s trace=%s", user_message, trace_id)
 
     # -- Card Population ---------------------------------------------------
 
@@ -939,7 +1055,11 @@ class DuplicatesPage(QWidget):
         """Navigate to full-page comparison/resolution view."""
         if idx >= len(self._conflicts):
             return
-        conflict = self._conflicts[idx]
+        conflict = dict(self._conflicts[idx])
+        # Forward import-context so the comparison page can use staged-entities
+        # fallback when production endpoints return 404 for staged records.
+        if self._import_package_id and "_importPackageId" not in conflict:
+            conflict["_importPackageId"] = self._import_package_id
         self.view_comparison_requested.emit(conflict)
 
     # -- Filter & Pagination -----------------------------------------------

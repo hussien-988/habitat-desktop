@@ -395,7 +395,7 @@ class LeafletHTMLGenerator:
             backface-visibility: hidden;
         }}
 
-        /* Loading overlay - hides map until tiles are ready */
+        /* Loading overlay - hides map until all viewport tiles are ready */
         #map-loading-overlay {{
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -405,7 +405,7 @@ class LeafletHTMLGenerator:
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: opacity 0.6s ease-out;
+            transition: opacity 0.4s ease-out;
         }}
         #map-loading-overlay.fade-out {{
             opacity: 0;
@@ -864,16 +864,7 @@ class LeafletHTMLGenerator:
             updateWhenIdle: {'true' if MapConstants.TILE_UPDATE_WHEN_IDLE else 'false'},
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
-
-       function addTileLayerDeferred() {{
-            if (!map.hasLayer(tileLayer)) {{
-                tileLayer.addTo(map);
-            }}
-       }}
-
-        setTimeout(addTileLayerDeferred, 300);
-
-        setTimeout(addTileLayerDeferred, 0);
+        tileLayer.addTo(map);
         // GeoServer WMS overlay (optional, configured via .env)
         var geoserverWmsUrl = '{geoserver_wms_url}';
         if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
@@ -888,8 +879,9 @@ class LeafletHTMLGenerator:
             L.control.layers(null, gsOverlays).addTo(map);
         }}
 
-        // Loading overlay removal - hide ONLY when real tiles finish loading,
-        // to avoid the white-flash when the dialog opens but tiles aren't drawn yet.
+        // Loading overlay: keep visible until ALL viewport tiles are loaded so the user
+        // never sees dark/empty tile areas. 'load' fires when every tile in the current
+        // viewport has loaded (or returned an error tile), so the map is fully drawn.
         (function() {{
             var overlay = document.getElementById('map-loading-overlay');
             if (!overlay) return;
@@ -899,21 +891,13 @@ class LeafletHTMLGenerator:
                 if (removed) return;
                 removed = true;
                 overlay.classList.add('fade-out');
-                setTimeout(function() {{ overlay.style.display = 'none'; }}, 400);
+                setTimeout(function() {{ overlay.style.display = 'none'; }}, 450);
             }}
 
-            // Primary: remove when ALL visible tiles are loaded (real map drawn).
+            // Remove only when ALL viewport tiles are painted.
             tileLayer.on('load', removeOverlay);
-            // Secondary: remove as soon as the first tile shows (perceived draw).
-            var _firstTileShown = false;
-            tileLayer.on('tileload', function() {{
-                if (_firstTileShown) return;
-                _firstTileShown = true;
-                // small delay so several tiles paint together, avoiding speckle
-                setTimeout(removeOverlay, 150);
-            }});
-            // Fallback: remove after 20 seconds max (network failure safety).
-            setTimeout(removeOverlay, 20000);
+            // Safety fallback: remove after 8 seconds regardless (slow/offline tile server).
+            setTimeout(removeOverlay, 8000);
         }})();
 
         // Status colors and labels

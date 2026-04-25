@@ -417,8 +417,22 @@ class OfficeSurveyWizard(BaseWizard):
 
         return survey_id
 
+    def _sync_header_save_visibility(self):
+        """Show the header save button only after the survey exists on backend."""
+        if not hasattr(self, "save_btn"):
+            return
+
+        has_survey_id = bool(self.context.get_data("survey_id"))
+        self.save_btn.setVisible(has_survey_id)
+        self.save_btn.setEnabled(has_survey_id)
+
     def _handle_header_save(self):
         """Header save button: finalize on last step, save draft on others."""
+        if not self.context.get_data("survey_id"):
+            logger.debug("Header save ignored: no survey_id exists yet")
+            self._sync_header_save_visibility()
+            return
+
         if self.navigator.current_index == len(self.steps) - 1:
             self._handle_submit()
         else:
@@ -701,6 +715,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.title_label.setText(tr("wizard.header.title"))
         self._subtitle_part1.setText(tr("wizard.header.breadcrumb"))
         self.save_btn.setText(f" {tr('wizard.button.save')}")
+        self._sync_header_save_visibility()
 
         # Step indicator tabs
         step_names = self.get_step_names()
@@ -825,7 +840,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.save_btn.setStyleSheet(HEADER_SAVE_STYLE)
         self.save_btn.clicked.connect(self._handle_header_save)
         header.add_action_widget(self.save_btn)
-
+        self._sync_header_save_visibility()
         # Step indicator tabs (NavStyleTab instead of CurvedTab)
         self.step_labels = []
         self._step_font_sizes = []
@@ -895,6 +910,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_previous.setCursor(Qt.PointingHandCursor)
         self.btn_previous.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_previous.setFont(nav_btn_font)
+        self.btn_previous.setFocusPolicy(Qt.NoFocus)
 
         self.btn_previous_visible_style = FOOTER_SECONDARY_STYLE
         self.btn_previous_hidden_style = FOOTER_HIDDEN_STYLE
@@ -921,11 +937,12 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_next.setFont(nav_btn_font)
+        self.btn_next.setFocusPolicy(Qt.NoFocus)
         self.btn_next.setStyleSheet(FOOTER_PRIMARY_STYLE)
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
 
-        # Final save/submit button
+        # Final save/submit butt
         from PyQt5.QtGui import QIcon
         import os
 
@@ -933,6 +950,7 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_final_save.setCursor(Qt.PointingHandCursor)
         self.btn_final_save.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_final_save.setFont(nav_btn_font)
+        self.btn_final_save.setFocusPolicy(Qt.NoFocus)
 
         save_icon_path = os.path.join("assets", "images", "save.png")
         if os.path.exists(save_icon_path):
@@ -1042,6 +1060,7 @@ class OfficeSurveyWizard(BaseWizard):
 
         # Update navigation buttons
         self._update_navigation_buttons()
+        self._sync_header_save_visibility()
 
     def _update_step_display(self):
         """Update step indicators with proper state styling and completion marks."""

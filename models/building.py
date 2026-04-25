@@ -55,9 +55,9 @@ class Building:
 
     # Building attributes
     # building_type: 1=Residential, 2=Commercial, 3=MixedUse, 4=Industrial (or string for legacy)
-    building_type: Union[int, str] = 1
+    building_type: Optional[Union[int, str]] = None
     # building_status: 1=Intact, 2=MinorDamage, 3=MajorDamage, 4=Destroyed, etc. (or string for legacy)
-    building_status: Union[int, str] = 1
+    building_status: Optional[Union[int, str]] = None
 
     number_of_units: int = 0
     number_of_apartments: int = 0

@@ -55,6 +55,7 @@ FORM_FIELD_STYLE = """
         color: #2C3E50;
         font-size: 10pt;
         min-height: 30px;
+        outline: none;
     }
     QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTextEdit:focus {
         border: 1.5px solid #3890DF;
@@ -75,6 +76,7 @@ FORM_FIELD_STYLE = """
         background-color: #FFFFFF;
         selection-background-color: #EBF5FF;
         selection-color: #2C3E50;
+        outline: none;
     }
 """
 

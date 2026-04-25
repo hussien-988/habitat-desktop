@@ -2,7 +2,7 @@
 """Import wizard final commit report step."""
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFrame,
     QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QSizePolicy, QGraphicsDropShadowEffect,
 )
@@ -53,29 +53,20 @@ class ImportStep6Report(QWidget):
         self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
-        outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-            + StyleManager.scrollbar()
-        )
-
-        container = QWidget()
-        container.setStyleSheet("background: transparent;")
-        main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(0, 24, 0, 24)
-        main_layout.setSpacing(20)
+        # No outer scroll — the report fits within the available height by
+        # using a 2-card horizontal layout (stats + breakdown) instead of
+        # stacking. The errors card has its own internal scroll for long
+        # error lists, but the page itself never scrolls.
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 16, 0, 16)
+        main_layout.setSpacing(16)
 
         # --- Card 1: Result header (success/partial/fail) ---
         self._result_card = QFrame()
+        self._result_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._result_card_layout = QVBoxLayout(self._result_card)
-        self._result_card_layout.setContentsMargins(32, 24, 32, 24)
-        self._result_card_layout.setSpacing(8)
+        self._result_card_layout.setContentsMargins(28, 16, 28, 16)
+        self._result_card_layout.setSpacing(6)
 
         self._result_title = QLabel(tr("wizard.import.step6.commit_success"))
         self._result_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -113,11 +104,16 @@ class ImportStep6Report(QWidget):
         self._set_result_style("success")
         main_layout.addWidget(self._result_card)
 
-        # --- Card 2: Summary stats ---
+        # --- Cards 2 + 3 side-by-side: Summary stats | Per-entity breakdown ---
+        # Wide screens have more horizontal space than vertical; use it.
+        # Stats card on the left (40%), breakdown table on the right (60%).
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(20)
+
         stats_card = self._create_card()
         stats_layout = QVBoxLayout(stats_card)
-        stats_layout.setContentsMargins(32, 24, 32, 24)
-        stats_layout.setSpacing(16)
+        stats_layout.setContentsMargins(24, 20, 24, 20)
+        stats_layout.setSpacing(14)
 
         self._stats_title = QLabel(tr("wizard.import.step6.results_summary"))
         self._stats_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -129,35 +125,41 @@ class ImportStep6Report(QWidget):
         sep.setStyleSheet("color: #E1E8ED;")
         stats_layout.addWidget(sep)
 
-        # Stat boxes row
-        stats_row = QHBoxLayout()
-        stats_row.setSpacing(16)
+        # Stat boxes in a 2-column grid (3 rows: approved+committed,
+        # failed+skipped, rate spanning both columns).
+        stats_grid = QGridLayout()
+        stats_grid.setSpacing(12)
 
-        self._approved_box, self._approved_label = self._create_stat_box(tr("wizard.import.step6.stat_approved"), "0", "#3B82F6", "#EFF6FF")
-        stats_row.addWidget(self._approved_box)
+        self._approved_box, self._approved_label = self._create_stat_box(
+            tr("wizard.import.step6.stat_approved"), "0", "#3B82F6", "#EFF6FF"
+        )
+        self._committed_box, self._committed_label = self._create_stat_box(
+            tr("wizard.import.step6.stat_committed"), "0", "#10B981", "#ECFDF5"
+        )
+        self._failed_box, self._failed_label = self._create_stat_box(
+            tr("wizard.import.step6.stat_failed"), "0", "#EF4444", "#FEF2F2"
+        )
+        self._skipped_box, self._skipped_label = self._create_stat_box(
+            tr("wizard.import.step6.stat_skipped"), "0", "#F59E0B", "#FFFBEB"
+        )
+        self._rate_box, self._rate_label = self._create_stat_box(
+            tr("wizard.import.step6.stat_success_rate"), "0%", "#8B5CF6", "#F5F3FF"
+        )
 
-        self._committed_box, self._committed_label = self._create_stat_box(tr("wizard.import.step6.stat_committed"), "0", "#10B981", "#ECFDF5")
-        stats_row.addWidget(self._committed_box)
+        stats_grid.addWidget(self._approved_box, 0, 0)
+        stats_grid.addWidget(self._committed_box, 0, 1)
+        stats_grid.addWidget(self._failed_box, 1, 0)
+        stats_grid.addWidget(self._skipped_box, 1, 1)
+        stats_grid.addWidget(self._rate_box, 2, 0, 1, 2)
 
-        self._failed_box, self._failed_label = self._create_stat_box(tr("wizard.import.step6.stat_failed"), "0", "#EF4444", "#FEF2F2")
-        stats_row.addWidget(self._failed_box)
-
-        self._skipped_box, self._skipped_label = self._create_stat_box(tr("wizard.import.step6.stat_skipped"), "0", "#F59E0B", "#FFFBEB")
-        stats_row.addWidget(self._skipped_box)
-
-        self._rate_box, self._rate_label = self._create_stat_box(tr("wizard.import.step6.stat_success_rate"), "0%", "#8B5CF6", "#F5F3FF")
-        stats_row.addWidget(self._rate_box)
-
-        stats_row.addStretch()
-        stats_layout.addLayout(stats_row)
-
-        main_layout.addWidget(stats_card)
+        stats_layout.addLayout(stats_grid)
+        stats_layout.addStretch()
 
         # --- Card 3: Per-entity breakdown table ---
         breakdown_card = self._create_card()
         breakdown_layout = QVBoxLayout(breakdown_card)
-        breakdown_layout.setContentsMargins(32, 24, 32, 24)
-        breakdown_layout.setSpacing(16)
+        breakdown_layout.setContentsMargins(24, 20, 24, 20)
+        breakdown_layout.setSpacing(14)
 
         self._breakdown_title = QLabel(tr("wizard.import.step6.breakdown_title"))
         self._breakdown_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -181,7 +183,7 @@ class ImportStep6Report(QWidget):
 
         header = self._breakdown_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Fixed)
-        self._breakdown_table.setColumnWidth(0, ScreenScale.w(160))
+        self._breakdown_table.setColumnWidth(0, ScreenScale.w(140))
         for col in range(1, 5):
             header.setSectionResizeMode(col, QHeaderView.Stretch)
 
@@ -207,77 +209,34 @@ class ImportStep6Report(QWidget):
         """)
         self._breakdown_table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._breakdown_table.setMaximumHeight(ScreenScale.h(340))
+        # Let the table expand vertically to fill the card — no fixed
+        # min/max height, so it grows when the window has spare space and
+        # the inner scrollbar disappears.
+        self._breakdown_table.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding
+        )
 
-        breakdown_layout.addWidget(self._breakdown_table)
-        main_layout.addWidget(breakdown_card)
+        breakdown_layout.addWidget(self._breakdown_table, 1)
 
-        # --- Card 4: Additional info ---
-        self._extra_card = self._create_card()
-        extra_layout = QVBoxLayout(self._extra_card)
-        extra_layout.setContentsMargins(32, 24, 32, 24)
-        extra_layout.setSpacing(12)
+        # Place stats (left, 4/10 width) and breakdown (right, 6/10 width)
+        # side by side. Use stretch factors so they scale with the window.
+        cards_row.addWidget(stats_card, 4)
+        cards_row.addWidget(breakdown_card, 6)
+        # Stretch factor 1 on the cards row so it consumes the empty
+        # space below the result header, instead of leaving a wide gap
+        # above the footer button.
+        main_layout.addLayout(cards_row, 1)
 
-        self._extra_title = QLabel(tr("wizard.import.step6.extra_info_title"))
-        self._extra_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._extra_title.setStyleSheet("color: #212B36; background: transparent;")
-        extra_layout.addWidget(self._extra_title)
-
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("color: #E1E8ED;")
-        extra_layout.addWidget(sep2)
-
-        self._extra_rows_layout = QVBoxLayout()
-        self._extra_rows_layout.setSpacing(8)
-        extra_layout.addLayout(self._extra_rows_layout)
-
-        # Pre-create extra info labels
+        # The legacy "معلومات إضافية" card was removed per UX feedback —
+        # the per-entity breakdown above already covers what the user
+        # needs to see. Backwards-compat stubs are kept below so older
+        # call sites (_update_extra_info, update_language) don't crash.
+        self._extra_card = None
+        self._extra_title = None
+        self._extra_rows_layout = None
         self._extra_labels = {}
         self._extra_name_labels = {}
-        self._extra_keys_tr = [
-            ('duplicateAttachmentsFound', "wizard.import.step6.extra_dup_attachments"),
-            ('deduplicationBytesSaved', "wizard.import.step6.extra_dedup_savings"),
-            ('conflictResolutionsApplied', "wizard.import.step6.extra_conflict_resolutions"),
-            ('mergesPerformed', "wizard.import.step6.extra_merges"),
-            ('isArchived', "wizard.import.step6.extra_archived"),
-            ('archivePath', "wizard.import.step6.extra_archive_path"),
-        ]
-        for key, tr_key in self._extra_keys_tr:
-            row_frame = QFrame()
-            row_frame.setFixedHeight(ScreenScale.h(40))
-            row_frame.setStyleSheet("""
-                QFrame {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #FAFCFF, stop:1 transparent);
-                    border-radius: 8px;
-                    border: none;
-                }
-                QFrame QLabel {
-                    border: none;
-                    background: transparent;
-                }
-            """)
-            row = QHBoxLayout(row_frame)
-            row.setContentsMargins(12, 4, 12, 4)
-            row.setSpacing(12)
-            name = QLabel(f"{tr(tr_key)}:")
-            name.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            name.setStyleSheet("color: #637381;")
-            name.setMinimumWidth(ScreenScale.w(200))
-            row.addWidget(name)
-            self._extra_name_labels[key] = name
-
-            value = QLabel("-")
-            value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            value.setStyleSheet("color: #212B36;")
-            row.addWidget(value)
-            row.addStretch()
-
-            self._extra_labels[key] = value
-            self._extra_rows_layout.addWidget(row_frame)
-
-        main_layout.addWidget(self._extra_card)
+        self._extra_keys_tr = []
 
         # --- Card 5: Errors (hidden if none) ---
         self._errors_card = self._create_card()
@@ -305,7 +264,9 @@ class ImportStep6Report(QWidget):
             "QScrollArea { background: transparent; border: none; }"
             + StyleManager.scrollbar()
         )
-        self._errors_scroll.setMaximumHeight(ScreenScale.h(250))
+        # Constrain the errors card so the page itself never scrolls;
+        # only the inner errors list scrolls when many errors are present.
+        self._errors_scroll.setMaximumHeight(ScreenScale.h(140))
 
         self._errors_container = QWidget()
         self._errors_container.setStyleSheet("background: transparent;")
@@ -319,9 +280,9 @@ class ImportStep6Report(QWidget):
         self._errors_card.setVisible(False)
         main_layout.addWidget(self._errors_card)
 
-        main_layout.addStretch()
-        scroll.setWidget(container)
-        outer_layout.addWidget(scroll)
+        # No trailing stretch — cards_row already absorbs the available
+        # vertical space via its stretch factor, so the cards reach the
+        # bottom of the page instead of leaving a gap.
 
     def _create_card(self) -> QFrame:
         card = QFrame()
@@ -606,31 +567,9 @@ class ImportStep6Report(QWidget):
             self._breakdown_table.setRowHeight(row_idx, 40)
 
     def _update_extra_info(self, d: dict):
-        """Update extra info labels."""
-        dup_attachments = d.get("duplicateAttachmentsFound", 0)
-        self._extra_labels["duplicateAttachmentsFound"].setText(str(dup_attachments))
-
-        dedup_bytes = d.get("deduplicationBytesSaved", 0)
-        if dedup_bytes > 1_048_576:
-            size_str = f"{dedup_bytes / 1_048_576:.1f} MB"
-        elif dedup_bytes > 1024:
-            size_str = f"{dedup_bytes / 1024:.1f} KB"
-        else:
-            size_str = f"{dedup_bytes} bytes"
-        self._extra_labels["deduplicationBytesSaved"].setText(size_str)
-
-        self._extra_labels["conflictResolutionsApplied"].setText(
-            str(d.get("conflictResolutionsApplied", 0))
-        )
-        self._extra_labels["mergesPerformed"].setText(
-            str(d.get("mergesPerformed", 0))
-        )
-
-        is_archived = d.get("isArchived", False)
-        self._extra_labels["isArchived"].setText(tr("wizard.import.step6.yes") if is_archived else tr("wizard.import.step6.no"))
-
-        archive_path = d.get("archivePath", "")
-        self._extra_labels["archivePath"].setText(archive_path or "-")
+        """No-op stub. The "extra info" card was removed per UX feedback;
+        this method is kept so older call sites don't crash."""
+        return
 
     def _populate_errors(self, errors: list):
         """Populate the errors section."""
@@ -737,7 +676,9 @@ class ImportStep6Report(QWidget):
         # Section titles
         self._stats_title.setText(tr("wizard.import.step6.results_summary"))
         self._breakdown_title.setText(tr("wizard.import.step6.breakdown_title"))
-        self._extra_title.setText(tr("wizard.import.step6.extra_info_title"))
+        # _extra_title was removed with the legacy "Additional info" card.
+        if self._extra_title is not None:
+            self._extra_title.setText(tr("wizard.import.step6.extra_info_title"))
         self._errors_title_label.setText(tr("wizard.import.step6.errors_title"))
 
         # Stat box labels
