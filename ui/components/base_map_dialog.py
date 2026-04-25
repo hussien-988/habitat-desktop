@@ -875,10 +875,61 @@ class BaseMapDialog(QDialog):
         if hasattr(self, '_loading_label') and self._loading_label:
             self._loading_label.setGeometry(0, 0, map_w, map_h)
 
+    def _find_main_window(self):
+        """Walk up the parent chain to find the MainWindow (has 'pages' dict)."""
+        w = self.parent()
+        while w is not None:
+            if hasattr(w, 'pages'):
+                return w
+            try:
+                w = w.parent()
+            except Exception:
+                return None
+        return None
+
+    def _pause_parent_decorative_timers(self):
+        """Pause shimmer + constellation timers on every page of the main window
+        while this dialog is visible. Modal dialogs do not trigger hideEvent on
+        the parent page, so its decorative timers keep firing on the main thread
+        and starve QWebEngineView during initialization. Resumed in hideEvent."""
+        self._paused_parent_timers = []
+        main_win = self._find_main_window()
+        if not main_win or not hasattr(main_win, 'pages'):
+            return
+        for page in main_win.pages.values():
+            t = getattr(page, '_shimmer_timer', None)
+            if t is not None:
+                try:
+                    if t.isActive():
+                        t.stop()
+                        self._paused_parent_timers.append(t)
+                except RuntimeError:
+                    pass
+            header = getattr(page, '_header', None)
+            if header is not None:
+                ht = getattr(header, '_timer', None)
+                if ht is not None:
+                    try:
+                        if ht.isActive():
+                            ht.stop()
+                            self._paused_parent_timers.append(ht)
+                    except RuntimeError:
+                        pass
+
+    def _resume_parent_decorative_timers(self):
+        for t in getattr(self, '_paused_parent_timers', []):
+            try:
+                if not t.isActive():
+                    t.start()
+            except RuntimeError:
+                pass
+        self._paused_parent_timers = []
+
     def showEvent(self, event):
         """Show the gray overlay only when the dialog actually becomes visible.
         Supports pre-warm flows where the dialog is instantiated but not shown."""
         super().showEvent(event)
+        self._pause_parent_decorative_timers()
         if getattr(self, '_overlay', None) is not None:
             try:
                 self._overlay.show()
@@ -888,6 +939,7 @@ class BaseMapDialog(QDialog):
 
     def hideEvent(self, event):
         """Hide the overlay when the dialog is hidden (on close/reject/accept)."""
+        self._resume_parent_decorative_timers()
         if getattr(self, '_overlay', None) is not None:
             try:
                 self._overlay.hide()
@@ -1523,11 +1575,31 @@ class BaseMapDialog(QDialog):
                 self._orig_shadow_effect = None
 
     def _cleanup_workers(self):
-        """Stop viewport workers and timers."""
+        """Stop viewport, buildings and layers workers + their debounce timer.
+
+        Disconnects signals so a stale result from a worker that finishes after
+        close cannot be injected into a destroyed dialog or compete with a
+        freshly opened one.
+        """
         if hasattr(self, '_viewport_debounce_timer'):
             self._viewport_debounce_timer.stop()
-        if self._viewport_worker and self._viewport_worker.isRunning():
-            self._viewport_worker.requestInterruption()
+        for worker_attr in ('_viewport_worker', '_buildings_worker', '_layers_worker'):
+            worker = getattr(self, worker_attr, None)
+            if worker is None:
+                continue
+            try:
+                worker.finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                worker.error.disconnect()
+            except (TypeError, RuntimeError, AttributeError):
+                pass
+            try:
+                if worker.isRunning():
+                    worker.requestInterruption()
+            except RuntimeError:
+                pass
 
     def accept(self):
         """Override accept to clean up overlay."""

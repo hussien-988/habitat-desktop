@@ -42,12 +42,6 @@ from controllers.claim_controller import (
     ClaimFilter,
 )
 
-from controllers.map_controller import (
-    MapController,
-    MapFilter,
-    MapState,
-)
-
 from controllers.person_controller import (
     PersonController,
     PersonFilter,
@@ -71,11 +65,6 @@ __all__ = [
     # Claim
     "ClaimController",
     "ClaimFilter",
-
-    # Map
-    "MapController",
-    "MapFilter",
-    "MapState",
 
     # Person
     "PersonController",
