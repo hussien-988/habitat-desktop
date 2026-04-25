@@ -310,9 +310,7 @@ class LoadingSpinnerOverlay(QWidget):
         else:
             self._subtitle.hide()
 
-        parent = self.parent()
-        if parent and isinstance(parent, QWidget):
-            self.setGeometry(parent.rect())
+        self._resize_to_parent()
 
         self._spinner.start()
         self._bg_timer.start()
@@ -321,6 +319,32 @@ class LoadingSpinnerOverlay(QWidget):
 
         self._timeout_timer.start(self._timeout_ms)
         QApplication.processEvents()
+        self._resize_to_parent()
+        QTimer.singleShot(0, self._resize_to_parent)
+
+    def _resize_to_parent(self) -> None:
+        """Resize overlay to match the visible area of the parent widget.
+
+        Falls back to the top-level window when the parent has not been laid
+        out yet (e.g. when show_loading is called before the step becomes the
+        current widget in a QStackedWidget).
+        """
+        parent = self.parent()
+        if not (parent and isinstance(parent, QWidget)):
+            return
+        if parent.layout() is not None:
+            parent.layout().activate()
+        rect = parent.rect()
+        if rect.width() < 100 or rect.height() < 100:
+            top = parent.window()
+            if top is not None and top is not parent:
+                top_rect = top.rect()
+                if top_rect.width() >= 100 and top_rect.height() >= 100:
+                    top_left = parent.mapFromGlobal(top.mapToGlobal(top_rect.topLeft()))
+                    self.setGeometry(top_left.x(), top_left.y(),
+                                     top_rect.width(), top_rect.height())
+                    return
+        self.setGeometry(rect)
 
     def hide_loading(self) -> None:
         """Hide overlay and stop all animations. Safe to call even if not showing."""
@@ -407,7 +431,8 @@ class LoadingSpinnerOverlay(QWidget):
         super().paintEvent(event)
 
     def eventFilter(self, obj, event) -> bool:
-        if obj is self.parent() and event.type() == QEvent.Resize:
+        if obj is self.parent() and event.type() in (QEvent.Resize, QEvent.Show):
             if self.isVisible():
-                self.setGeometry(obj.rect())
+                self._resize_to_parent()
+                self.raise_()
         return super().eventFilter(obj, event)

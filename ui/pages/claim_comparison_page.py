@@ -104,6 +104,66 @@ def _find_in_staged_collection(staged_snapshot, collection_key, entity_id):
                 return payload if isinstance(payload, dict) else item
     return None
 
+
+# ─── Embedded snapshot helpers (ConflictDetailDto.firstEntity / secondEntity) ──
+#
+# Backend now embeds the full Person/PropertyUnit/Building DTOs directly in the
+# `/conflicts/{id}/details` response, eliminating the need for secondary calls
+# to /persons/{id}, /propertyunits/{id}, /buildings/{id}, or
+# /import/packages/{id}/staged-entities. These helpers extract the inner DTO
+# while preserving graceful fallback when snapshots are absent (older backend).
+
+def _match_snapshot_to_id(details, entity_id):
+    """Locate the snapshot wrapper that matches a given conflict entity id.
+
+    Per backend contract:
+      - `firstEntity` corresponds to `firstEntityId` (always the staging row)
+      - `secondEntity` corresponds to `secondEntityId` (Production or Staging)
+
+    Returns (snapshot_dict, source_str) or (None, None) when not found.
+    `source_str` is the raw `source` field ("Staging"/"Production") or "" if
+    the wrapper exists but has no source.
+    """
+    if not isinstance(details, dict) or not entity_id:
+        return None, None
+    target = str(entity_id)
+    for snap_key, id_key in (
+        ("firstEntity", "firstEntityId"),
+        ("secondEntity", "secondEntityId"),
+    ):
+        if str(details.get(id_key, "")) != target:
+            continue
+        snap = details.get(snap_key)
+        if isinstance(snap, dict):
+            return snap, str(snap.get("source", ""))
+    return None, None
+
+
+def _extract_dto_from_snapshot(snapshot):
+    """Extract the inner Person/PropertyUnit/Building DTO from a snapshot.
+
+    The wrapper carries `entityType` selecting exactly one payload field.
+    Returns None when:
+      - the wrapper itself is missing/non-dict
+      - the targeted payload field is null (entity deleted/missing per
+        backend doc edge cases)
+
+    The returned dict is a shallow copy so callers can mutate it (e.g. attach
+    `_building`) without affecting the original details object.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    entity_type = snapshot.get("entityType")
+    payload_key = {
+        "Person": "person",
+        "PropertyUnit": "propertyUnit",
+        "Building": "building",
+    }.get(entity_type)
+    if not payload_key:
+        return None
+    payload = snapshot.get(payload_key)
+    return dict(payload) if isinstance(payload, dict) else None
+
 # ─── Styles ───────────────────────────────────────────────────────────
 _RECORD_CARD_NORMAL = f"""
     QFrame#recordCard {{
@@ -1713,26 +1773,53 @@ class ClaimComparisonPage(QWidget):
                 f"dataComparison_preview={str(details.get('dataComparison',''))[:300]}"
             )
 
-            if package_id and is_person:
-                try:
-                    from services.api_client import get_api_client
-                    staged_snapshot = get_api_client().get_staged_entities(package_id)
-                except Exception as se:
-                    logger.warning(f"Failed to fetch staged entities for package {package_id}: {se}")
-
-            logger.warning(
-                f"[CMP] staged_snapshot present={bool(staged_snapshot)}, entity_ids={entity_ids}"
-            )
-
+            # Embedded snapshots eliminate the need for secondary calls when
+            # both sides are present in details. We only fall back to
+            # staged-entities + production lookup when snapshots are missing
+            # (older backend deploy or `null` payload edge case).
             if is_person:
                 for eid in entity_ids:
                     if not eid:
                         continue
-                    record = _find_in_staged_persons(staged_snapshot, eid) if staged_snapshot else None
+
+                    # 1) Embedded snapshot path (preferred — single call).
+                    snap_wrapper, snap_source = _match_snapshot_to_id(details, eid)
+                    snap_dto = _extract_dto_from_snapshot(snap_wrapper) if snap_wrapper else None
+                    if snap_dto:
+                        fetched_records[eid] = snap_dto
+                        record_sources[eid] = (
+                            f"snapshot:{snap_source.lower()}" if snap_source else "snapshot"
+                        )
+                        logger.info(
+                            f"Person {eid} resolved from embedded snapshot "
+                            f"(source={snap_source!r})"
+                        )
+                        logger.warning(
+                            f"[CMP] eid={eid} source={record_sources[eid]} "
+                            f"has_keys={list(snap_dto.keys())[:10]}"
+                        )
+                        continue
+
+                    # 2) Fallback path — staged-entities then production.
+                    if package_id and staged_snapshot is None:
+                        try:
+                            from services.api_client import get_api_client
+                            staged_snapshot = get_api_client().get_staged_entities(package_id)
+                        except Exception as se:
+                            logger.warning(
+                                f"Failed to fetch staged entities for package "
+                                f"{package_id}: {se}"
+                            )
+                            staged_snapshot = {}
+
+                    record = (
+                        _find_in_staged_persons(staged_snapshot, eid)
+                        if staged_snapshot else None
+                    )
                     if record:
                         fetched_records[eid] = record
                         record_sources[eid] = "staged"
-                        logger.info(f"Person {eid} resolved from staged entities")
+                        logger.info(f"Person {eid} resolved from staged entities (fallback)")
                         logger.warning(
                             f"[CMP] eid={eid} source={record_sources[eid]} "
                             f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
@@ -1743,7 +1830,7 @@ class ClaimComparisonPage(QWidget):
                         if person:
                             fetched_records[eid] = person
                             record_sources[eid] = "production"
-                            logger.info(f"Person {eid} resolved from production endpoint")
+                            logger.info(f"Person {eid} resolved from production endpoint (fallback)")
                             logger.warning(
                                 f"[CMP] eid={eid} source={record_sources[eid]} "
                                 f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
@@ -2026,68 +2113,47 @@ class ClaimComparisonPage(QWidget):
             record_ids = [r["id"] for r in records]
             self._pending_data_comparison = data_comparison
             self._property_units_worker = ApiWorker(
-                self._fetch_all_property_units, record_ids
+                self._fetch_all_property_units, record_ids, details
             )
             self._property_units_worker.finished.connect(self._on_property_units_loaded)
             self._property_units_worker.error.connect(self._on_property_units_error)
             self._spinner.show_loading(tr("component.loading.default"))
             self._property_units_worker.start()
 
-    def _fetch_all_property_units(self, record_ids):
+    def _fetch_all_property_units(self, record_ids, details=None):
         """Fetch all property unit data for comparison (runs in worker thread).
 
-        For each id we try staged-entities FIRST (when in import context),
-        then fall back to production. This mirrors the person path: the
-        staged side of a duplicate isn't in production yet, so a pure
-        production lookup 404s and the column blanks out.
+        Resolution order per entity:
+          1. Embedded snapshot from `details.firstEntity` / `details.secondEntity`
+             — preferred: zero extra API calls.
+          2. Staged-entities snapshot (only fetched lazily when needed).
+          3. Production lookup via /propertyunits/{id}.
+
+        The staged side of a duplicate isn't in production yet, so falling
+        back to a pure production lookup would 404 and blank the column.
         """
         from services.api_client import get_api_client
         api = get_api_client()
 
-        staged_snapshot = None
+        staged_snapshot = None  # Lazily fetched only when snapshot path fails.
         package_id = self._current_import_package_id
         logger.warning(
-            f"[CMP-PROP] worker start: package_id={package_id!r}, record_ids={record_ids}"
+            f"[CMP-PROP] worker start: package_id={package_id!r}, "
+            f"record_ids={record_ids}, has_details={bool(details)}"
         )
-        if package_id:
+
+        def _ensure_staged_snapshot():
+            nonlocal staged_snapshot
+            if staged_snapshot is not None or not package_id:
+                return
             try:
-                staged_snapshot = api.get_staged_entities(package_id)
+                staged_snapshot = api.get_staged_entities(package_id) or {}
             except Exception as se:
                 logger.warning(
                     f"[CMP-PROP] Failed to fetch staged entities for package "
                     f"{package_id}: {se}"
                 )
-
-        if staged_snapshot:
-            try:
-                snap_keys = (
-                    list(staged_snapshot.keys())
-                    if isinstance(staged_snapshot, dict) else None
-                )
-                pu = (
-                    staged_snapshot.get("propertyUnits")
-                    if isinstance(staged_snapshot, dict) else None
-                )
-                pu_count = len(pu) if isinstance(pu, list) else None
-                pu_sample_ids = []
-                if isinstance(pu, list):
-                    for it in pu[:5]:
-                        if isinstance(it, dict):
-                            pu_sample_ids.append({
-                                k: it.get(k) for k in (
-                                    "id", "originalEntityId", "stagedEntityId",
-                                    "propertyUnitId", "entityId",
-                                ) if it.get(k) is not None
-                            })
-                logger.warning(
-                    f"[CMP-PROP] staged_snapshot keys={snap_keys}, "
-                    f"propertyUnits count={pu_count}, "
-                    f"first ids={pu_sample_ids}"
-                )
-            except Exception as e:
-                logger.warning(f"[CMP-PROP] snapshot inspect error: {e}")
-        else:
-            logger.warning(f"[CMP-PROP] staged_snapshot is None/empty")
+                staged_snapshot = {}
 
         results = []
         for entity_id in record_ids:
@@ -2096,28 +2162,43 @@ class ClaimComparisonPage(QWidget):
                 continue
 
             unit_dto = None
+            from_snapshot = False
             from_staged = False
-            if staged_snapshot:
-                staged_unit = _find_in_staged_property_units(staged_snapshot, entity_id)
-                if staged_unit:
-                    unit_dto = dict(staged_unit)
-                    from_staged = True
-                    logger.warning(
-                        f"[CMP-PROP] eid={entity_id} resolved from staged, "
-                        f"keys={list(unit_dto.keys())[:15]}"
-                    )
-                else:
-                    logger.warning(
-                        f"[CMP-PROP] eid={entity_id} NOT in staged_snapshot — "
-                        f"will try production"
-                    )
 
+            # 1) Embedded snapshot path.
+            snap_wrapper, snap_source = _match_snapshot_to_id(details, entity_id)
+            snap_dto = _extract_dto_from_snapshot(snap_wrapper) if snap_wrapper else None
+            if snap_dto:
+                unit_dto = snap_dto
+                from_snapshot = True
+                from_staged = (snap_source.lower() == "staging")
+                logger.warning(
+                    f"[CMP-PROP] eid={entity_id} resolved from embedded snapshot "
+                    f"(source={snap_source!r}), keys={list(unit_dto.keys())[:15]}"
+                )
+
+            # 2) Staged-entities fallback.
+            if unit_dto is None:
+                _ensure_staged_snapshot()
+                if staged_snapshot:
+                    staged_unit = _find_in_staged_property_units(
+                        staged_snapshot, entity_id
+                    )
+                    if staged_unit:
+                        unit_dto = dict(staged_unit)
+                        from_staged = True
+                        logger.warning(
+                            f"[CMP-PROP] eid={entity_id} resolved from staged "
+                            f"(fallback), keys={list(unit_dto.keys())[:15]}"
+                        )
+
+            # 3) Production fallback.
             if unit_dto is None:
                 try:
                     unit_dto = api.get_property_unit_by_id(entity_id)
                     logger.warning(
                         f"[CMP-PROP] eid={entity_id} production lookup "
-                        f"{'succeeded' if unit_dto else 'returned empty'}"
+                        f"{'succeeded' if unit_dto else 'returned empty'} (fallback)"
                     )
                 except Exception as e:
                     logger.error(f"[CMP-PROP] eid={entity_id} production failed: {e}")
@@ -2127,8 +2208,10 @@ class ClaimComparisonPage(QWidget):
                 results.append({})
                 continue
 
-            # Try to attach the parent building. Prefer staged buildings
-            # when the unit itself came from staging — they share package.
+            # Attach the parent building. The propertyUnit DTO (whether from
+            # snapshot or production) carries `buildingId` only — the building
+            # object itself must come from staged-entities (when staging) or
+            # production (when production).
             building_id = (
                 unit_dto.get("buildingId")
                 or unit_dto.get("building_id")
@@ -2136,13 +2219,15 @@ class ClaimComparisonPage(QWidget):
             )
             if building_id:
                 building_dto = None
-                if staged_snapshot:
-                    staged_building = _find_in_staged_buildings(
-                        staged_snapshot, building_id
-                    )
-                    if staged_building:
-                        building_dto = dict(staged_building)
-                if building_dto is None and not from_staged:
+                if from_staged:
+                    _ensure_staged_snapshot()
+                    if staged_snapshot:
+                        staged_building = _find_in_staged_buildings(
+                            staged_snapshot, building_id
+                        )
+                        if staged_building:
+                            building_dto = dict(staged_building)
+                else:
                     try:
                         building_dto = api.get_building_by_id(building_id)
                     except Exception as be:
@@ -2152,6 +2237,10 @@ class ClaimComparisonPage(QWidget):
                 if building_dto:
                     unit_dto["_building"] = building_dto
 
+            logger.warning(
+                f"[CMP-PROP] eid={entity_id} final: from_snapshot={from_snapshot}, "
+                f"from_staged={from_staged}, has_building={'_building' in unit_dto}"
+            )
             results.append(unit_dto)
 
         return results

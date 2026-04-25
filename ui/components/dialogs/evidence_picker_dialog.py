@@ -233,9 +233,7 @@ class EvidencePickerDialog(QDialog):
 
     def _make_view_btn(self, ev_id: str, file_name: str) -> QPushButton:
         import os
-        from PyQt5.QtCore import QUrl
-        from PyQt5.QtGui import QDesktopServices
-        from utils.helpers import download_evidence_file
+        from ui.components.evidence_viewer import download_and_open_evidence
 
         btn = QPushButton()
         btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
@@ -269,67 +267,10 @@ class EvidencePickerDialog(QDialog):
                 QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
             """)
 
-        def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
-            import threading
-            b.setCursor(Qt.WaitCursor)
-            b.setEnabled(False)
-            try:
-                from services.api_client import get_api_client
-                get_api_client()._ensure_valid_token()
-            except Exception:
-                pass
-
-            dialog_ref = self
-
-            def _open_on_ui():
-                # Runs back on the UI thread (queued via singleShot from
-                # the worker callback below) — safe to touch widgets.
-                local = getattr(b, "_last_local_path", None)
-                ok = bool(local)
-                if ok:
-                    try:
-                        os.startfile(local)
-                    except Exception as exc:
-                        logger.warning(f"openUrl failed for {local}: {exc}")
-                        try:
-                            QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                        except Exception:
-                            ok = False
-                if not ok:
-                    # Surface the failure to the user — silent failures
-                    # were the original bug. Toast attaches to the
-                    # picker dialog so it appears on top of the BottomSheet.
-                    from ui.components.toast import Toast as _T
-                    try:
-                        _T.show_toast(
-                            dialog_ref,
-                            tr("page.claim_details.cannot_download"),
-                            _T.ERROR,
-                            duration=6000,
-                        )
-                    except Exception:
-                        pass
-                b.setEnabled(True)
-                b.setCursor(Qt.PointingHandCursor)
-                try:
-                    delattr(b, "_last_local_path")
-                except Exception:
-                    pass
-
-            def _download():
-                try:
-                    local = download_evidence_file(eid, fn or eid)
-                except Exception as e:
-                    logger.error(f"View evidence error for {eid}: {e}")
-                    local = None
-                # Stash result on the button so the UI-thread callback can
-                # read it (passing strings via QMetaObject is fragile).
-                b._last_local_path = local
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, _open_on_ui)
-
-            threading.Thread(target=_download, daemon=True).start()
-        btn.clicked.connect(_open)
+        btn.clicked.connect(
+            lambda _checked=False, eid=ev_id, fn=file_name:
+                download_and_open_evidence(self, eid, fn)
+        )
         return btn
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:

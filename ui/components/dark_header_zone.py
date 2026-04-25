@@ -51,7 +51,7 @@ class DarkHeaderZone(QFrame):
             })
 
         self._timer = QTimer(self)
-        self._timer.setInterval(50)
+        self._timer.setInterval(200)
         self._timer.timeout.connect(self.update)
 
         # Internal layout refs

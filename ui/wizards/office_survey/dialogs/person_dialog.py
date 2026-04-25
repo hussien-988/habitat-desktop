@@ -751,6 +751,58 @@ class PersonDialog(QDialog):
         grid.addLayout(email_container, row, 0, 1, 2)
         row += 1
 
+        # Landline (full width)
+        grid.addWidget(self._label(tr("wizard.person_dialog.phone"), label_style), row, 0, 1, 2)
+        row += 1
+        landline_frame = QFrame()
+        landline_frame.setStyleSheet("""
+            QFrame {
+                border: 1px solid rgba(56,144,223,0.2);
+                border-radius: 8px;
+                background-color: #f0f7ff;
+                min-height: 36px; max-height: 36px;
+            }
+        """)
+        landline_frame.setLayoutDirection(Qt.LeftToRight)
+        land_layout = QHBoxLayout(landline_frame)
+        land_layout.setContentsMargins(0, 0, 0, 0)
+        land_layout.setSpacing(0)
+        self.lbl_landline_prefix = QLabel("0")
+        self.lbl_landline_prefix.setFixedWidth(ScreenScale.w(40))
+        self.lbl_landline_prefix.setAlignment(Qt.AlignCenter)
+        self.lbl_landline_prefix.setStyleSheet("""
+            QLabel {
+                color: #3890DF;
+                font-size: 13px;
+                font-weight: 600;
+                border-right: 1px solid rgba(56,144,223,0.35);
+                padding: 0 10px;
+                background: transparent;
+            }
+        """)
+        self.landline_digits = QLineEdit()
+        self.landline_digits.setPlaceholderText("xxxxxxxxx")
+        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,9}")))
+        self.landline_digits.setLayoutDirection(Qt.LeftToRight)
+        self.landline_digits.setStyleSheet("""
+            QLineEdit {
+                border: none; background: transparent;
+                color: #2C3E50; font-size: 14px; padding: 0 10px;
+            }
+        """)
+        land_layout.addWidget(self.lbl_landline_prefix)
+        land_layout.addWidget(self.landline_digits)
+        self._landline_error = QLabel("")
+        self._landline_error.setStyleSheet(self._error_label_style())
+        self._landline_error.setVisible(False)
+        landline_container = QVBoxLayout()
+        landline_container.setSpacing(2)
+        landline_container.setContentsMargins(0, 0, 0, 0)
+        landline_container.addWidget(landline_frame)
+        landline_container.addWidget(self._landline_error)
+        grid.addLayout(landline_container, row, 0, 1, 2)
+        row += 1
+
         # Mobile (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.mobile"), label_style), row, 0, 1, 2)
         row += 1
@@ -801,108 +853,6 @@ class PersonDialog(QDialog):
         mobile_outer.addWidget(mobile_container)
         mobile_outer.addWidget(self._mobile_error)
         grid.addLayout(mobile_outer, row, 0, 1, 2)
-        row += 1
-
-        # Landline (full width)
-        grid.addWidget(self._label(tr("wizard.person_dialog.phone"), label_style), row, 0, 1, 2)
-        row += 1
-        _area_codes = [
-            ("011", "011 - دمشق"), ("012", "012 - حمص"), ("013", "013 - حماة"),
-            ("014", "014 - القنيطرة"), ("015", "015 - درعا"), ("016", "016 - السويداء"),
-            ("017", "017 - اللاذقية"), ("018", "018 - طرطوس"), ("021", "021 - حلب"),
-            ("022", "022 - الرقة"), ("023", "023 - إدلب"), ("024", "024 - دير الزور"),
-            ("052", "052 - الحسكة"),
-        ]
-        landline_frame = QFrame()
-        landline_frame.setStyleSheet("""
-            QFrame {
-                border: 1px solid rgba(56,144,223,0.2);
-                border-radius: 8px;
-                background-color: #f0f7ff;
-                min-height: 36px; max-height: 36px;
-            }
-        """)
-        landline_frame.setLayoutDirection(Qt.LeftToRight)
-        land_layout = QHBoxLayout(landline_frame)
-        land_layout.setContentsMargins(0, 0, 0, 0)
-        land_layout.setSpacing(0)
-        self.landline_prefix = QComboBox()
-        self.landline_prefix.setFixedWidth(ScreenScale.w(130))
-        self.landline_prefix.setCursor(Qt.PointingHandCursor)
-        for _code, _display in _area_codes:
-            self.landline_prefix.addItem(_display, _code)
-        self.landline_prefix.setMaxVisibleItems(len(_area_codes))
-        self.landline_prefix.setStyleSheet("""
-            QComboBox {
-                border: none;
-                background: #EBF5FF;
-                border-top-left-radius: 7px;
-                border-bottom-left-radius: 7px;
-                padding: 0 22px 0 10px;
-                font-size: 13px; font-weight: 600; color: #3890DF;
-            }
-            QComboBox:hover { background: #D6ECFF; }
-            QComboBox QLineEdit {
-                border: none; background: transparent;
-                padding: 0; font-size: 13px; font-weight: 600; color: #3890DF;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: right center;
-                border: none; width: 20px;
-            }
-            QComboBox::down-arrow {
-                image: none; width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid #3890DF;
-                margin-right: 6px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #FFFFFF;
-                border: 1px solid #D0D7E2;
-                border-radius: 8px;
-                padding: 4px;
-                selection-background-color: #EBF5FF;
-                selection-color: #1E293B;
-                outline: none;
-            }
-            QComboBox QAbstractItemView::item {
-                min-height: 32px;
-                padding: 6px 10px;
-                border-radius: 6px;
-                color: #1E293B;
-            }
-            QComboBox QAbstractItemView::item:hover {
-                background-color: #F0F7FF;
-            }
-        """)
-        _land_sep = QFrame()
-        _land_sep.setFrameShape(QFrame.VLine)
-        _land_sep.setFixedWidth(1)
-        _land_sep.setStyleSheet("background-color: rgba(56,144,223,0.35); border: none; margin: 7px 0;")
-        self.landline_digits = QLineEdit()
-        self.landline_digits.setPlaceholderText("xxxxxxx")
-        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
-        self.landline_digits.setLayoutDirection(Qt.LeftToRight)
-        self.landline_digits.setStyleSheet("""
-            QLineEdit {
-                border: none; background: transparent;
-                color: #2C3E50; font-size: 14px; padding: 0 10px;
-            }
-        """)
-        land_layout.addWidget(self.landline_prefix)
-        land_layout.addWidget(_land_sep)
-        land_layout.addWidget(self.landline_digits)
-        self._landline_error = QLabel("")
-        self._landline_error.setStyleSheet(self._error_label_style())
-        self._landline_error.setVisible(False)
-        landline_container = QVBoxLayout()
-        landline_container.setSpacing(2)
-        landline_container.setContentsMargins(0, 0, 0, 0)
-        landline_container.addWidget(landline_frame)
-        landline_container.addWidget(self._landline_error)
-        grid.addLayout(landline_container, row, 0, 1, 2)
 
         tab_layout.addLayout(grid)
 
@@ -1989,10 +1939,6 @@ class PersonDialog(QDialog):
 
     def _create_existing_doc_widget(self, display_name: str, entry: dict) -> QWidget:
         """Create a thumbnail widget for an existing server document with preview."""
-        import os
-        from PyQt5.QtGui import QDesktopServices
-        from utils.helpers import download_evidence_file
-
         evidence_id = entry.get('evidence_id', '')
 
         container = QWidget()
@@ -2020,53 +1966,9 @@ class PersonDialog(QDialog):
         )
 
         def _open_doc(e, eid=evidence_id, fn=display_name):
-            import threading
+            from ui.components.evidence_viewer import download_and_open_evidence
             self._refresh_token()
-            thumb.setEnabled(False)
-            dialog_ref = self
-
-            def _open_on_ui():
-                local = getattr(thumb, "_last_local_path", None)
-                ok = bool(local)
-                if ok:
-                    try:
-                        import os as _os
-                        _os.startfile(local)
-                    except Exception as exc:
-                        logger.warning(f"openUrl failed for {local}: {exc}")
-                        try:
-                            from PyQt5.QtCore import QUrl
-                            QDesktopServices.openUrl(QUrl.fromLocalFile(local))
-                        except Exception:
-                            ok = False
-                if not ok:
-                    from ui.components.toast import Toast as _T
-                    try:
-                        _T.show_toast(
-                            dialog_ref,
-                            tr("page.claim_details.cannot_download"),
-                            _T.ERROR,
-                            duration=6000,
-                        )
-                    except Exception:
-                        pass
-                thumb.setEnabled(True)
-                try:
-                    delattr(thumb, "_last_local_path")
-                except Exception:
-                    pass
-
-            def _download():
-                try:
-                    local = download_evidence_file(eid, fn or eid)
-                except Exception as exc:
-                    logger.error(f"View doc error for {eid}: {exc}")
-                    local = None
-                thumb._last_local_path = local
-                from PyQt5.QtCore import QTimer
-                QTimer.singleShot(0, _open_on_ui)
-
-            threading.Thread(target=_download, daemon=True).start()
+            download_and_open_evidence(self, eid, fn)
         thumb.mousePressEvent = _open_doc
 
         x_btn = QLabel(container)
@@ -2541,11 +2443,11 @@ class PersonDialog(QDialog):
         return len(digits) == 8
 
     def _validate_landline(self, value: str) -> bool:
-        """Validate landline local digits: exactly 7 digits."""
+        """Validate landline local digits: exactly 9 digits."""
         if not value:
             return True
         digits = ''.join(c for c in value if c.isdigit())
-        return len(digits) == 7
+        return len(digits) == 9
 
     def _validate_national_id(self):
         """Validate national ID format. Uniqueness is checked server-side (409). Returns (valid, error_key)."""
@@ -2600,10 +2502,8 @@ class PersonDialog(QDialog):
         self.phone.setText(phone_val)
         self.email.setText(data.get('email') or '')
         _land_val = data.get('landline') or ''
-        if len(_land_val) == 10 and _land_val[0] == '0':
-            _idx = self.landline_prefix.findData(_land_val[:3])
-            self.landline_prefix.setCurrentIndex(_idx if _idx >= 0 else 0)
-            self.landline_digits.setText(_land_val[3:])
+        if _land_val.startswith('0'):
+            self.landline_digits.setText(_land_val[1:])
         else:
             self.landline_digits.setText(_land_val)
 
@@ -2706,7 +2606,7 @@ class PersonDialog(QDialog):
             'relationship_type': self.person_role.currentData(),  # backward compat
             'phone': self._format_phone(self.phone.text().strip()),
             'email': self.email.text().strip() or None,
-            'landline': (self.landline_prefix.currentData() + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else None,
+            'landline': ("0" + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else None,
             'is_contact_person': False,
             # Tab 3
             'relation_data': {

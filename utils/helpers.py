@@ -335,6 +335,42 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
     return None
 
 
+def download_identification_document_file(
+    person_id: str, document_id: str, file_name: str
+) -> Optional[str]:
+    """Cached download of an identification document via the new endpoint.
+
+    Uses GET /v1/persons/{personId}/identification-documents/{documentId}/download.
+    Mirrors download_evidence_file's caching: writes to TEMP/trrcms_iddocs and
+    short-circuits on subsequent calls when the cached file is present.
+    Returns the local path on success, or None on failure.
+    """
+    if not person_id or not document_id:
+        return None
+    import os, tempfile, logging
+    _logger = logging.getLogger(__name__)
+
+    cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_iddocs")
+    os.makedirs(cache_dir, exist_ok=True)
+    safe_name = sanitize_filename(file_name) if file_name else document_id
+    save_path = os.path.join(cache_dir, f"{document_id}_{safe_name}")
+
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        return save_path
+
+    from services.api_client import get_api_client
+    api = get_api_client()
+    try:
+        if api.download_identification_document(person_id, document_id, save_path):
+            return save_path
+    except Exception as e:
+        _logger.warning(
+            f"download_identification_document_file failed "
+            f"(person={person_id}, doc={document_id}): {e}"
+        )
+    return None
+
+
 def validate_coordinates(lat: float, lon: float) -> bool:
     """
     Validate latitude and longitude values.

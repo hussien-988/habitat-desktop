@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QFrame, QLineEdit, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect, QStackedWidget,
+    QStackedWidget,
 )
 from PyQt5.QtCore import (
     Qt, pyqtSignal, pyqtProperty, QTimer, QRectF, QPoint, QSize,
@@ -455,9 +455,6 @@ class CasesPage(QWidget):
         self._active_tab = "draft"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
-        self._draft_count = 0
-        self._finalized_count = 0
-        self._obstructed_count = 0
         self._card_widgets: List[_SurveyCard] = []
         self._loading = False
         self._navigating = False
@@ -539,7 +536,7 @@ class CasesPage(QWidget):
 
         # Search field (row 1)
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
@@ -774,7 +771,10 @@ class CasesPage(QWidget):
 
     def refresh(self, data=None):
         self._navigating = False
-        self._last_refresh_ms = int(time.time() * 1000)
+        now = int(time.time() * 1000)
+        if now - self._last_refresh_ms < 5000 and self._all_data:
+            return
+        self._last_refresh_ms = now
         self._load_surveys()
 
     def _load_surveys(self):
@@ -801,106 +801,45 @@ class CasesPage(QWidget):
 
     def _fetch_surveys_data(self, status, name, clerk_id):
         from services.api_client import get_api_client
-        from controllers.building_controller import BuildingController
 
         api = get_api_client()
         total_count = 0
 
-        # Fetch surveys
-        surveys = []
+        # Fetch paginated surveys
         try:
+            params = {
+                "page": self._current_page,
+                "pageSize": self._page_size,
+                "sortBy": "SurveyDate",
+                "sortDirection": "desc",
+            }
             if name:
-                # Direct lookup via Claims endpoint — exact CLM number match
-                claim = api.get_claim_by_number(name.strip())
-                if isinstance(claim, dict):
-                    survey_id = (
-                        claim.get("originatingSurveyId") or
-                        claim.get("surveyId") or
-                        claim.get("SurveyId") or
-                        claim.get("survey_id")
-                    )
-                    if survey_id:
-                        try:
-                            survey = api._request("GET", f"/v1/Surveys/office/{survey_id}")
-                            if isinstance(survey, dict):
-                                surveys = [survey]
-                        except Exception as exc:
-                            logger.warning(f"Survey fetch for {survey_id} failed: {exc}")
-                total_count = len(surveys)
+                params["referenceCode"] = name
+                # No status filter — search across all statuses
             else:
-                params = {
-                    "page": self._current_page,
-                    "pageSize": self._page_size,
-                    "sortBy": "SurveyDate",
-                    "sortDirection": "desc",
-                    "status": status,
-                }
-                if clerk_id:
-                    params["clerkId"] = clerk_id
-                raw = api._request("GET", "/v1/Surveys/office", params=params)
-                if isinstance(raw, dict):
-                    surveys = raw.get("surveys", [])
-                    total_count = raw.get("totalCount", len(surveys))
-                else:
-                    surveys = raw if isinstance(raw, list) else []
-                    total_count = len(surveys)
+                params["status"] = status
+            if clerk_id:
+                params["clerkId"] = clerk_id
+
+            raw = api._request("GET", "/v1/Surveys/office", params=params)
+            if isinstance(raw, dict):
+                surveys = raw.get("surveys", [])
+                total_count = raw.get("totalCount", len(surveys))
+            else:
+                surveys = raw if isinstance(raw, list) else []
+                total_count = len(surveys)
         except Exception as e:
-            logger.warning(f"Surveys fetch failed: {e}")
+            logger.warning(f"Paginated surveys fetch failed: {e}")
             surveys = []
-
-        # Fetch counts for stat pills
-        draft_count = 0
-        finalized_count = 0
-        obstructed_count = 0
-        for st, key in [("Draft", "draft"), ("Finalized", "finalized"), ("Obstructed", "obstructed")]:
-            try:
-                count_params = {"status": st, "page": 1, "pageSize": 1}
-                if clerk_id:
-                    count_params["clerkId"] = clerk_id
-                raw_count = api._request("GET", "/v1/Surveys/office", params=count_params)
-                count_val = raw_count.get("totalCount", 0) if isinstance(raw_count, dict) else 0
-                if key == "draft":
-                    draft_count = count_val
-                elif key == "finalized":
-                    finalized_count = count_val
-                else:
-                    obstructed_count = count_val
-            except Exception:
-                pass
-
-        # Building enrichment
-        new_buildings = {}
-        building_ids = {s.get("buildingId", "") for s in surveys if s.get("buildingId")}
-        if building_ids:
-            try:
-                bc = BuildingController(self.db)
-                for bid in building_ids:
-                    if not bid or bid in self._buildings_cache:
-                        continue
-                    try:
-                        dto = api.get_building_by_id(bid)
-                        new_buildings[bid] = bc._api_dto_to_building(dto)
-                    except Exception as exc:
-                        logger.warning(f"Building enrichment failed for {bid}: {exc}")
-            except Exception:
-                pass
 
         return {
             "surveys": surveys,
-            "new_buildings": new_buildings,
             "status": status,
-            "draft_count": draft_count,
-            "finalized_count": finalized_count,
-            "obstructed_count": obstructed_count,
             "total_count": total_count,
         }
 
     def _on_surveys_loaded(self, result):
         try:
-            self._buildings_cache.update(result.get("new_buildings", {}))
-            self._draft_count = result.get("draft_count", 0)
-            self._finalized_count = result.get("finalized_count", 0)
-            self._obstructed_count = result.get("obstructed_count", 0)
             self._total_count = result.get("total_count", 0)
 
             surveys = result.get("surveys", [])
@@ -996,7 +935,6 @@ class CasesPage(QWidget):
             self._cards_layout.addWidget(spacer, total_rows, 0, 1, 2)
 
             self._update_pagination()
-            self._animate_card_entrance()
 
             if not self._shimmer_timer.isActive():
                 self._shimmer_timer.start()
@@ -1004,38 +942,6 @@ class CasesPage(QWidget):
             logger.error(f"Error populating cards: {e}")
             self._stack.setCurrentIndex(1)
             self._update_empty_text()
-
-    def _animate_card_entrance(self):
-        count = len(self._card_widgets)
-        if count > 20 or count == 0:
-            return
-
-        for i, card in enumerate(self._card_widgets):
-            opacity_eff = QGraphicsOpacityEffect(card)
-            opacity_eff.setOpacity(0.0)
-            card.setGraphicsEffect(opacity_eff)
-
-            anim = QPropertyAnimation(opacity_eff, b"opacity")
-            anim.setDuration(300)
-            anim.setStartValue(0.0)
-            anim.setEndValue(1.0)
-            anim.setEasingCurve(QEasingCurve.OutCubic)
-
-            def _restore_shadow(c=card):
-                try:
-                    s = QGraphicsDropShadowEffect(c)
-                    s.setBlurRadius(20)
-                    s.setOffset(0, 4)
-                    s.setColor(QColor(0, 0, 0, 22))
-                    c.setGraphicsEffect(s)
-                except RuntimeError:
-                    pass
-
-            anim.finished.connect(_restore_shadow)
-            QTimer.singleShot(i * 40, anim.start)
-
-            card._entrance_anim = anim
-            card._entrance_effect = opacity_eff
 
     def _clear_cards(self):
         self._shimmer_timer.stop()
@@ -1099,7 +1005,7 @@ class CasesPage(QWidget):
         self.setLayoutDirection(direction)
 
         self._header.get_title_label().setText(tr("cases.page.title"))
-        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._add_btn.setText(tr("wizard.button.add_case"))
 
         self._search_bar.update_language()
@@ -1112,3 +1018,12 @@ class CasesPage(QWidget):
             self._populate_cards(self._all_data)
         else:
             self._update_empty_text()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._card_widgets and not self._shimmer_timer.isActive():
+            self._shimmer_timer.start()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._shimmer_timer.stop()

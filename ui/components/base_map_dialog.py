@@ -767,7 +767,7 @@ class BaseMapDialog(QDialog):
                 border-color: {Colors.TEXT_SECONDARY};
             }}
         """)
-        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.clicked.connect(self._on_clear_all_clicked)
         buttons_row.addWidget(cancel_btn)
 
         # Confirm button
