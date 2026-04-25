@@ -223,6 +223,7 @@ class SurveyController:
                                 "id": ev.get("id", ""),
                                 "fileName": ev.get("fileName") or ev.get("originalFileName") or "",
                                 "mimeType": ev.get("mimeType") or "",
+                                "filePath": ev.get("filePath") or "",
                             }
                             for ev in evidences
                         ]

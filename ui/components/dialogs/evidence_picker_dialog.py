@@ -233,9 +233,7 @@ class EvidencePickerDialog(QDialog):
 
     def _make_view_btn(self, ev_id: str, file_name: str) -> QPushButton:
         import os
-        from PyQt5.QtCore import QUrl
-        from PyQt5.QtGui import QDesktopServices
-        from utils.helpers import download_evidence_file
+        from ui.components.evidence_viewer import download_and_open_evidence
 
         btn = QPushButton()
         btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
@@ -269,32 +267,10 @@ class EvidencePickerDialog(QDialog):
                 QPushButton:hover { background: #DBEAFE; border-color: #93C5FD; }
             """)
 
-        def _open(checked=False, eid=ev_id, fn=file_name, b=btn):
-            import threading
-            b.setCursor(Qt.WaitCursor)
-            b.setEnabled(False)
-            try:
-                from services.api_client import get_api_client
-                get_api_client()._ensure_valid_token()
-            except Exception:
-                pass
-
-            def _download():
-                try:
-                    local = download_evidence_file(eid, fn or eid)
-                except Exception as e:
-                    logger.error(f"View evidence error: {e}")
-                    local = None
-
-                if local:
-                    import os
-                    os.startfile(local)
-
-                from PyQt5.QtCore import QMetaObject, Q_ARG
-                QMetaObject.invokeMethod(b, "setEnabled", Qt.QueuedConnection,
-                                         Q_ARG(bool, True))
-            threading.Thread(target=_download, daemon=True).start()
-        btn.clicked.connect(_open)
+        btn.clicked.connect(
+            lambda _checked=False, eid=ev_id, fn=file_name:
+                download_and_open_evidence(self, eid, fn)
+        )
         return btn
 
     def _create_button(self, text: str, primary: bool) -> QPushButton:

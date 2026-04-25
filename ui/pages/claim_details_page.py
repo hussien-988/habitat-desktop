@@ -8,7 +8,6 @@ import math
 import time
 
 from utils.logger import get_logger
-from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QScrollArea, QLineEdit,
@@ -1362,55 +1361,9 @@ class ClaimDetailsPage(QWidget):
             f"color: white; background-color: {bg_color}; border-radius: 8px; border: none;"
         )
 
-    def _download_evidence_file(self, evidence_id, file_name):
-        try:
-            from services.api_client import get_api_client
-            get_api_client()._ensure_valid_token()
-            from utils.helpers import download_evidence_file
-            return download_evidence_file(evidence_id, file_name)
-        except Exception as e:
-            logger.warning(f"Evidence download failed for {evidence_id}: {e}")
-            return None
-
     def _download_and_open_evidence(self, evidence_id, file_name):
-        import threading
-        from PyQt5.QtCore import QMetaObject, Qt
-
-        
-
-        page_ref = self
-        Toast.show_toast(self, tr("page.claim_details.downloading"), Toast.INFO)
-
-        def _do_download():
-            
-
-            local_path = page_ref._download_evidence_file(evidence_id, file_name)
-            
-
-        # تخزين المسار
-            page_ref._last_downloaded_path = local_path
-
-        # نفّذ الفتح ـ 
-            QMetaObject.invokeMethod(
-                page_ref,
-                "_open_file_direct",
-                Qt.QueuedConnection
-            )
-
-        threading.Thread(target=_do_download, daemon=True).start()
-    @pyqtSlot()
-    def _open_file_direct(self):
-        local_path = getattr(self, "_last_downloaded_path", None)
-        if not local_path:
-            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
-            return
-        import os
-        
-        if not os.path.exists(local_path):
-            Toast.show_toast(self, tr("page.claim_details.cannot_download"), Toast.ERROR)
-            return
-
-        os.startfile(local_path)
+        from ui.components.evidence_viewer import download_and_open_evidence
+        download_and_open_evidence(self, evidence_id, file_name)
 
     # -- Edit mode --
 

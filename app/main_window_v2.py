@@ -1918,14 +1918,34 @@ class MainWindow(QMainWindow):
 
         logger.info("Starting new office survey — opening building map dialog")
 
-        auth_token = getattr(self, '_api_token', None)
-        dialog = MultiSelectBuildingMapDialog(
-            db=self.db,
-            auth_token=auth_token,
-            parent=self,
-            max_selection=1,
+        # Pause shimmer animation on the surveys page while the map dialog is open.
+        # The shimmer timer fires every 80ms on the main thread (card.update() for every
+        # survey card), which starves QWebEngineView initialization and makes the map
+        # appear slow. Field work preparation has no such background timer, which is why
+        # that path opens the same dialog noticeably faster.
+        surveys_page = self.pages.get(Pages.SURVEYS)
+        shimmer_was_active = (
+            surveys_page is not None
+            and hasattr(surveys_page, '_shimmer_timer')
+            and surveys_page._shimmer_timer.isActive()
         )
-        if dialog.exec_() != QDialog.Accepted:
+        if shimmer_was_active:
+            surveys_page._shimmer_timer.stop()
+
+        auth_token = getattr(self, '_api_token', None)
+        try:
+            dialog = MultiSelectBuildingMapDialog(
+                db=self.db,
+                auth_token=auth_token,
+                parent=self,
+                max_selection=1,
+            )
+            result = dialog.exec_()
+        finally:
+            if shimmer_was_active:
+                surveys_page._shimmer_timer.start()
+
+        if result != QDialog.Accepted:
             logger.debug("Building selection cancelled")
             return
 

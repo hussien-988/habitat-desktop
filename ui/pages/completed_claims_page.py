@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QFrame, QLineEdit, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect, QStackedWidget,
+    QStackedWidget,
 )
 from PyQt5.QtCore import (
     QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtSignal, pyqtProperty, QTimer,
@@ -360,8 +360,6 @@ class CompletedClaimsPage(QWidget):
         self._active_tab = "open"
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
-        self._open_count = 0
-        self._closed_count = 0
         self._card_widgets: List[_ClaimCard] = []
         self._loading = False
         self._navigating = False
@@ -417,7 +415,7 @@ class CompletedClaimsPage(QWidget):
         self._header.add_row2_widget(self._search_bar)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
+        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -570,14 +568,8 @@ class CompletedClaimsPage(QWidget):
     # -- Tab labels with counts --
 
     def _update_tab_labels(self):
-        open_text = tr("page.claims.tab_open")
-        closed_text = tr("page.claims.tab_closed")
-        if self._open_count > 0:
-            open_text = f"{open_text} ({self._open_count})"
-        if self._closed_count > 0:
-            closed_text = f"{closed_text} ({self._closed_count})"
-        self._tab_open.set_text(open_text)
-        self._tab_closed.set_text(closed_text)
+        self._tab_open.set_text(tr("page.claims.tab_open"))
+        self._tab_closed.set_text(tr("page.claims.tab_closed"))
 
     # -- Events --
 
@@ -629,7 +621,10 @@ class CompletedClaimsPage(QWidget):
 
     def refresh(self, data=None):
         self._navigating = False
-        self._last_refresh_ms = int(time.time() * 1000)
+        now = int(time.time() * 1000)
+        if now - self._last_refresh_ms < 5000 and self.claims_data:
+            return
+        self._last_refresh_ms = now
         self._load_claims()
 
     def _load_claims(self):
@@ -650,7 +645,6 @@ class CompletedClaimsPage(QWidget):
 
     def _fetch_claims_data(self, case_status, search_text):
         from services.api_client import get_api_client
-        from controllers.building_controller import BuildingController
 
         api = get_api_client()
         total_count = 0
@@ -659,17 +653,29 @@ class CompletedClaimsPage(QWidget):
             normalized = search_text.strip().upper()
             summaries = []
             try:
-                raw = api._request("GET", "/v2/claims/summaries", params={
-                    "referenceCode": normalized,
-                    "page": self._current_page,
-                    "pageSize": self._page_size,
-                })
-                if isinstance(raw, dict):
-                    summaries = raw.get("items", [])
-                    total_count = raw.get("totalCount", len(summaries))
+                claim = api.get_claim_by_number(normalized)
+                if isinstance(claim, dict) and claim.get("claimNumber"):
+                    # Normalize ClaimDto -> summary shape expected by _map_summary.
+                    # Claim status enum (1=draft..7=archived); approved/rejected/archived = closed.
+                    raw_status = claim.get("status", 0)
+                    case_status = CASE_STATUS_CLOSED if raw_status in (5, 6, 7) else CASE_STATUS_OPEN
+                    normalized_claim = dict(claim)
+                    normalized_claim["caseStatus"] = case_status
+                    normalized_claim["buildingCode"] = (
+                        claim.get("buildingCode")
+                        or claim.get("buildingId")
+                        or claim.get("propertyUnitId")
+                        or ""
+                    )
+                    normalized_claim["referenceCode"] = (
+                        claim.get("referenceCode") or claim.get("claimNumber", "")
+                    )
+                    summaries = [normalized_claim]
+                    total_count = 1
             except Exception as e:
-                logger.warning(f"Reference code search failed: {e}")
+                logger.warning(f"Claim number lookup failed: {e}")
                 summaries = []
+                total_count = 0
         else:
             try:
                 raw = api._request("GET", "/v2/claims/summaries", params={
@@ -688,51 +694,14 @@ class CompletedClaimsPage(QWidget):
                 summaries = api.get_claims_summaries(claim_status=case_status)
                 total_count = len(summaries)
 
-        open_count = 0
-        closed_count = 0
-        try:
-            raw_open = api._request("GET", "/v2/claims/summaries", params={
-                "caseStatus": CASE_STATUS_OPEN, "page": 1, "pageSize": 1,
-            })
-            open_count = raw_open.get("totalCount", 0) if isinstance(raw_open, dict) else 0
-        except Exception:
-            pass
-        try:
-            raw_closed = api._request("GET", "/v2/claims/summaries", params={
-                "caseStatus": CASE_STATUS_CLOSED, "page": 1, "pageSize": 1,
-            })
-            closed_count = raw_closed.get("totalCount", 0) if isinstance(raw_closed, dict) else 0
-        except Exception:
-            pass
-
-        bc = BuildingController(self.db)
-        building_codes = {s.get("buildingCode", "") for s in summaries if s.get("buildingCode")}
-        new_buildings = {}
-        for code in building_codes:
-            if not code or code in self._buildings_cache:
-                continue
-            try:
-                result = api.search_buildings(building_id=code, page_size=1)
-                buildings = result.get("buildings", [])
-                if buildings:
-                    new_buildings[code] = bc._api_dto_to_building(buildings[0])
-            except Exception as e:
-                logger.debug(f"Building lookup failed for {code}: {e}")
-
         return {
             "summaries": summaries,
-            "new_buildings": new_buildings,
             "case_status": case_status,
-            "open_count": open_count,
-            "closed_count": closed_count,
             "total_count": total_count,
         }
 
     def _on_claims_loaded(self, result):
         try:
-            self._buildings_cache.update(result.get("new_buildings", {}))
-            self._open_count = result.get("open_count", 0)
-            self._closed_count = result.get("closed_count", 0)
             self._total_count = result.get("total_count", 0)
 
             summaries = result.get("summaries", [])
@@ -854,8 +823,6 @@ class CompletedClaimsPage(QWidget):
 
             self._update_pagination()
 
-            self._animate_card_entrance()
-
             # Start shimmer timer for card animation
             if not self._shimmer_timer.isActive():
                 self._shimmer_timer.start()
@@ -863,38 +830,6 @@ class CompletedClaimsPage(QWidget):
             logger.error(f"Error populating cards: {e}")
             self._stack.setCurrentIndex(1)
             self._update_empty_text()
-
-    def _animate_card_entrance(self):
-        count = len(self._card_widgets)
-        if count > 20 or count == 0:
-            return
-
-        for i, card in enumerate(self._card_widgets):
-            opacity_eff = QGraphicsOpacityEffect(card)
-            opacity_eff.setOpacity(0.0)
-            card.setGraphicsEffect(opacity_eff)
-
-            anim = QPropertyAnimation(opacity_eff, b"opacity")
-            anim.setDuration(300)
-            anim.setStartValue(0.0)
-            anim.setEndValue(1.0)
-            anim.setEasingCurve(QEasingCurve.OutCubic)
-
-            def _restore_shadow(c=card):
-                try:
-                    s = QGraphicsDropShadowEffect(c)
-                    s.setBlurRadius(20)
-                    s.setOffset(0, 4)
-                    s.setColor(QColor(0, 0, 0, 22))
-                    c.setGraphicsEffect(s)
-                except RuntimeError:
-                    pass
-
-            anim.finished.connect(_restore_shadow)
-            QTimer.singleShot(i * 40, anim.start)
-
-            card._entrance_anim = anim
-            card._entrance_effect = opacity_eff
 
     def _clear_cards(self):
         self._shimmer_timer.stop()
@@ -970,3 +905,12 @@ class CompletedClaimsPage(QWidget):
 
     def configure_for_role(self, role: str):
         pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._card_widgets and not self._shimmer_timer.isActive():
+            self._shimmer_timer.start()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._shimmer_timer.stop()

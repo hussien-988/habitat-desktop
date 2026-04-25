@@ -101,6 +101,11 @@ class ImportController(BaseController):
             api = get_api_client()
             result = self._with_retry(lambda: api.import_upload(file_path))
             pkg_id = result.get("id") or result.get("packageId") or ""
+            print(
+                f"[UPLOAD-DEBUG] Package uploaded — backend returned: id={pkg_id}, "
+                f"status={result.get('status')}, fileName={result.get('fileName', 'N/A')}",
+                flush=True,
+            )
             self.package_uploaded.emit(pkg_id)
             return OperationResult.ok(data=result, message_ar="تم رفع الملف بنجاح")
         except ApiException as e:

@@ -1644,7 +1644,7 @@ class TRRCMSApiClient:
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents"
         url = f"{self.base_url}{endpoint}"
 
         file_name = os.path.basename(file_path)
@@ -1739,7 +1739,7 @@ class TRRCMSApiClient:
         if not survey_id or not document_id:
             raise ValueError("survey_id and document_id are required")
 
-        endpoint = f"/v1/Surveys/{survey_id}/evidence/identification/{document_id}"
+        endpoint = f"/v1/Surveys/{survey_id}/identification-documents/{document_id}"
         url = f"{self.base_url}{endpoint}"
 
         self._ensure_valid_token()
@@ -1808,16 +1808,57 @@ class TRRCMSApiClient:
     ) -> List[Dict[str, Any]]:
         """Get all identification documents for a person.
 
-        Endpoint: GET /v1/Surveys/persons/{personId}/identification-documents
+        Endpoint: GET /v1/persons/{personId}/identification-documents
         Returns: List[IdentificationDocumentDto]
         """
         if not person_id:
             raise ValueError("person_id is required")
-        endpoint = f"/v1/Surveys/persons/{person_id}/identification-documents"
+        endpoint = f"/v1/persons/{person_id}/identification-documents"
         result = self._request("GET", endpoint)
         if isinstance(result, dict):
             return result.get("items", result.get("$values", []))
         return result if isinstance(result, list) else []
+
+    def download_identification_document(
+        self, person_id: str, document_id: str, save_path: str
+    ) -> bool:
+        """Download an identification document binary to save_path.
+
+        Endpoint: GET /v1/persons/{personId}/identification-documents/{documentId}/download
+        Returns True on success, False on failure.
+        """
+        import os as _os
+        if not person_id or not document_id:
+            raise ValueError("person_id and document_id are required")
+        endpoint = (
+            f"/v1/persons/{person_id}/identification-documents/"
+            f"{document_id}/download"
+        )
+        url = f"{self.base_url}{endpoint}"
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "*/*",
+        }
+        try:
+            with requests.get(
+                url, headers=headers, stream=True,
+                timeout=self.config.timeout, verify=False,
+            ) as resp:
+                resp.raise_for_status()
+                parent = _os.path.dirname(save_path)
+                if parent:
+                    _os.makedirs(parent, exist_ok=True)
+                with open(save_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            return _os.path.exists(save_path) and _os.path.getsize(save_path) > 0
+        except Exception as e:
+            logger.warning(
+                f"ID document download failed (person={person_id}, doc={document_id}): {e}"
+            )
+            return False
 
     def update_tenure_evidence(
         self,
@@ -1942,11 +1983,8 @@ class TRRCMSApiClient:
         return result if isinstance(result, list) else []
 
     def get_evidence_by_id(self, evidence_id: str) -> Dict[str, Any]:
-        """Get evidence metadata by ID. Tries v1 then v2."""
-        try:
-            return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
-        except Exception:
-            return self._request("GET", f"/v2/surveys/evidence/{evidence_id}")
+        """Get evidence metadata by ID."""
+        return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
 
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
         """Soft delete an evidence record."""
@@ -1963,9 +2001,12 @@ class TRRCMSApiClient:
             "Accept-Language": self._get_accept_language(),
         }
 
+        # Only the v1 endpoint is supported by the backend. The v2 path
+        # always returns 404 in this environment — keeping it caused noisy
+        # log spam and slow fallbacks. utils.helpers.download_evidence_file
+        # already retries via metadata (fileUrl / filePath) when v1 fails.
         urls = [
             f"{self.base_url}/v1/Surveys/evidence/{evidence_id}/download",
-            f"{self.base_url}/v2/surveys/evidence/{evidence_id}/download",
         ]
 
         last_error = None

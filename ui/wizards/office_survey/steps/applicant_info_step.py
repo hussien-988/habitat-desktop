@@ -323,13 +323,6 @@ class ApplicantInfoStep(BaseStep):
         layout.addLayout(mob_outer)
 
         # Landline
-        _area_codes = [
-            ("011", "011 - دمشق"), ("012", "012 - حمص"), ("013", "013 - حماة"),
-            ("014", "014 - القنيطرة"), ("015", "015 - درعا"), ("016", "016 - السويداء"),
-            ("017", "017 - اللاذقية"), ("018", "018 - طرطوس"), ("021", "021 - حلب"),
-            ("022", "022 - الرقة"), ("023", "023 - إدلب"), ("024", "024 - دير الزور"),
-            ("052", "052 - الحسكة"),
-        ]
         self.lbl_phone = self._lbl(tr("wizard.person_dialog.phone"))
         layout.addWidget(self.lbl_phone)
         self._landline_container = QFrame()
@@ -345,74 +338,21 @@ class ApplicantInfoStep(BaseStep):
         land_layout = QHBoxLayout(self._landline_container)
         land_layout.setContentsMargins(0, 0, 0, 0)
         land_layout.setSpacing(0)
-        self.landline_prefix = RtlCombo()
-        self.landline_prefix.setFixedWidth(ScreenScale.w(130))
-        self.landline_prefix.setCursor(Qt.PointingHandCursor)
-        self.landline_prefix.setToolTip(tr("wizard.person_dialog.select"))
-        for _code, _display in _area_codes:
-            self.landline_prefix.addItem(_display, _code)
-        self.landline_prefix.setStyleSheet(f"""
-            QComboBox {{
-                border: none;
-                background: #EBF5FF;
-                border-top-left-radius: 9px;
-                border-bottom-left-radius: 9px;
-                padding: 0 22px 0 10px;
+        self.lbl_landline_prefix = QLabel("0")
+        self.lbl_landline_prefix.setFixedWidth(ScreenScale.w(40))
+        self.lbl_landline_prefix.setAlignment(Qt.AlignCenter)
+        self.lbl_landline_prefix.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.WIZARD_SUBTITLE};
                 font-size: 10pt;
-                font-weight: 600;
-                color: {Colors.PRIMARY_BLUE};
-            }}
-            QComboBox:hover {{
-                background: #D6ECFF;
-            }}
-            QComboBox QLineEdit {{
-                border: none;
+                border-right: 1px solid rgba(56,144,223,0.25);
+                padding: 0 10px;
                 background: transparent;
-                padding: 0;
-                font-size: 10pt;
-                font-weight: 600;
-                color: {Colors.PRIMARY_BLUE};
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: right center;
-                border: none;
-                width: 20px;
-            }}
-            QComboBox::down-arrow {{
-                image: none;
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid {Colors.PRIMARY_BLUE};
-                margin-right: 6px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #FFFFFF;
-                border: 1px solid #D0D7E2;
-                border-radius: 8px;
-                padding: 4px;
-                selection-background-color: #EBF5FF;
-                selection-color: #1E293B;
-                outline: none;
-            }}
-            QComboBox QAbstractItemView::item {{
-                min-height: 32px;
-                padding: 6px 10px;
-                border-radius: 6px;
-                color: #1E293B;
-            }}
-            QComboBox QAbstractItemView::item:hover {{
-                background-color: #F0F7FF;
             }}
         """)
-        _land_sep = QFrame()
-        _land_sep.setFrameShape(QFrame.VLine)
-        _land_sep.setFixedWidth(1)
-        _land_sep.setStyleSheet("background-color: rgba(56,144,223,0.3); border: none; margin: 7px 0;")
         self.landline_digits = QLineEdit()
-        self.landline_digits.setPlaceholderText("xxxxxxx")
-        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,7}")))
+        self.landline_digits.setPlaceholderText("xxxxxxxxx")
+        self.landline_digits.setValidator(QRegExpValidator(QtRegExp(r"\d{0,9}")))
         self.landline_digits.setLayoutDirection(Qt.LeftToRight)
         self.landline_digits.setStyleSheet("""
             QLineEdit {
@@ -421,8 +361,7 @@ class ApplicantInfoStep(BaseStep):
                 min-height: 30px;
             }
         """)
-        land_layout.addWidget(self.landline_prefix)
-        land_layout.addWidget(_land_sep)
+        land_layout.addWidget(self.lbl_landline_prefix)
         land_layout.addWidget(self.landline_digits)
         self._landline_error = self._err_lbl()
         land_outer = QVBoxLayout()
@@ -784,9 +723,9 @@ class ApplicantInfoStep(BaseStep):
             result.add_error(tr("wizard.applicant.mobile_8_digits"))
 
         landline_digits = self.landline_digits.text().strip()
-        if landline_digits and len(landline_digits) != 7:
+        if landline_digits and len(landline_digits) != 9:
             self._set_err(self.landline_digits, self._landline_error)
-            result.add_error(tr("wizard.applicant.landline_7_digits"))
+            result.add_error(tr("wizard.applicant.landline_9_digits"))
 
         nid_text = self.national_id.text().strip()
         if not nid_text:
@@ -926,7 +865,7 @@ class ApplicantInfoStep(BaseStep):
 
         
             "phone":          full_mobile,      
-            "landline":       (self.landline_prefix.currentData() + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else "",
+            "landline":       ("0" + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else "",
 
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": list(self.uploaded_files),
@@ -943,7 +882,6 @@ class ApplicantInfoStep(BaseStep):
                       self.mother_name, self.national_id, self.phone]:
             field.clear()
         self.landline_digits.clear()
-        self.landline_prefix.setCurrentIndex(0)
         for c in (self.birth_year_combo, self.birth_month_combo, self.birth_day_combo):
             c.setCurrentIndex(-1)
             c.clearEditText()
@@ -1005,19 +943,20 @@ class ApplicantInfoStep(BaseStep):
             phone_val = phone_val[4:]
         self.phone.setText(phone_val)
         _land_val = a.get("landline", "")
-        if len(_land_val) == 10 and _land_val[0] == '0':
-            _idx = self.landline_prefix.findData(_land_val[:3])
-            self.landline_prefix.setCurrentIndex(_idx if _idx >= 0 else 0)
-            self.landline_digits.setText(_land_val[3:])
+        if _land_val.startswith("0"):
+            self.landline_digits.setText(_land_val[1:])
         else:
             self.landline_digits.setText(_land_val)
         self.in_person_check.setChecked(a.get("in_person", True))
 
+        import os as _os
         photos = a.get("id_photo_paths", [])
-        self.uploaded_files = list(photos)
-        if photos:
-            self._update_upload_thumbnails("id_upload", photos)
-        else:
+        valid_photos = [p for p in photos if p and _os.path.exists(p)]
+        self.uploaded_files = list(valid_photos)
+        if valid_photos:
+            self._update_upload_thumbnails("id_upload", valid_photos)
+        elif photos:
+            # Had photos in draft but local temp files are gone — fetch from server
             self._download_id_photos_from_api()
 
     def _download_id_photos_from_api(self):
@@ -1029,26 +968,54 @@ class ApplicantInfoStep(BaseStep):
         evidences = applicant.get("id_photo_evidences", [])
 
         person_id = self.context.get_data("contact_person_id")
-        if not evidences and not person_id:
+        survey_id = self.context.get_data("survey_id") or ""
+        if not evidences and not person_id and not survey_id:
             return
 
         self._set_auth_token()
 
         def _do_fetch():
-            from utils.helpers import download_evidence_file
-            docs = evidences
+            from utils.helpers import (
+                download_evidence_file,
+                download_static_file,
+                download_identification_document_file,
+            )
+            docs = list(evidences)
             if not docs and person_id:
-                docs = self._api_client.get_person_identification_documents(person_id)
+                try:
+                    docs = self._api_client.get_person_identification_documents(person_id)
+                except Exception as e:
+                    logger.warning(f"get_person_identification_documents failed: {e}")
+            if not docs and survey_id:
+                try:
+                    docs = self._api_client.get_survey_evidences(survey_id, evidence_type="identification")
+                except Exception as e:
+                    logger.warning(f"get_survey_evidences fallback failed: {e}")
             if not docs:
                 return []
             downloaded = []
             for doc in docs:
                 ev_id = doc.get("id") or doc.get("evidenceId", "")
-                if not ev_id:
-                    continue
-                file_name = doc.get("fileName") or doc.get("originalFileName") or f"{ev_id}.jpg"
+                doc_person_id = doc.get("personId") or person_id
+                file_name = (
+                    doc.get("originalFileName")
+                    or doc.get("fileName")
+                    or f"{ev_id}.jpg"
+                )
+                file_path_val = doc.get("filePath") or doc.get("file_path") or ""
                 try:
-                    result_path = download_evidence_file(ev_id, file_name)
+                    result_path = None
+                    # 1) New dedicated endpoint (preferred when both ids known).
+                    if doc_person_id and ev_id:
+                        result_path = download_identification_document_file(
+                            doc_person_id, ev_id, file_name
+                        )
+                    # 2) Legacy static-file path fallback.
+                    if not result_path and file_path_val:
+                        result_path = download_static_file(file_path_val, file_name)
+                    # 3) Generic evidence endpoint fallback.
+                    if not result_path and ev_id:
+                        result_path = download_evidence_file(ev_id, file_name)
                     if result_path:
                         downloaded.append(result_path)
                 except Exception as e:
@@ -1078,7 +1045,6 @@ class ApplicantInfoStep(BaseStep):
         self.phone.setLayoutDirection(Qt.LeftToRight)
         self._landline_container.setLayoutDirection(Qt.LeftToRight)
         self.landline_digits.setLayoutDirection(Qt.LeftToRight)
-        self.landline_prefix.setLayoutDirection(Qt.LeftToRight)
 
     # Card header
         self.app_title_lbl.setText(tr("wizard.step.applicant_info"))
@@ -1123,7 +1089,7 @@ class ApplicantInfoStep(BaseStep):
         self.lbl_phone.setText(tr("wizard.person_dialog.phone"))
 
         self.phone.setPlaceholderText("00000000")
-        self.landline_digits.setPlaceholderText("xxxxxxx")
+        self.landline_digits.setPlaceholderText("xxxxxxxxx")
 
     # Visit section
         

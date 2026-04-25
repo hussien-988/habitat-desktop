@@ -229,11 +229,14 @@ class ImportPackagesPage(QWidget):
         self._btn_toggle.clicked.connect(self._on_toggle_mode)
         self._header.add_action_widget(self._btn_toggle)
 
-        # Upload-package button is always hidden for all users — packages
-        # arrive via the field-collector workflow. The button is created
-        # but never added to the header, and `_upload_btn` is exposed as
-        # None so configure_for_role / update_language stay no-ops.
-        self._upload_btn = None
+        # Upload-package button — visible only for admin / data_manager via
+        # configure_for_role. Triggers _on_upload_clicked to pick a file
+        # and POST it to the import endpoint.
+        self._upload_btn = QPushButton(tr("page.import_packages.upload_package"))
+        self._upload_btn.setCursor(Qt.PointingHandCursor)
+        self._upload_btn.setStyleSheet(StyleManager.refresh_button_dark())
+        self._upload_btn.clicked.connect(self._on_upload_clicked)
+        self._header.add_action_widget(self._upload_btn)
 
         root.addWidget(self._header)
 
@@ -841,6 +844,10 @@ class ImportPackagesPage(QWidget):
         # Extract the new package id and open the wizard on it.
         data = result.data or {}
         pkg_id = str(data.get("id") or data.get("packageId") or "")
+        print(
+            f"[UPLOAD-DEBUG] Upload UI received — pkg_id={pkg_id}, status={data.get('status')}",
+            flush=True,
+        )
         if pkg_id:
             self.view_package.emit(pkg_id)
         else:

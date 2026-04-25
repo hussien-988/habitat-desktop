@@ -490,21 +490,19 @@ class ClaimStep(BaseStep):
         case_category_field.setStyleSheet(ro_input_style)
         add_field("wizard.claim.case_category", case_category_field, 0, 3)
 
-        # Row 2: status | source | survey date
-        claim_status_field = QLineEdit()
-        claim_status_field.setReadOnly(True)
-        claim_status_field.setStyleSheet(ro_input_style)
-        add_field("wizard.claim.case_status", claim_status_field, 1, 0)
-
+        # Row 2: source | survey date
+        # Case status field removed — backend is the only source of truth
+        # for status, and during creation/review we don't have a real
+        # value yet. Showing a local default ("New") was misleading.
         claim_source_field = QLineEdit()
         claim_source_field.setReadOnly(True)
         claim_source_field.setStyleSheet(ro_input_style)
-        add_field("wizard.claim.source", claim_source_field, 1, 1)
+        add_field("wizard.claim.source", claim_source_field, 1, 0)
 
         claim_survey_date = QLineEdit()
         claim_survey_date.setReadOnly(True)
         claim_survey_date.setStyleSheet(ro_input_style)
-        add_field("wizard.claim.survey_date", claim_survey_date, 1, 2)
+        add_field("wizard.claim.survey_date", claim_survey_date, 1, 1)
 
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
@@ -550,7 +548,6 @@ class ClaimStep(BaseStep):
         card.claim_unit_search = claim_unit_search
         card.claim_type_field = claim_type_field
         card.case_category_field = case_category_field
-        card.claim_status_field = claim_status_field
         card.claim_source_field = claim_source_field
         card.claim_survey_date = claim_survey_date
         card.claim_notes = claim_notes
@@ -624,9 +621,8 @@ class ClaimStep(BaseStep):
             card.case_category_field.setText(tr("wizard.claim.case_open"))
             card.case_category_field.setStyleSheet(CASE_OPEN_FIELD_STYLE)
 
-        claim_status = claim_data.get('claimStatus') or claim_data.get('caseStatus')
-        if claim_status:
-            card.claim_status_field.setText(get_claim_status_display(claim_status))
+        # Case-status field removed; status is backend-owned and not
+        # populated locally during creation/review.
 
         claim_source = claim_data.get('source') or claim_data.get('claimSource')
         if claim_source:
@@ -849,7 +845,7 @@ class ClaimStep(BaseStep):
 
         from datetime import datetime
         today_str = datetime.now().strftime("%Y-%m-%d")
-        status_code = _find_combo_code_by_english("ClaimStatus", "New")
+        # Case-status field removed; status is backend-owned.
         source_code = _find_combo_code_by_english("ClaimSource", "Office Submission")
         _TYPE_FB = {
             "Ownership": tr("wizard.claim.type_ownership"),
@@ -892,7 +888,6 @@ class ClaimStep(BaseStep):
                 card.case_category_field.setText(tr("wizard.claim.case_open"))
                 card.case_category_field.setStyleSheet(CASE_OPEN_FIELD_STYLE)
 
-            card.claim_status_field.setText(get_claim_status_display(status_code))
             card.claim_source_field.setText(get_source_display(source_code))
 
             survey_date = claim.get('survey_date') or today_str
@@ -935,7 +930,6 @@ class ClaimStep(BaseStep):
             first_card.claim_person_search.clear()
             first_card.claim_unit_search.clear()
             first_card.claim_type_field.clear()
-            first_card.claim_status_field.clear()
             first_card.claim_survey_date.clear()
             first_card.claim_source_field.clear()
             first_card.claim_notes.clear()
@@ -986,7 +980,10 @@ class ClaimStep(BaseStep):
             claim_data = {
                 "claim_type": raw.get('claimType') or _find_combo_code_by_english("ClaimType", "Ownership"),
                 "source": raw.get('source') or raw.get('claimSource') or _find_combo_code_by_english("ClaimSource", "Office Submission"),
-                "case_status": raw.get('claimStatus') or raw.get('caseStatus') or _find_combo_code_by_english("ClaimStatus", "New"),
+                # Backend owns case_status; do not invent a local default
+                # ("New") here. If the backend hasn't returned one yet, leave
+                # it empty so downstream readers know it's unset.
+                "case_status": raw.get('claimStatus') or raw.get('caseStatus') or "",
                 "survey_date": card.claim_survey_date.text().strip() or None,
                 "notes": card.claim_notes.toPlainText().strip(),
                 "status": "draft",
