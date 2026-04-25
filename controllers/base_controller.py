@@ -29,6 +29,11 @@ class OperationResult(Generic[T]):
     message: str = ""
     message_ar: str = ""
     errors: List[str] = None
+    # Structured backend error attached when the failure originated from an
+    # API call. Carries status code, trace id, raw response, etc. — kept
+    # separate from the simple message_ar so UI layers can choose between
+    # a quick toast and a richer inline panel.
+    error: Optional[Any] = None  # services.api_error.ApiError | None
 
     def __post_init__(self):
         if self.errors is None:
@@ -40,9 +45,16 @@ class OperationResult(Generic[T]):
         return cls(success=True, data=data, message=message, message_ar=message_ar)
 
     @classmethod
-    def fail(cls, message: str, message_ar: str = "", errors: List[str] = None) -> 'OperationResult[T]':
+    def fail(cls, message: str, message_ar: str = "", errors: List[str] = None,
+             error: Optional[Any] = None) -> 'OperationResult[T]':
         """Create a failed result."""
-        return cls(success=False, message=message, message_ar=message_ar, errors=errors or [])
+        return cls(
+            success=False,
+            message=message,
+            message_ar=message_ar,
+            errors=errors or [],
+            error=error,
+        )
 
 
 class BaseController(QObject):

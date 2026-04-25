@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Import wizard step 2: staging results and validation report."""
+"""LEGACY — Import wizard staging / validation page.
+
+DEPRECATED: this widget (with its "التحقق من البيانات" zeros table and
+"البيانات نظيفة" banner) is the OLD 5-step wizard's validation page. It
+is NO LONGER reachable from the active user flow — the 3-step wizard now
+uses `ui/pages/import_step_processing.ImportStepProcessing` for the
+Processing pill. Do not wire this file back into the wizard; kept only
+for backwards compatibility with any external imports.
+"""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,

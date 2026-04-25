@@ -19,9 +19,16 @@ class ApiWorker(QThread):
         self._kwargs = kwargs
 
     def run(self):
+        from services.exceptions import (
+            ApiException, NetworkException, humanize_exception, log_exception,
+        )
         try:
             result = self._func(*self._args, **self._kwargs)
             self.finished.emit(result)
+        except (ApiException, NetworkException) as e:
+            # Surface a safe user-facing message; never a stack trace.
+            log_exception(e, logger, context="api_worker")
+            self.error.emit(humanize_exception(e))
         except Exception as e:
             logger.warning(f"ApiWorker error: {e}")
             self.error.emit(str(e))

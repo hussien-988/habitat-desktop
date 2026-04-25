@@ -628,19 +628,23 @@ class SQLiteAdapter(DatabaseAdapter):
             )
         """)
 
-        # Duplicate resolutions table
+        # Duplicate resolutions table.
+        # Migration: a legacy schema (entity_type/group_key/record_ids
+        # NOT NULL, no conflict_id) used to be created here. The table is
+        # write-only audit (nothing reads it), so dropping it on schema
+        # mismatch is safe.
+        try:
+            cursor.execute("SELECT conflict_id FROM duplicate_resolutions LIMIT 1")
+        except Exception:
+            cursor.execute("DROP TABLE IF EXISTS duplicate_resolutions")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS duplicate_resolutions (
                 resolution_id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                group_key TEXT NOT NULL,
-                record_ids TEXT NOT NULL,
-                resolution_type TEXT NOT NULL,
+                conflict_id TEXT,
+                resolution_type TEXT,
                 master_record_id TEXT,
                 justification TEXT,
-                resolved_by TEXT,
-                resolved_at TEXT,
-                status TEXT DEFAULT 'pending'
+                resolved_at TEXT
             )
         """)
 
@@ -887,8 +891,7 @@ class SQLiteAdapter(DatabaseAdapter):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claims_unit ON claims(unit_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claim_history_claim ON claim_history(claim_uuid)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claim_documents_claim ON claim_documents(claim_uuid)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_type ON duplicate_resolutions(entity_type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_status ON duplicate_resolutions(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_conflict ON duplicate_resolutions(conflict_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_vocab_name ON vocabulary_terms(vocabulary_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_vocab_status ON vocabulary_terms(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
@@ -1570,18 +1573,20 @@ class PostgreSQLAdapter(DatabaseAdapter):
             )
         """)
 
+        # Migration: drop legacy duplicate_resolutions schema if present
+        # (entity_type/group_key/record_ids without conflict_id).
+        try:
+            cursor.execute("SELECT conflict_id FROM duplicate_resolutions LIMIT 1")
+        except Exception:
+            cursor.execute("DROP TABLE IF EXISTS duplicate_resolutions")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS duplicate_resolutions (
                 resolution_id TEXT PRIMARY KEY,
-                entity_type TEXT NOT NULL,
-                group_key TEXT NOT NULL,
-                record_ids TEXT NOT NULL,
-                resolution_type TEXT NOT NULL,
+                conflict_id TEXT,
+                resolution_type TEXT,
                 master_record_id TEXT,
                 justification TEXT,
-                resolved_by TEXT,
-                resolved_at TIMESTAMP,
-                status TEXT DEFAULT 'pending'
+                resolved_at TEXT
             )
         """)
 
@@ -1744,8 +1749,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claims_unit ON claims(unit_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claim_history_claim ON claim_history(claim_uuid)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_claim_documents_claim ON claim_documents(claim_uuid)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_type ON duplicate_resolutions(entity_type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_status ON duplicate_resolutions(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_dup_resolutions_conflict ON duplicate_resolutions(conflict_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_vocab_name ON vocabulary_terms(vocabulary_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_vocab_status ON vocabulary_terms(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")

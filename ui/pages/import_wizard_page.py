@@ -21,36 +21,95 @@ from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
 
-TOTAL_STEPS = 5
 
-_STEP_NAMES_KEYS = [
-    "wizard.import.step_select_package",
-    "wizard.import.step_staging_validation",
-    "wizard.import.step_review",
-    "wizard.import.step_confirm",
-    "wizard.import.step_report",
+def _prompt_reason_via_bottom_sheet(
+    parent,
+    title: str,
+    field_label: str,
+    submit_text: str,
+    cancel_text: str,
+) -> str:
+    """Prompt the user for a reason via the project's BottomSheet design.
+
+    Returns the trimmed string the user submitted, or "" if they cancelled
+    or left the field empty. Synchronous (blocks the calling slot via a
+    nested QEventLoop) — matches the existing pattern used in
+    `app/main_window_v2.py` for the office-survey cancellation reason.
+    """
+    from ui.components.bottom_sheet import BottomSheet
+    from PyQt5.QtCore import QEventLoop
+
+    sheet = BottomSheet(parent)
+    loop = QEventLoop()
+    result = {"value": None}
+
+    def _on_confirmed():
+        data = sheet.get_form_data()
+        result["value"] = (data.get("reason") or "").strip()
+        loop.quit()
+
+    def _on_cancelled():
+        result["value"] = None
+        loop.quit()
+
+    sheet.confirmed.connect(_on_confirmed)
+    sheet.cancelled.connect(_on_cancelled)
+    sheet.show_form(
+        title,
+        [("reason", field_label, "multiline")],
+        submit_text=submit_text,
+        cancel_text=cancel_text,
+    )
+    loop.exec_()
+    return result["value"] or ""
+
+
+from services.import_status_map import (
+    PkgStatus as _ImportPkgStatus,
+    TRANSIENT as _IMPORT_TRANSIENT,
+    HISTORY as _IMPORT_HISTORY,
+    target_wizard_step,
+)
+
+# Visible wizard pills are now 3; internal QStackedWidget still has 5 panels
+# because the legacy step widgets are reused as sub-panels.
+TOTAL_STEPS = 3
+INTERNAL_STEPS = 4
+
+# Visible step pills (3)
+_VISIBLE_STEP_KEYS = [
+    "wizard.import.step_processing",
+    "wizard.import.step_review_approve",
+    "wizard.import.step_final_report",
 ]
+_STEP_NAMES_KEYS = _VISIBLE_STEP_KEYS  # backwards-compat alias
+
+# Internal panel index -> visible pill index.
+# 0 = step2 staging/validation       -> Processing (pill 0)
+# 1 = step_review staged entities    -> Review & Approve (pill 1)
+# 2 = step_commit commit confirm     -> Review & Approve (pill 1)
+# 3 = step_report final report       -> Final Report (pill 2)
+_INTERNAL_TO_PILL = [0, 1, 1, 2]
 
 
 class _PkgStatus:
-    """Package status codes from backend."""
-    PENDING = 1
-    VALIDATING = 2
-    STAGING = 3
-    VALIDATION_FAILED = 4
-    QUARANTINED = 5
-    REVIEWING_CONFLICTS = 6
-    READY_TO_COMMIT = 7
-    COMMITTING = 8
-    COMPLETED = 9
-    FAILED = 10
-    PARTIALLY_COMPLETED = 11
-    CANCELLED = 12
+    """Package status codes — re-exported for backwards compat. Prefer
+    importing from services.import_status_map."""
+    PENDING = _ImportPkgStatus.PENDING
+    VALIDATING = _ImportPkgStatus.VALIDATING
+    STAGING = _ImportPkgStatus.STAGING
+    VALIDATION_FAILED = _ImportPkgStatus.VALIDATION_FAILED
+    QUARANTINED = _ImportPkgStatus.QUARANTINED
+    REVIEWING_CONFLICTS = _ImportPkgStatus.REVIEWING_CONFLICTS
+    READY_TO_COMMIT = _ImportPkgStatus.READY_TO_COMMIT
+    COMMITTING = _ImportPkgStatus.COMMITTING
+    COMPLETED = _ImportPkgStatus.COMPLETED
+    FAILED = _ImportPkgStatus.FAILED
+    PARTIALLY_COMPLETED = _ImportPkgStatus.PARTIALLY_COMPLETED
+    CANCELLED = _ImportPkgStatus.CANCELLED
 
-    # Transient states (backend is processing)
-    TRANSIENT = {VALIDATING, STAGING, COMMITTING}
-    # Terminal states (no more actions)
-    TERMINAL = {COMPLETED, FAILED, PARTIALLY_COMPLETED, CANCELLED}
+    TRANSIENT = _IMPORT_TRANSIENT
+    TERMINAL = _IMPORT_HISTORY | {FAILED}
 
 
 _STATUS_POLL_INTERVAL_MS = 5000  # 5 seconds
@@ -67,15 +126,16 @@ class _ApiWorker(QThread):
         self._fn = fn
 
     def run(self):
+        from services.exceptions import humanize_exception, log_exception
         try:
             result = self._fn()
             self.finished.emit(result)
         except NetworkException as e:
-            self.error.emit("network", tr("error.network_connection_failed"))
+            log_exception(e, logger, context="wizard_api_worker")
+            self.error.emit("network", humanize_exception(e))
         except ApiException as e:
-            from controllers.import_controller import ImportController
-            msg = ImportController._api_error_msg(e, tr("error.server_error"))
-            self.error.emit("api", msg)
+            log_exception(e, logger, context="wizard_api_worker")
+            self.error.emit("api", humanize_exception(e))
         except Exception as e:
             logger.error(f"Unexpected worker error: {e}")
             self.error.emit("unknown", tr("error.unexpected_retry"))
@@ -93,7 +153,16 @@ class ImportWizardPage(QWidget):
 
     completed = pyqtSignal(object)
     cancelled = pyqtSignal()
-    navigate_to_duplicates = pyqtSignal()
+    # Emitted when the wizard bounces back to the packages list because
+    # the package landed in a terminal/non-actionable state. Carries the
+    # localized message to surface to the user via a Toast on the
+    # packages page so they understand WHY nothing happened.
+    # Args: (severity, message_ar) where severity is "error"|"warning"|"info".
+    terminal_state_message = pyqtSignal(str, str)
+    navigate_to_duplicates = pyqtSignal(str)  # carries the current package_id
+
+    # Track package metadata so main_window can label the duplicates banner
+    _current_package_name = ""
 
     def __init__(self, import_controller=None, db=None, i18n=None, parent=None):
         """Initialize import wizard."""
@@ -107,6 +176,10 @@ class ImportWizardPage(QWidget):
         self._status_poll_timer = None
         self._poll_count = 0
         self._active_worker = None
+        # When True, the wizard is in a hard-error state (e.g. /stage 500,
+        # missing .uhc file). Forward navigation is blocked; only cancel
+        # package and back-to-list remain enabled until the user recovers.
+        self._blocking_error_active = False
 
         self._setup_ui()
         self._create_steps()
@@ -136,6 +209,11 @@ class ImportWizardPage(QWidget):
         self._accent = AccentLine()
         outer_layout.addWidget(self._accent)
 
+        # Inline error banner (hidden by default). Used to surface API
+        # failures near the affected step instead of relying on a toast.
+        self._error_banner = self._create_error_banner()
+        outer_layout.addWidget(self._error_banner)
+
         # Step container (QStackedWidget)
         self.step_container = QStackedWidget()
         outer_layout.addWidget(self.step_container, 1)
@@ -147,11 +225,109 @@ class ImportWizardPage(QWidget):
         footer = self._create_footer()
         outer_layout.addWidget(footer)
 
+    # -- Inline error banner --------------------------------------------------
+
+    def _create_error_banner(self) -> QFrame:
+        """Inline error panel rendered above the active step.
+
+        Shows the safe user message + (optional) trace id from the underlying
+        ApiException. Backend stack traces never reach this label.
+        """
+        banner = QFrame()
+        banner.setObjectName("wizardErrorBanner")
+        banner.setStyleSheet(
+            "QFrame#wizardErrorBanner { background: #FEF2F2;"
+            " border-bottom: 1px solid #FCA5A5; }"
+        )
+        layout = QHBoxLayout(banner)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(10)
+
+        icon = QLabel("⚠")  # warning sign
+        icon.setStyleSheet("color: #B91C1C; background: transparent; font-size: 16pt;")
+        layout.addWidget(icon)
+
+        text_box = QVBoxLayout()
+        text_box.setSpacing(2)
+        self._error_title = QLabel(tr("import.error.inline_title"))
+        self._error_title.setStyleSheet(
+            "color: #991B1B; background: transparent; font-weight: 700;"
+        )
+        text_box.addWidget(self._error_title)
+        self._error_message = QLabel("")
+        self._error_message.setWordWrap(True)
+        self._error_message.setStyleSheet(
+            "color: #7F1D1D; background: transparent;"
+        )
+        text_box.addWidget(self._error_message)
+        self._error_trace = QLabel("")
+        self._error_trace.setStyleSheet(
+            "color: #9CA3AF; background: transparent; font-size: 9pt;"
+        )
+        self._error_trace.setVisible(False)
+        text_box.addWidget(self._error_trace)
+        layout.addLayout(text_box, 1)
+
+        self._error_close = QPushButton("✕")
+        self._error_close.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        self._error_close.setCursor(Qt.PointingHandCursor)
+        self._error_close.setStyleSheet(
+            "QPushButton { background: transparent; border: none; color: #991B1B; font-size: 14pt; }"
+            "QPushButton:hover { color: #7F1D1D; }"
+        )
+        self._error_close.clicked.connect(self._hide_error_banner)
+        layout.addWidget(self._error_close)
+
+        banner.setVisible(False)
+        return banner
+
+    def _show_error_banner(self, user_message: str, trace_id: str = ""):
+        """Show the inline error banner with a safe message + optional trace id."""
+        self._error_message.setText(user_message or tr("api.error.generic"))
+        if trace_id:
+            self._error_trace.setText(f"{tr('api.error.trace_id_label')}: {trace_id}")
+            self._error_trace.setVisible(True)
+        else:
+            self._error_trace.clear()
+            self._error_trace.setVisible(False)
+        self._error_banner.setVisible(True)
+
+    def _hide_error_banner(self):
+        self._error_banner.setVisible(False)
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+
+    def _show_result_error(self, result, fallback_context: str = "generic"):
+        """Render an OperationResult failure in the inline banner + log it.
+
+        Reads the structured `error` from the result when available so we
+        get the trace id and can re-humanize via the central layer. Falls
+        back to result.message_ar if no structured error was attached.
+        """
+        from services.exceptions import humanize_exception
+        error = getattr(result, "error", None) if result is not None else None
+        if error is not None:
+            user_msg = humanize_exception(error, context=fallback_context)
+            trace_id = getattr(error, "trace_id", "") or ""
+            try:
+                logger.error(error.log_summary())
+            except Exception:
+                logger.error(f"API error: {error}")
+        else:
+            user_msg = (getattr(result, "message_ar", "") or tr("api.error.generic"))
+            trace_id = ""
+        self._show_error_banner(user_msg, trace_id)
+
     # -- Step Indicator -------------------------------------------------------
 
     def _update_step_indicator(self, current: int):
-        """Update step indicator in the dark wizard header."""
-        self.header.set_current_step(current)
+        """Update step indicator in the dark wizard header.
+
+        The header shows 3 pills (Processing / Review / Report) while the
+        internal stack still has 5 panels — map accordingly.
+        """
+        visible = _INTERNAL_TO_PILL[current] if 0 <= current < len(_INTERNAL_TO_PILL) else 0
+        self.header.set_current_step(visible)
 
     # -- Loading Overlay ------------------------------------------------------
 
@@ -289,14 +465,58 @@ class ImportWizardPage(QWidget):
             self._show_error(f"{msg_ar}\n\n{tr('wizard.import.retry_hint')}")
         else:
             self._show_error(msg_ar)
-        if self.current_step == 0:
-            self.step1._start_polling()
 
     def _set_buttons_enabled(self, enabled: bool):
         """Enable or disable navigation buttons (prevents double-click)."""
-        self.btn_next.setEnabled(enabled)
-        self.btn_back.setEnabled(enabled and self.current_step > 0 and self.current_step < 3)
+        # Forward navigation is suppressed entirely while a blocking error
+        # is active — see _enter_blocking_error_state.
+        if self._blocking_error_active:
+            self.btn_next.setEnabled(False)
+        else:
+            self.btn_next.setEnabled(enabled)
+        # "Back to packages" stays enabled — it's non-destructive and must
+        # remain reachable even during in-flight requests.
+        self.btn_back.setEnabled(True)
         self.btn_cancel.setEnabled(enabled)
+
+    def _enter_blocking_error_state(self):
+        """Halt all wizard operations after a hard error.
+
+        Triggered when /stage (or another required call) returns a server
+        error such as 500 / missing .uhc file. We:
+          1. Stop status polling and any active worker so nothing keeps
+             firing in the background.
+          2. Stop the processing widget's cycling animation so it doesn't
+             keep showing fake progress text below the error banner.
+          3. Set the blocking flag so _set_buttons_enabled / _update_
+             navigation refuse to re-enable Next.
+          4. Disable Next, keep Cancel-Package and Back-to-List enabled.
+        The error banner stays visible above the buttons so the user knows
+        why nothing is happening.
+        """
+        self._blocking_error_active = True
+        try:
+            self._stop_status_poll()
+        except Exception:
+            pass
+        try:
+            self._cancel_active_worker()
+        except Exception:
+            pass
+        # Halt the cycling progress text in the processing widget — it
+        # would otherwise keep claiming "the server is starting…" while
+        # the error banner says the opposite.
+        if self.step2 is not None and hasattr(self.step2, "_stop_cycle"):
+            try:
+                self.step2._stop_cycle()
+            except Exception:
+                pass
+        self._hide_loading()
+        self.btn_next.setEnabled(False)
+        self.btn_next.setToolTip(tr("wizard.import.error_next_blocked"))
+        self.btn_cancel.setVisible(True)
+        self.btn_cancel.setEnabled(True)
+        self.btn_back.setEnabled(True)
 
     # -- Footer ---------------------------------------------------------------
 
@@ -311,13 +531,14 @@ class ImportWizardPage(QWidget):
         layout.setSpacing(0)
 
         # Back button
-        self.btn_back = QPushButton(tr("action.back_arrow"))
+        self.btn_back = QPushButton(tr("wizard.import.back_to_list"))
         self.btn_back.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
         self.btn_back.setCursor(Qt.PointingHandCursor)
         self.btn_back.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_back.setStyleSheet(StyleManager.nav_button_secondary())
         self.btn_back.clicked.connect(self._on_back)
-        self.btn_back.setEnabled(False)
+        # Always enabled — user can always leave the wizard without destructive side-effects.
+        self.btn_back.setEnabled(True)
         layout.addWidget(self.btn_back)
 
         layout.addStretch()
@@ -368,20 +589,17 @@ class ImportWizardPage(QWidget):
         return footer
 
     def _create_steps(self):
-        """Create step placeholders. Steps are created lazily."""
-        # Step 1: Incoming packages (select a package to process)
-        from ui.pages.import_step1_packages import ImportStep1Packages
-        self.step1 = ImportStep1Packages(
-            self.import_controller,
-            parent=self
-        )
-        self.step1.package_selected.connect(self._on_package_selected)
-        self.step1.upload_completed.connect(self._on_upload_completed)
-        self.step1.back_requested.connect(self.cancelled.emit)
-        self.step_container.addWidget(self.step1)
+        """Step widgets are created lazily when the wizard routes to them.
 
-        # Steps 2-5: created lazily when needed
-        self.step2 = None        # staging + validation + duplicates
+        The legacy ImportStep1Packages package-list widget has been removed —
+        users enter the wizard from ImportPackagesPage with a specific
+        package id (see set_package_id). Internal stack layout:
+          index 0 = step2 (processing / validation)
+          index 1 = step_review
+          index 2 = step_commit
+          index 3 = step_report
+        """
+        self.step2 = None         # staging + validation + duplicates
         self.step_review = None   # review (uses import_step4_review.py)
         self.step_commit = None   # commit (uses import_step5_commit.py)
         self.step_report = None   # report (uses import_step6_report.py)
@@ -391,107 +609,76 @@ class ImportWizardPage(QWidget):
     # -- Navigation ----------------------------------------------------------
 
     def _on_back(self):
-        """Handle back button."""
-        if self.current_step > 0 and self.current_step < 3:
-            self.current_step -= 1
-            self.step_container.setCurrentIndex(self.current_step)
-            self._update_navigation()
+        """Back button → leave the wizard and return to the packages list.
+
+        Does NOT call any destructive backend endpoint. Polling and active
+        workers are stopped, and the UI emits `cancelled` so main_window
+        routes back to IMPORT_PACKAGES.
+        """
+        self._cancel_active_worker()
+        self._stop_status_poll()
+        self._hide_loading()
+        self.cancelled.emit()
 
     def _on_next(self):
-        """Handle next button — step transitions with controller calls."""
-        if self.current_step == 0:
-            self._transition_step1_to_step2()
+        """Handle next button — step transitions with controller calls.
 
-        elif self.current_step == 1:
+        Internal step indices: 0=validation, 1=review, 2=commit, 3=report.
+        Legacy step1 (package list) has been removed; entry is always via
+        set_package_id() from the packages list.
+        """
+        if self.current_step == 0:
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
                 self._cancel_validation_failed_package()
                 return
             self._transition_step2_to_review()
 
-        elif self.current_step == 2:
+        elif self.current_step == 1:
             self._transition_review_to_commit()
 
-        elif self.current_step == 3:
+        elif self.current_step == 2:
+            # Approve and Import Data — irreversible; confirm first.
+            from ui.error_handler import ErrorHandler
+            confirmed = ErrorHandler.confirm(
+                self,
+                tr("wizard.import.confirm_commit_body"),
+                tr("wizard.import.confirm_commit_title"),
+            )
+            if not confirmed:
+                return
             self._transition_commit_to_report()
 
-        elif self.current_step == 4:
+        elif self.current_step == 3:
             if self._current_package_status == _PkgStatus.FAILED:
                 self._retry_failed_commit()
             else:
-                self.refresh()
-
-    def _on_package_selected(self, package_id: str):
-        """Handle package selection from Step 1."""
-        self.btn_next.setEnabled(bool(package_id))
-        self._update_step0_btn_text()
-
-    def _update_step0_btn_text(self):
-        """Update Next button text based on selected package status at step 0."""
-        if self.current_step != 0 or not hasattr(self, 'step1'):
-            return
-        selected_status = self.step1.get_selected_status()
-        is_done = selected_status in (_PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED)
-        self.btn_next.setText(
-            tr("wizard.import.btn_view_report") if is_done
-            else tr("wizard.import.btn_start_processing")
-        )
-
-    def _on_upload_completed(self, package_id: str):
-        """After successful upload, auto-advance to processing."""
-        if package_id:
-            self._current_package_id = package_id
-            self._transition_step1_to_step2()
+                # Terminal state — leave the wizard.
+                self.cancelled.emit()
 
     # -- State-aware routing --------------------------------------------------
-
-    def _transition_step1_to_step2(self):
-        """Step 1 -> next: health check, fetch fresh status, route accordingly (async)."""
-        package_id = self.step1.get_selected_package_id()
-        if not package_id:
-            return
-
-        self._current_package_id = package_id
-        self.step1._stop_polling()
-
-        def do_health_and_status():
-            from services.api_client import get_api_client
-            api = get_api_client()
-            if not api.health_check():
-                raise NetworkException("Server unreachable")
-            return self.import_controller.get_package(package_id)
-
-        def on_status_fetched(pkg_result):
-            if not pkg_result.success:
-                self._set_buttons_enabled(True)
-                self._show_error(pkg_result.message_ar or tr("wizard.import.error_load_package"))
-                self.step1._start_polling()
-                return
-            status = pkg_result.data.get("status", 1)
-            self._route_by_status(status)
-
-        def on_health_error(error_type, msg_ar):
-            self._set_buttons_enabled(True)
-            if error_type == "network":
-                self._show_error(tr("error.cannot_connect_server"))
-            else:
-                self._show_error(msg_ar)
-            self.step1._start_polling()
-
-        self._run_api(
-            do_health_and_status,
-            on_status_fetched,
-            on_error=on_health_error,
-            loading_msg=tr("wizard.import.loading_checking_connection")
-        )
 
     def _route_by_status(self, status: int):
         """Central router: direct to the correct wizard step based on package status."""
         self._current_package_status = status
         logger.info(f"Routing package {self._current_package_id} with status {status}")
+        # Keep the processing widget in sync when it's visible.
+        if self.step2 is not None and hasattr(self.step2, "set_status"):
+            try:
+                self.step2.set_status(status)
+            except Exception:
+                pass
 
         if status == _PkgStatus.PENDING:
             self._handle_pending()
-        elif status in (_PkgStatus.VALIDATING, _PkgStatus.STAGING):
+        elif status == _PkgStatus.VALIDATING:
+            # Backend semantic: "uploaded, waiting for /stage trigger".
+            # Frontend MUST POST /stage to start the pipeline; polling
+            # alone would never advance the package.
+            self._handle_validating_start()
+        elif status == _PkgStatus.STAGING:
+            # Pipeline is already running on the server (likely triggered
+            # by another session). Don't re-call /stage (returns 409); just
+            # poll until completion.
             self._handle_in_progress(status)
         elif status == _PkgStatus.VALIDATION_FAILED:
             self._handle_validation_failed()
@@ -512,129 +699,342 @@ class ImportWizardPage(QWidget):
         else:
             logger.warning(f"Unknown package status: {status}")
             self._show_error(tr("wizard.import.error_unknown_status").format(status=status))
-            self.btn_next.setEnabled(True)
-            self.step1._start_polling()
+            # Unknown server state — bounce back to the packages list.
+            self.cancelled.emit()
 
     def _handle_pending(self):
-        """Status 1: Fresh package — run staging then duplicate detection (async)."""
+        """Status 1: Fresh package — stage + detect-duplicates in one call.
+
+        Stops immediately on stage failure: no detect, no approve, no commit,
+        no reset-commit, no auto-progress to step 2. Inline banner shows the
+        humanized error.
+        """
         pkg_id = self._current_package_id
+        current_status = self._current_package_status or _PkgStatus.PENDING
 
-        def do_stage():
-            return self.import_controller.stage_package(pkg_id)
-
-        def on_stage_done(stage_result):
-            if not stage_result.success:
-                logger.error(f"Staging failed: {stage_result.message}")
-                self._set_buttons_enabled(True)
-                self._show_error(stage_result.message_ar or tr("wizard.import.error_staging_failed"))
-                self.step1._start_polling()
+        def on_done(result):
+            if not result.success:
+                # Hard stop. Do NOT navigate to step 2 — the package never
+                # got staged. Block forward navigation but keep cancel and
+                # back-to-list reachable so the user can recover.
+                self._show_result_error(result, fallback_context="stage")
+                self._enter_blocking_error_state()
                 return
-            self._show_loading(tr("wizard.import.loading_detecting_duplicates"))
-            self._run_api(
-                lambda: self.import_controller.detect_duplicates(pkg_id),
-                on_dup_done,
-                on_error=on_dup_error,
-                loading_msg=""
-            )
-
-        def on_dup_done(dup_result):
-            duplicates_data = dup_result.data if dup_result.success else None
-            if not dup_result.success:
-                Toast.show_toast(self, tr("error.failed_load_data"), Toast.ERROR)
-                logger.warning(f"Duplicate detection failed: {dup_result.message}")
+            self._blocking_error_active = False
+            duplicates_data = None
+            if isinstance(result.data, dict):
+                duplicates_data = result.data.get("detect")
+            self._hide_error_banner()
             self._navigate_to_step2(duplicates_data)
             self._update_navigation()
 
-        def on_dup_error(error_type, msg_ar):
-            Toast.show_toast(self, tr("error.failed_load_data"), Toast.ERROR)
-            logger.warning(f"Duplicate detection error ({error_type}): {msg_ar}")
-            self._navigate_to_step2(duplicates_data=None)
-            self._update_navigation()
-
-        self._run_api(do_stage, on_stage_done, loading_msg=tr("wizard.import.loading_staging"))
-
-    def _handle_in_progress(self, status: int):
-        """Status 2/3: Backend is processing — trigger stage if needed, then poll."""
-        pkg_id = self._current_package_id
-
-        if status == _PkgStatus.VALIDATING:
-            # Backend may need explicit /stage call to start actual processing.
-            # Try stage; whether it succeeds or fails (409 = already processing), poll.
-            def on_stage_result(result):
-                if result.success:
-                    logger.info(f"Stage triggered for package {pkg_id}")
-                else:
-                    logger.info(f"Stage returned: {result.message} — polling anyway")
-                self._show_loading(tr("wizard.import.loading_server_check"))
-                self._start_status_poll()
-
-            def on_stage_error(error_type, msg_ar):
-                logger.info(f"Stage error ({error_type}): {msg_ar} — polling anyway")
-                self._show_loading(tr("wizard.import.loading_server_check"))
-                self._start_status_poll()
-
-            self._run_api(
-                lambda: self.import_controller.stage_package(pkg_id),
-                on_stage_result,
-                on_error=on_stage_error,
-                loading_msg=tr("wizard.import.loading_start_processing")
-            )
-        else:
-            self._show_loading(tr("wizard.import.loading_staging_server"))
-            self._start_status_poll()
-
-    def _handle_validation_failed(self):
-        """Status 4: Validation failed — show report, block forward."""
-        self._navigate_to_step2(duplicates_data=None, block_next=True)
-
-    def _handle_quarantined(self):
-        """Status 5: Quarantined — show message, block completely."""
-        self._show_error(tr("wizard.import.error_quarantined"))
-        self.btn_next.setEnabled(True)
-        self.step1._start_polling()
-
-    def _handle_reviewing_conflicts(self):
-        """Status 6: Staged with conflicts — try approve first, then show report."""
-        pkg_id = self._current_package_id
-        if not pkg_id:
-            self._navigate_to_step2(duplicates_data=None)
-            return
-
-        # Try to approve — backend will succeed only if all conflicts are resolved
-        self._show_loading(tr("wizard.import.loading_checking_conflicts"))
-
-        def on_approve_ok(result):
-            self._hide_loading()
-            if result.success:
-                logger.info(f"Package {pkg_id} approved after conflicts resolved")
-                # Re-poll to get new status (should be READY_TO_COMMIT)
-                self._start_status_poll()
-            else:
-                logger.info(f"Approve rejected (conflicts remain): {result.message}")
-                self._navigate_to_step2(duplicates_data=None)
-
-        def on_approve_err(error_type, msg_ar):
-            self._hide_loading()
-            logger.info(f"Approve failed ({error_type}) — showing conflicts step")
-            self._navigate_to_step2(duplicates_data=None)
+        def on_error(error_type, msg_ar):
+            # Synthesize a minimal failed result so _show_result_error
+            # routes through the same UI path.
+            class _SimpleResult:
+                success = False
+                message_ar = msg_ar
+                message = msg_ar
+                error = None
+            self._show_result_error(_SimpleResult(), fallback_context="stage")
+            self._enter_blocking_error_state()
 
         self._run_api(
-            lambda: self.import_controller.approve_package(pkg_id),
-            on_approve_ok,
-            on_error=on_approve_err,
-            loading_msg=""
+            lambda: self.import_controller.stage_and_detect_if_pending(pkg_id, current_status),
+            on_done,
+            on_error=on_error,
+            loading_msg=tr("wizard.import.loading_staging"),
+        )
+
+    def _handle_validating_start(self):
+        """Status 2 (Validating): package was uploaded and is waiting for an
+        explicit POST /stage trigger to start the pipeline.
+
+        Backend reality (StagePackageCommandHandler):
+          1. Updates DB status: Validating → Staging (early).
+          2. Unpacks .uhc into staging tables.
+          3. Runs the 8-level validation pipeline (synchronous).
+          4. Auto-runs duplicate detection if validation passes.
+          5. Final status: ReviewingConflicts | ReadyToCommit | ValidationFailed.
+
+        The HTTP /stage call blocks for the full pipeline (tens of seconds
+        to minutes). While it runs, we also poll /packages/{id} so the UI
+        catches the early Validating→Staging flip and reflects the final
+        status as soon as the request returns.
+        """
+        pkg_id = self._current_package_id
+        if not pkg_id:
+            return
+
+        self._hide_error_banner()
+        self._hide_loading()
+        # Show the processing view immediately so the user gets feedback
+        # while /stage runs synchronously on the backend.
+        self._navigate_to_step2(duplicates_data=None, block_next=True)
+        if self.step2 is not None and hasattr(self.step2, "set_status"):
+            try:
+                self.step2.set_status(_PkgStatus.VALIDATING)
+            except Exception:
+                pass
+
+        # Run polling in parallel with the /stage request so we observe
+        # the early Validating→Staging transition the backend writes to
+        # the DB before the HTTP response returns.
+        self._start_status_poll()
+
+        def on_stage_done(result):
+            if not result.success:
+                # Stage failed (missing .uhc, validation pipeline crash,
+                # etc.). Hard stop — block forward navigation, keep
+                # cancel and back-to-list reachable.
+                self._show_result_error(result, fallback_context="stage")
+                self._enter_blocking_error_state()
+                return
+            # /stage succeeded. Re-fetch the package and route on the
+            # canonical post-pipeline status (ReviewingConflicts /
+            # ReadyToCommit / ValidationFailed).
+            self._stop_status_poll()
+
+            def _on_post_stage_fetched(pkg_result):
+                if not pkg_result.success:
+                    self._start_status_poll()
+                    return
+                new_status = pkg_result.data.get("status", 0)
+                if isinstance(new_status, str) and new_status.isdigit():
+                    new_status = int(new_status)
+                self._current_package_status = new_status
+                self._route_by_status(new_status)
+
+            self._run_api(
+                lambda: self.import_controller.get_package(pkg_id),
+                _on_post_stage_fetched,
+                on_error=lambda et, m: self._start_status_poll(),
+                loading_msg="",
+            )
+
+        def on_stage_error(error_type, msg_ar):
+            class _SimpleResult:
+                success = False
+                message_ar = msg_ar
+                message = msg_ar
+                error = None
+            self._show_result_error(_SimpleResult(), fallback_context="stage")
+            self._enter_blocking_error_state()
+
+        self._run_api(
+            lambda: self.import_controller.stage_package(pkg_id),
+            on_stage_done,
+            on_error=on_stage_error,
+            # No full-screen overlay — the processing widget shows the
+            # active state with its own animated indicator.
+            loading_msg="",
+        )
+
+    def _handle_in_progress(self, status: int):
+        """Status 2/3: Backend is processing on the server. Show the new
+        ImportStepProcessing view (which has its own animated sub-state
+        indicator) and start polling. We do NOT call /stage again — that
+        would make the backend re-attempt the same file and 500 every tick.
+        We also do NOT show the wizard's full-screen loading overlay; the
+        processing widget already conveys the active state.
+        """
+        self._hide_error_banner()
+        self._hide_loading()
+        self._navigate_to_step2(duplicates_data=None, block_next=True)
+        # Make sure the new widget reflects the current sub-state.
+        if self.step2 is not None and hasattr(self.step2, "set_status"):
+            try:
+                self.step2.set_status(status)
+            except Exception:
+                pass
+        self._start_status_poll()
+
+    def _handle_validation_failed(self):
+        """Status 4: ValidationFailed — non-actionable terminal state."""
+        self._set_buttons_enabled(True)
+        self.terminal_state_message.emit(
+            "error", tr("wizard.import.bounce_validation_failed")
+        )
+        self.cancelled.emit()
+
+    def _handle_quarantined(self):
+        """Status 5: Quarantined — non-actionable terminal state.
+
+        Bounce back to the packages list AND emit a clear error toast so
+        the user knows the package was quarantined (silent bounces caused
+        confusion: users assumed the package had completed successfully).
+        """
+        self._set_buttons_enabled(True)
+        self.terminal_state_message.emit(
+            "error", tr("wizard.import.bounce_quarantined")
+        )
+        self.cancelled.emit()
+
+    def _handle_reviewing_conflicts(self):
+        """Status 6: Staged with conflicts.
+
+        We DO NOT auto-emit `navigate_to_duplicates` here. That used to be
+        convenient on first entry but caused an infinite redirect loop when
+        the user came back from the duplicates page with conflicts still
+        unresolved (set_package_id re-fetched, status was still 6, this
+        handler emitted again, main_window navigated back to duplicates,
+        repeat).
+
+        Instead we:
+          1. Show the new processing widget with sub-state=reviewing_conflicts
+             — it has a built-in conflict-count card and a "حل التعارضات
+             الآن" button that emits navigate_to_duplicates only when the
+             user explicitly clicks.
+          2. Fetch the live unresolved-conflicts count and feed it to the
+             widget so the user sees exactly how many remain.
+          3. If the count is 0 but status is still ReviewingConflicts (the
+             rare case where the backend hasn't transitioned), call /approve
+             which the backend accepts only if all conflicts are truly
+             resolved — and re-route on the new status.
+        """
+        pkg_id = self._current_package_id or ""
+        if not pkg_id:
+            return
+
+        self._hide_error_banner()
+        # Show a generic loading state FIRST — do NOT render the
+        # ReviewingConflicts card yet. Otherwise the user sees a momentary
+        # "still has conflicts" UI flash before the auto-rescue kicks in.
+        # The processing widget is only revealed once we know there's
+        # actually something pending.
+        self._show_loading(tr("wizard.import.loading_checking_status"))
+
+        def on_count_done(count_result):
+            count = (
+                int(count_result.data or 0)
+                if getattr(count_result, "success", False)
+                else 0
+            )
+
+            if count == 0:
+                # Backend status is still ReviewingConflicts but no
+                # PendingReview conflicts remain. Skip showing the
+                # conflict-count UI entirely — go straight to /approve.
+                # The backend accepts only if all are truly resolved and
+                # rejects safely otherwise.
+                logger.info(
+                    "Status=ReviewingConflicts but conflict count is 0 — "
+                    "attempting /approve to force advance"
+                )
+
+                def on_approve_done(approve_result):
+                    if not approve_result.success:
+                        # Backend refused; surface the conflict-review UI
+                        # now so the user can inspect what's still pending.
+                        logger.warning(
+                            "Approve rejected: %s — falling back to "
+                            "conflict-review widget",
+                            approve_result.message,
+                        )
+                        self._hide_loading()
+                        self._show_reviewing_conflicts_widget(0)
+                        return
+                    # Re-fetch status and route from there. _route_by_status
+                    # will hide the loading overlay when it draws the next
+                    # screen.
+                    self._refresh_status_and_route()
+
+                self._run_api(
+                    lambda: self.import_controller.approve_package(pkg_id),
+                    on_approve_done,
+                    on_error=lambda et, m: (
+                        self._hide_loading(),
+                        self._show_reviewing_conflicts_widget(0),
+                    ),
+                    loading_msg="",
+                )
+                return
+
+            # count > 0 — there really are unresolved conflicts. Reveal the
+            # processing widget with the count so the user can act on them.
+            self._hide_loading()
+            self._show_reviewing_conflicts_widget(count)
+
+        def on_count_error(error_type, msg_ar):
+            logger.warning(f"Conflict count fetch failed ({error_type}): {msg_ar}")
+            # Best-effort: assume there might be conflicts and let the user
+            # inspect them manually.
+            self._hide_loading()
+            self._show_reviewing_conflicts_widget(0)
+
+        self._run_api(
+            lambda: self.import_controller.get_conflict_count_for_package(pkg_id),
+            on_count_done,
+            on_error=on_count_error,
+            loading_msg="",
+        )
+
+    def _show_reviewing_conflicts_widget(self, count: int):
+        """Reveal the processing widget in ReviewingConflicts state."""
+        self._navigate_to_step2(duplicates_data=None, block_next=True)
+        if self.step2 is not None and hasattr(self.step2, "set_status"):
+            try:
+                self.step2.set_status(_PkgStatus.REVIEWING_CONFLICTS)
+            except Exception:
+                pass
+        if self.step2 is not None and hasattr(self.step2, "set_conflict_count"):
+            try:
+                self.step2.set_conflict_count(int(count))
+            except Exception:
+                pass
+
+    def _refresh_status_and_route(self):
+        """Fetch the current package status from the server and route on it.
+
+        Used as the success continuation after a /approve attempt during
+        the ReviewingConflicts → ReadyToCommit rescue path.
+        """
+        pkg_id = self._current_package_id
+        if not pkg_id:
+            return
+
+        def on_done(pkg_result):
+            if not pkg_result.success:
+                return
+            new_status = pkg_result.data.get("status", 0)
+            if isinstance(new_status, str) and new_status.isdigit():
+                new_status = int(new_status)
+            self._current_package_status = new_status
+            self._route_by_status(new_status)
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_done,
+            on_error=lambda et, m: None,
+            loading_msg="",
         )
 
     def _handle_ready_to_commit(self):
-        """Status 7: Approved — show validation report, user navigates forward."""
-        self._navigate_to_step2(duplicates_data=None)
+        """Status 7: ReadyToCommit — land directly on the Review step.
+
+        After conflicts are resolved (or none existed), the user comes
+        back here. They've already done the processing/validation work,
+        so showing step 1 (processing) again is a wasted click. Jump
+        straight to step 2 (review staged entities) where they can
+        inspect the data and press the commit button.
+        """
+        self._hide_error_banner()
+        self._hide_loading()
+        # Both ensure calls are needed: step2 lives at index 0 in the
+        # stack and step_review at index 1. We build them lazily so the
+        # stack ordering stays correct, then switch to index 1.
+        self._ensure_step2(duplicates_data=None, skip_load=True)
+        self._ensure_step_review()
+        self.current_step = 1
+        self.step_container.setCurrentIndex(self.current_step)
+        self._update_navigation()
 
     def _handle_committing(self):
         """Status 8: Commit in progress — show progress and poll."""
         self._ensure_step2(duplicates_data=None)
         self._ensure_step_review()
         self._ensure_step_commit()
-        self.current_step = 3
+        self.current_step = 2  # step_commit (internal index 2)
         self.step_container.setCurrentIndex(self.current_step)
         self._update_navigation()
         if self.step_commit and hasattr(self.step_commit, 'set_committing'):
@@ -643,38 +1043,75 @@ class ImportWizardPage(QWidget):
         self._start_status_poll()
 
     def _handle_terminal_report(self):
-        """Status 9/11: Completed or partially completed — show report."""
-        self._navigate_to_report()
+        """Status 9: Completed — show the final report.
+
+        Only Completed renders the report. PartiallyCompleted bounces to
+        the packages list with a warning toast.
+        """
+        if self._current_package_status == _PkgStatus.COMPLETED:
+            self._navigate_to_report()
+            return
+        # PartiallyCompleted — bounce with explicit warning.
+        self._set_buttons_enabled(True)
+        self.terminal_state_message.emit(
+            "warning", tr("wizard.import.bounce_partially_completed")
+        )
+        self.cancelled.emit()
 
     def _handle_failed(self):
-        """Status 10: Commit failed — show report with retry option."""
-        self._navigate_to_report()
+        """Status 10: Failed — non-actionable terminal state."""
+        self._set_buttons_enabled(True)
+        self.terminal_state_message.emit(
+            "error", tr("wizard.import.bounce_failed")
+        )
+        self.cancelled.emit()
 
     def _handle_cancelled(self):
-        """Status 12: Cancelled — should not reach here (filtered)."""
-        self._show_error(tr("wizard.import.error_cancelled_package"))
-        self.btn_next.setEnabled(True)
-        self.step1._start_polling()
+        """Status 12: Cancelled — non-actionable terminal state."""
+        self._set_buttons_enabled(True)
+        self.terminal_state_message.emit(
+            "info", tr("wizard.import.bounce_cancelled")
+        )
+        self.cancelled.emit()
 
     # -- Navigation helpers ---------------------------------------------------
 
     def _navigate_to_step2(self, duplicates_data=None, block_next=False):
-        """Navigate to Step 2 (staging/validation) and optionally block next."""
+        """Navigate to the processing/validation step (internal index 0)."""
         self._ensure_step2(duplicates_data)
-        self.current_step = 1
+        self.current_step = 0
         self.step_container.setCurrentIndex(self.current_step)
         self._update_navigation()
         if block_next:
             self.btn_next.setEnabled(False)
 
     def _navigate_to_report(self):
-        """Navigate directly to the report step (for terminal/completed statuses)."""
-        self._ensure_step2(duplicates_data=None, skip_load=True)
-        self._ensure_step_review(skip_load=True)
-        self._ensure_step_commit(skip_load=True)
+        """Navigate directly to the Final Report step (terminal statuses only).
+
+        We build ONLY step_report — there is no reason to spin up the
+        processing/review/commit widgets for a terminal package the user
+        will only view and then leave. setCurrentWidget locks the visible
+        child regardless of QStackedWidget index ordering.
+        """
+        # Tear down any other step widgets first to keep the stack clean.
+        for step_attr in ("step2", "step_review", "step_commit"):
+            step = getattr(self, step_attr, None)
+            if step is not None:
+                try:
+                    self.step_container.removeWidget(step)
+                except Exception:
+                    pass
+                try:
+                    step.deleteLater()
+                except Exception:
+                    pass
+                setattr(self, step_attr, None)
+
         self._ensure_step_report()
-        self.current_step = 4
-        self.step_container.setCurrentIndex(self.current_step)
+        # current_step kept at 3 for _update_navigation's report-step branch.
+        self.current_step = 3
+        if self.step_report is not None:
+            self.step_container.setCurrentWidget(self.step_report)
         self._update_navigation()
 
     # -- Status polling for transient states ----------------------------------
@@ -719,16 +1156,15 @@ class ImportWizardPage(QWidget):
             logger.info(f"Status poll #{self._poll_count}: package {pkg_id} -> status {new_status}")
 
             if new_status in _PkgStatus.TRANSIENT:
-                # Re-show loading (hidden by _on_worker_done)
-                if new_status == _PkgStatus.VALIDATING:
-                    status_label = tr("wizard.import.status_validating")
-                elif new_status == _PkgStatus.STAGING:
-                    status_label = tr("wizard.import.status_staging")
-                else:
-                    status_label = tr("wizard.import.status_committing")
-                self._show_loading(tr("wizard.import.loading_server_attempt").format(
-                    status=status_label, attempt=self._poll_count
-                ))
+                # Keep the processing widget in sync with the latest state.
+                # No full-screen overlay — the widget itself communicates
+                # which sub-state the backend is in.
+                self._hide_loading()
+                if self.step2 is not None and hasattr(self.step2, "set_status"):
+                    try:
+                        self.step2.set_status(new_status)
+                    except Exception:
+                        pass
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return
 
@@ -752,56 +1188,47 @@ class ImportWizardPage(QWidget):
     # -- Step transitions (with status guards) --------------------------------
 
     def _transition_step2_to_review(self):
-        """Step 2 -> Review: show staged entities for review."""
+        """Processing → Review: show staged entities for review."""
         self._ensure_step_review()
-        self.current_step = 2
+        self.current_step = 1  # step_review (internal index 1)
         self.step_container.setCurrentIndex(self.current_step)
         self._update_navigation()
 
     def _transition_review_to_commit(self):
-        """Review -> Commit: check status (async), approve if needed, then show confirmation."""
+        """Review -> Commit: re-check status, then approve (only if not yet
+        approved). Stop and show inline error on every failure — never let
+        an approve-failure cascade into commit."""
         pkg_id = self._current_package_id
 
         def on_status_fetched(pkg_result):
-            if pkg_result.success:
-                status = pkg_result.data.get("status", 0)
-                self._current_package_status = status
-
-                if status == _PkgStatus.READY_TO_COMMIT:
-                    self._ensure_step_commit()
-                    self.current_step = 3
-                    self.step_container.setCurrentIndex(self.current_step)
-                    self._update_navigation()
-                    return
-
-                if status in _PkgStatus.TERMINAL:
-                    self._navigate_to_report()
-                    return
-
-                if status == _PkgStatus.VALIDATION_FAILED:
-                    self._set_buttons_enabled(True)
-                    self._show_error(tr("wizard.import.error_validation_errors"))
-                    return
-
-            # Proceed to approve
-            self._run_api(
-                lambda: self.import_controller.approve_package(pkg_id),
-                on_approve_done,
-                loading_msg=tr("wizard.import.loading_approving")
-            )
-
-        def on_approve_done(approve_result):
-            if not approve_result.success:
-                logger.error(f"Approve failed: {approve_result.message}")
+            if not pkg_result.success:
                 self._set_buttons_enabled(True)
-                self._show_error(approve_result.message_ar or tr("wizard.import.error_approve_failed"))
+                self._show_result_error(pkg_result, fallback_context="load_package")
+                return
+            status = pkg_result.data.get("status", 0)
+            self._current_package_status = status
+
+            if status == _PkgStatus.READY_TO_COMMIT:
+                self._hide_error_banner()
+                self._ensure_step_commit()
+                self.current_step = 2  # step_commit
+                self.step_container.setCurrentIndex(self.current_step)
+                self._update_navigation()
                 return
 
-            self._current_package_status = _PkgStatus.READY_TO_COMMIT
-            self._ensure_step_commit()
-            self.current_step = 3
-            self.step_container.setCurrentIndex(self.current_step)
-            self._update_navigation()
+            if status in _PkgStatus.TERMINAL:
+                self._navigate_to_report()
+                return
+
+            if status == _PkgStatus.VALIDATION_FAILED:
+                self._set_buttons_enabled(True)
+                self._show_error_banner(tr("wizard.import.error_validation_errors"))
+                return
+
+            # Status is something else (e.g. ReviewingConflicts) — don't try
+            # to approve; surface a clear message.
+            self._set_buttons_enabled(True)
+            self._show_error_banner(tr("api.error.conflict"))
 
         self._run_api(
             lambda: self.import_controller.get_package(pkg_id),
@@ -840,9 +1267,16 @@ class ImportWizardPage(QWidget):
 
         def on_approve_done(approve_result):
             if not approve_result.success:
-                logger.warning(f"Approve returned: {approve_result.message}")
-                # Continue to commit anyway (might already be approved)
+                # STOP. Do not call commit on a package the backend refused
+                # to approve — that's how stage failures cascaded into
+                # reset-commit before. Show the inline error.
+                if self.step_commit and hasattr(self.step_commit, 'set_committing'):
+                    self.step_commit.set_committing(False)
+                self._set_buttons_enabled(True)
+                self._show_result_error(approve_result, fallback_context="approve")
+                return
 
+            self._hide_error_banner()
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                 self.step_commit.set_committing(True)
 
@@ -854,40 +1288,50 @@ class ImportWizardPage(QWidget):
             )
 
         def on_approve_error(error_type, msg_ar):
-            logger.warning(f"Approve error ({error_type}): {msg_ar} — proceeding to commit")
-            # Proceed to commit even if approve fails (might already be approved)
+            class _SimpleResult:
+                success = False
+                message_ar = msg_ar
+                message = msg_ar
+                error = None
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
-                self.step_commit.set_committing(True)
-
-            self._run_api(
-                lambda: self.import_controller.commit_package(pkg_id),
-                on_commit_done,
-                on_error=on_commit_error,
-                loading_msg=tr("wizard.import.loading_committing")
-            )
+                self.step_commit.set_committing(False)
+            self._set_buttons_enabled(True)
+            self._show_result_error(_SimpleResult(), fallback_context="approve")
 
         def on_commit_done(commit_result):
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                 self.step_commit.set_committing(False)
 
             if not commit_result.success:
-                logger.error(f"Commit failed: {commit_result.message}")
+                # Don't navigate to the Final Report just because commit
+                # failed in flight — re-fetch status and let the wizard
+                # route based on what the server actually says.
                 self._set_buttons_enabled(True)
-                self._show_error(commit_result.message_ar or tr("wizard.import.error_commit_failed"))
+                self._show_result_error(commit_result, fallback_context="commit")
+                self._refresh_status_silently()
                 return
 
+            self._hide_error_banner()
             self._current_package_status = _PkgStatus.COMPLETED
             self._ensure_step_report()
-            self.current_step = 4
+            self.current_step = 3  # step_report
             self.step_container.setCurrentIndex(self.current_step)
             self._update_navigation()
             self.completed.emit({"package_id": pkg_id})
 
         def on_commit_error(error_type, msg_ar):
+            class _SimpleResult:
+                success = False
+                message_ar = msg_ar
+                message = msg_ar
+                error = None
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                 self.step_commit.set_committing(False)
             self._set_buttons_enabled(True)
-            self._show_error(msg_ar)
+            self._show_result_error(_SimpleResult(), fallback_context="commit")
+            # Network drop during commit: do NOT assume failure. Re-check
+            # status from the server before changing the UI.
+            self._refresh_status_silently()
 
         self._run_api(
             lambda: self.import_controller.get_package(pkg_id),
@@ -895,26 +1339,85 @@ class ImportWizardPage(QWidget):
             loading_msg=tr("wizard.import.loading_checking_status")
         )
 
+    def _refresh_status_silently(self):
+        """Re-fetch the current package's backend status without re-routing.
+
+        Used after an inline error to make sure the wizard reflects the
+        true server state — e.g. if commit dropped the connection but the
+        backend still completed it, we'll see status=Completed and route
+        the user to the report.
+        """
+        pkg_id = self._current_package_id
+        if not pkg_id:
+            return
+
+        def on_done(result):
+            if not result.success:
+                return
+            new_status = result.data.get("status", 0)
+            if isinstance(new_status, str) and new_status.isdigit():
+                new_status = int(new_status)
+            self._current_package_status = new_status
+            # Only auto-navigate if the new state is meaningfully different
+            # (e.g. backend confirmed Completed while we thought commit failed).
+            if new_status in (
+                _PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED,
+                _PkgStatus.FAILED,
+            ):
+                self._route_by_status(new_status)
+
+        self._run_api(
+            lambda: self.import_controller.get_package(pkg_id),
+            on_done,
+            on_error=lambda et, m: None,
+            loading_msg="",
+        )
+
     # -- Retry failed commit --------------------------------------------------
 
     def _retry_failed_commit(self):
-        """Reset a failed commit (async) and navigate back to commit step."""
+        """Reset a failed commit, but only after the user explicitly confirms
+        AND provides a reason (the backend persists it in the audit trail
+        and rejects the request with 400 otherwise).
+        """
         pkg_id = self._current_package_id
+        if not pkg_id:
+            return
+
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
+            tr("import.error.reset_confirm_body"),
+            tr("import.error.reset_confirm_title"),
+        ):
+            return
+
+        # Same BottomSheet reason prompt as the cancel-package flow.
+        reason = _prompt_reason_via_bottom_sheet(
+            self,
+            title=tr("import.error.reset_reason_title"),
+            field_label=tr("import.error.reset_reason_prompt"),
+            submit_text=tr("action.retry"),
+            cancel_text=tr("action.dismiss"),
+        )
+        if not reason:
+            self._show_error_banner(tr("import.error.reset_reason_required"))
+            return
 
         def on_reset_done(result):
             if not result.success:
                 self._set_buttons_enabled(True)
-                self._show_error(result.message_ar or tr("wizard.import.error_reset_failed"))
+                self._show_result_error(result, fallback_context="reset_commit")
                 return
-
+            self._hide_error_banner()
             self._current_package_status = _PkgStatus.READY_TO_COMMIT
             self._ensure_step_commit()
-            self.current_step = 3
+            self.current_step = 2  # step_commit
             self.step_container.setCurrentIndex(self.current_step)
             self._update_navigation()
 
         self._run_api(
-            lambda: self.import_controller.reset_commit(pkg_id),
+            lambda: self.import_controller.reset_commit(pkg_id, reason=reason),
             on_reset_done,
             loading_msg=tr("wizard.import.loading_resetting")
         )
@@ -922,24 +1425,38 @@ class ImportWizardPage(QWidget):
     # -- Lazy step creation ---------------------------------------------------
 
     def _ensure_step2(self, duplicates_data=None, skip_load=False):
-        """Create or rebuild Step 2: Staging + Validation + Duplicates."""
+        """Create or rebuild the processing-step widget at internal index 0.
+
+        The legacy ImportStep2Staging (validation-zeros table + "clean data"
+        banner) is intentionally NOT used anymore — see
+        ui/pages/import_step_processing.py for the new clean UI.
+        """
         if self.step2 is not None:
             self.step_container.removeWidget(self.step2)
             self.step2.deleteLater()
 
-        from ui.pages.import_step2_staging import ImportStep2Staging
-        self.step2 = ImportStep2Staging(
+        from ui.pages.import_step_processing import ImportStepProcessing
+        self.step2 = ImportStepProcessing(
             self.import_controller,
             self._current_package_id,
             duplicates_data=duplicates_data,
             skip_load=skip_load,
-            parent=self
+            parent=self,
         )
         self.step2.resolve_duplicates_requested.connect(self._on_resolve_duplicates)
-        self.step_container.addWidget(self.step2)
+        # Pre-paint the new widget with the current status so the user
+        # never sees a blank processing pane before the first poll tick.
+        if self._current_package_status:
+            try:
+                self.step2.set_status(self._current_package_status)
+            except Exception:
+                pass
+        # insertWidget pins the slot (index 0) even if other steps already
+        # exist, so setCurrentIndex(0) reliably shows the processing view.
+        self.step_container.insertWidget(0, self.step2)
 
     def _ensure_step_review(self, skip_load=False):
-        """Create or rebuild Review step (uses import_step4_review)."""
+        """Create or rebuild Review step at internal index 1."""
         if self.step_review is not None:
             self.step_container.removeWidget(self.step_review)
             self.step_review.deleteLater()
@@ -951,10 +1468,10 @@ class ImportWizardPage(QWidget):
             skip_load=skip_load,
             parent=self
         )
-        self.step_container.addWidget(self.step_review)
+        self.step_container.insertWidget(1, self.step_review)
 
     def _ensure_step_commit(self, skip_load=False):
-        """Create or rebuild Commit step (uses import_step5_commit)."""
+        """Create or rebuild Commit step at internal index 2."""
         if self.step_commit is not None:
             self.step_container.removeWidget(self.step_commit)
             self.step_commit.deleteLater()
@@ -966,10 +1483,10 @@ class ImportWizardPage(QWidget):
             skip_load=skip_load,
             parent=self
         )
-        self.step_container.addWidget(self.step_commit)
+        self.step_container.insertWidget(2, self.step_commit)
 
     def _ensure_step_report(self):
-        """Create or rebuild Report step (uses import_step6_report)."""
+        """Create or rebuild Report step at internal index 3."""
         if self.step_report is not None:
             self.step_container.removeWidget(self.step_report)
             self.step_report.deleteLater()
@@ -980,29 +1497,45 @@ class ImportWizardPage(QWidget):
             self._current_package_id,
             parent=self
         )
-        self.step_container.addWidget(self.step_report)
+        self.step_container.insertWidget(3, self.step_report)
 
     # -- Navigation state -----------------------------------------------------
 
     def _update_navigation(self):
-        """Update navigation buttons and step indicator based on current step."""
+        """Update navigation buttons and step indicator based on current step.
+
+        Internal step indices (post step1 removal):
+          0 = processing / validation
+          1 = review staged entities
+          2 = commit confirmation / progress
+          3 = final report (terminal)
+        """
         self._update_step_indicator(self.current_step)
 
-        # Cancel button visible on steps 2-4 (index 1-3)
-        self.btn_cancel.setVisible(1 <= self.current_step <= 3)
+        # Cancel button visible AND enabled on processing / review / commit
+        # steps (0-2). Without explicitly re-enabling here, a previous
+        # `_set_buttons_enabled(False)` (fired during any in-flight API
+        # worker) leaves the cancel button greyed out forever — even after
+        # the call succeeds and the user lands on a step where cancelling
+        # is a perfectly valid action. The Final Report step (3) hides
+        # cancel entirely since the package is already terminal.
+        cancel_visible = 0 <= self.current_step <= 2
+        self.btn_cancel.setVisible(cancel_visible)
+        self.btn_cancel.setEnabled(cancel_visible)
+        # Back-to-list is always enabled and visible — it's non-destructive.
+        self.btn_back.setEnabled(True)
+        # Reset Next visibility; terminal report for non-failed statuses hides it below.
+        self.btn_next.setVisible(True)
+
+        # Hard-error state takes precedence over per-step logic — keep
+        # Next disabled regardless of which step we're on.
+        if self._blocking_error_active:
+            self.btn_next.setEnabled(False)
+            self.btn_next.setToolTip(tr("wizard.import.error_next_blocked"))
+            return
 
         if self.current_step == 0:
-            self.btn_back.setEnabled(False)
-            has_selection = (
-                hasattr(self, 'step1')
-                and hasattr(self.step1, 'get_selected_package_id')
-                and bool(self.step1.get_selected_package_id())
-            )
-            self.btn_next.setEnabled(has_selection)
-            self._update_step0_btn_text()
-
-        elif self.current_step == 1:
-            self.btn_back.setEnabled(True)
+            # Processing / validation step.
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
                 self.btn_next.setText(tr("wizard.import.btn_validation_failed_cancel"))
                 self.btn_next.setEnabled(True)
@@ -1013,26 +1546,37 @@ class ImportWizardPage(QWidget):
                 self.btn_next.setText(tr("action.next_arrow"))
                 self.btn_next.setEnabled(True)
 
-        elif self.current_step == 2:
-            self.btn_back.setEnabled(True)
+        elif self.current_step == 1:
+            # Review staged entities.
             self.btn_next.setText(tr("wizard.import.btn_approve_and_import"))
             self.btn_next.setEnabled(True)
 
-        elif self.current_step == 3:
-            self.btn_back.setEnabled(False)
-            self.btn_next.setText(tr("wizard.import.btn_commit_data"))
-            self.btn_next.setEnabled(True)
+        elif self.current_step == 2:
+            # Commit confirmation — only enable when server confirms readiness.
+            self.btn_next.setText(tr("wizard.import.btn_approve_and_import"))
+            can_commit = self._current_package_status == _PkgStatus.READY_TO_COMMIT
+            self.btn_next.setEnabled(can_commit)
+            if not can_commit:
+                if self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:
+                    self.btn_next.setToolTip(tr("wizard.import.tooltip_approve_disabled_conflicts"))
+                elif self._current_package_status == _PkgStatus.VALIDATION_FAILED:
+                    self.btn_next.setToolTip(tr("wizard.import.tooltip_approve_disabled_validation"))
+                else:
+                    self.btn_next.setToolTip(tr("wizard.import.tooltip_approve_disabled_not_ready"))
+            else:
+                self.btn_next.setToolTip("")
 
-        elif self.current_step == 4:
-            self.btn_back.setEnabled(False)
+        elif self.current_step == 3:
+            # Final Report — Back-to-list is the normal exit; only FAILED
+            # exposes a Retry primary action.
             self.btn_cancel.setVisible(False)
             if self._current_package_status == _PkgStatus.FAILED:
                 self.btn_next.setText(tr("action.retry"))
                 self.btn_next.setStyleSheet(StyleManager.nav_button_primary())
+                self.btn_next.setVisible(True)
+                self.btn_next.setEnabled(True)
             else:
-                self.btn_next.setText(tr("wizard.import.btn_new_import"))
-                self.btn_next.setStyleSheet(StyleManager.nav_button_success())
-            self.btn_next.setEnabled(True)
+                self.btn_next.setVisible(False)
 
     def enable_next_button(self, enabled: bool):
         """Allow steps to enable/disable next button."""
@@ -1066,15 +1610,26 @@ class ImportWizardPage(QWidget):
         if not self._current_package_id:
             return
 
-        from ui.error_handler import ErrorHandler
-        if not ErrorHandler.confirm(
-            self,
-            tr("dialog.import.confirm_cancel_message"),
-            tr("dialog.import.confirm_cancel_title")
-        ):
+        # Block cancellation while the server is actively committing — the
+        # backend does not support safe rollback mid-commit.
+        if self._current_package_status == _PkgStatus.COMMITTING:
+            self._show_error(tr("api.error.conflict"))
             return
 
-        logger.info(f"Cancelling package: {self._current_package_id}")
+        # Prompt for the cancellation reason via the project's BottomSheet
+        # design (matches the office-survey cancel-reason flow in
+        # main_window_v2). Reason is required — empty submission is rejected.
+        reason = _prompt_reason_via_bottom_sheet(
+            self,
+            title=tr("wizard.import.cancel_reason_title"),
+            field_label=tr("wizard.import.cancel_reason_prompt"),
+            submit_text=tr("wizard.import.cancel_package"),
+            cancel_text=tr("action.dismiss"),
+        )
+        if not reason:
+            return
+
+        logger.info(f"Cancelling package {self._current_package_id} — reason={reason!r}")
         pkg_id = self._current_package_id
 
         def on_cancel_done(cancel_result):
@@ -1084,12 +1639,26 @@ class ImportWizardPage(QWidget):
                 self._show_error(cancel_result.message_ar or tr("wizard.import.error_cancel_failed"))
                 return
 
+            # Reset wizard internal state BEFORE emitting cancelled so the
+            # packages page sees a clean slate when it gets focus. Then
+            # navigate via cancelled.emit() — main_window is wired to
+            # switch to IMPORT_PACKAGES on this signal. We do NOT call
+            # self.refresh() afterwards: the wizard is no longer visible,
+            # and a refresh would re-fetch the cancelled package's status
+            # and re-route based on stale state.
             self._show_success(tr("wizard.import.success_package_cancelled"))
+            self._stop_status_poll()
+            self._cancel_active_worker()
+            self._teardown_step_widgets()
+            self._current_package_id = None
+            self._current_package_status = 0
+            self._current_package_name = ""
+            self._hide_loading()
+            self._hide_error_banner()
             self.cancelled.emit()
-            self.refresh()
 
         self._run_api(
-            lambda: self.import_controller.cancel_package(pkg_id),
+            lambda: self.import_controller.cancel_package(pkg_id, reason=reason),
             on_cancel_done,
             loading_msg=tr("wizard.import.loading_cancelling")
         )
@@ -1109,7 +1678,35 @@ class ImportWizardPage(QWidget):
     # -- Public interface -----------------------------------------------------
 
     def refresh(self, data=None):
-        """Reset wizard to step 1 for a new import."""
+        """Refresh hook called by main_window when this page becomes visible.
+
+        Behavior:
+          • If `data` is a non-empty package id (string), route the wizard to
+            the right step for that package. This is the normal entry path:
+            the user clicked a package in ImportPackagesPage and main_window
+            forwarded the id via `navigate_to(IMPORT_WIZARD, pkg_id)`.
+          • If `data` is None and a package is already loaded/in-flight, do
+            nothing — never tear down a routed sub-step a moment after it was
+            set (would race the async status fetch).
+          • Otherwise reset the wizard to a clean idle state. The legacy
+            step1 package list is no longer the production entry point; we
+            keep the reset path only for explicit "new import" scenarios.
+        """
+        # Case 1: data carries a package id → route to the right step.
+        if isinstance(data, str) and data:
+            self.set_package_id(data)
+            return
+
+        # Case 2: a package is loaded/in-flight → leave the routed UI alone.
+        if self._current_package_id:
+            return
+
+        # Case 3: no package, no in-flight work → idle reset.
+        # The wizard is only meant to be used with a specific package id;
+        # entering it idle means the user navigated here by mistake (or
+        # through a stale signal). Tear down any loaded step widgets and
+        # bounce back to the packages list so we never leave the user on
+        # an empty, confusing screen.
         self._cancel_active_worker()
         self._stop_status_poll()
         self._hide_loading()
@@ -1123,14 +1720,9 @@ class ImportWizardPage(QWidget):
 
         self._current_package_id = None
         self._current_package_status = 0
+        self._current_package_name = ""
         self.current_step = 0
-        self.step_container.setCurrentIndex(0)
-        self._update_navigation()
-
-        if hasattr(self.step1, 'reset'):
-            self.step1.reset()
-        if hasattr(self.step1, '_start_polling'):
-            self.step1._start_polling()
+        self.cancelled.emit()
 
     def _on_resolve_duplicates(self):
         """Handle resolve duplicates button from step 2."""
@@ -1141,7 +1733,132 @@ class ImportWizardPage(QWidget):
             tr("wizard.import.resolve_duplicates_confirm_title")
         )
         if confirmed:
-            self.navigate_to_duplicates.emit()
+            self.navigate_to_duplicates.emit(self._current_package_id or "")
+
+    # ----- Public API used by main_window_v2 ---------------------------------
+
+    def _teardown_step_widgets(self):
+        """Remove every step widget from the QStackedWidget.
+
+        Called whenever a new package id arrives so the lazy `_ensure_step*`
+        methods can rebuild the stack in the right order. Removing in
+        reverse-creation order keeps Qt's child indices predictable.
+        """
+        for step_attr in ("step_report", "step_commit", "step_review", "step2"):
+            step = getattr(self, step_attr, None)
+            if step is not None:
+                try:
+                    self.step_container.removeWidget(step)
+                except Exception:
+                    pass
+                try:
+                    step.deleteLater()
+                except Exception:
+                    pass
+                setattr(self, step_attr, None)
+        self.current_step = 0
+
+    def set_package_id(self, package_id: str):
+        """Entry point from the packages list. Stores the id, fetches fresh
+        status and routes to the right internal step."""
+        package_id = str(package_id) if package_id else ""
+        self._current_package_id = package_id
+        self._current_package_status = 0
+        self._current_package_name = ""
+        # New package = fresh slate. Clear any blocking-error state from
+        # the previous package so Next is re-enabled by the per-step logic.
+        self._blocking_error_active = False
+        self._stop_status_poll()
+        self._cancel_active_worker()
+        # Tear down any step widgets left over from a previous package, so
+        # the lazy _ensure_step* methods rebuild the QStackedWidget in the
+        # correct order starting from an empty stack. Without this, stale
+        # widgets keep their slots and setCurrentIndex(0) can land on the
+        # wrong child (e.g. the step_review "Entity Review" screen instead
+        # of the new processing view).
+        self._teardown_step_widgets()
+        self._hide_error_banner()
+        if not package_id:
+            self.refresh()
+            return
+
+        def on_status_fetched(pkg_result):
+            if not pkg_result.success:
+                self._set_buttons_enabled(True)
+                self._show_error(pkg_result.message_ar or tr("wizard.import.error_load_package"))
+                return
+            data = pkg_result.data or {}
+            self._current_package_name = (
+                data.get("fileName") or data.get("packageName") or data.get("id") or ""
+            )
+            status = data.get("status", 1)
+            if isinstance(status, str) and status.isdigit():
+                status = int(status)
+            self._route_by_status(status)
+            # Defensive: if routing failed to put SOMETHING on screen
+            # (no widget added to the stack), at least show the processing
+            # widget so the user isn't stuck on a blank pane.
+            #
+            # Skip the fallback for terminal/non-actionable statuses whose
+            # handlers intentionally bounce back to the packages list via
+            # cancelled.emit(). Drawing a processing widget after the bounce
+            # creates a confusing flash and the empty-stack warning.
+            from services.import_status_map import is_actionable_status
+            if (
+                self.step_container.count() == 0
+                and is_actionable_status(status)
+            ):
+                logger.warning(
+                    "Routing left an empty stack for status %s — showing processing fallback",
+                    status,
+                )
+                self._navigate_to_step2(duplicates_data=None, block_next=True)
+
+        def on_status_error(error_type, msg_ar):
+            self._set_buttons_enabled(True)
+            self._show_error(msg_ar or tr("wizard.import.error_load_package"))
+
+        self._run_api(
+            lambda: self.import_controller.get_package(package_id),
+            on_status_fetched,
+            on_error=on_status_error,
+            loading_msg=tr("wizard.import.loading_checking_connection"),
+        )
+
+    def current_package_name(self) -> str:
+        """Return the current package's display name (for UI banners)."""
+        return self._current_package_name or ""
+
+    def refresh_current_package(self):
+        """Re-fetch the current package status and re-route accordingly.
+
+        Called when returning from the duplicates page so the wizard reflects
+        any conflicts resolved during navigation.
+        """
+        if not self._current_package_id:
+            return
+        # Reuse set_package_id for its status-fetch + routing logic.
+        self.set_package_id(self._current_package_id)
+
+    def leaveEvent(self, event):
+        """Stop polling + workers when user navigates away."""
+        try:
+            self._cancel_active_worker()
+            self._stop_status_poll()
+            self._hide_loading()
+        except Exception:
+            pass
+        super().leaveEvent(event)
+
+    def hideEvent(self, event):
+        """Ensure no orphan polling timer or background worker when hidden."""
+        try:
+            self._cancel_active_worker()
+            self._stop_status_poll()
+            self._hide_loading()
+        except Exception:
+            pass
+        super().hideEvent(event)
 
     def refresh_from_duplicates(self):
         """Re-check package status after returning from duplicates page.
@@ -1204,7 +1921,7 @@ class ImportWizardPage(QWidget):
     def configure_for_role(self, role: str):
         """Store user role for RBAC and propagate to steps."""
         self._user_role = role
-        for step_attr in ('step1', 'step2', 'step_review', 'step_commit', 'step_report'):
+        for step_attr in ('step2', 'step_review', 'step_commit', 'step_report'):
             step = getattr(self, step_attr, None)
             if step is not None and hasattr(step, 'configure_for_role'):
                 step.configure_for_role(role)
@@ -1222,7 +1939,7 @@ class ImportWizardPage(QWidget):
         self.header.set_steps(step_names)
 
         # Footer buttons
-        self.btn_back.setText(tr("action.back_arrow"))
+        self.btn_back.setText(tr("wizard.import.back_to_list"))
         self.btn_cancel.setText(tr("wizard.import.cancel_package"))
 
         # Next button text depends on current step
@@ -1232,7 +1949,7 @@ class ImportWizardPage(QWidget):
         self._loading_label.setText(tr("status.processing"))
 
         # Propagate to child steps
-        for step_attr in ('step1', 'step2', 'step_review', 'step_commit', 'step_report'):
+        for step_attr in ('step2', 'step_review', 'step_commit', 'step_report'):
             step = getattr(self, step_attr, None)
             if step is not None and hasattr(step, 'update_language'):
                 step.update_language(is_arabic)

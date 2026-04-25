@@ -337,8 +337,13 @@ class BaseMapDialog(QDialog):
         map_w = self.width() - 48
         map_h = self.height() - 174
         if HAS_WEBENGINE:
-            self.web_view = QWebEngineView(self)
-            self.web_view.setFixedSize(map_w, map_h)
+            # map_container is a plain fixed-size widget — children are positioned
+            # absolutely so the loading label can float on top of the web view.
+            self._map_container = QWidget()
+            self._map_container.setFixedSize(map_w, map_h)
+
+            self.web_view = QWebEngineView(self._map_container)
+            self.web_view.setGeometry(0, 0, map_w, map_h)
 
             settings = self.web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
@@ -351,28 +356,24 @@ class BaseMapDialog(QDialog):
             # conflicts with other Chromium apps sharing the GPU).
             settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
             settings.setAttribute(QWebEngineSettings.WebGLEnabled, False)
+            # Set dark background so web_view never flashes white before Chromium's first paint.
+            self.web_view.page().setBackgroundColor(QColor('#1a1a2e'))
             if HAS_WEBCHANNEL:
                 self._setup_webchannel()
 
-            # Loading indicator
-            self._loading_label = QLabel(tr("dialog.map.loading_map"))
-            self._loading_label.setFixedSize(map_w, map_h)
+            # Loading indicator — absolute overlay on top of web_view.
+            # Stays visible until _on_load_finished so there is never a dark gap.
+            self._loading_label = QLabel(tr("dialog.map.loading_map"), self._map_container)
+            self._loading_label.setGeometry(0, 0, map_w, map_h)
             self._loading_label.setAlignment(Qt.AlignCenter)
             self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
             self._loading_label.setStyleSheet(
                 f"background-color: {Colors.BACKGROUND}; color: {Colors.TEXT_SECONDARY}; border-radius: 8px;"
             )
-
-            map_container = QWidget()
-            map_layout = QVBoxLayout(map_container)
-            map_layout.setContentsMargins(0, 0, 0, 0)
-            map_layout.setSpacing(0)
-            map_layout.addWidget(self._loading_label)
-            map_layout.addWidget(self.web_view)
-            self.web_view.hide()
+            self._loading_label.raise_()
 
             self.web_view.loadFinished.connect(self._on_load_finished)
-            content_layout.addWidget(map_container)
+            content_layout.addWidget(self._map_container)
         else:
             placeholder = QLabel(tr("dialog.map.map_unavailable"))
             placeholder.setFixedSize(map_w, map_h)
@@ -867,10 +868,12 @@ class BaseMapDialog(QDialog):
         super().resizeEvent(event)
         map_w = self.width() - 48
         map_h = max(self.height() - 174, 300)
+        if hasattr(self, '_map_container') and self._map_container:
+            self._map_container.setFixedSize(map_w, map_h)
         if hasattr(self, 'web_view') and self.web_view:
-            self.web_view.setFixedSize(map_w, map_h)
+            self.web_view.setGeometry(0, 0, map_w, map_h)
         if hasattr(self, '_loading_label') and self._loading_label:
-            self._loading_label.setFixedSize(map_w, map_h)
+            self._loading_label.setGeometry(0, 0, map_w, map_h)
 
     def showEvent(self, event):
         """Show the gray overlay only when the dialog actually becomes visible.
@@ -895,17 +898,22 @@ class BaseMapDialog(QDialog):
     def _on_load_finished(self, success):
         """Called when web_view finishes loading HTML."""
         if success:
-            if hasattr(self, '_loading_label'):
+            # Hide the overlay label now that HTML (and its own spinner) is ready.
+            if hasattr(self, '_loading_label') and self._loading_label:
                 self._loading_label.hide()
             if self.web_view:
-                self.web_view.show()
+                self.web_view.page().runJavaScript(
+                    "if(typeof map!=='undefined'&&map&&map.invalidateSize){map.invalidateSize(false);}"
+                )
         else:
             logger.error("Map HTML failed to load")
-            if hasattr(self, '_loading_label'):
+            if hasattr(self, '_loading_label') and self._loading_label:
                 self._loading_label.setText(tr("dialog.map.map_load_failed"))
                 self._loading_label.setStyleSheet(
                     f"background-color: {Colors.BACKGROUND}; color: {Colors.ERROR}; border-radius: 8px;"
                 )
+                self._loading_label.show()
+                self._loading_label.raise_()
 
     def _on_bridge_ready(self):
         """Called when QWebChannel bridge is ready — map is interactive."""
@@ -1324,12 +1332,26 @@ class BaseMapDialog(QDialog):
         """
         Load map HTML into web view.
 
+        Shows web_view before setHtml so Chromium is never throttled while hidden —
+        preventing blank-tile areas on first pan. The HTML's own #map-loading-overlay
+        (dark, z-index 9999) is the visual loading indicator from this point on.
+        The dark page.setBackgroundColor ensures no white flash during the first paint.
+
         Args:
             html: Complete HTML string
         """
         if not self.web_view:
             logger.warning("WebView not available")
             return
+
+        # Ensure the overlay label is visible and on top while the new HTML loads.
+        if hasattr(self, '_loading_label') and self._loading_label:
+            self._loading_label.setText(tr("dialog.map.loading_map"))
+            self._loading_label.setStyleSheet(
+                f"background-color: {Colors.BACKGROUND}; color: {Colors.TEXT_SECONDARY}; border-radius: 8px;"
+            )
+            self._loading_label.show()
+            self._loading_label.raise_()
 
         from services.tile_server_manager import get_local_server_url
         base_url = QUrl(get_local_server_url())

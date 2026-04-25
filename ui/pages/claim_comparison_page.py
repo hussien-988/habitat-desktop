@@ -12,6 +12,7 @@ from PyQt5.QtGui import QColor, QIcon, QCursor
 
 from repositories.database import Database
 from services.duplicate_service import DuplicateService
+from services.conflict_classifier import get_conflict_display_category, PERSON
 from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.design_system import Colors, PageDimensions, ButtonDimensions, ScreenScale
@@ -29,6 +30,79 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 RADIO_STYLE = StyleManager.radio_button()
+
+# Field keys whose values are always Latin (digits / Latin punctuation).
+# Cells for these fields render with LayoutDirection=LeftToRight so the
+# digits and separators don't get bidi-reordered inside an Arabic UI.
+_LTR_FIELD_KEYS = {
+    "national_id",
+    "date_of_birth",
+    "phone_number",
+    "building_code",
+    "area_sqm",
+    "rooms",
+    "floor",
+    "unit_number",
+    "residential_units",
+    "commercial_units",
+    "total_units",
+}
+
+
+def _find_in_staged_persons(staged_snapshot, entity_id):
+    """Search the staged-entities payload for a person record by id.
+
+    staged_snapshot shape (from api.get_staged_entities):
+      { "persons": [...], "buildings": [...], "propertyUnits": [...], ... }
+    Each list contains staged entity dicts with various id fields.
+    """
+    return _find_in_staged_collection(staged_snapshot, "persons", entity_id)
+
+
+def _find_in_staged_property_units(staged_snapshot, entity_id):
+    """Search the staged-entities payload for a property unit by id."""
+    return _find_in_staged_collection(staged_snapshot, "propertyUnits", entity_id)
+
+
+def _find_in_staged_buildings(staged_snapshot, building_id):
+    """Search the staged-entities payload for a building by id."""
+    return _find_in_staged_collection(staged_snapshot, "buildings", building_id)
+
+
+def _find_in_staged_collection(staged_snapshot, collection_key, entity_id):
+    """Generic id-lookup across one of the staged-entities lists.
+
+    Returns the unwrapped staging payload (`stagingData` / `entityData` /
+    the item itself) so callers can read it like a regular DTO.
+    """
+    if not staged_snapshot or not entity_id:
+        return None
+    items = (
+        staged_snapshot.get(collection_key)
+        if isinstance(staged_snapshot, dict) else None
+    )
+    if not isinstance(items, list):
+        return None
+    target = str(entity_id)
+    id_keys = (
+        "id", "originalEntityId", "stagedEntityId",
+        "personId", "buildingId", "propertyUnitId", "entityId",
+    )
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        for key in id_keys:
+            val = item.get(key)
+            if val and str(val) == target:
+                payload = item.get("stagingData") or item.get("entityData") or item
+                if isinstance(payload, str):
+                    try:
+                        import json as _json
+                        payload = _json.loads(payload)
+                    except (ValueError, TypeError):
+                        payload = item
+                return payload if isinstance(payload, dict) else item
+    return None
 
 # ─── Styles ───────────────────────────────────────────────────────────
 _RECORD_CARD_NORMAL = f"""
@@ -508,17 +582,46 @@ class ClaimComparisonPage(QWidget):
         options_layout.addStretch()
         res_layout.addLayout(options_layout)
 
-        self._justification_label = QLabel(tr("page.comparison.justification_required"))
-        self._justification_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._justification_label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+        # Justification — required input. Larger label with red asterisk so
+        # the user immediately sees this is mandatory. The placeholder is
+        # multiline with a concrete example. A hint below clarifies that
+        # the text is persisted in the audit trail and cannot be edited.
+        self._justification_label = QLabel()
+        self._justification_label.setText(
+            f"{tr('page.comparison.justification_required')} "
+            f"<span style='color:#DC2626;'>*</span>"
+        )
+        self._justification_label.setTextFormat(Qt.RichText)
+        self._justification_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        self._justification_label.setStyleSheet(
+            f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
+        )
         res_layout.addWidget(self._justification_label)
 
         self._justification_edit = QTextEdit()
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
-        self._justification_edit.setFixedHeight(ScreenScale.h(80))
-        self._justification_edit.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._justification_edit.setStyleSheet(StyleManager.form_input_light())
+        self._justification_edit.setFixedHeight(ScreenScale.h(110))
+        self._justification_edit.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+        self._justification_edit.setStyleSheet(
+            "QTextEdit {"
+            " background: #FFFFFF;"
+            " border: 1.5px solid #CBD5E1;"
+            " border-radius: 8px;"
+            " padding: 10px 12px;"
+            " color: #1F2937;"
+            " selection-background-color: #93C5FD;"
+            " }"
+            " QTextEdit:focus { border-color: #3890DF; }"
+        )
         res_layout.addWidget(self._justification_edit)
+
+        self._justification_hint = QLabel(tr("page.comparison.justification_audit_hint"))
+        self._justification_hint.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._justification_hint.setStyleSheet(
+            "color: #6B7280; background: transparent; border: none; padding-top: 4px;"
+        )
+        self._justification_hint.setWordWrap(True)
+        res_layout.addWidget(self._justification_hint)
 
         self._content_layout.addWidget(self._resolution_card)
 
@@ -643,8 +746,31 @@ class ClaimComparisonPage(QWidget):
 
         self._table_grid.addWidget(header_frame, 0, 0, 1, 5)
 
-        # Determine fields based on conflict type
-        if self._current_conflict_type == "PersonDuplicate":
+        # Unavailable placeholder row — shown when a record's details couldn't be loaded
+        notice_offset = 0
+        if any(d.get("_unavailable") for d in comparison_dicts):
+            notice = QLabel()
+            a_unavail = comparison_dicts[0].get("_unavailable")
+            b_unavail = comparison_dicts[1].get("_unavailable")
+            if a_unavail and b_unavail:
+                notice.setText(tr("page.comparison.record_unavailable"))
+            elif a_unavail:
+                notice.setText(f"{tr('page.comparison.record_a')}: {tr('page.comparison.record_unavailable')}")
+            else:
+                notice.setText(f"{tr('page.comparison.record_b')}: {tr('page.comparison.record_unavailable')}")
+            notice.setAlignment(Qt.AlignCenter)
+            notice.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            notice.setStyleSheet(
+                "QLabel { background: #FFF7ED; color: #B45309;"
+                " border: 1px solid #FCD34D; border-radius: 8px;"
+                " padding: 10px 16px; margin: 6px 0; }"
+            )
+            self._table_grid.addWidget(notice, 1, 0, 1, 5)
+            notice_offset = 1
+
+        # Determine fields based on robust category (preferred) or legacy conflictType
+        category = getattr(self, "_current_category", "")
+        if category == PERSON or self._current_conflict_type == "PersonDuplicate":
             fields = [
                 ("full_name_ar", tr("page.comparison.full_name")),
                 ("mother_name", tr("page.comparison.mother_name")),
@@ -672,14 +798,15 @@ class ClaimComparisonPage(QWidget):
                 ("unit_number", tr("page.comparison.unit_number")),
             ]
 
-        row_offset = 1
+        row_offset = 1 + notice_offset
         for idx, (field_key, label_text) in enumerate(fields):
             row = row_offset + idx
             is_diff = field_key in diff_fields
             is_alt = idx % 2 == 0
             alt_bg = "#F8FBFF" if is_alt else "transparent"
 
-            # Field label column
+            # Field label column — keep default Qt alignment (no override)
+            # so the original look is preserved.
             field_lbl = QLabel(label_text)
             field_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             field_lbl.setStyleSheet(_TABLE_ROW_FIELD.replace("transparent", alt_bg))
@@ -691,10 +818,19 @@ class ClaimComparisonPage(QWidget):
             sep1.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
             self._table_grid.addWidget(sep1, row, 1)
 
-            # Record A value
+            # Record A value — alignment kept at Qt default for Arabic
+            # text values (matches the previous look). For known Latin-
+            # only fields (NID, date, phone) we explicitly:
+            #   • set layout direction to LTR so digits/dashes/`+` don't
+            #     get bidi-reordered, and
+            #   • align them to the trailing edge of the cell so they
+            #     visually match the rest of the column in Arabic UI.
             val_a = str(comparison_dicts[0].get(field_key, "-"))
             lbl_a = QLabel(val_a)
             lbl_a.setWordWrap(True)
+            if field_key in _LTR_FIELD_KEYS:
+                lbl_a.setLayoutDirection(Qt.LeftToRight)
+                lbl_a.setAlignment(get_text_alignment() | Qt.AlignVCenter)
             if is_diff:
                 lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
                 lbl_a.setStyleSheet(_get_diff_indicator_style("#E8F2FF"))
@@ -709,10 +845,13 @@ class ClaimComparisonPage(QWidget):
             sep2.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
             self._table_grid.addWidget(sep2, row, 3)
 
-            # Record B value
+            # Record B value — same LTR + trailing-edge alignment for Latin.
             val_b = str(comparison_dicts[1].get(field_key, "-"))
             lbl_b = QLabel(val_b)
             lbl_b.setWordWrap(True)
+            if field_key in _LTR_FIELD_KEYS:
+                lbl_b.setLayoutDirection(Qt.LeftToRight)
+                lbl_b.setAlignment(get_text_alignment() | Qt.AlignVCenter)
             if is_diff:
                 lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
                 lbl_b.setStyleSheet(_get_diff_indicator_style("#FFF8EB"))
@@ -907,7 +1046,7 @@ class ClaimComparisonPage(QWidget):
             self._current_group.get("firstEntityId", ""),
             self._current_group.get("secondEntityId", ""),
         ]
-        is_person = self._current_conflict_type == "PersonDuplicate"
+        is_person = getattr(self, "_current_category", "") == PERSON
 
         self._doc_comparison_worker = ApiWorker(
             self._fetch_document_comparison, conflict_id, entity_ids, is_person
@@ -1122,10 +1261,196 @@ class ClaimComparisonPage(QWidget):
                 diff_fields.add(key)
         return diff_fields
 
+    # Map of backend field names (in DataComparison.fields[].field) to our
+    # internal canonical comparison-field keys.
+    _DC_FIELD_ALIASES = {
+        "fullname": "full_name_ar",
+        "fullnamearabic": "full_name_ar",
+        "name": "full_name_ar",
+        "mothername": "mother_name",
+        "mothernamearabic": "mother_name",
+        "nationalid": "national_id",
+        "national_id": "national_id",
+        "nid": "national_id",
+        "dateofbirth": "date_of_birth",
+        "date_of_birth": "date_of_birth",
+        "dob": "date_of_birth",
+        "gender": "gender",
+        "nationality": "nationality",
+        "phone": "phone_number",
+        "phonenumber": "phone_number",
+        "mobilenumber": "phone_number",
+    }
+
+    @classmethod
+    def _parse_data_comparison(cls, raw):
+        """Normalise backend `dataComparison` into [record_a_dict, record_b_dict].
+
+        Handles three observed shapes:
+          1. {"fields": [{"field": ..., "first": ..., "second": ...,
+                          "match": bool}, ...]}    (canonical backend)
+          2. [{...record_a...}, {...record_b...}]   (already flattened)
+          3. [[{fieldName, value}, ...], [...]]     (legacy list-of-lists)
+
+        Returns a 2-element list — index 0 is record A, index 1 is record B.
+        Empty dicts when the input is missing/unparseable.
+        """
+        import json as _json
+
+        if not raw:
+            return [{}, {}]
+
+        if isinstance(raw, str):
+            try:
+                raw = _json.loads(raw)
+            except (ValueError, TypeError):
+                return [{}, {}]
+
+        # Shape 1: dict with "fields" array.
+        if isinstance(raw, dict):
+            fields = raw.get("fields")
+            if isinstance(fields, list):
+                rec_a, rec_b = {}, {}
+                for entry in fields:
+                    if not isinstance(entry, dict):
+                        continue
+                    field_name = str(
+                        entry.get("field") or entry.get("fieldName") or ""
+                    ).strip()
+                    if not field_name:
+                        continue
+                    canonical = cls._DC_FIELD_ALIASES.get(
+                        field_name.lower().replace("_", ""), field_name
+                    )
+                    first = entry.get("first", entry.get("firstValue", ""))
+                    second = entry.get("second", entry.get("secondValue", ""))
+                    if first not in ("", None):
+                        # Store under BOTH canonical (snake_case) and the
+                        # original field name so legacy lookups (cards,
+                        # NID extraction) that read camelCase keep working.
+                        rec_a[canonical] = str(first)
+                        if field_name != canonical:
+                            rec_a[field_name] = str(first)
+                    if second not in ("", None):
+                        rec_b[canonical] = str(second)
+                        if field_name != canonical:
+                            rec_b[field_name] = str(second)
+                return [rec_a, rec_b]
+            # Single-record dict — treat as record A only.
+            return [raw, {}]
+
+        # Shape 2 / 3: list.
+        if isinstance(raw, list):
+            out = []
+            for item in raw[:2]:
+                if isinstance(item, dict):
+                    out.append(item)
+                elif isinstance(item, list):
+                    flat = {}
+                    for fi in item:
+                        if isinstance(fi, dict):
+                            key = (
+                                fi.get("field")
+                                or fi.get("fieldName")
+                                or ""
+                            )
+                            val = fi.get("value", fi.get("first", ""))
+                            if key:
+                                canonical = cls._DC_FIELD_ALIASES.get(
+                                    str(key).lower().replace("_", ""), key
+                                )
+                                flat[canonical] = str(val)
+                    out.append(flat)
+                else:
+                    out.append({})
+            while len(out) < 2:
+                out.append({})
+            return out
+
+        return [{}, {}]
+
+    @staticmethod
+    def _is_meaningful_person(person_dto: dict) -> bool:
+        """Return True if the person dict has at least one identifying field.
+
+        Some endpoints return a thin `{"id": "..."}` for missing/staged
+        records. Treating that as a real hit overwrites the identifier
+        skeleton with empty data, so we filter it out here.
+        """
+        if not isinstance(person_dto, dict):
+            return False
+        for key in (
+            "fullNameArabic", "firstNameArabic", "fatherNameArabic",
+            "familyNameArabic", "fullName", "nationalId", "mobileNumber",
+            "phoneNumber", "dateOfBirth", "motherNameArabic",
+        ):
+            v = person_dto.get(key)
+            if v not in (None, ""):
+                return True
+        return False
+
+    @staticmethod
+    def _build_identifier_fallback(conflict_data: dict, idx: int,
+                                   data_comparison: list) -> dict:
+        """Last-resort fallback when neither production nor dataComparison
+        have data for one record.
+
+        The conflict object always carries `firstEntityIdentifier` /
+        `secondEntityIdentifier` (the human-readable label, usually the name).
+        For person duplicates, the NID is shared by definition with the OTHER
+        record — pull it from data_comparison's other side if present.
+        Returns a dict with at least a name and (when possible) NID.
+        """
+        if not isinstance(conflict_data, dict):
+            return {}
+        identifier = conflict_data.get(
+            "firstEntityIdentifier" if idx == 0 else "secondEntityIdentifier",
+            "",
+        )
+        # Backend may send an empty/None identifier when one side is staged-only.
+        # Fall back to the parsed dataComparison full-name for this index so the
+        # skeleton still has SOMETHING to display.
+        if not identifier and 0 <= idx < len(data_comparison):
+            dc_row = data_comparison[idx] or {}
+            if isinstance(dc_row, dict):
+                identifier = (
+                    dc_row.get("full_name_ar")
+                    or dc_row.get("fullNameArabic")
+                    or ""
+                )
+        if not identifier:
+            return {}
+        result = {"fullNameArabic": str(identifier)}
+        # Try to inherit NID from the sibling record's parsed data.
+        sibling_idx = 1 - idx
+        if 0 <= sibling_idx < len(data_comparison):
+            sibling = data_comparison[sibling_idx] or {}
+            if isinstance(sibling, dict):
+                nid = (
+                    sibling.get("national_id")
+                    or sibling.get("nationalId")
+                    or sibling.get("nationalID")
+                )
+                if nid:
+                    result["nationalId"] = str(nid)
+        return result
+
     def _map_person_to_comparison_dict(self, record: dict) -> dict:
         from services.vocab_service import get_label
 
-        full_name_ar = record.get("fullNameArabic") or ""
+        logger.warning(
+            f"[CMP-MAP] input keys={list(record.keys()) if isinstance(record, dict) else None}, "
+            f"full_name_ar(canonical)={record.get('full_name_ar')!r}, "
+            f"fullNameArabic={record.get('fullNameArabic')!r}, "
+            f"nationalId={record.get('nationalId')!r}, "
+            f"national_id={record.get('national_id')!r}"
+        )
+
+        # Accept either a production person DTO (fullNameArabic, mobileNumber,
+        # …) or a pre-canonical dict already produced by `_parse_data_comparison`
+        # (full_name_ar, phone_number, …) — whichever has data wins.
+        canonical_full_name = record.get("full_name_ar")
+        full_name_ar = canonical_full_name or record.get("fullNameArabic") or ""
         if not full_name_ar:
             parts = filter(None, [
                 record.get("firstNameArabic", ""),
@@ -1134,25 +1459,77 @@ class ClaimComparisonPage(QWidget):
             ])
             full_name_ar = " ".join(parts) or "-"
 
-        dob = record.get("dateOfBirth") or ""
+        dob = (
+            record.get("date_of_birth")
+            or record.get("dateOfBirth")
+            or ""
+        )
         if dob and "T" in str(dob):
             dob = str(dob).split("T")[0]
 
         gender_raw = record.get("gender")
-        gender_label = get_label("Gender", gender_raw, lang="ar") if gender_raw else "-"
+        gender_label = (
+            get_label("Gender", gender_raw, lang="ar")
+            if gender_raw and not isinstance(gender_raw, str)
+            else (gender_raw if gender_raw else "-")
+        )
+        # If gender_raw came as a string label already (e.g. "Male"), pass
+        # through; if it's a vocab code, get_label resolves it.
+        if isinstance(gender_raw, str) and gender_raw in ("Male", "Female", "ذكر", "أنثى"):
+            gender_label = gender_raw if gender_raw in ("ذكر", "أنثى") else (
+                "ذكر" if gender_raw == "Male" else "أنثى"
+            )
+        elif isinstance(gender_raw, (int, str)) and gender_raw not in ("", None):
+            try:
+                gender_label = get_label("Gender", gender_raw, lang="ar") or str(gender_raw)
+            except Exception:
+                gender_label = str(gender_raw)
+        else:
+            gender_label = "-"
 
         nationality_raw = record.get("nationality")
-        nationality_label = get_label("Nationality", nationality_raw, lang="ar") if nationality_raw else "-"
+        if isinstance(nationality_raw, str) and nationality_raw and not nationality_raw.isdigit():
+            nationality_label = nationality_raw
+        elif nationality_raw not in ("", None):
+            try:
+                nationality_label = get_label("Nationality", nationality_raw, lang="ar") or str(nationality_raw)
+            except Exception:
+                nationality_label = str(nationality_raw)
+        else:
+            nationality_label = "-"
 
-        return {
+        phone = (
+            record.get("phone_number")
+            or record.get("mobileNumber")
+            or record.get("phoneNumber")
+            or record.get("phone")
+            or "-"
+        )
+
+        out = {
             "full_name_ar": str(full_name_ar),
-            "mother_name": str(record.get("motherNameArabic") or "-"),
-            "national_id": str(record.get("nationalId") or "-"),
+            "mother_name": str(
+                record.get("mother_name")
+                or record.get("motherNameArabic")
+                or record.get("motherName")
+                or "-"
+            ),
+            "national_id": str(
+                record.get("national_id")
+                or record.get("nationalId")
+                or "-"
+            ),
             "date_of_birth": dob or "-",
             "gender": gender_label,
             "nationality": nationality_label,
-            "phone_number": str(record.get("mobileNumber") or "-"),
+            "phone_number": str(phone),
         }
+        logger.warning(
+            f"[CMP-MAP] output: full_name_ar={out.get('full_name_ar')!r}, "
+            f"national_id={out.get('national_id')!r}, "
+            f"date_of_birth={out.get('date_of_birth')!r}"
+        )
+        return out
 
     def _compute_person_diff_fields(self, comparison_dicts: list) -> set:
         if len(comparison_dicts) < 2:
@@ -1239,6 +1616,23 @@ class ClaimComparisonPage(QWidget):
         if success:
             self._justification_edit.clear()
             Toast.show_toast(self, tr("page.comparison.action_success"), Toast.SUCCESS)
+            # Tell the duplicates page to force-reload its list right after
+            # we navigate back. This avoids the 200ms refresh race in
+            # main_window.navigate_to and lets the page's
+            # "all-resolved-auto-return" check fire immediately.
+            try:
+                from app.config import Pages as _Pages
+                main_win = self.window()
+                if main_win is not None and hasattr(main_win, "pages"):
+                    dup_page = main_win.pages.get(_Pages.DUPLICATES)
+                    if dup_page is not None and hasattr(dup_page, "refresh"):
+                        # Synchronous refresh — the worker still runs async,
+                        # but the load_conflicts call kicks off NOW so the
+                        # auto-return logic isn't delayed by the navigation
+                        # timer.
+                        dup_page.refresh()
+            except Exception as e:
+                logger.warning(f"Could not pre-refresh duplicates list: {e}")
             self.back_requested.emit()
         else:
             Toast.show_toast(self, tr("page.comparison.action_failed"), Toast.WARNING)
@@ -1262,7 +1656,9 @@ class ClaimComparisonPage(QWidget):
 
         self._current_group = data
         self._current_conflict_type = data.get("conflictType", "")
-        is_person = self._current_conflict_type == "PersonDuplicate"
+        self._current_category = get_conflict_display_category(data)
+        self._current_import_package_id = data.get("_importPackageId") or ""
+        is_person = self._current_category == PERSON
 
         # Resolved / read-only mode
         status = data.get("status", "")
@@ -1297,25 +1693,79 @@ class ClaimComparisonPage(QWidget):
 
         conflict_id = data.get("id", "")
         entity_ids = [data.get("firstEntityId", ""), data.get("secondEntityId", "")]
+        package_id = self._current_import_package_id
 
         def _fetch_comparison_data():
             details = {}
-            fetched_persons = {}
+            staged_snapshot = None
+            fetched_records = {}
+            record_sources = {}  # eid -> "details" | "staged" | "production" | "unavailable"
+
             if conflict_id:
                 try:
-                    details = self.duplicate_service.get_conflict_details(conflict_id)
+                    details = self.duplicate_service.get_conflict_details(conflict_id) or {}
                 except Exception as e:
                     logger.error(f"Failed to fetch conflict details: {e}")
+
+            logger.warning(
+                f"[CMP] details fetched: keys={list(details.keys())}, "
+                f"dataComparison_present={bool(details.get('dataComparison'))}, "
+                f"dataComparison_preview={str(details.get('dataComparison',''))[:300]}"
+            )
+
+            if package_id and is_person:
+                try:
+                    from services.api_client import get_api_client
+                    staged_snapshot = get_api_client().get_staged_entities(package_id)
+                except Exception as se:
+                    logger.warning(f"Failed to fetch staged entities for package {package_id}: {se}")
+
+            logger.warning(
+                f"[CMP] staged_snapshot present={bool(staged_snapshot)}, entity_ids={entity_ids}"
+            )
+
             if is_person:
                 for eid in entity_ids:
-                    if eid:
-                        try:
-                            person = self.duplicate_service.get_person_data(eid)
-                            if person:
-                                fetched_persons[eid] = person
-                        except Exception as pe:
-                            logger.warning(f"Failed to fetch person {eid}: {pe}")
-            return {"details": details, "fetched_persons": fetched_persons}
+                    if not eid:
+                        continue
+                    record = _find_in_staged_persons(staged_snapshot, eid) if staged_snapshot else None
+                    if record:
+                        fetched_records[eid] = record
+                        record_sources[eid] = "staged"
+                        logger.info(f"Person {eid} resolved from staged entities")
+                        logger.warning(
+                            f"[CMP] eid={eid} source={record_sources[eid]} "
+                            f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
+                        )
+                        continue
+                    try:
+                        person = self.duplicate_service.get_person_data(eid)
+                        if person:
+                            fetched_records[eid] = person
+                            record_sources[eid] = "production"
+                            logger.info(f"Person {eid} resolved from production endpoint")
+                            logger.warning(
+                                f"[CMP] eid={eid} source={record_sources[eid]} "
+                                f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
+                            )
+                            continue
+                    except Exception as pe:
+                        logger.warning(f"Failed to fetch person {eid} from production: {pe}")
+                    record_sources[eid] = "unavailable"
+                    logger.warning(f"Person {eid} details unavailable")
+                    logger.warning(
+                        f"[CMP] eid={eid} source={record_sources[eid]} "
+                        f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
+                    )
+            logger.warning(
+                f"[CMP] worker return: fetched_persons keys={list(fetched_records.keys())}, "
+                f"sources={record_sources}"
+            )
+            return {
+                "details": details,
+                "fetched_persons": fetched_records,
+                "record_sources": record_sources,
+            }
 
         self._comparison_fetch_worker = ApiWorker(_fetch_comparison_data)
         self._comparison_fetch_worker.finished.connect(
@@ -1325,10 +1775,32 @@ class ClaimComparisonPage(QWidget):
         self._comparison_fetch_worker.start()
 
     def _on_comparison_data_error(self, error_msg):
-        """Handle comparison data fetch failure."""
+        """Handle comparison data fetch failure.
+
+        We surface the user-facing message via toast AND keep the empty
+        comparison area showing the "details unavailable" placeholder so
+        the user never sees a silently blank page.
+        """
         self._spinner.hide_loading()
         logger.error(f"Failed to fetch comparison data: {error_msg}")
-        Toast.show_toast(self, str(error_msg), Toast.ERROR)
+        # Show the central "record details unavailable" message with a
+        # toast for visibility — message_ar already humanized upstream.
+        safe_msg = str(error_msg) or tr("comparison.error.record_details_unavailable")
+        Toast.show_toast(self, safe_msg, Toast.ERROR)
+        # Also render the placeholder banner above the comparison area by
+        # passing a synthetic "both records unavailable" payload through
+        # the normal load handler. This avoids a blank page.
+        try:
+            self._on_comparison_data_loaded(self._current_group or {}, {
+                "details": {},
+                "fetched_persons": {},
+                "record_sources": {
+                    self._current_group.get("firstEntityId", "") if self._current_group else "": "unavailable",
+                    self._current_group.get("secondEntityId", "") if self._current_group else "": "unavailable",
+                },
+            })
+        except Exception as inner:
+            logger.warning(f"Could not render comparison fallback UI: {inner}")
 
     def _on_comparison_data_loaded(self, data, result):
         """Populate UI after background fetch completes."""
@@ -1336,8 +1808,15 @@ class ClaimComparisonPage(QWidget):
 
         details = result.get("details", {}) if result else {}
         _fetched_persons = result.get("fetched_persons", {}) if result else {}
+        record_sources = result.get("record_sources", {}) if result else {}
 
-        is_person = self._current_conflict_type == "PersonDuplicate"
+        is_person = getattr(self, "_current_category", "") == PERSON
+
+        logger.warning(
+            f"[CMP] loaded: details_keys={list(details.keys())}, "
+            f"fetched_persons_keys={list(_fetched_persons.keys())}, "
+            f"record_sources={record_sources}"
+        )
 
         if details:
             raw_dc = details.get("dataComparison", "")
@@ -1353,25 +1832,61 @@ class ClaimComparisonPage(QWidget):
         for btn in self.claim_radio_group.buttons():
             self.claim_radio_group.removeButton(btn)
 
-        records = []
-        first_id = data.get("firstEntityIdentifier", data.get("firstEntityId", "-"))
-        second_id = data.get("secondEntityIdentifier", data.get("secondEntityId", "-"))
-
+        # Parse dataComparison first so identifier fallbacks below can use it.
+        # Backend shape (TRRCMS-Backend ConflictDetailDto.DataComparison):
+        #   { "fields": [{"field": "...", "first": "...", "second": "...",
+        #                 "match": bool}, ...] }
+        # Older builds may also send a flat list (legacy). We normalise all
+        # variants into a 2-element list of dicts keyed by our internal
+        # canonical comparison-field names so the per-record loop below can
+        # populate either record reliably without a per-entity production
+        # lookup succeeding.
         raw_comparison = details.get("dataComparison", "")
-        data_comparison = []
-        if raw_comparison:
-            if isinstance(raw_comparison, list):
-                data_comparison = raw_comparison
-            elif isinstance(raw_comparison, str):
-                import json as _json
-                try:
-                    parsed = _json.loads(raw_comparison)
-                    if isinstance(parsed, list):
-                        data_comparison = parsed
-                except (ValueError, TypeError):
-                    pass
+        data_comparison = self._parse_data_comparison(raw_comparison)
+
+        def _identifier_for(idx: int) -> str:
+            # `dict.get(key, default)` returns the empty string if the key is
+            # PRESENT but blank — which is what the backend sends when the
+            # entity is staged-only. Walk a fallback chain that treats "",
+            # None, and "-" as missing, ending at the parsed dataComparison
+            # full-name field so the card never appears blank when the table
+            # row has data.
+            key_id = "firstEntityIdentifier" if idx == 0 else "secondEntityIdentifier"
+            key_eid = "firstEntityId" if idx == 0 else "secondEntityId"
+            for candidate in (
+                data.get(key_id),
+                (data_comparison[idx] if idx < len(data_comparison) else {}).get("full_name_ar"),
+                (data_comparison[idx] if idx < len(data_comparison) else {}).get("fullNameArabic"),
+                data.get(key_eid),
+            ):
+                if candidate not in (None, "", "-"):
+                    return str(candidate)
+            return "-"
+
+        records = []
+        first_id = _identifier_for(0)
+        second_id = _identifier_for(1)
+
+        logger.warning(
+            f"[CMP] parsed dataComparison: len={len(data_comparison)}, "
+            f"rec0_keys={list((data_comparison[0] or {}).keys()) if data_comparison else []}, "
+            f"rec1_keys={list((data_comparison[1] or {}).keys()) if len(data_comparison)>1 else []}"
+        )
+        logger.warning(
+            f"[CMP] rec0_sample: "
+            f"{dict(list((data_comparison[0] or {}).items())[:8]) if data_comparison else {}}"
+        )
+        logger.warning(
+            f"[CMP] rec1_sample: "
+            f"{dict(list((data_comparison[1] or {}).items())[:8]) if len(data_comparison)>1 else {}}"
+        )
 
         entity_ids = [data.get("firstEntityId", ""), data.get("secondEntityId", "")]
+        logger.warning(
+            f"[CMP] entity_ids={entity_ids}, "
+            f"firstEntityIdentifier={data.get('firstEntityIdentifier')!r}, "
+            f"secondEntityIdentifier={data.get('secondEntityIdentifier')!r}"
+        )
         records.append({
             "id": entity_ids[0],
             "identifier": first_id,
@@ -1444,27 +1959,65 @@ class ClaimComparisonPage(QWidget):
         if is_person:
             comparison_dicts = []
             for idx, record in enumerate(records):
+                # Build the record by LAYERING three sources from least to
+                # most authoritative. This guarantees the comparison cell
+                # always has at least name + NID even when the production
+                # endpoint returns an unrelated thin payload.
+                #
+                #   layer 1: identifier skeleton (firstEntityIdentifier +
+                #            sibling NID — always works for person dups)
+                #   layer 2: parsed dataComparison[idx] (per-record fields)
+                #   layer 3: production person DTO (fetched by id) — only
+                #            applied when it contains real person data, so
+                #            a {"id":"..."} placeholder doesn't blank out
+                #            the lower layers.
+                logger.warning(f"[CMP] === record idx={idx} eid={record['id']!r} ===")
+
+                merged = self._build_identifier_fallback(data, idx, data_comparison) or {}
+                logger.warning(f"[CMP] idx={idx} skeleton_fallback={merged}")
+
+                dc_dict = data_comparison[idx] if idx < len(data_comparison) else {}
+                if isinstance(dc_dict, dict) and dc_dict:
+                    merged.update({k: v for k, v in dc_dict.items() if v not in ("", None)})
+                logger.warning(
+                    f"[CMP] idx={idx} "
+                    f"dc_dict_keys={list((dc_dict if isinstance(dc_dict,dict) else {}).keys())}, "
+                    f"after_dc_merge_keys={list(merged.keys())}"
+                )
+
                 person_dto = _fetched_persons.get(record["id"])
-                if person_dto:
-                    comparison_dicts.append(self._map_person_to_comparison_dict(person_dto))
-                elif data_comparison and idx < len(data_comparison):
-                    dc = data_comparison[idx]
-                    comp_dict = {}
-                    if isinstance(dc, dict):
-                        if "fieldName" in dc:
-                            comp_dict[dc.get("fieldName", "")] = str(dc.get("value", "-"))
-                        else:
-                            comp_dict = dc
-                    elif isinstance(dc, list):
-                        for field_item in dc:
-                            if isinstance(field_item, dict):
-                                key = field_item.get("fieldName", "")
-                                val = field_item.get("value", "-")
-                                comp_dict[key] = str(val) if val else "-"
-                    comparison_dicts.append(self._map_person_to_comparison_dict(comp_dict))
+                logger.warning(
+                    f"[CMP] idx={idx} person_dto_present={isinstance(person_dto, dict)}, "
+                    f"meaningful={self._is_meaningful_person(person_dto) if isinstance(person_dto, dict) else False}, "
+                    f"person_dto_keys={list(person_dto.keys()) if isinstance(person_dto, dict) else None}"
+                )
+                if isinstance(person_dto, dict) and self._is_meaningful_person(person_dto):
+                    merged.update(
+                        {k: v for k, v in person_dto.items() if v not in ("", None)}
+                    )
+
+                logger.warning(
+                    f"[CMP] idx={idx} merged_final_keys={list(merged.keys())}, "
+                    f"merged_sample={dict(list(merged.items())[:8])}"
+                )
+
+                if not merged:
+                    logger.warning(f"Person {record['id']} not available — placeholder")
+                    mapped = self._map_person_to_comparison_dict({})
+                    mapped["_source"] = "unavailable"
+                    mapped["_unavailable"] = True
+                    mapped["_unavailable_text"] = tr("page.comparison.record_unavailable")
                 else:
-                    logger.warning(f"Person {record['id']} not available")
-                    comparison_dicts.append(self._map_person_to_comparison_dict({}))
+                    mapped = self._map_person_to_comparison_dict(merged)
+                    mapped["_source"] = record_sources.get(record["id"], "merged")
+                    mapped["_unavailable"] = False
+                logger.warning(
+                    f"[CMP] idx={idx} mapped_full_name_ar={mapped.get('full_name_ar')!r}, "
+                    f"national_id={mapped.get('national_id')!r}, "
+                    f"unavailable={mapped.get('_unavailable')}, "
+                    f"source={mapped.get('_source')}"
+                )
+                comparison_dicts.append(mapped)
 
             diff_fields = self._compute_person_diff_fields(comparison_dicts)
             self._populate_comparison_table(comparison_dicts, diff_fields)
@@ -1481,57 +2034,185 @@ class ClaimComparisonPage(QWidget):
             self._property_units_worker.start()
 
     def _fetch_all_property_units(self, record_ids):
-        """Fetch all property unit data for comparison (runs in worker thread)."""
+        """Fetch all property unit data for comparison (runs in worker thread).
+
+        For each id we try staged-entities FIRST (when in import context),
+        then fall back to production. This mirrors the person path: the
+        staged side of a duplicate isn't in production yet, so a pure
+        production lookup 404s and the column blanks out.
+        """
         from services.api_client import get_api_client
         api = get_api_client()
+
+        staged_snapshot = None
+        package_id = self._current_import_package_id
+        logger.warning(
+            f"[CMP-PROP] worker start: package_id={package_id!r}, record_ids={record_ids}"
+        )
+        if package_id:
+            try:
+                staged_snapshot = api.get_staged_entities(package_id)
+            except Exception as se:
+                logger.warning(
+                    f"[CMP-PROP] Failed to fetch staged entities for package "
+                    f"{package_id}: {se}"
+                )
+
+        if staged_snapshot:
+            try:
+                snap_keys = (
+                    list(staged_snapshot.keys())
+                    if isinstance(staged_snapshot, dict) else None
+                )
+                pu = (
+                    staged_snapshot.get("propertyUnits")
+                    if isinstance(staged_snapshot, dict) else None
+                )
+                pu_count = len(pu) if isinstance(pu, list) else None
+                pu_sample_ids = []
+                if isinstance(pu, list):
+                    for it in pu[:5]:
+                        if isinstance(it, dict):
+                            pu_sample_ids.append({
+                                k: it.get(k) for k in (
+                                    "id", "originalEntityId", "stagedEntityId",
+                                    "propertyUnitId", "entityId",
+                                ) if it.get(k) is not None
+                            })
+                logger.warning(
+                    f"[CMP-PROP] staged_snapshot keys={snap_keys}, "
+                    f"propertyUnits count={pu_count}, "
+                    f"first ids={pu_sample_ids}"
+                )
+            except Exception as e:
+                logger.warning(f"[CMP-PROP] snapshot inspect error: {e}")
+        else:
+            logger.warning(f"[CMP-PROP] staged_snapshot is None/empty")
+
         results = []
         for entity_id in record_ids:
             if not entity_id:
                 results.append({})
                 continue
-            try:
-                unit_dto = api.get_property_unit_by_id(entity_id)
-                if not unit_dto:
-                    results.append({})
-                    continue
-                building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
-                if building_id:
+
+            unit_dto = None
+            from_staged = False
+            if staged_snapshot:
+                staged_unit = _find_in_staged_property_units(staged_snapshot, entity_id)
+                if staged_unit:
+                    unit_dto = dict(staged_unit)
+                    from_staged = True
+                    logger.warning(
+                        f"[CMP-PROP] eid={entity_id} resolved from staged, "
+                        f"keys={list(unit_dto.keys())[:15]}"
+                    )
+                else:
+                    logger.warning(
+                        f"[CMP-PROP] eid={entity_id} NOT in staged_snapshot — "
+                        f"will try production"
+                    )
+
+            if unit_dto is None:
+                try:
+                    unit_dto = api.get_property_unit_by_id(entity_id)
+                    logger.warning(
+                        f"[CMP-PROP] eid={entity_id} production lookup "
+                        f"{'succeeded' if unit_dto else 'returned empty'}"
+                    )
+                except Exception as e:
+                    logger.error(f"[CMP-PROP] eid={entity_id} production failed: {e}")
+                    unit_dto = None
+
+            if not unit_dto:
+                results.append({})
+                continue
+
+            # Try to attach the parent building. Prefer staged buildings
+            # when the unit itself came from staging — they share package.
+            building_id = (
+                unit_dto.get("buildingId")
+                or unit_dto.get("building_id")
+                or ""
+            )
+            if building_id:
+                building_dto = None
+                if staged_snapshot:
+                    staged_building = _find_in_staged_buildings(
+                        staged_snapshot, building_id
+                    )
+                    if staged_building:
+                        building_dto = dict(staged_building)
+                if building_dto is None and not from_staged:
                     try:
                         building_dto = api.get_building_by_id(building_id)
-                        if building_dto:
-                            unit_dto["_building"] = building_dto
                     except Exception as be:
-                        logger.warning(f"Failed to fetch building {building_id}: {be}")
-                results.append(unit_dto)
-            except Exception as e:
-                logger.error(f"Failed to fetch property unit {entity_id}: {e}")
-                results.append({})
+                        logger.warning(
+                            f"Failed to fetch building {building_id}: {be}"
+                        )
+                if building_dto:
+                    unit_dto["_building"] = building_dto
+
+            results.append(unit_dto)
+
         return results
 
     def _on_property_units_loaded(self, unit_dtos):
         """Handle property unit data loaded from API."""
         self._spinner.hide_loading()
         data_comparison = getattr(self, '_pending_data_comparison', [])
+        conflict_data = self._current_group or {}
         comparison_dicts = []
 
         for idx, unit_dto in enumerate(unit_dtos):
+            logger.warning(
+                f"[CMP-PROP] === record idx={idx} dto_present={bool(unit_dto)} "
+                f"dc_present={bool(data_comparison and idx < len(data_comparison) and data_comparison[idx])}"
+            )
             if unit_dto:
                 building_data = unit_dto.get("_building", {})
-                comparison_dicts.append(self._map_to_comparison_dict(
+                mapped = self._map_to_comparison_dict(
                     building_data or unit_dto, unit_dto
-                ))
-            elif data_comparison and idx < len(data_comparison):
+                )
+                comparison_dicts.append(mapped)
+                continue
+
+            # Build a property-skeleton fallback so the column never blanks
+            # out when production 404s and dataComparison is null. Order:
+            #   1. dataComparison row (richest when backend supplies it)
+            #   2. firstEntityIdentifier / secondEntityIdentifier from the
+            #      conflict (always present — usually "<building_id>|<unit>")
+            comp_dict = {}
+            if data_comparison and idx < len(data_comparison):
                 dc = data_comparison[idx]
-                comp_dict = dc if isinstance(dc, dict) else {}
-                if isinstance(dc, list):
-                    comp_dict = {}
+                if isinstance(dc, dict):
+                    comp_dict = {k: v for k, v in dc.items() if v not in ("", None)}
+                elif isinstance(dc, list):
                     for fi in dc:
                         if isinstance(fi, dict):
-                            comp_dict[fi.get("fieldName", "")] = str(fi.get("value", "-"))
-                comparison_dicts.append(self._map_to_comparison_dict(comp_dict, comp_dict))
-            else:
-                logger.warning(f"Property unit at index {idx} not available")
-                comparison_dicts.append(self._map_to_comparison_dict({}, {}))
+                            key = fi.get("fieldName", "") or fi.get("field", "")
+                            val = fi.get("value", fi.get("first", ""))
+                            if key and val not in ("", None):
+                                comp_dict[key] = str(val)
+
+            if not comp_dict:
+                ident = conflict_data.get(
+                    "firstEntityIdentifier" if idx == 0 else "secondEntityIdentifier",
+                    "",
+                )
+                if ident:
+                    # Identifier shape observed: "<buildingId>|<unit>" — split
+                    # so the table at least shows the building code and unit
+                    # number rather than two columns of dashes.
+                    parts = str(ident).split("|", 1)
+                    comp_dict["buildingId"] = parts[0] if parts else str(ident)
+                    if len(parts) > 1 and parts[1]:
+                        comp_dict["unitIdentifier"] = parts[1]
+
+            logger.warning(
+                f"[CMP-PROP] idx={idx} skeleton_keys={list(comp_dict.keys())}, "
+                f"sample={dict(list(comp_dict.items())[:6])}"
+            )
+            comparison_dicts.append(self._map_to_comparison_dict(comp_dict, comp_dict))
 
         diff_fields = self._compute_comparison_diff_fields(comparison_dicts)
         self._populate_comparison_table(comparison_dicts, diff_fields)
@@ -1582,9 +2263,15 @@ class ClaimComparisonPage(QWidget):
             if idx < len(resolution_labels):
                 btn.setText(resolution_labels[idx])
 
-        # Justification
-        self._justification_label.setText(tr("page.comparison.justification_required"))
+        # Justification — keep the rich-text label with the red asterisk in
+        # sync with the language change.
+        self._justification_label.setText(
+            f"{tr('page.comparison.justification_required')} "
+            f"<span style='color:#DC2626;'>*</span>"
+        )
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
+        if hasattr(self, "_justification_hint"):
+            self._justification_hint.setText(tr("page.comparison.justification_audit_hint"))
 
         # Document column titles
         self._doc_first_frame._title_label.setText(tr("page.comparison.first_record_docs"))

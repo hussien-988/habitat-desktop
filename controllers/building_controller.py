@@ -652,8 +652,8 @@ class BuildingController(BaseController):
             neighborhood_name=neighborhood_name or neighborhood_code,
             neighborhood_name_ar=neighborhood_name,
             building_number=dto.get("buildingNumber", ""),
-            building_type=dto.get("buildingType") or 1,
-            building_status=dto.get("status") or dto.get("buildingStatus") or 1,
+            building_type=dto.get("buildingType") ,
+            building_status=dto.get("status") or dto.get("buildingStatus"),
             number_of_apartments=dto.get("numberOfApartments", 0) or 0,
             number_of_shops=dto.get("numberOfShops", 0) or 0,
             number_of_units=(

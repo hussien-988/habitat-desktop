@@ -299,7 +299,7 @@ class ViewportMapLoader:
         building = Building(
             building_id=dto.get("buildingCode", ""),
             building_uuid=dto.get("id", ""),
-            building_type=dto.get("buildingType", 1),
+            building_type=dto.get("buildingType"),
             building_status=dto.get("buildingStatus") or dto.get("status", 1),
             latitude=dto.get("latitude"),
             longitude=dto.get("longitude"),

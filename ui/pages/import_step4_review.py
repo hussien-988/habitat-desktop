@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Import wizard step 3: review staged entities before commit."""
+"""Import wizard step 3: review staged entities before commit.
+
+Used by the 3-step wizard as the Review & Approve pill's content.
+"""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
@@ -20,6 +23,48 @@ import re
 logger = get_logger(__name__)
 
 
+_BUILDING_TYPE_KEYS = {
+    "residential": "wizard.import.step4.bldg_residential",
+    "commercial": "wizard.import.step4.bldg_commercial",
+    "mixed": "wizard.import.step4.bldg_mixed",
+    "industrial": "wizard.import.step4.bldg_industrial",
+    "public": "wizard.import.step4.bldg_public",
+}
+
+_UNIT_TYPE_KEYS = {
+    "apartment": "wizard.import.step4.unit_apartment",
+    "shop": "wizard.import.step4.unit_shop",
+    "office": "wizard.import.step4.unit_office",
+    "warehouse": "wizard.import.step4.unit_warehouse",
+    "house": "wizard.import.step4.unit_house",
+    "other": "wizard.import.step4.unit_other",
+}
+
+
+def _localize_building_display(value: str) -> str:
+    """Translate strings like "Residential, 2 units" → "سكني، 2 وحدة"."""
+    m = re.match(r"^([A-Za-z]+),\s*(\d+)\s+units?$", value.strip())
+    if not m:
+        return value
+    type_word, count = m.group(1), m.group(2)
+    type_key = _BUILDING_TYPE_KEYS.get(type_word.lower())
+    type_ar = tr(type_key) if type_key else type_word
+    units_ar = tr("wizard.import.step4.units_count", count=count)
+    return f"{type_ar}، {units_ar}"
+
+
+def _localize_unit_display(value: str) -> str:
+    """Translate strings like "Apartment, Floor 3" → "شقة، طابق 3"."""
+    m = re.match(r"^([A-Za-z]+),\s*Floor\s*(\d+)$", value.strip(), re.IGNORECASE)
+    if not m:
+        return value
+    type_word, floor = m.group(1), m.group(2)
+    type_key = _UNIT_TYPE_KEYS.get(type_word.lower())
+    type_ar = tr(type_key) if type_key else type_word
+    floor_ar = tr("wizard.import.step4.floor_label", floor=floor)
+    return f"{type_ar}، {floor_ar}"
+
+
 def _translate_display(entity_type: str, field: str, value: str) -> str:
     """Translate API display values to Arabic using vocab service."""
     if not value or value == "-":
@@ -29,6 +74,14 @@ def _translate_display(entity_type: str, field: str, value: str) -> str:
     size_match = re.match(r"^Size:\s*(\d+)$", value, re.IGNORECASE)
     if size_match:
         return tr("wizard.import.step4.household_members", count=size_match.group(1))
+
+    # Buildings: "Residential, 2 units" → "سكني، 2 وحدة"
+    if entity_type == "buildings" and field == "displayInfo":
+        return _localize_building_display(value)
+
+    # Property units: "Apartment, Floor 3" → "شقة، طابق 3"
+    if entity_type == "propertyUnits" and field == "displayInfo":
+        return _localize_unit_display(value)
 
     # Use vocab service for known types
     if entity_type == "personPropertyRelations" and field == "displayInfo":
@@ -111,29 +164,24 @@ class ImportStep4Review(QWidget):
         self.setLayoutDirection(get_layout_direction())
         self.setStyleSheet("background: transparent;")
 
-        outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-            + StyleManager.scrollbar()
+        # Two-card horizontal split. The viewport is wider than tall, so we
+        # use the horizontal axis for the summary card on one side and the
+        # entity table on the other — no page scroll needed.
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(
+            ScreenScale.w(20), ScreenScale.h(16),
+            ScreenScale.w(20), ScreenScale.h(16),
         )
+        outer_layout.setSpacing(ScreenScale.w(16))
 
-        container = QWidget()
-        container.setStyleSheet("background: transparent;")
-        main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(0, 24, 0, 24)
-        main_layout.setSpacing(20)
-
-        # --- Card 1: Summary counts ---
+        # --- Card 1: Summary counts (LEFT, ~1/3 width) -----------------------
         summary_card = self._create_card()
+        summary_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        summary_card.setMinimumWidth(ScreenScale.w(360))
+        summary_card.setMaximumWidth(ScreenScale.w(460))
         summary_layout = QVBoxLayout(summary_card)
-        summary_layout.setContentsMargins(32, 24, 32, 24)
-        summary_layout.setSpacing(16)
+        summary_layout.setContentsMargins(24, 20, 24, 20)
+        summary_layout.setSpacing(12)
 
         title = QLabel(tr("wizard.import.step4.title"))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -151,36 +199,23 @@ class ImportStep4Review(QWidget):
         self._total_label.setStyleSheet("color: #212B36; background: transparent;")
         summary_layout.addWidget(self._total_label)
 
-        # Count badges (2 rows of 4)
+        # Count badges — stacked vertically in the narrow card.
         self._count_labels = {}
-
         entity_sections = _get_entity_sections()
-
-        row1_layout = QHBoxLayout()
-        row1_layout.setSpacing(16)
-        for key, ar_name, color, bg in entity_sections[:4]:
+        for key, ar_name, color, bg in entity_sections:
             badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
             self._count_labels[key] = count_label
-            row1_layout.addWidget(badge)
-        row1_layout.addStretch()
-        summary_layout.addLayout(row1_layout)
+            summary_layout.addWidget(badge)
+        summary_layout.addStretch()
 
-        row2_layout = QHBoxLayout()
-        row2_layout.setSpacing(16)
-        for key, ar_name, color, bg in entity_sections[4:]:
-            badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
-            self._count_labels[key] = count_label
-            row2_layout.addWidget(badge)
-        row2_layout.addStretch()
-        summary_layout.addLayout(row2_layout)
+        outer_layout.addWidget(summary_card, 1)
 
-        main_layout.addWidget(summary_card)
-
-        # --- Card 2: Entities table ---
+        # --- Card 2: Entities table (RIGHT, ~2/3 width) ----------------------
         table_card = self._create_card()
+        table_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table_layout = QVBoxLayout(table_card)
-        table_layout.setContentsMargins(32, 24, 32, 24)
-        table_layout.setSpacing(16)
+        table_layout.setContentsMargins(24, 20, 24, 20)
+        table_layout.setSpacing(12)
 
         table_title = QLabel(tr("wizard.import.step4.entity_details"))
         table_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -210,18 +245,22 @@ class ImportStep4Review(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
-        self._table.setMinimumHeight(ScreenScale.h(350))
+        self._table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # Lock all columns: type/status/approved have fixed widths; identifier
+        # and description stretch to fill remaining space. The header is no
+        # longer interactively resizable.
         header = self._table.horizontalHeader()
+        header.setSectionsMovable(False)
+        header.setSectionsClickable(False)
         header.setSectionResizeMode(0, QHeaderView.Fixed)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Fixed)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
-        self._table.setColumnWidth(0, 160)
-        self._table.setColumnWidth(1, 180)
-        self._table.setColumnWidth(3, 120)
-        self._table.setColumnWidth(4, 120)
+        self._table.setColumnWidth(0, ScreenScale.w(140))
+        self._table.setColumnWidth(3, ScreenScale.w(120))
+        self._table.setColumnWidth(4, ScreenScale.w(120))
 
         self._table.setStyleSheet("""
             QTableWidget {
@@ -250,12 +289,9 @@ class ImportStep4Review(QWidget):
         self._table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
 
-        table_layout.addWidget(self._table)
-        main_layout.addWidget(table_card)
+        table_layout.addWidget(self._table, 1)
 
-        main_layout.addStretch()
-        scroll.setWidget(container)
-        outer_layout.addWidget(scroll)
+        outer_layout.addWidget(table_card, 2)
 
     def _create_card(self) -> QFrame:
         card = QFrame()

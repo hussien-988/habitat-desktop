@@ -297,7 +297,8 @@ class TRRCMSApiClient:
                 if status_code == 401:
                     if self._session_expired_flag or "/auth/change-password" in endpoint.lower():
                         raise ApiException(
-                            message=api_msg, status_code=401, response_data=response_data
+                            message=api_msg, status_code=401, response_data=response_data,
+                            endpoint=endpoint, method=method,
                         )
                     # Only handle if the token hasn't changed (new login) since our request
                     if self.access_token and self.access_token == token_used:
@@ -327,7 +328,9 @@ class TRRCMSApiClient:
                 raise ApiException(
                     message=api_msg,
                     status_code=status_code,
-                    response_data=response_data
+                    response_data=response_data,
+                    endpoint=endpoint,
+                    method=method,
                 )
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 last_error = e
@@ -2980,10 +2983,23 @@ class TRRCMSApiClient:
         """Get the commit report for an import package."""
         return self._request("GET", f"/v1/import/packages/{package_id}/commit-report")
 
-    def reset_commit(self, package_id: str) -> Dict[str, Any]:
-        """Reset a package back to ReadyToCommit status."""
+    def reset_commit(self, package_id: str, reason: str = "") -> Dict[str, Any]:
+        """Reset a package back to ReadyToCommit status.
+
+        Backend requires both packageId and a non-empty Reason (used for
+        the audit trail); missing either returns 400 with a field-level
+        validation error.
+        """
         logger.info(f"Resetting commit for package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/reset-commit")
+        body = {
+            "packageId": package_id,
+            "Reason": reason or "",
+        }
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/reset-commit",
+            json_data=body,
+        )
 
     def cancel_import_package(self, package_id: str, reason: str = "Cancelled by user") -> Dict[str, Any]:
         """Cancel an active import package."""
