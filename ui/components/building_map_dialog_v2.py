@@ -306,6 +306,17 @@ class BuildingMapDialog(BaseMapDialog):
         self._enable_multiselect_in_map = self.__dict__.get('_enable_multiselect_in_map', False)
         self._initial_zoom = self.__dict__.get('_initial_zoom', None)
 
+        # Unified default provider: all map dialog entry points share the same
+        # FieldAssignmentMapProvider singleton viewport_loader cache.
+        if self._map_data_provider is None:
+            try:
+                from services.map_data_provider import FieldAssignmentMapProvider
+                from services.api_client import get_api_client
+                self._map_data_provider = FieldAssignmentMapProvider(get_api_client())
+            except Exception as e:
+                logger.warning(f"Could not create FieldAssignmentMapProvider, falling back to default: {e}")
+                self._map_data_provider = None
+
         # Use provided auth token first, fallback to parent window
         self._auth_token = auth_token
         if not self._auth_token:

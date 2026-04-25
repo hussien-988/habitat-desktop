@@ -1932,6 +1932,15 @@ class MainWindow(QMainWindow):
         if shimmer_was_active:
             surveys_page._shimmer_timer.stop()
 
+        header_timer_was_active = (
+            surveys_page is not None
+            and hasattr(surveys_page, '_header')
+            and hasattr(surveys_page._header, '_timer')
+            and surveys_page._header._timer.isActive()
+        )
+        if header_timer_was_active:
+            surveys_page._header._timer.stop()
+
         auth_token = getattr(self, '_api_token', None)
         try:
             dialog = MultiSelectBuildingMapDialog(
@@ -1944,6 +1953,8 @@ class MainWindow(QMainWindow):
         finally:
             if shimmer_was_active:
                 surveys_page._shimmer_timer.start()
+            if header_timer_was_active:
+                surveys_page._header._timer.start()
 
         if result != QDialog.Accepted:
             logger.debug("Building selection cancelled")
