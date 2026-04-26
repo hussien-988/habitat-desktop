@@ -33,15 +33,35 @@ class ApiAuthService:
     """Authentication service that delegates to the REST API."""
 
     def __init__(self):
-        from app.config import get_api_base_url
-        self.base_url = get_api_base_url().rstrip("/")
-        self.login_url = f"{self.base_url}/v1/Auth/login"
         self.timeout = Config.API_TIMEOUT
 
         # SSL context that skips verification for localhost self-signed certs
         self._ssl_ctx = ssl.create_default_context()
         self._ssl_ctx.check_hostname = False
         self._ssl_ctx.verify_mode = ssl.CERT_NONE
+
+    def _resolve_login_url(self) -> str:
+        """Resolve the login URL from current config every call.
+
+        The API base URL can change at runtime (user edits server settings
+        via the in-app dialog), so caching at construction time leads to
+        login attempts hitting the previous URL. Reading fresh each call
+        keeps this service in lockstep with `data/settings.json`.
+        """
+        from app.config import get_api_base_url
+        base_url = get_api_base_url().rstrip("/")
+        return f"{base_url}/v1/Auth/login"
+
+    @property
+    def base_url(self) -> str:
+        """Backwards-compat read-only accessor; resolved fresh each access."""
+        from app.config import get_api_base_url
+        return get_api_base_url().rstrip("/")
+
+    @property
+    def login_url(self) -> str:
+        """Backwards-compat read-only accessor; resolved fresh each access."""
+        return self._resolve_login_url()
 
     def authenticate(self, username: str, password: str) -> Tuple[Optional[User], str]:
         """

@@ -25,7 +25,8 @@ class _BuildingsWorker(QThread):
     error = pyqtSignal(str)
 
     def __init__(self, auth_token, selected_building_id, is_view_only,
-                 fallback_building, center_lat, center_lon, data_provider=None):
+                 fallback_building, center_lat, center_lon, data_provider=None,
+                 perf_trace=None):
         super().__init__()
         self._auth_token = auth_token
         self._selected_building_id = selected_building_id
@@ -34,6 +35,7 @@ class _BuildingsWorker(QThread):
         self._center_lat = center_lat
         self._center_lon = center_lon
         self._data_provider = data_provider
+        self._perf_trace = perf_trace
 
 
     def run(self):
@@ -47,13 +49,28 @@ class _BuildingsWorker(QThread):
 
             buildings = []
             if self._is_view_only and self._selected_building_id:
+                if self._perf_trace:
+                    self._perf_trace.mark('buildings_api_start', mode='view_only')
                 result['buildings_geojson'] = '{"type": "FeatureCollection", "features": []}'
                 if self._fallback_building:
                     result['view_buildings'] = [self._fallback_building]
                 else:
                     building = map_service.get_building_with_polygon(self._selected_building_id)
                     result['view_buildings'] = [building] if building else []
+                if self._perf_trace:
+                    self._perf_trace.mark(
+                        'buildings_api_done',
+                        n_buildings=len(result.get('view_buildings', [])),
+                    )
             else:
+                if self._perf_trace:
+                    self._perf_trace.mark(
+                        'buildings_api_start',
+                        center_lat=f"{self._center_lat:.4f}",
+                        center_lon=f"{self._center_lon:.4f}",
+                        delta=0.15,
+                        page_size=2000,
+                    )
                 try:
                     # ~15km radius to cover the full screen at zoom 15
                     delta_lat, delta_lng = 0.15, 0.15
@@ -66,10 +83,20 @@ class _BuildingsWorker(QThread):
                     )
                 except Exception as e:
                     logger.warning(f"API map loading failed: {e}")
+                if self._perf_trace:
+                    self._perf_trace.mark(
+                        'buildings_api_done',
+                        n_buildings=len(buildings) if buildings else 0,
+                    )
                 result['buildings_list'] = buildings
                 result['buildings_geojson'] = GeoJSONConverter.buildings_to_geojson(
                     buildings, force_points=True
                 )
+                if self._perf_trace:
+                    self._perf_trace.mark(
+                        'geojson_built',
+                        bytes=len(result['buildings_geojson']),
+                    )
 
             self.finished.emit(result)
         except Exception as e:
@@ -82,15 +109,19 @@ class _LayersWorker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, auth_token):
+    def __init__(self, auth_token, perf_trace=None):
         super().__init__()
         self._auth_token = auth_token
+        self._perf_trace = perf_trace
 
     def run(self):
         try:
             from concurrent.futures import ThreadPoolExecutor
 
             result = {}
+            trace = self._perf_trace
+            if trace:
+                trace.mark('layers_start')
 
             def _load_landmarks():
                 try:
@@ -106,9 +137,13 @@ class _LayersWorker(QThread):
                     )
                     if items and isinstance(items, list):
                         logger.info(f"Loaded {len(items)} landmarks for map")
+                        if trace:
+                            trace.mark('layers_landmarks_done', count=len(items))
                         return json.dumps([normalize_landmark(lm) for lm in items], ensure_ascii=False)
                 except Exception as e:
                     logger.warning(f"Failed to load landmarks: {e}")
+                    if trace:
+                        trace.mark('layers_landmarks_failed', err=type(e).__name__)
                 return None
 
             def _load_streets():
@@ -125,9 +160,13 @@ class _LayersWorker(QThread):
                     )
                     if items and isinstance(items, list):
                         logger.info(f"Loaded {len(items)} streets for map")
+                        if trace:
+                            trace.mark('layers_streets_done', count=len(items))
                         return json.dumps([normalize_street(s) for s in items], ensure_ascii=False)
                 except Exception as e:
                     logger.warning(f"Failed to load streets: {e}")
+                    if trace:
+                        trace.mark('layers_streets_failed', err=type(e).__name__)
                 return None
 
             with ThreadPoolExecutor(max_workers=2) as executor:
@@ -279,7 +318,7 @@ class _SearchWorker(QThread):
 
 class BuildingMapDialog(BaseMapDialog):
     """Dialog for selecting a single building by clicking on map."""
-    
+
     def __init__(
         self,
         db: Database,
@@ -290,8 +329,19 @@ class BuildingMapDialog(BaseMapDialog):
         parent=None,
         show_confirm_button: bool = False,
         show_multiselect_ui: bool = False,
+        perf_trace=None,
     ):
         """Initialize building map dialog."""
+        # Subclass may have set _perf_trace before calling super().__init__ —
+        # preserve it. Otherwise honour the explicit kwarg.
+        self._perf_trace = self.__dict__.get('_perf_trace', None) or perf_trace
+        if self._perf_trace:
+            self._perf_trace.mark(
+                'dialog_init_start',
+                cls=type(self).__name__,
+                read_only=read_only,
+                max_sel=self.__dict__.get('_max_selection'),
+            )
         self.db = db
         self.building_controller = BuildingController(db)
         self._fallback_building = selected_building
@@ -407,6 +457,15 @@ class BuildingMapDialog(BaseMapDialog):
                         self._initial_center_lat = _pt['coordinates'][1]
                         self._has_building_center = True
 
+        if self._perf_trace:
+            self._perf_trace.mark(
+                'dialog_init_done',
+                center_lat=f"{self._initial_center_lat:.4f}",
+                center_lon=f"{self._initial_center_lon:.4f}",
+                zoom=self._initial_zoom,
+                has_building_center=self._has_building_center,
+            )
+
         # Start buildings fetch immediately (parallel with HTML generation)
         QTimer.singleShot(0, self._prefetch_buildings_early)
         QTimer.singleShot(50, self._start_map_load)
@@ -415,6 +474,11 @@ class BuildingMapDialog(BaseMapDialog):
         """Show map immediately with tiles, then load buildings in background."""
         from services.tile_server_manager import get_tile_server_url
         from ui.constants.map_constants import MapConstants
+
+        if self._perf_trace:
+            from services.map_perf_logger import set_active_trace
+            set_active_trace(self._perf_trace)
+            self._perf_trace.mark('html_gen_start')
 
         tile_url = get_tile_server_url()
         logger.info(f"Map tile server URL: {tile_url}")
@@ -454,9 +518,28 @@ class BuildingMapDialog(BaseMapDialog):
                 logger.error("generate_leaflet_html returned empty HTML")
                 self._show_map_error(tr("dialog.map.map_load_failed"))
                 return
+            if self._perf_trace:
+                self._perf_trace.mark('html_gen_done', html_kb=round(len(html) / 1024, 1))
             self.load_map_html(html)
+            if self._perf_trace:
+                from services.map_perf_logger import (
+                    snapshot_active_timers, snapshot_running_threads,
+                    count_web_engine_views,
+                )
+                self._perf_trace.mark(
+                    'set_html_called',
+                    active_timers=snapshot_active_timers(),
+                    running_threads=snapshot_running_threads(),
+                    web_views=count_web_engine_views(),
+                )
+                # Intentionally NOT clearing the active_trace here — keep it set
+                # so renderer-side console.log("[MAP_PERF_JS]...") messages
+                # fired during the loadFinished window route into this trace.
         except Exception as e:
             logger.error(f"Failed to generate map HTML: {e}", exc_info=True)
+            if self._perf_trace:
+                from services.map_perf_logger import set_active_trace
+                set_active_trace(None)
             self._show_map_error(tr("dialog.map.map_load_failed"))
             return
 
@@ -489,11 +572,14 @@ class BuildingMapDialog(BaseMapDialog):
 
         # Buildings worker started early in _prefetch_buildings_early; start here only if missed
         if self._buildings_worker is None:
+            if self._perf_trace:
+                self._perf_trace.mark('buildings_worker_start_late')
             self._buildings_worker = _BuildingsWorker(
                 self._auth_token, self._selected_building_id,
                 self._is_view_only, self._fallback_building,
                 center_lat, center_lon,
                 data_provider=self._map_data_provider,
+                perf_trace=self._perf_trace,
             )
             self._buildings_worker.finished.connect(self._on_buildings_ready)
             self._buildings_worker.error.connect(self._on_map_data_error)
@@ -506,13 +592,21 @@ class BuildingMapDialog(BaseMapDialog):
 
     def _prefetch_buildings_early(self):
         """Start fetching buildings immediately on dialog open, before HTML is ready."""
+        if self._perf_trace:
+            self._perf_trace.mark('prefetch_start')
         if self._is_view_only or self._buildings_worker is not None:
+            if self._perf_trace:
+                self._perf_trace.mark(
+                    'prefetch_skipped',
+                    reason='view_only' if self._is_view_only else 'already_running',
+                )
             return
         self._buildings_worker = _BuildingsWorker(
             self._auth_token, self._selected_building_id,
             self._is_view_only, self._fallback_building,
             self._initial_center_lat, self._initial_center_lon,
             data_provider=self._map_data_provider,
+            perf_trace=self._perf_trace,
         )
         self._buildings_worker.finished.connect(self._on_buildings_ready)
         self._buildings_worker.error.connect(self._on_map_data_error)
@@ -529,6 +623,11 @@ class BuildingMapDialog(BaseMapDialog):
 
     def _on_buildings_ready(self, data):
         """Inject buildings into the already-visible map, or buffer if page not loaded."""
+        if self._perf_trace:
+            self._perf_trace.mark(
+                'buildings_arrived',
+                page_loaded=self._page_loaded,
+            )
         if not self._page_loaded:
             self._pending_buildings_data = data
             logger.info("Buildings data buffered, waiting for page load")
@@ -617,8 +716,43 @@ class BuildingMapDialog(BaseMapDialog):
                 }}
             }})();
             """
+            if self._perf_trace:
+                self._perf_trace.mark(
+                    'buildings_inject_start',
+                    has_buildings=str(_has_buildings).lower(),
+                )
             if self.web_view:
-                self.web_view.page().runJavaScript(js_inject)
+                if self._perf_trace:
+                    trace_ref = self._perf_trace
+                    dialog_ref = self
+                    def _on_inject_done(_result, _trace=trace_ref, _dlg=dialog_ref):
+                        from services.map_perf_logger import (
+                            snapshot_active_timers, snapshot_running_threads,
+                            count_web_engine_views,
+                        )
+                        _trace.mark(
+                            'buildings_inject_done',
+                            active_timers=snapshot_active_timers(),
+                            running_threads=snapshot_running_threads(),
+                            web_views=count_web_engine_views(),
+                        )
+                        _trace.summary()
+                        # Probe main-thread responsiveness for 5s after map ready.
+                        # Confirms whether the user-perceived ongoing lag is
+                        # main-thread starvation. Skip if already running.
+                        if getattr(_dlg, '_perf_heartbeat', None) is None:
+                            try:
+                                from services.map_perf_logger import MainThreadHeartbeat
+                                _dlg._perf_heartbeat = MainThreadHeartbeat(
+                                    _trace, _dlg, interval_ms=50,
+                                    duration_ms=5000, stall_threshold_ms=100.0,
+                                )
+                                _dlg._perf_heartbeat.start()
+                            except Exception as e:
+                                logger.warning(f"Heartbeat probe failed to start: {e}")
+                    self.web_view.page().runJavaScript(js_inject, _on_inject_done)
+                else:
+                    self.web_view.page().runJavaScript(js_inject)
 
             if self._is_view_only and focus_building_id and center_lat and center_lon:
                 self._fly_to(center_lat, center_lon, 18)
@@ -630,6 +764,17 @@ class BuildingMapDialog(BaseMapDialog):
 
     def _on_page_ready(self, success):
         """Called when HTML page finishes loading - inject any buffered data."""
+        if self._perf_trace:
+            from services.map_perf_logger import (
+                snapshot_active_timers, snapshot_running_threads, count_web_engine_views,
+            )
+            self._perf_trace.mark(
+                'load_finished',
+                success=success,
+                active_timers=snapshot_active_timers(),
+                running_threads=snapshot_running_threads(),
+                web_views=count_web_engine_views(),
+            )
         if success:
             self._page_loaded = True
             # Show loading overlay now (page DOM is ready)
@@ -646,10 +791,12 @@ class BuildingMapDialog(BaseMapDialog):
             # earlier caused its JSON parsing / normalize_* loops to hold the
             # GIL and starve Qt/Chromium during the critical render window.
             if self._layers_worker is None:
-                self._layers_worker = _LayersWorker(self._auth_token)
+                self._layers_worker = _LayersWorker(self._auth_token, perf_trace=self._perf_trace)
                 self._layers_worker.finished.connect(self._on_layers_ready)
                 self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))
                 self._layers_worker.start()
+        if self._perf_trace:
+            self._perf_trace.mark('page_ready_done')
 
     def _on_layers_ready(self, data):
         """Inject landmarks and streets, or buffer if page not loaded yet."""
@@ -671,6 +818,9 @@ class BuildingMapDialog(BaseMapDialog):
             if streets_json and self.web_view:
                 js_st = f"if(typeof updateStreetsOnMap==='function')updateStreetsOnMap({streets_json});"
                 self.web_view.page().runJavaScript(js_st)
+
+            if self._perf_trace:
+                self._perf_trace.mark('layers_inject_done')
         except Exception as e:
             logger.error(f"Error injecting layers: {e}", exc_info=True)
 
@@ -1017,10 +1167,14 @@ def show_building_map_dialog(
     auth_token: Optional[str] = None,
     read_only: bool = False,
     selected_building: Optional[Building] = None,
-    parent=None
+    parent=None,
+    perf_trace=None,
 ) -> Optional[Building]:
     """Show building map dialog and return selected building, or None if cancelled."""
-    dialog = BuildingMapDialog(db, selected_building_id, auth_token, read_only, selected_building, parent)
+    dialog = BuildingMapDialog(
+        db, selected_building_id, auth_token, read_only, selected_building, parent,
+        perf_trace=perf_trace,
+    )
     result = dialog.exec_()
 
     if result == dialog.Accepted:
@@ -1040,7 +1194,10 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
                  center_lat: Optional[float] = None, center_lon: Optional[float] = None,
                  initial_zoom: Optional[int] = None,
                  already_selected_ids: Optional[list] = None,
-                 max_selection: Optional[int] = None):
+                 max_selection: Optional[int] = None,
+                 perf_trace=None):
+        # Stash trace before super().__init__ so the parent ctor sees it via __dict__.get
+        self._perf_trace = perf_trace
         self._multi_selected_buildings: List[Building] = []
         self._already_selected_ids = set(already_selected_ids or [])
         # [UNIFIED-DIALOG] None = unlimited (Field Work), 1 = single-select replace mode (Claims).
@@ -1191,6 +1348,7 @@ def show_multiselect_map_dialog(
     initial_zoom: Optional[int] = None,
     already_selected_ids: Optional[list] = None,
     max_selection: Optional[int] = None,
+    perf_trace=None,
 ) -> Optional[List[Building]]:
     """Show the unified building map dialog.
 
@@ -1207,6 +1365,7 @@ def show_multiselect_map_dialog(
         initial_zoom=initial_zoom,
         already_selected_ids=already_selected_ids,
         max_selection=max_selection,
+        perf_trace=perf_trace,
     )
     result = dialog.exec_()
 

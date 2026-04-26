@@ -2835,8 +2835,20 @@ class BuildingsListPage(QWidget):
         """
         if building.latitude and building.longitude:
             from ui.components.building_map_dialog_v2 import show_building_map_dialog
+            from services.map_perf_logger import (
+                MapPerfTrace, snapshot_active_timers, snapshot_running_threads,
+                count_web_engine_views,
+            )
 
             auth_token = self._get_auth_token()
+
+            perf_trace = MapPerfTrace(flow_name="buildings_mgmt")
+            perf_trace.mark(
+                'flow_start',
+                active_timers=snapshot_active_timers(),
+                running_threads=snapshot_running_threads(),
+                web_views=count_web_engine_views(),
+            )
 
             show_building_map_dialog(
                 db=self.building_controller.db,
@@ -2844,7 +2856,8 @@ class BuildingsListPage(QWidget):
                 auth_token=auth_token,
                 read_only=True,
                 selected_building=building,
-                parent=self
+                parent=self,
+                perf_trace=perf_trace,
             )
         else:
             Toast.show_toast(self, tr("dialog.buildings.no_coordinates"), Toast.WARNING)

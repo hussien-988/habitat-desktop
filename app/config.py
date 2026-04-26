@@ -5,11 +5,64 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import os
+import sys
 import json
+
+
+def _resolve_user_root() -> Path:
+    """User-writable root: where data/, logs/, and a user-editable .env live.
+
+    Frozen (PyInstaller exe): the directory containing TRRCMS.exe.
+    Source mode: the repo root.
+    """
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+def _resolve_bundle_root() -> Path:
+    """Read-only bundle root: where assets/, translations/, bundled .env live.
+
+    Frozen (PyInstaller exe): sys._MEIPASS — the bundle's extracted/cached dir
+    (in one-folder mode this is the _internal/ folder beside the exe).
+    Source mode: the repo root.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    return Path(__file__).resolve().parent.parent
+
+
+def _find_env_file() -> Optional[Path]:
+    """Find a usable .env file across dev / frozen modes.
+
+    Search order:
+      1. User root — .env beside the exe (user-editable, takes precedence).
+      2. Bundle root — .env packaged inside _internal/.
+    """
+    candidates = [_resolve_user_root() / ".env", _resolve_bundle_root() / ".env"]
+    seen = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            if path.is_file():
+                return path
+        except OSError:
+            continue
+    return None
+
+
 # Load .env file for local environment configuration
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # Load from .env file in project root
+    _env_path = _find_env_file()
+    if _env_path is not None:
+        load_dotenv(_env_path)
+    else:
+        # Fall back to dotenv's default search (CWD walk-up).
+        load_dotenv()
 except ImportError:
     pass  # dotenv not installed - will use defaults
 # Read settings from environment variables (from .env or system)
@@ -97,11 +150,14 @@ class Config:
     GEOSERVER_WORKSPACE: str = _GEOSERVER_WORKSPACE
     GEOSERVER_ENABLED: bool = _GEOSERVER_ENABLED
 
-    # Paths
-    PROJECT_ROOT: Path = Path(__file__).parent.parent
-    DATA_DIR: Path = PROJECT_ROOT / "data"
-    LOGS_DIR: Path = PROJECT_ROOT / "logs"
-    ASSETS_DIR: Path = PROJECT_ROOT / "assets"
+    # Paths — resolved once at class-definition time.
+    # PROJECT_ROOT and DATA_DIR/LOGS_DIR live next to the exe in frozen mode
+    # (user-writable), while ASSETS_DIR points at the read-only bundled
+    # resources inside _internal/ (sys._MEIPASS).
+    PROJECT_ROOT: Path = _resolve_user_root()
+    DATA_DIR: Path = _resolve_user_root() / "data"
+    LOGS_DIR: Path = _resolve_user_root() / "logs"
+    ASSETS_DIR: Path = _resolve_bundle_root() / "assets"
     ICONS_DIR: Path = ASSETS_DIR / "icons"
     FONTS_DIR: Path = ASSETS_DIR / "fonts"
     IMAGES_DIR: Path = ASSETS_DIR / "images"

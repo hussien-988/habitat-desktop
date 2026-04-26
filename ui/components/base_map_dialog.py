@@ -21,11 +21,56 @@ logger = get_logger(__name__)
 
 # Check for WebEngine availability
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage
     HAS_WEBENGINE = True
 except ImportError:
     HAS_WEBENGINE = False
     QWebEngineView = None
+    QWebEnginePage = None
+
+
+# Forward console messages from the page to Python logs and to the active
+# MapPerfTrace if any. JS in the HTML can emit `console.log("[MAP_PERF_JS]
+# phase=name extra=value")` to attach renderer-side phase marks to the trace.
+if HAS_WEBENGINE:
+    class _PerfWebEnginePage(QWebEnginePage):
+        """QWebEnginePage that captures all JS console messages."""
+
+        def javaScriptConsoleMessage(self, level, message, line_number, source_id):
+            try:
+                # Only log [MAP_PERF_JS]-prefixed messages at WARNING (visible in
+                # the terminal); everything else at DEBUG to avoid noise.
+                if isinstance(message, str) and message.startswith('[MAP_PERF_JS]'):
+                    # Translate into a phase mark if a trace is active so the
+                    # JS-side timeline merges into our existing [MAP_PERF] log.
+                    try:
+                        from services.map_perf_logger import get_active_trace
+                        trace = get_active_trace()
+                    except Exception:
+                        trace = None
+                    if trace is not None:
+                        # message format: "[MAP_PERF_JS] phase=<name> k1=v1 k2=v2 ..."
+                        body = message[len('[MAP_PERF_JS]'):].strip()
+                        parts = body.split()
+                        phase = 'js_unknown'
+                        fields = {}
+                        for p in parts:
+                            if '=' in p:
+                                k, v = p.split('=', 1)
+                                if k == 'phase':
+                                    phase = v
+                                else:
+                                    fields[k] = v
+                        try:
+                            trace.mark('js_' + phase, **fields)
+                        except Exception:
+                            pass
+                    else:
+                        logger.warning(message)
+                else:
+                    logger.debug(f"[JS:{line_number}] {message}")
+            except Exception:
+                pass
 
 # Check for WebChannel availability
 try:
@@ -344,6 +389,14 @@ class BaseMapDialog(QDialog):
 
             self.web_view = QWebEngineView(self._map_container)
             self.web_view.setGeometry(0, 0, map_w, map_h)
+
+            # Install the perf-capturing page so JS console.log("[MAP_PERF_JS]...")
+            # statements flow into our MapPerfTrace timeline.
+            try:
+                _perf_page = _PerfWebEnginePage(self.web_view)
+                self.web_view.setPage(_perf_page)
+            except Exception as _e:
+                logger.warning(f"Could not install perf page: {_e}")
 
             settings = self.web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
@@ -1601,11 +1654,64 @@ class BaseMapDialog(QDialog):
             except RuntimeError:
                 pass
 
+    def _clear_perf_active_trace(self):
+        """Drop the module-level active trace pointer so the next dialog's
+        renderer console messages don't get attributed to this trace."""
+        try:
+            from services.map_perf_logger import set_active_trace, get_active_trace
+            current = get_active_trace()
+            # Only clear if THIS dialog set it; otherwise leave whatever the
+            # next dialog already set.
+            if current is not None and current is getattr(self, '_perf_trace', None):
+                set_active_trace(None)
+        except Exception:
+            pass
+
+    def _cleanup_web_view(self):
+        """Tear down the QWebEngineView so the renderer process and pending
+        network requests are released immediately.
+
+        Without this, Python GC may keep the view alive after the dialog
+        closes; its renderer continues to issue tile/asset requests against
+        the local Python tile server, congesting the next dialog's load.
+        """
+        view = getattr(self, 'web_view', None)
+        if view is None:
+            return
+        try:
+            from PyQt5.QtCore import QUrl
+            page = view.page()
+            if page is not None:
+                try:
+                    page.runJavaScript("if(typeof map!=='undefined'&&map){try{map.remove();}catch(e){}}")
+                except Exception:
+                    pass
+            try:
+                view.stop()
+            except Exception:
+                pass
+            try:
+                view.setUrl(QUrl("about:blank"))
+            except Exception:
+                pass
+            try:
+                view.setParent(None)
+            except Exception:
+                pass
+            try:
+                view.deleteLater()
+            except Exception:
+                pass
+        finally:
+            self.web_view = None
+
     def accept(self):
         """Override accept to clean up overlay."""
         try:
             self._cleanup_overlay()
             self._cleanup_workers()
+            self._cleanup_web_view()
+            self._clear_perf_active_trace()
         finally:
             super().accept()
 
@@ -1614,6 +1720,8 @@ class BaseMapDialog(QDialog):
         try:
             self._cleanup_overlay()
             self._cleanup_workers()
+            self._cleanup_web_view()
+            self._clear_perf_active_trace()
         finally:
             super().reject()
 
@@ -1622,5 +1730,7 @@ class BaseMapDialog(QDialog):
         try:
             self._cleanup_overlay()
             self._cleanup_workers()
+            self._cleanup_web_view()
+            self._clear_perf_active_trace()
         finally:
             super().closeEvent(event)

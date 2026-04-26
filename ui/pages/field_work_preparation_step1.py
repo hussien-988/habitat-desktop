@@ -1119,6 +1119,18 @@ class FieldWorkPreparationStep1(QWidget):
         """
         try:
             from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
+            from services.map_perf_logger import (
+                MapPerfTrace, snapshot_active_timers, snapshot_running_threads,
+                count_web_engine_views,
+            )
+
+            perf_trace = MapPerfTrace(flow_name="field_work")
+            perf_trace.mark(
+                'flow_start',
+                active_timers=snapshot_active_timers(),
+                running_threads=snapshot_running_threads(),
+                web_views=count_web_engine_views(),
+            )
 
             # Pass neighborhood center if a neighborhood filter is selected
             filters = self.get_filters()
@@ -1134,6 +1146,7 @@ class FieldWorkPreparationStep1(QWidget):
                 center_lon=center_lon,
                 initial_zoom=17 if neighborhood_code else None,
                 already_selected_ids=list(self._selected_building_ids),
+                perf_trace=perf_trace,
             )
 
             # User cancelled or no buildings selected

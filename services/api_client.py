@@ -3206,6 +3206,13 @@ def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClie
     """
     الحصول على instance واحد من ApiClient (Singleton).
 
+    The cached client is rebuilt if the configured API base URL has changed
+    since it was created (e.g. user updated `data/settings.json` via the
+    in-app settings panel after login was first invoked). Without this,
+    URL changes only take effect after a full app restart, which causes
+    confusing "wrong credentials" failures when the cached client is still
+    pointing at a stale URL.
+
     Args:
         config: تكوين API (يُستخدم فقط في المرة الأولى)
 
@@ -3213,6 +3220,19 @@ def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClie
         TRRCMSApiClient instance
     """
     global _api_client_instance
+
+    if _api_client_instance is not None and config is None:
+        try:
+            from app.config import get_api_base_url
+            current_url = get_api_base_url().rstrip('/')
+            if _api_client_instance.base_url != current_url:
+                logger.info(
+                    f"API base URL changed ({_api_client_instance.base_url} "
+                    f"-> {current_url}); rebuilding api client"
+                )
+                _api_client_instance = None
+        except Exception as e:
+            logger.debug(f"Could not check api base url drift: {e}")
 
     if _api_client_instance is None:
         if config is None:

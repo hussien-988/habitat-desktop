@@ -495,7 +495,17 @@ class TileServerManager:
         if self._tile_metadata is not None:
             return self._tile_metadata
 
+        # Phase mark: cold cache — actual fetch is about to run.
+        try:
+            from services.map_perf_logger import get_active_trace
+            _trace = get_active_trace()
+        except Exception:
+            _trace = None
+        if _trace:
+            _trace.mark('tile_metadata_start')
+
         metadata = None
+        source = None
 
         # Only try API metadata for local Docker servers (they have /data.json)
         # External XYZ servers (e.g. OpenStreetMap) don't have this endpoint
@@ -504,10 +514,14 @@ class TileServerManager:
             _parsed = urlparse(self._production_url or '')
             if (_parsed.hostname or '') in ('localhost', '127.0.0.1'):
                 metadata = self._fetch_metadata_from_api()
+                if metadata:
+                    source = 'api'
 
         # Always try local MBTiles as fallback
         if not metadata:
             metadata = self._read_metadata_from_mbtiles()
+            if metadata:
+                source = 'mbtiles'
 
         if metadata and metadata.get('minzoom') is not None:
             self._tile_metadata = metadata
@@ -517,7 +531,11 @@ class TileServerManager:
                 'minzoom': Config.MAP_MIN_ZOOM,
                 'maxzoom': Config.MAP_MAX_ZOOM,
             }
+            source = source or 'defaults'
             logger.warning("Could not detect tile metadata, using .env defaults")
+
+        if _trace:
+            _trace.mark('tile_metadata_done', source=source or 'unknown')
 
         return self._tile_metadata
 

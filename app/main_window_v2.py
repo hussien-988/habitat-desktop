@@ -1915,8 +1915,20 @@ class MainWindow(QMainWindow):
         """Start a new office survey."""
         from PyQt5.QtWidgets import QDialog
         from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
+        from services.map_perf_logger import (
+            MapPerfTrace, snapshot_active_timers, snapshot_running_threads,
+            count_web_engine_views,
+        )
 
         logger.info("Starting new office survey — opening building map dialog")
+
+        perf_trace = MapPerfTrace(flow_name="claims")
+        perf_trace.mark(
+            'flow_start',
+            active_timers=snapshot_active_timers(),
+            running_threads=snapshot_running_threads(),
+            web_views=count_web_engine_views(),
+        )
 
         # Pause shimmer animation on the surveys page while the map dialog is open.
         # The shimmer timer fires every 80ms on the main thread (card.update() for every
@@ -1942,15 +1954,34 @@ class MainWindow(QMainWindow):
             surveys_page._header._timer.stop()
 
         auth_token = getattr(self, '_api_token', None)
+        # [PERF EXPERIMENT] Temporarily hide the surveys page entirely while
+        # the dialog is open. CasesPage has N _SurveyCard widgets, each with a
+        # QGraphicsDropShadowEffect; if the modal doesn't fully cover them,
+        # each parent repaint cascades into an expensive offscreen-buffered
+        # blur per card, starving the Chromium browser process and the GPU
+        # compositor — observable as a long set_html → loadFinished gap.
+        # If hiding makes Claims fast, the shadow-effect cascade is confirmed.
+        surveys_was_visible = surveys_page is not None and surveys_page.isVisible()
+        if surveys_was_visible:
+            surveys_page.setVisible(False)
         try:
             dialog = MultiSelectBuildingMapDialog(
                 db=self.db,
                 auth_token=auth_token,
                 parent=self,
                 max_selection=1,
+                perf_trace=perf_trace,
             )
             result = dialog.exec_()
         finally:
+            perf_trace.mark(
+                'dialog_closed',
+                accepted=(result == QDialog.Accepted),
+                running_threads=snapshot_running_threads(),
+                web_views=count_web_engine_views(),
+            )
+            if surveys_was_visible:
+                surveys_page.setVisible(True)
             if shimmer_was_active:
                 surveys_page._shimmer_timer.start()
             if header_timer_was_active:
@@ -1958,18 +1989,23 @@ class MainWindow(QMainWindow):
 
         if result != QDialog.Accepted:
             logger.debug("Building selection cancelled")
+            perf_trace.mark('flow_end', outcome='cancelled')
             return
 
         buildings = dialog.get_selected_buildings()
         if not buildings:
             logger.warning("Map dialog accepted but no building selected")
+            perf_trace.mark('flow_end', outcome='no_building')
             return
         selected_building = buildings[0]
 
         logger.info(f"Building selected: {selected_building.building_id}")
 
+        perf_trace.mark('reset_wizard_start')
         self._reset_wizard(building=selected_building)
+        perf_trace.mark('reset_wizard_done')
         self.stack.setCurrentWidget(self.office_survey_wizard)
+        perf_trace.mark('flow_end', outcome='wizard_shown')
 
     def _on_survey_completed(self, data):
         """Handle survey completion from wizard — navigate to surveys page."""

@@ -143,15 +143,33 @@ class LeafletHTMLGenerator:
 <html dir="rtl">
 <head>
     <meta charset="utf-8">
+    <script>
+        // [MAP_PERF_JS] Embedded perf timing — fires before any other script.
+        // Captured by _PerfWebEnginePage.javaScriptConsoleMessage on the Python side.
+        window._mp = function(name, extra) {{
+            try {{
+                var msg = '[MAP_PERF_JS] phase=' + name + ' t=' + Math.round(performance.now());
+                if (extra) msg += ' ' + extra;
+                console.log(msg);
+            }} catch(e) {{}}
+        }};
+        window._mp('html_parsed_start');
+        document.addEventListener('DOMContentLoaded', function() {{ window._mp('dom_ready'); }});
+        window.addEventListener('load', function() {{ window._mp('window_load'); }});
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>خريطة حلب - UN-Habitat</title>
     <style>{LeafletHTMLGenerator._load_asset("leaflet.css")}</style>
+    <script>window._mp('css_main_loaded');</script>
     {clustering_css}
     {drawing_css}
     <script>{LeafletHTMLGenerator._load_asset("leaflet.js")}</script>
+    <script>window._mp('leaflet_loaded');</script>
     {clustering_js}
+    <script>window._mp('clustering_loaded');</script>
     {drawing_js}
     {qwebchannel_tag}
+    <script>window._mp('qwebchannel_loaded');</script>
     {LeafletHTMLGenerator._get_styles(enable_selection, enable_drawing, enable_multiselect)}
 </head>
 <body>
@@ -832,6 +850,9 @@ class LeafletHTMLGenerator:
         _max_selection_js = 'null' if max_selection is None else str(int(max_selection))
         return f'''
     <script>
+        // [PERF] First line of the main map-init script.
+        if (typeof window._mp === 'function') window._mp('main_script_start');
+
         // [UNIFIED-DIALOG] Max selection count: null=unlimited, 1=single-select replace mode.
         window.maxSelection = {_max_selection_js};
 
@@ -848,6 +869,7 @@ class LeafletHTMLGenerator:
             maxBounds: [[{MapConstants.MIN_LAT}, {MapConstants.MIN_LON}], [{MapConstants.MAX_LAT}, {MapConstants.MAX_LON}]],
             maxBoundsViscosity: 1.0
         }}).setView([{center_lat}, {center_lon}], {zoom});
+        if (typeof window._mp === 'function') window._mp('map_created');
 
         var initialBounds = {initial_bounds_js};
         if (initialBounds) {{
@@ -865,6 +887,8 @@ class LeafletHTMLGenerator:
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
         }});
         tileLayer.addTo(map);
+        if (typeof window._mp === 'function') window._mp('tile_layer_added');
+        tileLayer.on('load', function() {{ if (typeof window._mp === 'function') window._mp('tile_layer_loaded'); }});
         // GeoServer WMS overlay (optional, configured via .env)
         var geoserverWmsUrl = '{geoserver_wms_url}';
         if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
@@ -1169,6 +1193,8 @@ class LeafletHTMLGenerator:
             if(typeof updateLandmarksVisibility !== 'undefined') updateLandmarksVisibility();
             if(typeof updateStreetsVisibility !== 'undefined') updateStreetsVisibility();
         }});
+
+        if (typeof window._mp === 'function') window._mp('main_script_end');
     </script>
 '''
 
