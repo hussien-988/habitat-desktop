@@ -2827,6 +2827,9 @@ AR_TRANSLATIONS = {
 
     # New processing step (replaces legacy validation page)
     "wizard.import.processing.processing_label": "جاري المعالجة",
+    "wizard.import.processing.stuck_title": "الخادم بطيء في الاستجابة",
+    "wizard.import.processing.stuck_detail": "لم تتحدّث الحالة منذ {elapsed} ثانية. الحزمة قد تحتاج إلى تدخّل.",
+    "wizard.import.processing.poll_progress": "مضى: {elapsed} ثانية / الحدّ الأقصى {max} ثانية",
     "wizard.import.processing.pending_title": "الحزمة بانتظار المعالجة",
     "wizard.import.processing.pending_detail": "اضغط بدء المعالجة من قائمة الحزم للبدء.",
     "wizard.import.processing.staging_title": "جاري تجهيز بيانات الحزمة",
@@ -2846,7 +2849,27 @@ AR_TRANSLATIONS = {
     "wizard.import.processing.ready_title": "الحزمة جاهزة للإدخال",
     "wizard.import.processing.ready_detail": "انتقل إلى الخطوة التالية لمراجعة البيانات واعتماد الإدخال.",
     "page.import_wizard.loading_package": "جارٍ تحميل الحزمة...",
-
+    "wizard.import.warning_server_slow": "الخادم يستغرق وقتاً أطول من المتوقّع. ما زلنا ننتظر…",
+    "wizard.import.warning_stuck_actionable": "لم تتغيّر الحالة منذ {seconds} ثانية. يمكنك إعادة المحاولة أو إلغاء الحزمة.",
+    "wizard.import.action_retry_now": "إعادة المحاولة الآن",
+    "wizard.import.warning_title": "تنبيه",
+    "wizard.import.initial_load_failed": "تعذّر تحميل بيانات الحزمة. تحقق من الاتصال ثم أعد المحاولة.",
+    "wizard.import.loading_elapsed": "مضى: {elapsed} ثانية",
+    # Real-progress UI: elapsed since current backend state began,
+    # heartbeat indicator for last poll response.
+    "wizard.import.processing.state_elapsed": "بدء هذه المرحلة منذ: {time}",
+    "wizard.import.processing.last_response_seconds_ago": "آخر استجابة من الخادم: قبل {seconds} ث",
+    "wizard.import.processing.last_response_idle": "بانتظار أول استجابة من الخادم…",
+    "wizard.import.processing.last_response_failed": "فشل آخر طلب — {seconds} ث منذ آخر استجابة ناجحة",
+    # Timeout decision banner (replaces silent timeout error after 120s).
+    "wizard.import.timeout_decision_title": "انتهى وقت الانتظار",
+    "wizard.import.timeout_decision_body": "مضى {seconds} ثانية دون تقدّم في حالة الحزمة. ماذا تريد أن تفعل؟",
+    "wizard.import.action_wait_more": "الانتظار 60 ثانية إضافية",
+    "wizard.import.action_back_to_list": "العودة إلى القائمة",
+    "wizard.import.action_cancel_package": "إلغاء الحزمة",
+    "wizard.import.next_blocked_transient": "الباكيند يعالج الحزمة الآن — انتظر أو اضغط 'إلغاء الحزمة'",
+    "wizard.import.processing.backend_last_updated_seconds_ago": "الخادم آخر تحديث للحالة منذ {seconds} ث",
+    "wizard.import.processing.backend_last_updated_minutes_ago": "الخادم آخر تحديث للحالة منذ {minutes} د",
     # Micro-stage text cycle for the processing widget. Mirrors the real
     # backend pipeline (8 validators in TRRCMS-Backend). Text-only — the
     # widget rotates through these every 5s while /stage is running.

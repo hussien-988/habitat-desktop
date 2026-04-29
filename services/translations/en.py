@@ -2826,6 +2826,9 @@ EN_TRANSLATIONS = {
 
     # New processing step (replaces legacy validation page)
     "wizard.import.processing.processing_label": "Processing",
+    "wizard.import.processing.stuck_title": "Server slow to respond",
+    "wizard.import.processing.stuck_detail": "No status change for {elapsed}s. The package may need attention.",
+    "wizard.import.processing.poll_progress": "Elapsed: {elapsed}s / max {max}s",
     "wizard.import.processing.pending_title": "Package is waiting to be processed",
     "wizard.import.processing.pending_detail": "Click Start Processing on the package list to begin.",
     "wizard.import.processing.staging_title": "Staging package data",
@@ -2845,7 +2848,26 @@ EN_TRANSLATIONS = {
     "wizard.import.processing.ready_title": "Package is ready for import",
     "wizard.import.processing.ready_detail": "Move to the next step to review data and approve the import.",
     "page.import_wizard.loading_package": "Loading package...",
-
+    "wizard.import.warning_server_slow": "Server is taking longer than expected. Still waiting…",
+    "wizard.import.warning_stuck_actionable": "Status hasn't changed for {seconds}s. You can retry or cancel the package.",
+    "wizard.import.action_retry_now": "Retry now",
+    "wizard.import.warning_title": "Warning",
+    "wizard.import.loading_elapsed": "Elapsed: {elapsed}s",
+    # Real-progress UI: elapsed since current backend state began,
+    # heartbeat indicator for last poll response.
+    "wizard.import.processing.state_elapsed": "In this state for: {time}",
+    "wizard.import.processing.last_response_seconds_ago": "Last server response: {seconds}s ago",
+    "wizard.import.processing.last_response_idle": "Waiting for first server response…",
+    "wizard.import.processing.last_response_failed": "Last request failed — {seconds}s since last successful response",
+    # Timeout decision banner (replaces silent timeout error after 120s).
+    "wizard.import.timeout_decision_title": "Wait time elapsed",
+    "wizard.import.timeout_decision_body": "{seconds} seconds passed with no progress on the package status. What would you like to do?",
+    "wizard.import.action_wait_more": "Wait 60 more seconds",
+    "wizard.import.action_back_to_list": "Back to list",
+    "wizard.import.action_cancel_package": "Cancel package",
+    "wizard.import.next_blocked_transient": "Backend is processing the package — wait or click 'Cancel package'",
+    "wizard.import.processing.backend_last_updated_seconds_ago": "Server last status update {seconds}s ago",
+    "wizard.import.processing.backend_last_updated_minutes_ago": "Server last status update {minutes}m ago",
     # Micro-stage text cycle for the processing widget. Mirrors the real
     # backend pipeline (8 validators in TRRCMS-Backend). Text-only — the
     # widget rotates through these every 5s while /stage is running.
@@ -2853,7 +2875,7 @@ EN_TRANSLATIONS = {
     "wizard.import.processing.validating.cycle.1.detail": "Setting up the import pipeline and opening the session.",
     "wizard.import.processing.validating.cycle.2.title": "Starting validation",
     "wizard.import.processing.validating.cycle.2.detail": "The server has accepted the processing request.",
-
+    "wizard.import.initial_load_failed": "Failed to load package data. Check the connection and try again.",
     "wizard.import.processing.staging.cycle.1.title": "Reading and unpacking the package",
     "wizard.import.processing.staging.cycle.1.detail": "The .uhc file is being read and unpacked on the server.",
     "wizard.import.processing.staging.cycle.2.title": "Loading records into staging",
