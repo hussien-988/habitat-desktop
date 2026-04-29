@@ -24,11 +24,11 @@ def initialize_vocabularies():
     Called once at app startup from main.py.
     """
     global _initialized
-    from app.config import Config, get_api_base_url
+    from app.config import Config, get_api_base_url, should_verify_ssl
     url = f"{get_api_base_url()}/v2/vocabularies"
     logger.info(f"Fetching vocabularies from: {url}")
     try:
-        response = requests.get(url, timeout=10, verify=False)
+        response = requests.get(url, timeout=10, verify=should_verify_ssl(url))
         response.raise_for_status()
         raw = response.json()
         data = raw.get("items", raw) if isinstance(raw, dict) else raw

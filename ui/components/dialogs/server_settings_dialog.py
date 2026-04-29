@@ -45,9 +45,11 @@ class _ConnectionWorker(QThread):
                 pass
             if self._is_api:
                 import requests
+                from app.config import should_verify_ssl
+                health_url = self._url.rstrip("/") + "/v1/Health"
                 requests.get(
-                    self._url.rstrip("/") + "/v1/Health",
-                    timeout=5, verify=False
+                    health_url,
+                    timeout=5, verify=should_verify_ssl(health_url)
                 )
             self.finished.emit(True, tr("dialog.server_settings.connected"))
         except Exception:

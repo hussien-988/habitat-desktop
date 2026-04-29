@@ -1,9 +1,0 @@
-TRRCMS - بيانات دخول تطبيق سطح المكتب
-
-Username	Password	Role	
-admin	         Admin@123	Administrator      
-datamanager	Data@123	DataManager
-clerk	           Clerk@123  OfficeClerk
-collector	Field@123	FieldCollector	
-supervisor	Super@123	FieldSupervisor
-analyst	Analyst@123	Analyst	

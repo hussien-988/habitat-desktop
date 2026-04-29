@@ -250,8 +250,9 @@ def download_static_file(file_path_val: str, file_name: str) -> Optional[str]:
     if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
         return save_path
     headers = {"Authorization": f"Bearer {api.access_token}", "Accept": "*/*"}
+    from app.config import should_verify_ssl
     try:
-        resp = _requests.get(url, headers=headers, timeout=30, verify=False)
+        resp = _requests.get(url, headers=headers, timeout=30, verify=should_verify_ssl(url))
         resp.raise_for_status()
         with open(save_path, "wb") as f:
             f.write(resp.content)
@@ -303,7 +304,8 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
 
             if file_url and file_url.startswith("http"):
                 try:
-                    resp = _requests.get(file_url, headers=auth_headers, timeout=30, verify=False)
+                    from app.config import should_verify_ssl
+                    resp = _requests.get(file_url, headers=auth_headers, timeout=30, verify=should_verify_ssl(file_url))
                     resp.raise_for_status()
                     with open(save_path, 'wb') as f:
                         f.write(resp.content)
@@ -320,7 +322,8 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
                     static_url = build_static_url(file_path_val, api.base_url)
                     if static_url:
                         try:
-                            resp = _requests.get(static_url, headers=auth_headers, timeout=30, verify=False)
+                            from app.config import should_verify_ssl
+                            resp = _requests.get(static_url, headers=auth_headers, timeout=30, verify=should_verify_ssl(static_url))
                             resp.raise_for_status()
                             with open(save_path, 'wb') as f:
                                 f.write(resp.content)

@@ -35,10 +35,19 @@ class ApiAuthService:
     def __init__(self):
         self.timeout = Config.API_TIMEOUT
 
-        # SSL context that skips verification for localhost self-signed certs
-        self._ssl_ctx = ssl.create_default_context()
-        self._ssl_ctx.check_hostname = False
-        self._ssl_ctx.verify_mode = ssl.CERT_NONE
+    def _build_ssl_context(self, url: str) -> ssl.SSLContext:
+        """Build an SSL context appropriate for the given URL.
+
+        Remote hosts always use the system trust store with full verification.
+        Localhost may opt out via VERIFY_SSL=false to permit self-signed certs
+        in a Docker dev stack.
+        """
+        from app.config import should_verify_ssl
+        ctx = ssl.create_default_context()
+        if not should_verify_ssl(url):
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        return ctx
 
     def _resolve_login_url(self) -> str:
         """Resolve the login URL from current config every call.
@@ -106,7 +115,7 @@ class ApiAuthService:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout, context=self._ssl_ctx) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=self._build_ssl_context(self.login_url)) as resp:
                 body = resp.read().decode("utf-8")
                 data = json.loads(body)
 

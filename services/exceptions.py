@@ -71,6 +71,11 @@ _CTX_FALLBACK_KEY = {
 _DOMAIN_MATCHERS: List[tuple] = [
     (("cannot find .uhc", "uhc file", "filenotfoundexception", "uploadedfilepath"),
         "import.error.missing_package_file"),
+    # Re-uploading a package: backend has flagged a previous import for the
+    # same content. Status code can vary across deployments (409 vs 400 vs
+    # custom), so match on the message text to keep behavior stable.
+    (("already imported", "package already", "duplicate package", "existing package id"),
+        "import.error.duplicate_package"),
 ]
 
 

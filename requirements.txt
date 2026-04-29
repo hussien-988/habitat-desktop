@@ -50,6 +50,7 @@ zeroconf>=0.131.0      # mDNS/Bonjour for LAN discovery
 cryptography>=41.0.0   # Encryption and signing
 bcrypt>=4.1.0          # Password hashing
 PyJWT>=2.8.0           # JWT tokens
+keyring>=24.0.0        # OS-native secure storage for refresh tokens
 
 # =============================================================================
 # Utilities

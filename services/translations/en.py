@@ -2929,6 +2929,7 @@ EN_TRANSLATIONS = {
 
     # Import-specific structured errors
     "import.error.missing_package_file": "This package cannot be processed because the original .uhc file is missing on the server. Please confirm the package was uploaded correctly from the field collector device or contact the system administrator.",
+    "import.error.duplicate_package": "This package was already uploaded. Open the packages list to track its status.",
     "import.error.stage_failed": "Could not start package processing.",
     "import.error.detect_failed": "Could not run duplicate detection on this package.",
     "import.error.approve_failed": "Could not approve the package for import.",
