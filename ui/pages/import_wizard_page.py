@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Import wizard page with 5-step processing pipeline."""
+"""Import wizard page with 3-step processing pipeline (processing → review/commit → final report)."""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget, QFrame, QPushButton,
     QHBoxLayout, QLabel, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QThread, QDateTime
 from PyQt5.QtGui import QColor
 
 from ui.components.wizard_header import WizardHeader
@@ -113,8 +113,25 @@ class _PkgStatus:
 
 
 _STATUS_POLL_INTERVAL_MS = 5000  # 5 seconds
-_MAX_POLL_COUNT = 60  # 60 polls × 5s = 5 minutes max
+_MAX_POLL_COUNT = 24  # 24 polls × 5s = 120s default timeout (was 300s)
+_TIMEOUT_EXTENSION_POLLS = 12  # +60s if user clicks "wait more" (one-time)
+_STUCK_WARN_POLLS = 6   # 6 polls × 5s = 30s with same transient status
+_STUCK_RETRY_POLLS = 12  # 12 polls × 5s = 1 minute with same transient status → show retry toast
 
+
+def _status_name(code) -> str:
+    """Human-readable status name for log lines (defensive, returns 'unknown')."""
+    try:
+        for attr in (
+            "PENDING", "VALIDATING", "STAGING", "VALIDATION_FAILED", "QUARANTINED",
+            "REVIEWING_CONFLICTS", "READY_TO_COMMIT", "COMMITTING", "COMPLETED",
+            "FAILED", "PARTIALLY_COMPLETED", "CANCELLED",
+        ):
+            if getattr(_PkgStatus, attr) == code:
+                return attr
+    except Exception:
+        pass
+    return "unknown"
 
 class _ApiWorker(QThread):
     """Worker thread for non-blocking API calls."""
@@ -143,7 +160,7 @@ class _ApiWorker(QThread):
 
 class ImportWizardPage(QWidget):
     """
-    Import Wizard - 5-Step Wizard Structure.
+    Import Wizard - 3-Step Wizard (3 visible pills, 4 internal panels).
 
     Same structure as FieldWorkPreparationPage:
     1. Fixed header + step indicator
@@ -175,6 +192,20 @@ class ImportWizardPage(QWidget):
         self._current_package_status = 0
         self._status_poll_timer = None
         self._poll_count = 0
+        self._poll_last_status = None
+        self._poll_unchanged_count = 0
+        self._poll_warned = False
+        self._poll_started_at = None
+        self._pipeline_in_flight = False
+        # Timeout extension state — once user clicks "wait more" we allow 60
+        # extra seconds, after which the final timeout error fires.
+        self._timeout_extension_used = False
+        self._max_polls_session = _MAX_POLL_COUNT
+        # Stage call timing — for measuring total /stage round-trip duration.
+        self._stage_started_at_ms = 0
+        # Loading overlay timing state
+        self._loading_started_at = None
+        self._loading_elapsed_timer = None
         self._active_worker = None
         # When True, the wizard is in a hard-error state (e.g. /stage 500,
         # missing .uhc file). Forward navigation is blocked; only cancel
@@ -228,10 +259,10 @@ class ImportWizardPage(QWidget):
     # -- Inline error banner --------------------------------------------------
 
     def _create_error_banner(self) -> QFrame:
-        """Inline error panel rendered above the active step.
+        """Inline error/warning panel rendered above the active step.
 
-        Shows the safe user message + (optional) trace id from the underlying
-        ApiException. Backend stack traces never reach this label.
+        Shows the safe user message + optional action button + optional trace id.
+        Backend stack traces never reach this label.
         """
         banner = QFrame()
         banner.setObjectName("wizardErrorBanner")
@@ -239,34 +270,79 @@ class ImportWizardPage(QWidget):
             "QFrame#wizardErrorBanner { background: #FEF2F2;"
             " border-bottom: 1px solid #FCA5A5; }"
         )
+
         layout = QHBoxLayout(banner)
         layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(10)
 
-        icon = QLabel("⚠")  # warning sign
-        icon.setStyleSheet("color: #B91C1C; background: transparent; font-size: 16pt;")
-        layout.addWidget(icon)
+        self._error_icon = QLabel("⚠")
+        self._error_icon.setStyleSheet(
+            "color: #B91C1C; background: transparent; font-size: 16pt;"
+        )
+        layout.addWidget(self._error_icon)
 
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
+
         self._error_title = QLabel(tr("import.error.inline_title"))
         self._error_title.setStyleSheet(
             "color: #991B1B; background: transparent; font-weight: 700;"
         )
         text_box.addWidget(self._error_title)
+
         self._error_message = QLabel("")
         self._error_message.setWordWrap(True)
         self._error_message.setStyleSheet(
             "color: #7F1D1D; background: transparent;"
         )
         text_box.addWidget(self._error_message)
+
         self._error_trace = QLabel("")
         self._error_trace.setStyleSheet(
             "color: #9CA3AF; background: transparent; font-size: 9pt;"
         )
         self._error_trace.setVisible(False)
         text_box.addWidget(self._error_trace)
+
         layout.addLayout(text_box, 1)
+
+        self._banner_secondary_btn = QPushButton("")
+        self._banner_secondary_btn.setObjectName("bannerSecondaryButton")
+        self._banner_secondary_btn.setVisible(False)
+        self._banner_secondary_btn.setCursor(Qt.PointingHandCursor)
+        self._banner_secondary_btn.setStyleSheet("""
+            QPushButton#bannerSecondaryButton {
+                background-color: #DC2626;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-weight: 600;
+            }
+            QPushButton#bannerSecondaryButton:hover {
+                background-color: #B91C1C;
+            }
+        """)
+        layout.addWidget(self._banner_secondary_btn)
+
+        self._banner_action_btn = QPushButton("")
+        self._banner_action_btn.setObjectName("bannerActionButton")
+        self._banner_action_btn.setVisible(False)
+        self._banner_action_btn.setCursor(Qt.PointingHandCursor)
+        self._banner_action_btn.setStyleSheet("""
+            QPushButton#bannerActionButton {
+                background-color: #F59E0B;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-weight: 600;
+            }
+            QPushButton#bannerActionButton:hover {
+                background-color: #D97706;
+            }
+        """)
+        layout.addWidget(self._banner_action_btn)
 
         self._error_close = QPushButton("✕")
         self._error_close.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
@@ -275,14 +351,64 @@ class ImportWizardPage(QWidget):
             "QPushButton { background: transparent; border: none; color: #991B1B; font-size: 14pt; }"
             "QPushButton:hover { color: #7F1D1D; }"
         )
-        self._error_close.clicked.connect(self._hide_error_banner)
+        self._error_close.clicked.connect(self._on_error_close_clicked)
         layout.addWidget(self._error_close)
 
         banner.setVisible(False)
         return banner
 
+    def _apply_banner_severity(self, severity: str):
+        """Repaint the inline banner with the colors for the given severity.
+
+        Centralised so that switching from a warning back to an error (or vice
+        versa) doesn't leave stale colors on the next show. Severities:
+          - "error":   red background / red text (api failures, hard stops)
+          - "warning": amber background / amber text (slow server, recoverable)
+        """
+        if severity == "warning":
+            banner_qss = (
+                "QFrame#wizardErrorBanner { background: #FEF3C7;"
+                " border-bottom: 1px solid #F59E0B; }"
+            )
+            icon_qss = "color: #D97706; background: transparent; font-size: 16pt;"
+            title_qss = "color: #92400E; background: transparent; font-weight: 700;"
+            message_qss = "color: #92400E; background: transparent;"
+            close_qss = (
+                "QPushButton { background: transparent; border: none;"
+                " color: #92400E; font-size: 14pt; }"
+                "QPushButton:hover { color: #78350F; }"
+            )
+        else:
+            banner_qss = (
+                "QFrame#wizardErrorBanner { background: #FEF2F2;"
+                " border-bottom: 1px solid #FCA5A5; }"
+            )
+            icon_qss = "color: #B91C1C; background: transparent; font-size: 16pt;"
+            title_qss = "color: #991B1B; background: transparent; font-weight: 700;"
+            message_qss = "color: #7F1D1D; background: transparent;"
+            close_qss = (
+                "QPushButton { background: transparent; border: none;"
+                " color: #991B1B; font-size: 14pt; }"
+                "QPushButton:hover { color: #7F1D1D; }"
+            )
+
+        if hasattr(self, "_error_banner") and self._error_banner is not None:
+            self._error_banner.setStyleSheet(banner_qss)
+        if hasattr(self, "_error_icon") and self._error_icon is not None:
+            self._error_icon.setStyleSheet(icon_qss)
+        if hasattr(self, "_error_title") and self._error_title is not None:
+            self._error_title.setStyleSheet(title_qss)
+        if hasattr(self, "_error_message") and self._error_message is not None:
+            self._error_message.setStyleSheet(message_qss)
+        if hasattr(self, "_error_close") and self._error_close is not None:
+            self._error_close.setStyleSheet(close_qss)
+
+
     def _show_error_banner(self, user_message: str, trace_id: str = ""):
         """Show the inline error banner with a safe message + optional trace id."""
+        self._clear_banner_action()
+        self._apply_banner_severity("error")
+        self._error_title.setText(tr("import.error.inline_title"))
         self._error_message.setText(user_message or tr("api.error.generic"))
         if trace_id:
             self._error_trace.setText(f"{tr('api.error.trace_id_label')}: {trace_id}")
@@ -292,8 +418,143 @@ class ImportWizardPage(QWidget):
             self._error_trace.setVisible(False)
         self._error_banner.setVisible(True)
 
+
+    def _show_warning_banner(self, message: str):
+        """Show a non-blocking warning banner for slow backend progress."""
+        self._clear_banner_action()
+        self._apply_banner_severity("warning")
+        self._error_title.setText(tr("wizard.import.warning_title"))
+        self._error_message.setText(message)
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+        self._error_banner.setVisible(True)
+
+
+    def _show_stuck_banner(self, elapsed_secs: int):
+        """Show an actionable warning when backend status is unchanged too long."""
+        seconds = max(0, int(elapsed_secs or 0))
+        self._clear_banner_action()
+        self._apply_banner_severity("warning")
+        self._error_title.setText(tr("wizard.import.warning_title"))
+        self._error_message.setText(
+            tr("wizard.import.warning_stuck_actionable").format(seconds=seconds)
+        )
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+
+        self._banner_action_btn.setText(tr("wizard.import.action_retry_now"))
+        self._banner_action_btn.setVisible(True)
+
+        def retry_now():
+            self._poll_unchanged_count = 0
+            self._poll_warned = False
+            self._hide_error_banner()
+            self._poll_package_status()
+
+        self._banner_action_btn.clicked.connect(retry_now)
+        self._error_banner.setVisible(True)
+
+
+    def _show_initial_load_failed_banner(self):
+        """Show an actionable banner when the initial package load fails."""
+        self._clear_banner_action()
+        self._apply_banner_severity("warning")
+        self._error_title.setText(tr("wizard.import.warning_title"))
+        self._error_message.setText(tr("wizard.import.initial_load_failed"))
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+
+        self._banner_action_btn.setText(tr("wizard.import.action_retry_now"))
+        self._banner_action_btn.setVisible(True)
+
+        def retry_load():
+            self._hide_error_banner()
+            if self._current_package_id:
+                self.set_package_id(self._current_package_id)
+
+        self._banner_action_btn.clicked.connect(retry_load)
+        self._error_banner.setVisible(True)
+
+
+    def _show_timeout_decision_banner(self, elapsed_secs: int):
+        """Show the timeout banner with two explicit choices: wait more, or cancel."""
+        seconds = max(0, int(elapsed_secs or 0))
+        self._clear_banner_action()
+        self._apply_banner_severity("warning")
+        self._error_title.setText(tr("wizard.import.timeout_decision_title"))
+        self._error_message.setText(
+            tr("wizard.import.timeout_decision_body").format(seconds=seconds)
+        )
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+
+        self._banner_action_btn.setText(tr("wizard.import.action_wait_more"))
+        self._banner_action_btn.setVisible(True)
+
+        def wait_more():
+            self._timeout_extension_used = True
+            self._max_polls_session = _MAX_POLL_COUNT + _TIMEOUT_EXTENSION_POLLS
+            self._poll_unchanged_count = 0
+            self._poll_warned = False
+            logger.info(
+                f"[import-flow] resume pkg={self._current_package_id} extension=60s "
+                f"new_max_polls={self._max_polls_session}"
+            )
+            self._hide_error_banner()
+            if self._status_poll_timer is not None:
+                self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
+
+        self._banner_action_btn.clicked.connect(wait_more)
+
+        self._banner_secondary_btn.setText(tr("wizard.import.action_cancel_package"))
+        self._banner_secondary_btn.setVisible(True)
+
+        def cancel_now():
+            logger.info(
+                f"[import-flow] timeout-decision-cancel pkg={self._current_package_id}"
+            )
+            self._hide_error_banner()
+            self._on_cancel_package()
+
+        self._banner_secondary_btn.clicked.connect(cancel_now)
+
+        self._error_banner.setVisible(True)
+
+
+    def _clear_banner_action(self):
+        """Remove any active banner action buttons (primary + secondary)."""
+        for attr in ("_banner_action_btn", "_banner_secondary_btn"):
+            btn = getattr(self, attr, None)
+            if btn is None:
+                continue
+            try:
+                btn.clicked.disconnect()
+            except TypeError:
+                pass
+            btn.setText("")
+            btn.setVisible(False)
+
+
+    def _on_error_close_clicked(self):
+        """Handle closing the inline banner without losing recovery actions."""
+        has_active_action = (
+            hasattr(self, "_banner_action_btn")
+            and self._banner_action_btn is not None
+            and self._banner_action_btn.isVisible()
+            and bool(self._banner_action_btn.text())
+        )
+
+        if has_active_action:
+            # Do not hide the only visible recovery path by accident.
+            # The user can still use the action button itself.
+            return
+
+        self._hide_error_banner()
+
+
     def _hide_error_banner(self):
         self._error_banner.setVisible(False)
+        self._clear_banner_action()
         self._error_trace.clear()
         self._error_trace.setVisible(False)
 
@@ -377,6 +638,14 @@ class ImportWizardPage(QWidget):
         self._loading_dots.setStyleSheet("color: #3890DF; background: transparent; border: none;")
         self._loading_dots.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self._loading_dots)
+        self._loading_elapsed_label = QLabel("")
+        self._loading_elapsed_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._loading_elapsed_label.setStyleSheet(
+            "color: #6B7280; background: transparent; border: none;"
+        )
+        self._loading_elapsed_label.setAlignment(Qt.AlignCenter)
+        self._loading_elapsed_label.setVisible(False)
+        card_layout.addWidget(self._loading_elapsed_label)
 
         overlay_layout.addWidget(card)
 
@@ -384,7 +653,10 @@ class ImportWizardPage(QWidget):
         self._dots_count = 0
         self._dots_timer = QTimer(self)
         self._dots_timer.timeout.connect(self._animate_dots)
-
+        # Elapsed time timer for long blocking calls
+        self._loading_elapsed_timer = QTimer(self)
+        self._loading_elapsed_timer.setInterval(1000)
+        self._loading_elapsed_timer.timeout.connect(self._update_loading_elapsed)
         return overlay
 
     def _show_loading(self, message: str):
@@ -393,13 +665,39 @@ class ImportWizardPage(QWidget):
         self._loading_overlay.setGeometry(self.rect())
         self._loading_overlay.raise_()
         self._loading_overlay.setVisible(True)
+
+        self._loading_started_at = QDateTime.currentDateTime()
+        self._update_loading_elapsed()
+        self._loading_elapsed_label.setVisible(True)
+        if self._loading_elapsed_timer is not None:
+            self._loading_elapsed_timer.start()
+
         self._dots_count = 0
         self._dots_timer.start(400)
 
     def _hide_loading(self):
         """Hide loading overlay."""
         self._dots_timer.stop()
+
+        if self._loading_elapsed_timer is not None:
+            self._loading_elapsed_timer.stop()
+
+        self._loading_started_at = None
+        self._loading_elapsed_label.setText("")
+        self._loading_elapsed_label.setVisible(False)
+
         self._loading_overlay.setVisible(False)
+    def _update_loading_elapsed(self):
+        """Update elapsed-time text inside the loading overlay."""
+        if self._loading_started_at is None:
+            return
+
+        elapsed = max(0, int(self._loading_started_at.secsTo(QDateTime.currentDateTime())))
+
+        if hasattr(self, "_loading_elapsed_label") and self._loading_elapsed_label is not None:
+            self._loading_elapsed_label.setText(
+                tr("wizard.import.loading_elapsed").format(elapsed=elapsed)
+            )
 
     def _animate_dots(self):
         """Animate loading dots."""
@@ -617,6 +915,10 @@ class ImportWizardPage(QWidget):
         """
         self._cancel_active_worker()
         self._stop_status_poll()
+        # Clear the in-flight flag so the next package the user opens is
+        # routed fresh (otherwise a stale flag from this session would make
+        # _route_by_status skip /stage for a new VALIDATING package).
+        self._pipeline_in_flight = False
         self._hide_loading()
         self.cancelled.emit()
 
@@ -660,7 +962,12 @@ class ImportWizardPage(QWidget):
     def _route_by_status(self, status: int):
         """Central router: direct to the correct wizard step based on package status."""
         self._current_package_status = status
-        logger.info(f"Routing package {self._current_package_id} with status {status}")
+        logger.info(
+            f"[import-flow] route pkg={self._current_package_id} "
+            f"status={status}({_status_name(status)})"
+        )
+        if status not in (_PkgStatus.VALIDATING, _PkgStatus.STAGING):
+            self._pipeline_in_flight = False
         # Keep the processing widget in sync when it's visible.
         if self.step2 is not None and hasattr(self.step2, "set_status"):
             try:
@@ -671,10 +978,18 @@ class ImportWizardPage(QWidget):
         if status == _PkgStatus.PENDING:
             self._handle_pending()
         elif status == _PkgStatus.VALIDATING:
-            # Backend semantic: "uploaded, waiting for /stage trigger".
-            # Frontend MUST POST /stage to start the pipeline; polling
-            # alone would never advance the package.
-            self._handle_validating_start()
+            # VALIDATING normally means "uploaded, waiting for /stage".
+            # But if this wizard already triggered /stage for this package,
+            # seeing VALIDATING again is a transient backend state, not a new
+            # instruction to call /stage again.
+            if self._pipeline_in_flight:
+                logger.info(
+                    f"Package {self._current_package_id} is still VALIDATING after /stage trigger; "
+                    "keeping status polling instead of re-posting /stage."
+                )
+                self._handle_in_progress(status)
+            else:
+                self._handle_validating_start()
         elif status == _PkgStatus.STAGING:
             # Pipeline is already running on the server (likely triggered
             # by another session). Don't re-call /stage (returns 409); just
@@ -714,10 +1029,8 @@ class ImportWizardPage(QWidget):
 
         def on_done(result):
             if not result.success:
-                # Hard stop. Do NOT navigate to step 2 — the package never
-                # got staged. Block forward navigation but keep cancel and
-                # back-to-list reachable so the user can recover.
-                self._show_result_error(result, fallback_context="stage")
+                self._hide_loading()
+                self._show_initial_load_failed_banner()
                 self._enter_blocking_error_state()
                 return
             self._blocking_error_active = False
@@ -765,7 +1078,12 @@ class ImportWizardPage(QWidget):
         pkg_id = self._current_package_id
         if not pkg_id:
             return
-
+        if self._pipeline_in_flight:
+            logger.info(
+                f"/stage already triggered for package {pkg_id}; keeping polling alive."
+            )
+            self._handle_in_progress(_PkgStatus.VALIDATING)
+            return
         self._hide_error_banner()
         self._hide_loading()
         # Show the processing view immediately so the user gets feedback
@@ -780,16 +1098,32 @@ class ImportWizardPage(QWidget):
         # Run polling in parallel with the /stage request so we observe
         # the early Validating→Staging transition the backend writes to
         # the DB before the HTTP response returns.
+        self._pipeline_in_flight = True
+        self._stage_started_at_ms = QDateTime.currentMSecsSinceEpoch()
+        logger.info(
+            f"[import-flow] stage-start pkg={pkg_id} status_before={_PkgStatus.VALIDATING}"
+            f"({_status_name(_PkgStatus.VALIDATING)})"
+        )
         self._start_status_poll()
 
         def on_stage_done(result):
+            duration = max(0, int(QDateTime.currentMSecsSinceEpoch() - self._stage_started_at_ms))
             if not result.success:
-                # Stage failed (missing .uhc, validation pipeline crash,
-                # etc.). Hard stop — block forward navigation, keep
-                # cancel and back-to-list reachable.
+                # Stage failed (missing .uhc, validation pipeline crash, etc.).
+                # Hard stop — block forward navigation, keep cancel and
+                # back-to-list reachable.
+                logger.warning(
+                    f"[import-flow] stage-done pkg={pkg_id} ok=false "
+                    f"duration={duration}ms msg={result.message}"
+                )
+                self._pipeline_in_flight = False
+                self._stop_status_poll()
                 self._show_result_error(result, fallback_context="stage")
                 self._enter_blocking_error_state()
                 return
+            logger.info(
+                f"[import-flow] stage-done pkg={pkg_id} ok=true duration={duration}ms"
+            )
             # /stage succeeded. Re-fetch the package and route on the
             # canonical post-pipeline status (ReviewingConflicts /
             # ReadyToCommit / ValidationFailed).
@@ -813,6 +1147,13 @@ class ImportWizardPage(QWidget):
             )
 
         def on_stage_error(error_type, msg_ar):
+            duration = max(0, int(QDateTime.currentMSecsSinceEpoch() - self._stage_started_at_ms))
+            logger.warning(
+                f"[import-flow] stage-error pkg={pkg_id} type={error_type} "
+                f"duration={duration}ms msg={msg_ar}"
+            )
+            self._pipeline_in_flight = False
+            self._stop_status_poll()
             class _SimpleResult:
                 success = False
                 message_ar = msg_ar
@@ -1116,23 +1457,81 @@ class ImportWizardPage(QWidget):
 
     # -- Status polling for transient states ----------------------------------
 
+    def _reset_poll_tracking(self):
+        """Reset local poll telemetry used to detect unchanged backend status."""
+        self._poll_count = 0
+        self._poll_last_status = None
+        self._poll_unchanged_count = 0
+        self._poll_warned = False
+        self._poll_started_at = None
+
     def _start_status_poll(self):
         """Start polling package status for in-progress operations."""
-        self._poll_count = 0
+        self._reset_poll_tracking()
+        self._poll_started_at = QDateTime.currentDateTime()
+
         if self._status_poll_timer is None:
             self._status_poll_timer = QTimer(self)
             self._status_poll_timer.timeout.connect(self._poll_package_status)
+
+        timeout_secs = self._max_polls_session * (_STATUS_POLL_INTERVAL_MS // 1000)
+        logger.info(
+            f"[import-flow] poll-start pkg={self._current_package_id} "
+            f"interval={_STATUS_POLL_INTERVAL_MS // 1000}s timeout={timeout_secs}s"
+        )
         self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
 
-    def _stop_status_poll(self):
-        """Stop status polling."""
+    def _pause_status_poll(self):
+        """Pause the poll timer while one API request is in flight.
+
+        This preserves poll telemetry. A pause is not the end of the polling
+        session; it only prevents overlapping get_package calls.
+        """
         if self._status_poll_timer is not None:
             self._status_poll_timer.stop()
+
+    def _stop_status_poll(self):
+        """Stop status polling and clear transient poll tracking state."""
+        if self._status_poll_timer is not None and self._poll_started_at is not None:
+            elapsed_secs = self._current_poll_elapsed_secs()
+            logger.info(
+                f"[import-flow] poll-stop pkg={self._current_package_id} "
+                f"polls={self._poll_count} elapsed={elapsed_secs}s"
+            )
+        self._pause_status_poll()
+        self._reset_poll_tracking()
+
+    def _current_poll_elapsed_secs(self) -> int:
+        """Return elapsed seconds since the current polling session started."""
+        if self._poll_started_at is None:
+            return 0
+
+        try:
+            return max(0, int(self._poll_started_at.secsTo(QDateTime.currentDateTime())))
+        except Exception:
+            return 0
 
     def _poll_package_status(self):
         """Check current package status (async) and re-route if changed."""
         self._poll_count += 1
-        if self._poll_count >= _MAX_POLL_COUNT:
+        if self._poll_count >= self._max_polls_session:
+            elapsed_secs = self._current_poll_elapsed_secs()
+            if not self._timeout_extension_used:
+                # First timeout — give the user a choice instead of a silent
+                # error. Polling stays paused until the user picks an option.
+                logger.warning(
+                    f"[import-flow] TIMEOUT pkg={self._current_package_id} "
+                    f"polls={self._poll_count} elapsed={elapsed_secs}s next=user_decision"
+                )
+                self._pause_status_poll()
+                self._hide_loading()
+                self._show_timeout_decision_banner(elapsed_secs)
+                return
+            # Already extended — give up.
+            logger.error(
+                f"[import-flow] TIMEOUT-FINAL pkg={self._current_package_id} "
+                f"polls={self._poll_count} elapsed={elapsed_secs}s"
+            )
             self._stop_status_poll()
             self._hide_loading()
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
@@ -1141,40 +1540,123 @@ class ImportWizardPage(QWidget):
             self._show_error(tr("wizard.import.error_timeout"))
             return
 
-        # Pause timer during the API call, resume if still transient
-        self._stop_status_poll()
+        # Pause the timer during the API call so a slow response does not
+        # overlap with the next scheduled tick. This is only a pause: we must
+        # keep poll telemetry alive across requests.
+        self._pause_status_poll()
         pkg_id = self._current_package_id
 
+        # Measure round-trip latency for honest heartbeat reporting.
+        request_started_ms = QDateTime.currentMSecsSinceEpoch()
+        poll_n = self._poll_count
+
         def on_poll_result(result):
+            latency_ms = max(0, int(QDateTime.currentMSecsSinceEpoch() - request_started_ms))
             if not result.success:
-                logger.warning(f"Status poll failed: {result.message}")
+                logger.warning(
+                    f"[import-flow] poll-fail pkg={pkg_id} #{poll_n} "
+                    f"latency={latency_ms}ms msg={result.message}"
+                )
+                if self.step2 is not None and hasattr(self.step2, "set_heartbeat"):
+                    try:
+                        self.step2.set_heartbeat(False, latency_ms)
+                    except Exception:
+                        pass
                 self._show_loading(tr("wizard.import.loading_processing_server"))
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return
 
             new_status = result.data.get("status", 0)
-            logger.info(f"Status poll #{self._poll_count}: package {pkg_id} -> status {new_status}")
+            old_status = self._poll_last_status
+
+            backend_updated_at = ""
+            if isinstance(result.data, dict):
+                backend_updated_at = (
+                    result.data.get("updatedAt")
+                    or result.data.get("lastUpdatedAt")
+                    or result.data.get("modifiedAt")
+                    or ""
+                )
 
             if new_status in _PkgStatus.TRANSIENT:
-                # Keep the processing widget in sync with the latest state.
-                # No full-screen overlay — the widget itself communicates
-                # which sub-state the backend is in.
                 self._hide_loading()
+
+                if new_status == old_status:
+                    self._poll_unchanged_count += 1
+                else:
+                    self._poll_last_status = new_status
+                    self._poll_unchanged_count = 1
+                    self._poll_warned = False
+
+                if self.step2 is not None and hasattr(self.step2, "set_heartbeat"):
+                    try:
+                        self.step2.set_heartbeat(True, latency_ms, backend_updated_at)
+                    except Exception:
+                        pass
+
                 if self.step2 is not None and hasattr(self.step2, "set_status"):
                     try:
                         self.step2.set_status(new_status)
                     except Exception:
                         pass
+
+                if old_status is not None and new_status != old_status:
+                    logger.info(
+                        f"[import-flow] STATUS-CHANGE pkg={pkg_id} #{poll_n} "
+                        f"{old_status}({_status_name(old_status)})->"
+                        f"{new_status}({_status_name(new_status)}) latency={latency_ms}ms"
+                    )
+                else:
+                    logger.info(
+                        f"[import-flow] poll-tick #{poll_n} pkg={pkg_id} "
+                        f"status={new_status}({_status_name(new_status)}) "
+                        f"unchanged_x{self._poll_unchanged_count} latency={latency_ms}ms"
+                    )
+
+                if (
+                    self._poll_unchanged_count >= _STUCK_WARN_POLLS
+                    and not self._poll_warned
+                ):
+                    self._show_warning_banner(tr("wizard.import.warning_server_slow"))
+                    self._poll_warned = True
+
+                elapsed_secs = self._current_poll_elapsed_secs()
+                if self._poll_unchanged_count >= _STUCK_RETRY_POLLS:
+                    logger.warning(
+                        f"[import-flow] STUCK pkg={pkg_id} status={new_status} "
+                        f"unchanged_x{self._poll_unchanged_count} elapsed={elapsed_secs}s"
+                    )
+                    self._show_stuck_banner(elapsed_secs)
+
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return
 
+            logger.info(
+                f"[import-flow] STATUS-CHANGE pkg={pkg_id} #{poll_n} "
+                f"{old_status}({_status_name(old_status)})->"
+                f"{new_status}({_status_name(new_status)}) latency={latency_ms}ms (transitioned out)"
+            )
             self._hide_loading()
+            if self.step2 is not None and hasattr(self.step2, "set_heartbeat"):
+                try:
+                    self.step2.set_heartbeat(True, latency_ms, backend_updated_at)
+                except Exception:
+                    pass
             if self.step_commit and hasattr(self.step_commit, 'set_committing'):
                 self.step_commit.set_committing(False)
             self._route_by_status(new_status)
 
         def on_poll_error(error_type, msg_ar):
-            logger.warning(f"Status poll error ({error_type}): {msg_ar}")
+            latency_ms = max(0, int(QDateTime.currentMSecsSinceEpoch() - request_started_ms))
+            logger.warning(
+                f"[import-flow] poll-error pkg={pkg_id} #{poll_n} "
+                f"type={error_type} latency={latency_ms}ms msg={msg_ar}"
+            )
+            if self.step2 is not None and hasattr(self.step2, "set_heartbeat"):
+                try:
+                    self.step2.set_heartbeat(False, latency_ms, "")
+                except Exception:
+                    pass
             self._show_loading(tr("wizard.import.loading_processing_server"))
             self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
 
@@ -1358,6 +1840,15 @@ class ImportWizardPage(QWidget):
             if isinstance(new_status, str) and new_status.isdigit():
                 new_status = int(new_status)
             self._current_package_status = new_status
+
+            if new_status == _PkgStatus.COMMITTING:
+                logger.info(
+                    f"Package {self._current_package_id} is still COMMITTING after apparent commit failure; resuming polling."
+                )
+                self._hide_error_banner()
+                self._handle_committing()
+                return
+
             # Only auto-navigate if the new state is meaningfully different
             # (e.g. backend confirmed Completed while we thought commit failed).
             if new_status in (
@@ -1535,16 +2026,27 @@ class ImportWizardPage(QWidget):
             return
 
         if self.current_step == 0:
-            # Processing / validation step.
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
                 self.btn_next.setText(tr("wizard.import.btn_validation_failed_cancel"))
                 self.btn_next.setEnabled(True)
+                self.btn_next.setToolTip("")
             elif self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:
                 self.btn_next.setText(tr("wizard.import.btn_resolve_conflicts_first"))
                 self.btn_next.setEnabled(False)
+                self.btn_next.setToolTip("")
+            elif self._current_package_status in (
+                _PkgStatus.PENDING,
+                _PkgStatus.VALIDATING,
+                _PkgStatus.STAGING,
+                _PkgStatus.COMMITTING,
+            ):
+                self.btn_next.setText(tr("action.next_arrow"))
+                self.btn_next.setEnabled(False)
+                self.btn_next.setToolTip(tr("wizard.import.next_blocked_transient"))
             else:
                 self.btn_next.setText(tr("action.next_arrow"))
                 self.btn_next.setEnabled(True)
+                self.btn_next.setToolTip("")
 
         elif self.current_step == 1:
             # Review staged entities.
@@ -1653,6 +2155,7 @@ class ImportWizardPage(QWidget):
             self._current_package_id = None
             self._current_package_status = 0
             self._current_package_name = ""
+            self._pipeline_in_flight = False
             self._hide_loading()
             self._hide_error_banner()
             self.cancelled.emit()
@@ -1762,12 +2265,21 @@ class ImportWizardPage(QWidget):
         """Entry point from the packages list. Stores the id, fetches fresh
         status and routes to the right internal step."""
         package_id = str(package_id) if package_id else ""
+        logger.info(f"[import-flow] open pkg={package_id}")
         self._current_package_id = package_id
         self._current_package_status = 0
         self._current_package_name = ""
         # New package = fresh slate. Clear any blocking-error state from
         # the previous package so Next is re-enabled by the per-step logic.
         self._blocking_error_active = False
+        # Also clear the per-session pipeline flag — without this, a
+        # VALIDATING status on the new package would be misread as
+        # "/stage already triggered for this package" and we'd never
+        # actually post /stage, leaving the wizard stuck.
+        self._pipeline_in_flight = False
+        # Fresh timeout budget for the new package.
+        self._timeout_extension_used = False
+        self._max_polls_session = _MAX_POLL_COUNT
         self._stop_status_poll()
         self._cancel_active_worker()
         # Tear down any step widgets left over from a previous package, so
@@ -1784,8 +2296,10 @@ class ImportWizardPage(QWidget):
 
         def on_status_fetched(pkg_result):
             if not pkg_result.success:
+                self._hide_loading()
                 self._set_buttons_enabled(True)
-                self._show_error(pkg_result.message_ar or tr("wizard.import.error_load_package"))
+                self._show_initial_load_failed_banner()
+                self._enter_blocking_error_state()
                 return
             data = pkg_result.data or {}
             self._current_package_name = (
@@ -1815,8 +2329,10 @@ class ImportWizardPage(QWidget):
                 self._navigate_to_step2(duplicates_data=None, block_next=True)
 
         def on_status_error(error_type, msg_ar):
+            self._hide_loading()
             self._set_buttons_enabled(True)
-            self._show_error(msg_ar or tr("wizard.import.error_load_package"))
+            self._show_initial_load_failed_banner()
+            self._enter_blocking_error_state()
 
         self._run_api(
             lambda: self.import_controller.get_package(package_id),
@@ -1840,21 +2356,22 @@ class ImportWizardPage(QWidget):
         # Reuse set_package_id for its status-fetch + routing logic.
         self.set_package_id(self._current_package_id)
 
-    def leaveEvent(self, event):
-        """Stop polling + workers when user navigates away."""
-        try:
-            self._cancel_active_worker()
-            self._stop_status_poll()
-            self._hide_loading()
-        except Exception:
-            pass
-        super().leaveEvent(event)
-
     def hideEvent(self, event):
-        """Ensure no orphan polling timer or background worker when hidden."""
+        """Stop polling + workers when this page is hidden (e.g. user
+        navigates to another page).
+
+        IMPORTANT: this must be hideEvent, NOT leaveEvent. Qt's leaveEvent
+        fires whenever the mouse cursor merely leaves the widget area —
+        which happens dozens of times during normal use. If we kill polling
+        on every mouse-leave, the wizard appears frozen even though the
+        backend is fine. Found via [import-flow] logs:
+          [import-flow] poll-start ... timeout=120s
+          [import-flow] poll-stop polls=0 elapsed=2s   ← caused by mouse move
+        """
         try:
             self._cancel_active_worker()
             self._stop_status_poll()
+            self._pipeline_in_flight = False
             self._hide_loading()
         except Exception:
             pass

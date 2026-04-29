@@ -227,6 +227,8 @@ class TRRCMSApiClient:
         params: Optional[Dict] = None,
         headers_override: Optional[Dict] = None,
         skip_accept_language: bool = False,
+        disable_retry: bool = False,
+        timeout_override: int = 0,
     ) -> Any:
         """Execute HTTP request with error handling and automatic retry."""
         url = f"{self.base_url}{endpoint}"
@@ -242,8 +244,11 @@ class TRRCMSApiClient:
             except Exception:
                 logger.info(f"[API REQ] Body: {json_data}")
 
+        effective_timeout = timeout_override if timeout_override > 0 else self.config.timeout
+        max_retries = 0 if disable_retry else self._MAX_RETRIES
+
         last_error = None
-        for attempt in range(self._MAX_RETRIES + 1):
+        for attempt in range(max_retries + 1):
             try:
                 token_used = self.access_token
                 headers = self._headers()
@@ -257,7 +262,7 @@ class TRRCMSApiClient:
                     json=json_data,
                     params=params,
                     headers=headers,
-                    timeout=self.config.timeout,
+                    timeout=effective_timeout,
                     verify=False
                 )
                 response.raise_for_status()
@@ -334,11 +339,11 @@ class TRRCMSApiClient:
                 )
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 last_error = e
-                if attempt < self._MAX_RETRIES:
+                if attempt < max_retries:
                     import time
                     wait = attempt + 1
                     logger.warning(
-                        f"Network error (attempt {attempt + 1}/{self._MAX_RETRIES + 1}), "
+                        f"Network error (attempt {attempt + 1}/{max_retries + 1}), "
                         f"retrying in {wait}s: {endpoint}"
                     )
                     time.sleep(wait)
@@ -3004,9 +3009,14 @@ class TRRCMSApiClient:
         return self._request("GET", f"/v1/import/packages/{package_id}")
 
     def stage_import_package(self, package_id: str) -> Dict[str, Any]:
-        """Trigger staging and row-level validation."""
+        """Trigger staging and row-level validation. Long blocking call; no client-side retry."""
         logger.info(f"Staging import package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/stage")
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/stage",
+            disable_retry=True,
+            timeout_override=300,
+        )
 
     def get_validation_report(self, package_id: str) -> Dict[str, Any]:
         """Get the current validation report for a package."""

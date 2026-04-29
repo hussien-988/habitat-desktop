@@ -1,26 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Import wizard — processing view (new 3-step flow).
+"""Import wizard — processing view (3-step flow, real-progress mode).
 
-This replaces the legacy `import_step2_staging.py` which showed an
-ad-hoc validation summary (zeros table + "clean data" banner) that
-confused users during the wizard's processing phase.
+Drop-in replacement for the legacy ImportStep2Staging widget. The view is
+strictly status-driven: the title and detail come from a fixed string per
+backend status code (Pending / Validating / Staging / DetectingDuplicates /
+ReviewingConflicts / ReadyToCommit / ValidationFailed / Quarantined). There
+are NO rotating "fake progress" frames anymore — the previous cycle was
+misleading because the backend does not expose per-validator signals.
 
-The new widget is minimal and status-driven:
+What the user sees while a transient state is active:
+  • Status badge in the header strip (real backend status)
+  • One static title + detail describing what this state means
+  • Spinner dots (proves UI is alive)
+  • "بدء هذه المرحلة منذ: MM:SS" — local elapsed counter, reset on every
+    sub-state change. This is HONEST: it measures wall-clock time spent in
+    the current backend state, not made-up backend progress.
+  • "● آخر استجابة من الخادم: قبل Ns" — heartbeat, fed by the wizard via
+    set_heartbeat() on every poll response. Color of the dot reflects the
+    last poll: green=ok, amber=slow (>3s latency), red=failed, grey=idle.
 
-  • Package summary strip at the top
-  • Centered state panel:
-        - animated spinner + "processing…" label for transient backend work
-        - conflict count card + "Resolve Conflicts" button when
-          the backend reports ReviewingConflicts
-        - error panel (filled from the wizard's inline banner for
-          stage/detect failures)
-
-The widget intentionally does NOT show a validation-report table —
-that belongs in Step 2 (Review & Approve), not in Step 1 processing.
+Stuck warnings and timeout decisions live in the wizard's top inline banner
+(single source of truth for messages with action buttons), so this widget
+no longer renders a stuck sub-state.
 
 Constructor signature is kept drop-in compatible with the legacy
-ImportStep2Staging (controller, package_id, duplicates_data, skip_load)
-so the wizard's _ensure_step2 only needed to swap the import.
+ImportStep2Staging (controller, package_id, duplicates_data, skip_load).
 """
 
 from typing import Any, Dict, Optional
@@ -29,8 +33,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
     QSizePolicy,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QDateTime
 
 from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from services.import_status_map import status_meta, PkgStatus
@@ -62,74 +65,22 @@ _STATUS_TO_SUB_STATE = {
 }
 
 
-# Backend-truthful micro-stage cycle.
-# Backend status `Staging` covers BOTH unpacking AND the 8-level validation
-# pipeline (no per-level signal exposed by the API). We rotate through copy
-# that mirrors what the server is actually doing — matching the order of the
-# real validators in TRRCMS-Backend/src/TRRCMS.Infrastructure/Services/Validators.
-# Cycle advances every 5s. Text-only — no icon changes, no timer display.
-_STAGING_CYCLE = [
-    ("wizard.import.processing.staging.cycle.1.title",
-     "wizard.import.processing.staging.cycle.1.detail"),
-    ("wizard.import.processing.staging.cycle.2.title",
-     "wizard.import.processing.staging.cycle.2.detail"),
-    ("wizard.import.processing.staging.cycle.3.title",   # ~ L1 DataConsistency
-     "wizard.import.processing.staging.cycle.3.detail"),
-    ("wizard.import.processing.staging.cycle.4.title",   # ~ L2 CrossEntityRelation
-     "wizard.import.processing.staging.cycle.4.detail"),
-    ("wizard.import.processing.staging.cycle.5.title",   # ~ L3 OwnershipEvidence
-     "wizard.import.processing.staging.cycle.5.detail"),
-    ("wizard.import.processing.staging.cycle.6.title",   # ~ L4 HouseholdStructure
-     "wizard.import.processing.staging.cycle.6.detail"),
-    ("wizard.import.processing.staging.cycle.7.title",   # ~ L5 SpatialGeometry
-     "wizard.import.processing.staging.cycle.7.detail"),
-    ("wizard.import.processing.staging.cycle.8.title",   # ~ L6 ClaimLifecycle
-     "wizard.import.processing.staging.cycle.8.detail"),
-    ("wizard.import.processing.staging.cycle.9.title",   # ~ L7 VocabularyVersion
-     "wizard.import.processing.staging.cycle.9.detail"),
-    ("wizard.import.processing.staging.cycle.10.title",  # ~ L8 BuildingUnitCode
-     "wizard.import.processing.staging.cycle.10.detail"),
-    ("wizard.import.processing.staging.cycle.11.title",  # duplicate detection
-     "wizard.import.processing.staging.cycle.11.detail"),
-    ("wizard.import.processing.staging.cycle.12.title",  # finalising
-     "wizard.import.processing.staging.cycle.12.detail"),
-]
-
-# When the package is at status=Validating, we have just fired POST /stage.
-# This brief window before the backend flips to Staging shows a "starting"
-# message.
-_VALIDATING_CYCLE = [
-    ("wizard.import.processing.validating.cycle.1.title",
-     "wizard.import.processing.validating.cycle.1.detail"),
-    ("wizard.import.processing.validating.cycle.2.title",
-     "wizard.import.processing.validating.cycle.2.detail"),
-]
-
-# Committing — wizard's _handle_committing already routes to the commit
-# step (internal index 2) which has its own progress UI; this list is a
-# fallback in case the processing widget receives a Committing status.
-_COMMITTING_CYCLE = [
-    ("wizard.import.processing.committing.cycle.1.title",
-     "wizard.import.processing.committing.cycle.1.detail"),
-    ("wizard.import.processing.committing.cycle.2.title",
-     "wizard.import.processing.committing.cycle.2.detail"),
-    ("wizard.import.processing.committing.cycle.3.title",
-     "wizard.import.processing.committing.cycle.3.detail"),
-    ("wizard.import.processing.committing.cycle.4.title",
-     "wizard.import.processing.committing.cycle.4.detail"),
-]
-
-_SUB_STATE_TO_CYCLE = {
-    _SUB_STATE_VALIDATING: _VALIDATING_CYCLE,
-    _SUB_STATE_STAGING: _STAGING_CYCLE,
-    _SUB_STATE_DETECTING: _STAGING_CYCLE,  # detection runs inside Staging
+# A transient sub-state shows the spinner + elapsed counter + heartbeat.
+_TRANSIENT_SUB_STATES = {
+    _SUB_STATE_PENDING,
+    _SUB_STATE_STAGING,
+    _SUB_STATE_VALIDATING,
+    _SUB_STATE_DETECTING,
 }
 
-_CYCLE_INTERVAL_MS = 5000
+
+def _format_mmss(seconds: int) -> str:
+    s = max(0, int(seconds or 0))
+    return f"{s // 60:02d}:{s % 60:02d}"
 
 
 class ImportStepProcessing(QWidget):
-    """New 3-step-flow processing view. Drop-in for the legacy step2 widget."""
+    """Real-progress processing view. No rotating fake text."""
 
     resolve_duplicates_requested = pyqtSignal()
 
@@ -146,13 +97,18 @@ class ImportStepProcessing(QWidget):
         self._package_id = package_id or ""
         self._duplicates_data = duplicates_data or {}
         self._current_status: Optional[int] = None
+        self._current_sub_state: Optional[str] = None
+
+        self._state_started_at: Optional[QDateTime] = None
+
+        self._last_heartbeat_at: Optional[QDateTime] = None
+        self._last_heartbeat_ok: Optional[bool] = None
+        self._last_heartbeat_latency_ms: int = -1
+        self._backend_updated_at_str: str = ""
 
         self._setup_ui()
 
         if not skip_load and self._package_id:
-            # Lazy-fetch the package metadata so the summary strip has real
-            # data. Failures here are non-fatal — the wizard owns the error
-            # banner and will surface them if load_package_failed.
             QTimer.singleShot(0, self._load_package_summary)
 
     # -- UI ------------------------------------------------------------------
@@ -168,7 +124,7 @@ class ImportStepProcessing(QWidget):
         )
         root.setSpacing(ScreenScale.h(18))
 
-        # --- Package summary strip ----------------------------------------
+        # Package summary strip
         summary = QFrame()
         summary.setStyleSheet(
             "QFrame { background: #F7FAFF; border: 1px solid #E2EAF2;"
@@ -195,7 +151,7 @@ class ImportStepProcessing(QWidget):
 
         root.addWidget(summary)
 
-        # --- Central state panel ------------------------------------------
+        # Central state panel
         self._state_panel = QFrame()
         self._state_panel.setStyleSheet(
             "QFrame { background: #FFFFFF; border: 1px solid #E2EAF2;"
@@ -205,7 +161,7 @@ class ImportStepProcessing(QWidget):
 
         state_layout = QVBoxLayout(self._state_panel)
         state_layout.setContentsMargins(32, 28, 32, 28)
-        state_layout.setSpacing(14)
+        state_layout.setSpacing(12)
         state_layout.setAlignment(Qt.AlignCenter)
 
         self._state_icon = QLabel("⏳")
@@ -233,7 +189,7 @@ class ImportStepProcessing(QWidget):
         )
         state_layout.addWidget(self._state_detail)
 
-        # Animated dots (shows only for transient sub-states).
+        # Spinner dots — proves the UI thread is alive.
         self._dots_label = QLabel("")
         self._dots_label.setAlignment(Qt.AlignCenter)
         self._dots_label.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
@@ -242,7 +198,34 @@ class ImportStepProcessing(QWidget):
         )
         state_layout.addWidget(self._dots_label)
 
-        # Conflict CTA (hidden unless status == ReviewingConflicts).
+        # Real elapsed-in-state line.
+        self._state_elapsed_label = QLabel("")
+        self._state_elapsed_label.setAlignment(Qt.AlignCenter)
+        self._state_elapsed_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._state_elapsed_label.setStyleSheet(
+            "color: #1F2937; background: transparent; border: none;"
+        )
+        self._state_elapsed_label.setVisible(False)
+        state_layout.addWidget(self._state_elapsed_label)
+
+        self._heartbeat_label = QLabel("")
+        self._heartbeat_label.setAlignment(Qt.AlignCenter)
+        self._heartbeat_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._heartbeat_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        self._heartbeat_label.setVisible(False)
+        state_layout.addWidget(self._heartbeat_label)
+
+        self._backend_updated_label = QLabel("")
+        self._backend_updated_label.setAlignment(Qt.AlignCenter)
+        self._backend_updated_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._backend_updated_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
+        )
+        self._backend_updated_label.setVisible(False)
+        state_layout.addWidget(self._backend_updated_label)
+
         self._conflict_box = QFrame()
         self._conflict_box.setStyleSheet(
             "QFrame { background: #FAF5FF; border: 1px solid #C4B5FD;"
@@ -280,30 +263,26 @@ class ImportStepProcessing(QWidget):
 
         root.addWidget(self._state_panel, 1)
 
-        # Dots animation timer.
+        # Spinner dots animation timer.
         self._dots_count = 0
         self._dots_timer = QTimer(self)
         self._dots_timer.timeout.connect(self._tick_dots)
 
-        # Micro-stage cycling — advances title/detail text every 5s during
-        # transient sub-states so the screen never feels frozen during a
-        # long synchronous /stage call. Text-only; no icon changes.
-        self._cycle_idx = 0
-        self._cycle_active_state: Optional[str] = None
-        self._cycle_timer = QTimer(self)
-        self._cycle_timer.timeout.connect(self._tick_cycle)
+        # Per-second tick that refreshes the elapsed + heartbeat lines.
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(1000)
+        self._refresh_timer.timeout.connect(self._refresh_live_lines)
 
-        # Apply initial state if we already know it from the wizard.
         self._apply_sub_state(_SUB_STATE_PENDING)
 
-    # -- Public API -----------------------------------------------------------
+    # -- Public API ----------------------------------------------------------
 
     def set_status(self, status_code: int, extra: Optional[Dict[str, Any]] = None):
         """Update the view for a new backend status code."""
         self._current_status = status_code
         sub_state = _STATUS_TO_SUB_STATE.get(status_code, _SUB_STATE_PENDING)
         self._apply_sub_state(sub_state, extra=extra or {})
-        # Status badge on the package summary strip.
+
         meta = status_meta(status_code)
         self._pkg_status_badge.setText(tr(meta["label_key"]))
         self._pkg_status_badge.setStyleSheet(
@@ -321,13 +300,20 @@ class ImportStepProcessing(QWidget):
         if count and self._current_status == PkgStatus.REVIEWING_CONFLICTS:
             self._conflict_box.setVisible(True)
 
+    def set_heartbeat(self, success: bool, latency_ms: int, backend_updated_at: str = ""):
+        """Called by the wizard on every poll response."""
+        self._last_heartbeat_at = QDateTime.currentDateTime()
+        self._last_heartbeat_ok = bool(success)
+        self._last_heartbeat_latency_ms = int(latency_ms if latency_ms is not None else -1)
+        self._backend_updated_at_str = backend_updated_at or ""
+        self._refresh_live_lines()
+
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
-        # Re-apply current state to pick up new translations.
         if self._current_status is not None:
             self.set_status(self._current_status)
 
-    # -- Internal helpers -----------------------------------------------------
+    # -- Internal helpers ----------------------------------------------------
 
     def _load_package_summary(self):
         if not self.import_controller or not self._package_id:
@@ -349,8 +335,17 @@ class ImportStepProcessing(QWidget):
             self.set_status(status)
 
     def _apply_sub_state(self, sub_state: str, extra: Optional[Dict[str, Any]] = None):
-        extra = extra or {}
-        # Hide conflict CTA by default; only the conflict branch shows it.
+        # Reset state-elapsed timer whenever the sub-state actually changes,
+        # so the counter reflects time spent in the CURRENT backend state.
+        if sub_state != self._current_sub_state:
+            logger.info(
+                f"[import-flow] sub-state pkg={self._package_id} "
+                f"{self._current_sub_state}→{sub_state}"
+            )
+            self._current_sub_state = sub_state
+            self._state_started_at = QDateTime.currentDateTime()
+
+        # Hide conflict CTA by default.
         self._conflict_box.setVisible(False)
 
         if sub_state == _SUB_STATE_PENDING:
@@ -360,17 +355,27 @@ class ImportStepProcessing(QWidget):
             )
             self._state_title.setText(tr("wizard.import.processing.pending_title"))
             self._state_detail.setText(tr("wizard.import.processing.pending_detail"))
-            self._stop_dots()
-            self._stop_cycle()
-        elif sub_state in (_SUB_STATE_STAGING, _SUB_STATE_VALIDATING, _SUB_STATE_DETECTING):
-            # Same icon for all transient sub-states (no icon changes per
-            # request — just rotating text).
+        elif sub_state == _SUB_STATE_VALIDATING:
             self._state_icon.setText("⚙")
             self._state_icon.setStyleSheet(
                 "color: #3890DF; background: transparent; border: none;"
             )
-            self._start_cycle(sub_state)
-            self._start_dots()
+            self._state_title.setText(tr("wizard.import.processing.validating_title"))
+            self._state_detail.setText(tr("wizard.import.processing.validating_detail"))
+        elif sub_state == _SUB_STATE_STAGING:
+            self._state_icon.setText("⚙")
+            self._state_icon.setStyleSheet(
+                "color: #F59E0B; background: transparent; border: none;"
+            )
+            self._state_title.setText(tr("wizard.import.processing.staging_title"))
+            self._state_detail.setText(tr("wizard.import.processing.staging_detail"))
+        elif sub_state == _SUB_STATE_DETECTING:
+            self._state_icon.setText("⚙")
+            self._state_icon.setStyleSheet(
+                "color: #8B5CF6; background: transparent; border: none;"
+            )
+            self._state_title.setText(tr("wizard.import.processing.detecting_title"))
+            self._state_detail.setText(tr("wizard.import.processing.detecting_detail"))
         elif sub_state == _SUB_STATE_VALIDATION_FAILED:
             self._state_icon.setText("⚠")
             self._state_icon.setStyleSheet(
@@ -378,8 +383,6 @@ class ImportStepProcessing(QWidget):
             )
             self._state_title.setText(tr("wizard.import.processing.validation_failed_title"))
             self._state_detail.setText(tr("wizard.import.processing.validation_failed_detail"))
-            self._stop_dots()
-            self._stop_cycle()
         elif sub_state == _SUB_STATE_QUARANTINED:
             self._state_icon.setText("🔒")
             self._state_icon.setStyleSheet(
@@ -387,8 +390,6 @@ class ImportStepProcessing(QWidget):
             )
             self._state_title.setText(tr("wizard.import.processing.quarantined_title"))
             self._state_detail.setText(tr("wizard.import.processing.quarantined_detail"))
-            self._stop_dots()
-            self._stop_cycle()
         elif sub_state == _SUB_STATE_REVIEWING_CONFLICTS:
             self._state_icon.setText("⚡")
             self._state_icon.setStyleSheet(
@@ -397,8 +398,6 @@ class ImportStepProcessing(QWidget):
             self._state_title.setText(tr("wizard.import.processing.conflicts_title"))
             self._state_detail.setText(tr("wizard.import.processing.conflicts_detail"))
             self._conflict_box.setVisible(True)
-            self._stop_dots()
-            self._stop_cycle()
         elif sub_state == _SUB_STATE_READY:
             self._state_icon.setText("✓")
             self._state_icon.setStyleSheet(
@@ -406,8 +405,89 @@ class ImportStepProcessing(QWidget):
             )
             self._state_title.setText(tr("wizard.import.processing.ready_title"))
             self._state_detail.setText(tr("wizard.import.processing.ready_detail"))
+
+        is_transient = sub_state in _TRANSIENT_SUB_STATES
+        if is_transient:
+            self._start_dots()
+            self._state_elapsed_label.setVisible(True)
+            self._heartbeat_label.setVisible(True)
+            if not self._refresh_timer.isActive():
+                self._refresh_timer.start()
+            self._refresh_live_lines()
+        else:
             self._stop_dots()
-            self._stop_cycle()
+            self._refresh_timer.stop()
+            self._state_elapsed_label.setVisible(False)
+            self._heartbeat_label.setVisible(False)
+            self._backend_updated_label.setVisible(False)
+
+    def _refresh_live_lines(self):
+        if self._state_started_at is not None:
+            elapsed = max(0, int(self._state_started_at.secsTo(QDateTime.currentDateTime())))
+            self._state_elapsed_label.setText(
+                tr("wizard.import.processing.state_elapsed").format(time=_format_mmss(elapsed))
+            )
+
+        self._refresh_heartbeat_line()
+        self._refresh_backend_updated_line()
+
+    def _refresh_heartbeat_line(self):
+        if self._last_heartbeat_at is None:
+            self._heartbeat_label.setText(
+                "● " + tr("wizard.import.processing.last_response_idle")
+            )
+            self._heartbeat_label.setStyleSheet(
+                "color: #9CA3AF; background: transparent; border: none;"
+            )
+            return
+
+        seconds_ago = max(0, int(self._last_heartbeat_at.secsTo(QDateTime.currentDateTime())))
+        if self._last_heartbeat_ok:
+            slow = self._last_heartbeat_latency_ms >= 0 and self._last_heartbeat_latency_ms > 3000
+            color = "#F59E0B" if slow else "#10B981"
+            self._heartbeat_label.setText(
+                "● " + tr("wizard.import.processing.last_response_seconds_ago").format(
+                    seconds=seconds_ago
+                )
+            )
+            self._heartbeat_label.setStyleSheet(
+                f"color: {color}; background: transparent; border: none;"
+            )
+        else:
+            self._heartbeat_label.setText(
+                "● " + tr("wizard.import.processing.last_response_failed").format(
+                    seconds=seconds_ago
+                )
+            )
+            self._heartbeat_label.setStyleSheet(
+                "color: #DC2626; background: transparent; border: none;"
+            )
+
+    def _refresh_backend_updated_line(self):
+        if not self._backend_updated_at_str:
+            self._backend_updated_label.setVisible(False)
+            return
+
+        parsed = QDateTime.fromString(self._backend_updated_at_str, Qt.ISODate)
+        if not parsed.isValid():
+            parsed = QDateTime.fromString(self._backend_updated_at_str, Qt.ISODateWithMs)
+        if not parsed.isValid():
+            self._backend_updated_label.setVisible(False)
+            return
+
+        secs_ago = max(0, parsed.secsTo(QDateTime.currentDateTimeUtc()))
+        if secs_ago < 60:
+            text = tr("wizard.import.processing.backend_last_updated_seconds_ago").format(
+                seconds=secs_ago
+            )
+        else:
+            text = tr("wizard.import.processing.backend_last_updated_minutes_ago").format(
+                minutes=secs_ago // 60
+            )
+        self._backend_updated_label.setText(text)
+        self._backend_updated_label.setVisible(True)
+
+    # -- Spinner dots --------------------------------------------------------
 
     def _start_dots(self):
         self._dots_count = 0
@@ -422,56 +502,12 @@ class ImportStepProcessing(QWidget):
         self._dots_count = (self._dots_count + 1) % 4
         self._dots_label.setText("." * self._dots_count)
 
-    # -- Micro-stage text cycling -------------------------------------------
-
-    def _start_cycle(self, sub_state: str):
-        """Begin (or resume) cycling the title/detail through the list for
-        this sub-state. Idempotent: if the cycle is already running for the
-        same sub-state, just continue from the current index."""
-        cycle = _SUB_STATE_TO_CYCLE.get(sub_state)
-        if not cycle:
-            self._stop_cycle()
-            return
-        if self._cycle_active_state != sub_state:
-            self._cycle_active_state = sub_state
-            self._cycle_idx = 0
-        # Render the current frame immediately so the user sees a real
-        # message instead of blank text.
-        self._render_cycle_frame()
-        if not self._cycle_timer.isActive():
-            self._cycle_timer.start(_CYCLE_INTERVAL_MS)
-
-    def _stop_cycle(self):
-        """Stop cycling. Called when the widget enters a non-transient
-        sub-state or is hidden."""
-        self._cycle_timer.stop()
-        self._cycle_active_state = None
-        self._cycle_idx = 0
-
-    def _tick_cycle(self):
-        cycle = _SUB_STATE_TO_CYCLE.get(self._cycle_active_state or "")
-        if not cycle:
-            self._stop_cycle()
-            return
-        self._cycle_idx = (self._cycle_idx + 1) % len(cycle)
-        self._render_cycle_frame()
-
-    def _render_cycle_frame(self):
-        cycle = _SUB_STATE_TO_CYCLE.get(self._cycle_active_state or "")
-        if not cycle:
-            return
-        title_key, detail_key = cycle[self._cycle_idx % len(cycle)]
-        self._state_title.setText(tr(title_key))
-        self._state_detail.setText(tr(detail_key))
-
-    # -- Lifecycle ----------------------------------------------------------
+    # -- Lifecycle -----------------------------------------------------------
 
     def hideEvent(self, event):
-        # Stop all timers when this widget leaves the active step so it
-        # doesn't keep ticking in the background.
         try:
             self._stop_dots()
-            self._stop_cycle()
+            self._refresh_timer.stop()
         except Exception:
             pass
         super().hideEvent(event)

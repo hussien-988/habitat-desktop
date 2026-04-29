@@ -58,6 +58,17 @@ def _fail_from_exception(exc: BaseException, context: str) -> OperationResult:
     )
 
 
+def _is_stage_already_advanced(exc: ApiException) -> bool:
+    """True when a 409 from /stage indicates the package already moved past Validating."""
+    parts = [exc.message or ""]
+    rd = getattr(exc, "response_data", {}) or {}
+    if isinstance(rd, dict):
+        parts.append(str(rd.get("detail") or ""))
+        parts.append(str(rd.get("message") or ""))
+    haystack = " ".join(parts).lower()
+    return "cannot stage" in haystack
+
+
 class ImportController(BaseController):
     """Controller for the import pipeline."""
 
@@ -144,10 +155,23 @@ class ImportController(BaseController):
             return _fail_from_exception(e, CTX_LOAD_PACKAGE)
 
     def get_package(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
         try:
             api = get_api_client()
-            return OperationResult.ok(data=api.get_import_package(package_id))
+            data = api.get_import_package(package_id)
+            latency = int((time.monotonic() - t) * 1000)
+            status = data.get("status") if isinstance(data, dict) else None
+            logger.info(
+                f"[import-flow] api GET /packages/{package_id} → status={status} latency={latency}ms"
+            )
+            return OperationResult.ok(data=data)
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api GET /packages/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_LOAD_PACKAGE)
         except Exception as e:
             return _fail_from_exception(e, CTX_LOAD_PACKAGE)
@@ -177,6 +201,7 @@ class ImportController(BaseController):
 
         Pass `only_pending=False` for the global "any-status" count.
         """
+        t = time.monotonic()
         try:
             api = get_api_client()
             kwargs = {"page": 1, "page_size": 1, "import_package_id": package_id}
@@ -184,8 +209,19 @@ class ImportController(BaseController):
                 kwargs["status"] = "PendingReview"
             result = api.get_conflicts(**kwargs)
             total = int(result.get("totalCount", 0) or 0) if isinstance(result, dict) else 0
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(
+                f"[import-flow] api GET /conflicts pkg={package_id} only_pending={only_pending} "
+                f"→ count={total} latency={latency}ms"
+            )
             return OperationResult.ok(data=total)
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api GET /conflicts pkg={package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, "load_conflict_count")
         except Exception as e:
             return _fail_from_exception(e, "load_conflict_count")
@@ -195,45 +231,108 @@ class ImportController(BaseController):
     # -----------------------------------------------------------------------
 
     def stage_package(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /stage/{package_id} started")
         try:
             api = get_api_client()
             result = self._with_retry(lambda: api.stage_import_package(package_id))
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(
+                f"[import-flow] api POST /stage/{package_id} OK latency={latency}ms"
+            )
             self.package_staged.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم تدريج الحزمة بنجاح")
-        except (ApiException, NetworkException) as e:
+        except ApiException as e:
+            latency = int((time.monotonic() - t) * 1000)
+            if e.status_code == 409 and _is_stage_already_advanced(e):
+                logger.info(
+                    f"[import-flow] api POST /stage/{package_id} 409-idempotent "
+                    f"latency={latency}ms (backend already advanced)"
+                )
+                self.package_staged.emit(package_id)
+                return OperationResult.ok(
+                    data={"alreadyAdvanced": True},
+                    message_ar="الحزمة قيد المعالجة فعلياً على الخادم",
+                )
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /stage/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms trace={trace}"
+            )
+            return _fail_from_exception(e, CTX_STAGE)
+        except NetworkException as e:
+            latency = int((time.monotonic() - t) * 1000)
+            logger.warning(
+                f"[import-flow] api POST /stage/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms"
+            )
             return _fail_from_exception(e, CTX_STAGE)
         except Exception as e:
             return _fail_from_exception(e, CTX_STAGE)
 
     def get_validation_report(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
         try:
             api = get_api_client()
-            return OperationResult.ok(data=api.get_validation_report(package_id))
+            data = api.get_validation_report(package_id)
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(
+                f"[import-flow] api GET /validation-report/{package_id} OK latency={latency}ms"
+            )
+            return OperationResult.ok(data=data)
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api GET /validation-report/{package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_LOAD_REPORT)
         except Exception as e:
             return _fail_from_exception(e, CTX_LOAD_REPORT)
 
     def get_staged_entities(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
         try:
             api = get_api_client()
             result = api.get_staged_entities(package_id)
             if not isinstance(result, dict):
                 result = {}
+            latency = int((time.monotonic() - t) * 1000)
+            counts = {k: (len(v) if isinstance(v, list) else v) for k, v in result.items()}
+            logger.info(
+                f"[import-flow] api GET /staged-entities/{package_id} → {counts} latency={latency}ms"
+            )
             return OperationResult.ok(data=result)
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api GET /staged-entities/{package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_LOAD_REPORT)
         except Exception as e:
             return _fail_from_exception(e, CTX_LOAD_REPORT)
 
     def detect_duplicates(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /detect-duplicates/{package_id} started")
         try:
             api = get_api_client()
-            return OperationResult.ok(
-                data=api.detect_duplicates(package_id),
-                message_ar="تم كشف التكرارات",
+            data = api.detect_duplicates(package_id)
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(
+                f"[import-flow] api POST /detect-duplicates/{package_id} OK latency={latency}ms"
             )
+            return OperationResult.ok(data=data, message_ar="تم كشف التكرارات")
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /detect-duplicates/{package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_DETECT)
         except Exception as e:
             return _fail_from_exception(e, CTX_DETECT)
@@ -266,33 +365,75 @@ class ImportController(BaseController):
         )
 
     def approve_package(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /approve/{package_id} started")
         try:
             api = get_api_client()
-            return OperationResult.ok(
-                data=self._with_retry(lambda: api.approve_import_package(package_id)),
-                message_ar="تمت الموافقة على الحزمة",
-            )
+            data = self._with_retry(lambda: api.approve_import_package(package_id))
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(f"[import-flow] api POST /approve/{package_id} OK latency={latency}ms")
+            return OperationResult.ok(data=data, message_ar="تمت الموافقة على الحزمة")
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /approve/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_APPROVE)
         except Exception as e:
             return _fail_from_exception(e, CTX_APPROVE)
 
     def commit_package(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /commit/{package_id} started")
         try:
             api = get_api_client()
             result = self._with_retry(lambda: api.commit_import_package(package_id))
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(f"[import-flow] api POST /commit/{package_id} OK latency={latency}ms")
             self.package_committed.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إدخال البيانات في الإنتاج")
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /commit/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_COMMIT)
         except Exception as e:
             return _fail_from_exception(e, CTX_COMMIT)
 
     def get_commit_report(self, package_id: str) -> OperationResult[Dict]:
+        t = time.monotonic()
         try:
             api = get_api_client()
-            return OperationResult.ok(data=api.get_commit_report(package_id))
+            data = api.get_commit_report(package_id)
+            latency = int((time.monotonic() - t) * 1000)
+            if isinstance(data, dict):
+                approved = data.get("totalRecordsApproved", "?")
+                committed = data.get("totalRecordsCommitted", "?")
+                failed = data.get("totalRecordsFailed", "?")
+                skipped = data.get("totalRecordsSkipped", "?")
+                rate = data.get("successRate", "?")
+                logger.info(
+                    f"[import-flow] api GET /commit-report/{package_id} → "
+                    f"approved={approved} committed={committed} failed={failed} "
+                    f"skipped={skipped} rate={rate} latency={latency}ms"
+                )
+            else:
+                logger.info(
+                    f"[import-flow] api GET /commit-report/{package_id} → non-dict latency={latency}ms"
+                )
+            return OperationResult.ok(data=data)
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api GET /commit-report/{package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_LOAD_REPORT)
         except Exception as e:
             return _fail_from_exception(e, CTX_LOAD_REPORT)
@@ -313,15 +454,25 @@ class ImportController(BaseController):
             return _fail_from_exception(e, CTX_RESET_COMMIT)
 
     def cancel_package(self, package_id: str, reason: str = "") -> OperationResult[Dict]:
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /cancel/{package_id} started reason={reason!r}")
         try:
             api = get_api_client()
             if reason:
                 result = api.cancel_import_package(package_id, reason=reason)
             else:
                 result = api.cancel_import_package(package_id)
+            latency = int((time.monotonic() - t) * 1000)
+            logger.info(f"[import-flow] api POST /cancel/{package_id} OK latency={latency}ms")
             self.package_cancelled.emit(package_id)
             return OperationResult.ok(data=result, message_ar="تم إلغاء الحزمة")
         except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /cancel/{package_id} FAILED type={type(e).__name__} "
+                f"latency={latency}ms trace={trace}"
+            )
             return _fail_from_exception(e, CTX_CANCEL)
         except Exception as e:
             return _fail_from_exception(e, CTX_CANCEL)

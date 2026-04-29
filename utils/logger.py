@@ -4,6 +4,7 @@ Logging configuration.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -54,6 +55,23 @@ def setup_logger() -> logging.Logger:
     )
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
+
+    # Dedicated import-flow console handler — ALWAYS ON unless explicitly
+    # disabled with DEBUG_IMPORT=0. The filter only lets [import-flow] lines
+    # through, so this never drowns the console with unrelated INFO. Default-on
+    # makes "open the wizard, watch the terminal" work without shell-specific
+    # env-var syntax (bash vs PowerShell vs cmd).
+    if os.environ.get("DEBUG_IMPORT") != "0":
+        flow_console = logging.StreamHandler(sys.stdout)
+        flow_console.setLevel(logging.INFO)
+        flow_console.addFilter(
+            lambda record: "[import-flow]" in record.getMessage()
+        )
+        flow_console.setFormatter(logging.Formatter(
+            "%(asctime)s | %(message)s",
+            datefmt="%H:%M:%S",
+        ))
+        logger.addHandler(flow_console)
 
     _logger = logger
     return logger
