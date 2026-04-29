@@ -14,10 +14,87 @@ from datetime import datetime, timedelta
 from utils.logger import get_logger
 from services.exceptions import ApiException, NetworkException, PasswordChangeRequiredException
 
-# Suppress SSL warnings for self-signed certificates in development
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 logger = get_logger(__name__)
+
+# Keys whose values must never reach log files. Match is case-insensitive on
+# the dict key only; values are not inspected, so a token stored under an
+# unexpected key (e.g. ``Authorization`` header copied into a body field)
+# may still leak — pair this with header-level redaction at the request site.
+_SENSITIVE_LOG_KEYS = {
+    "password", "currentpassword", "newpassword", "confirmpassword",
+    "token", "accesstoken", "refreshtoken", "id_token", "idtoken",
+    "authorization", "apikey", "api_key", "secret", "clientsecret",
+}
+
+
+def _redact_for_log(obj):
+    """Return a copy of obj with sensitive keys masked, safe for logging.
+
+    Walks dicts and lists recursively. The original object is untouched so
+    callers can still pass it to the network layer. Values that are not the
+    expected str/int/float/bool/None are stringified to avoid leaking
+    repr() output of custom objects (which sometimes include credentials).
+    """
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if isinstance(k, str) and k.lower() in _SENSITIVE_LOG_KEYS:
+                out[k] = "***"
+            else:
+                out[k] = _redact_for_log(v)
+        return out
+    if isinstance(obj, list):
+        return [_redact_for_log(x) for x in obj]
+    if isinstance(obj, tuple):
+        return tuple(_redact_for_log(x) for x in obj)
+    return obj
+
+
+# Service identifier used as the keyring "service name". All credentials
+# scoped to this app live under this string so we can clear them at logout.
+_KEYRING_SERVICE = "TRRCMS"
+_KEYRING_REFRESH_KEY = "refresh_token"
+
+
+def _save_refresh_token(token: str) -> bool:
+    """Persist refresh_token in the OS credential store; never to plain disk.
+
+    Returns True on success. On platforms without a keyring backend (some
+    headless Linux setups, locked-down enterprise images) this returns False
+    and the caller falls back to memory-only storage — the user simply has
+    to log in again next launch.
+    """
+    if not token:
+        return False
+    try:
+        import keyring
+        keyring.set_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY, token)
+        return True
+    except Exception as e:
+        logger.warning(f"Could not persist refresh token to keyring: {e}")
+        return False
+
+
+def _load_refresh_token() -> Optional[str]:
+    """Load the previously saved refresh_token, or None if not stored."""
+    try:
+        import keyring
+        return keyring.get_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY)
+    except Exception as e:
+        logger.debug(f"No keyring entry available: {e}")
+        return None
+
+
+def _clear_refresh_token() -> None:
+    """Remove the saved refresh_token; called at logout to end the device session."""
+    try:
+        import keyring
+        try:
+            keyring.delete_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 @dataclass
@@ -52,7 +129,11 @@ class TRRCMSApiClient:
         self.config = config
         self.base_url = config.base_url.rstrip('/')
         self.access_token: Optional[str] = None
-        self.refresh_token: Optional[str] = None
+        # access_token stays in memory only (short-lived). refresh_token is
+        # restored from the OS keyring so the user does not have to re-login
+        # every time the desktop app starts; access_token will be re-issued
+        # on first request via the existing _ensure_valid_token path.
+        self.refresh_token: Optional[str] = _load_refresh_token()
         self.token_expires_at: Optional[datetime] = None
         self._login_failures: int = 0
         self._login_cooldown_until: Optional[datetime] = None
@@ -62,7 +143,22 @@ class TRRCMSApiClient:
         self._last_network_error_time: Optional[datetime] = None
         self._session_expired_flag = False
         self._neighborhoods_cache = None
-        logger.info(f"API client initialized for {self.base_url}")
+        # Suppress urllib3 InsecureRequestWarning only when we are intentionally
+        # skipping verification for a local dev backend; never suppress globally.
+        if not self._verify_ssl():
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        logger.info(
+            f"API client initialized for {self.base_url} "
+            f"(verify_ssl={self._verify_ssl()}, restored_session={bool(self.refresh_token)})"
+        )
+
+    def _verify_ssl(self) -> bool:
+        """Return verify flag for the configured base URL.
+
+        Localhost may opt out via VERIFY_SSL=false; remote hosts always verify.
+        """
+        from app.config import should_verify_ssl
+        return should_verify_ssl(self.base_url)
 
     def set_session_expired_callback(self, callback):
         """Set callback to invoke when the session expires (token refresh failed or 401)."""
@@ -94,13 +190,15 @@ class TRRCMSApiClient:
                 json={"username": username, "password": password},
                 headers={"Accept-Language": self._get_accept_language()},
                 timeout=self.config.timeout,
-                verify=False  # Allow self-signed certificates in development
+                verify=self._verify_ssl()
             )
             response.raise_for_status()
 
             data = response.json()
             self.access_token = data["accessToken"]
             self.refresh_token = data.get("refreshToken")
+            if self.refresh_token:
+                _save_refresh_token(self.refresh_token)
 
             # Calculate token expiration
             expires_in = data.get("expiresIn", 3600)  # default 1 hour
@@ -135,13 +233,18 @@ class TRRCMSApiClient:
                 json={"refreshToken": self.refresh_token},
                 headers={"Accept-Language": self._get_accept_language()},
                 timeout=self.config.timeout,
-                verify=False  # Allow self-signed certificates in development
+                verify=self._verify_ssl()
             )
             response.raise_for_status()
 
             data = response.json()
             self.access_token = data["accessToken"]
-            self.refresh_token = data.get("refreshToken", self.refresh_token)
+            new_refresh = data.get("refreshToken", self.refresh_token)
+            # Persist only when the server actually rotated the token, to avoid
+            # touching the keyring on every refresh cycle.
+            if new_refresh and new_refresh != self.refresh_token:
+                _save_refresh_token(new_refresh)
+            self.refresh_token = new_refresh
 
             expires_in = data.get("expiresIn", 3600)
             self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
@@ -160,6 +263,9 @@ class TRRCMSApiClient:
         self.access_token = None
         self.refresh_token = None
         self.token_expires_at = None
+        # Drop the persisted refresh_token; otherwise the next launch would
+        # silently revive a logged-out session.
+        _clear_refresh_token()
         return result or {}
 
     def change_password(self, current_password: str, new_password: str, user_id: str = None) -> Dict[str, Any]:
@@ -237,12 +343,12 @@ class TRRCMSApiClient:
 
         logger.info(f"[API REQ] {method} {endpoint}")
         if params:
-            logger.info(f"[API REQ] Params: {params}")
+            logger.info(f"[API REQ] Params: {_redact_for_log(params)}")
         if json_data:
             try:
-                logger.info(f"[API REQ] Body: {_json.dumps(json_data, indent=2, ensure_ascii=False, default=str)}")
+                logger.info(f"[API REQ] Body: {_json.dumps(_redact_for_log(json_data), indent=2, ensure_ascii=False, default=str)}")
             except Exception:
-                logger.info(f"[API REQ] Body: {json_data}")
+                logger.info(f"[API REQ] Body: {_redact_for_log(json_data)}")
 
         effective_timeout = timeout_override if timeout_override > 0 else self.config.timeout
         max_retries = 0 if disable_retry else self._MAX_RETRIES
@@ -263,7 +369,7 @@ class TRRCMSApiClient:
                     params=params,
                     headers=headers,
                     timeout=effective_timeout,
-                    verify=False
+                    verify=self._verify_ssl()
                 )
                 response.raise_for_status()
 
@@ -274,13 +380,13 @@ class TRRCMSApiClient:
                 logger.info(f"[API RES] {response.status_code} {endpoint}")
                 if result:
                     try:
-                        res_str = _json.dumps(result, indent=2, ensure_ascii=False, default=str)
+                        res_str = _json.dumps(_redact_for_log(result), indent=2, ensure_ascii=False, default=str)
                         if len(res_str) > 5000:
                             logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
                         else:
                             logger.info(f"[API RES] Body: {res_str}")
                     except Exception:
-                        logger.info(f"[API RES] Body: {result}")
+                        logger.info(f"[API RES] Body: {_redact_for_log(result)}")
 
                 return result
 
@@ -1593,7 +1699,7 @@ class TRRCMSApiClient:
                     files=files,
                     headers=headers,
                     timeout=self.config.timeout,
-                    verify=False
+                    verify=self._verify_ssl()
                 )
 
             response.raise_for_status()
@@ -1693,7 +1799,7 @@ class TRRCMSApiClient:
                     files=files,
                     headers=headers,
                     timeout=self.config.timeout,
-                    verify=False
+                    verify=self._verify_ssl()
                 )
 
             response.raise_for_status()
@@ -1791,10 +1897,10 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = requests.put(url, files=files, headers=headers,
-                                            timeout=self.config.timeout, verify=False)
+                                            timeout=self.config.timeout, verify=self._verify_ssl())
             else:
                 response = requests.put(url, files=form_fields, headers=headers,
-                                        timeout=self.config.timeout, verify=False)
+                                        timeout=self.config.timeout, verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -1857,7 +1963,7 @@ class TRRCMSApiClient:
         try:
             with requests.get(
                 url, headers=headers, stream=True,
-                timeout=self.config.timeout, verify=False,
+                timeout=self.config.timeout, verify=self._verify_ssl(),
             ) as resp:
                 if resp.status_code >= 400:
                     body_preview = ""
@@ -1935,10 +2041,10 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = requests.put(url, files=files, headers=headers,
-                                            timeout=self.config.timeout, verify=False)
+                                            timeout=self.config.timeout, verify=self._verify_ssl())
             else:
                 response = requests.put(url, files=form_fields, headers=headers,
-                                        timeout=self.config.timeout, verify=False)
+                                        timeout=self.config.timeout, verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -2037,7 +2143,7 @@ class TRRCMSApiClient:
         for url in urls:
             try:
                 logger.info(f"[API REQ] GET {url.replace(self.base_url, '')}")
-                response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=False)
+                response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=self._verify_ssl())
                 response.raise_for_status()
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 with open(save_path, 'wb') as f:
@@ -2971,7 +3077,7 @@ class TRRCMSApiClient:
                 files = {"file": (file_name, f, mime_type)}
                 response = requests.post(
                     url, files=files, headers=headers,
-                    timeout=self.config.timeout, verify=False
+                    timeout=self.config.timeout, verify=self._verify_ssl()
                 )
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -2979,13 +3085,20 @@ class TRRCMSApiClient:
             return result
         except requests.exceptions.HTTPError as e:
             response_data = None
-            try:
-                response_data = e.response.json()
-            except Exception:
-                pass
+            # NOTE: ``requests.Response.__bool__`` is False for any 4xx/5xx
+            # status, so ``if e.response`` collapses a real error response to
+            # the ``else 0`` branch and we lose the HTTP status (the very
+            # thing the caller switches on). Always compare with ``is not
+            # None`` here.
+            resp = e.response
+            if resp is not None:
+                try:
+                    response_data = resp.json()
+                except Exception:
+                    pass
             upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
-                status_code=e.response.status_code if e.response else 0,
+                status_code=resp.status_code if resp is not None else 0,
                 message=upload_api_msg,
                 response_data=response_data
             )

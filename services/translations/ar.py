@@ -2932,6 +2932,7 @@ AR_TRANSLATIONS = {
 
     # Import-specific structured errors
     "import.error.missing_package_file": "لا يمكن معالجة هذه الحزمة لأن ملف الحزمة الأصلي غير موجود على الخادم. يرجى التأكد من أن الحزمة تم رفعها بشكل صحيح من جهاز جامع البيانات أو التواصل مع مسؤول النظام.",
+    "import.error.duplicate_package": "هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى. تحقّق من قائمة الحزم لمتابعتها.",
     "import.error.stage_failed": "تعذر بدء معالجة الحزمة.",
     "import.error.detect_failed": "تعذر كشف التكرارات لهذه الحزمة.",
     "import.error.approve_failed": "تعذر اعتماد الحزمة للإدخال.",

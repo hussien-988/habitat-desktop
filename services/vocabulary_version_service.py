@@ -902,7 +902,12 @@ class VocabularyVersionService:
         """
         usage = []
 
-        # Define mappings of vocabularies to tables/columns
+        # The (table, column) pairs are hardcoded literals in this dict and
+        # never derived from external input. ``vocabulary_name`` is only used
+        # as a dict key, so an attacker cannot smuggle SQL through it. The
+        # whitelist below is enforced anyway as defense in depth: if someone
+        # ever adds a dynamically-built entry, the assertion fails loudly
+        # rather than silently producing an injection.
         usage_mappings = {
             "building_type": [("buildings", "building_type")],
             "ownership_type": [("ownership_records", "ownership_type")],
@@ -912,10 +917,16 @@ class VocabularyVersionService:
             "building_condition": [("buildings", "condition")],
             "verification_status": [("documents", "verification_status")]
         }
+        _allowed_pairs = {
+            (t, c) for entries in usage_mappings.values() for (t, c) in entries
+        }
 
         mappings = usage_mappings.get(vocabulary_name, [])
 
         for table, column in mappings:
+            if (table, column) not in _allowed_pairs:
+                logger.warning(f"Refusing untrusted (table,column): {table!r},{column!r}")
+                continue
             try:
                 result = self._adapter.fetch_one(f"""
                     SELECT COUNT(*) as count FROM {table} WHERE {column} = ?

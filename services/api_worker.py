@@ -3,6 +3,7 @@
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from utils.logger import get_logger
+from services.worker_registry import register as _register_worker
 
 logger = get_logger(__name__)
 
@@ -17,6 +18,9 @@ class ApiWorker(QThread):
         self._func = func
         self._args = args
         self._kwargs = kwargs
+        # Auto-register so the registry can stop us at app shutdown without
+        # every call site needing to opt in.
+        _register_worker(self)
 
     def run(self):
         from services.exceptions import (

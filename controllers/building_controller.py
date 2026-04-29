@@ -895,6 +895,9 @@ class BuildingController(BaseController):
 
     def _unit_has_data(self, unit_id: str) -> bool:
         """Check if a unit has associated claims, relations, households, or surveys."""
+        # ``table`` only ever takes values from this in-source tuple — never
+        # user input — so the f-string is safe. ``unit_id`` still binds via
+        # the ? parameter.
         for table in ("claims", "person_unit_relations", "households", "surveys"):
             result = self.db.fetch_one(
                 f"SELECT COUNT(*) as c FROM {table} WHERE unit_id = ?", (unit_id,))
