@@ -408,6 +408,12 @@ def main():
     # Initialize logging
     logger = setup_logger()
 
+    # Install the global crash handler immediately after the logger is ready,
+    # so any exception thrown during the rest of bootstrap (DB init, font
+    # loading, etc.) is captured to a crash file instead of vanishing.
+    from utils.crash_handler import install as _install_crash_handler
+    _install_crash_handler()
+
     try:
         # Create Qt application
         app = QApplication(sys.argv)

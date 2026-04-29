@@ -2915,6 +2915,11 @@ AR_TRANSLATIONS = {
     # neutral so no caller accidentally mislabels Failed/Cancelled).
     "page.import_packages.action.follow_processing": "متابعة المعالجة",
 
+    # Global crash handler dialog (utils/crash_handler.py)
+    "error.crash.title": "حدث خطأ غير متوقّع",
+    "error.crash.body": "حدث خطأ غير متوقّع داخل التطبيق. تم حفظ التفاصيل الكاملة في مجلد سجلات التطبيق. يمكنك نسخ التفاصيل التقنية أدناه ومشاركتها مع الدعم الفني.",
+    "error.crash.copy": "نسخ التفاصيل",
+
     # Structured API error messages (surfaced by services.api_error.humanize)
     "api.error.generic": "تعذر تنفيذ العملية. يرجى المحاولة لاحقًا.",
     "api.error.server": "حدث خطأ في الخادم أثناء تنفيذ العملية. يرجى المحاولة لاحقًا أو التواصل مع مسؤول النظام.",

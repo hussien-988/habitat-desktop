@@ -2912,6 +2912,11 @@ EN_TRANSLATIONS = {
     # Backwards-compat alias only.
     "page.import_packages.action.follow_processing": "Follow processing",
 
+    # Global crash handler dialog (utils/crash_handler.py)
+    "error.crash.title": "Unexpected error",
+    "error.crash.body": "An unexpected error occurred inside the application. The full report has been saved to the application logs folder. You can copy the technical details below and share them with support.",
+    "error.crash.copy": "Copy details",
+
     # Structured API error messages (surfaced by services.exceptions.humanize)
     "api.error.generic": "Something went wrong. Please try again.",
     "api.error.server": "The server hit an error while processing this operation. Please try again later or contact the system administrator.",
