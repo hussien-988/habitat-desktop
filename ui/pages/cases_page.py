@@ -433,6 +433,15 @@ class _EmptyStateAnimated(QWidget):
     def set_description(self, text: str):
         self._inner.set_description(text)
 
+    def set_action(self, text: str, callback) -> None:
+        self._inner.set_action(text, callback)
+
+    def clear_action(self) -> None:
+        self._inner.clear_action()
+
+    def configure(self, icon_text=None, title=None, description=None) -> None:
+        self._inner.configure(icon_text=icon_text, title=title, description=description)
+
 
 # ---------------------------------------------------------------------------
 #  CasesPage — Main page widget
@@ -830,7 +839,7 @@ class CasesPage(QWidget):
                 total_count = len(surveys)
         except Exception as e:
             logger.warning(f"Paginated surveys fetch failed: {e}")
-            surveys = []
+            raise
 
         return {
             "surveys": surveys,
@@ -867,10 +876,16 @@ class CasesPage(QWidget):
     def _on_surveys_load_error(self, error_msg):
         self._loading = False
         self._spinner.hide_loading()
-        Toast.show_toast(self, tr("page.cases.load_error"), Toast.ERROR)
         logger.warning(f"Error loading surveys: {error_msg}")
         self._all_data = []
-        self._populate_cards(self._all_data)
+        self._empty_state.configure(
+            icon_text="⚠",
+            title=tr("error.connection_failed_title"),
+            description=error_msg or tr("error.connection_failed_description"),
+        )
+        self._empty_state.set_action(tr("button.retry"), self._load_surveys)
+        self._stack.setCurrentIndex(1)
+        self._update_pagination()
 
     def _map_survey(self, s: Dict) -> Dict:
         building_id = s.get("buildingId", "")
@@ -913,6 +928,7 @@ class CasesPage(QWidget):
             self._clear_cards()
 
             if not data:
+                self._empty_state.clear_action()
                 self._stack.setCurrentIndex(1)
                 self._update_empty_text()
                 self._update_pagination()

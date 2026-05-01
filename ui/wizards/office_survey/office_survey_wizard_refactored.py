@@ -7,7 +7,7 @@ Multi-step wizard for conducting office-based property surveys.
 from typing import List
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QSpacerItem, QSizePolicy
-from PyQt5.QtCore import pyqtSignal, Qt, QSize
+from PyQt5.QtCore import pyqtSignal, Qt, QSize, QTimer
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
 from services.error_mapper import map_exception
@@ -1021,7 +1021,11 @@ class OfficeSurveyWizard(BaseWizard):
             # Validate current step before saving
             current_step = self.navigator.get_current_step()
             if current_step:
-                validation_result = current_step.validate()
+                self.btn_next.setEnabled(False)
+                try:
+                    validation_result = current_step.validate()
+                finally:
+                    QTimer.singleShot(150, lambda: self.btn_next.setEnabled(True))
                 if not validation_result.is_valid:
                     self._on_validation_failed(validation_result)
                     return

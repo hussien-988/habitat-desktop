@@ -7,6 +7,7 @@
 """
 
 import requests
+from requests.adapters import HTTPAdapter
 import urllib3
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
@@ -143,6 +144,14 @@ class TRRCMSApiClient:
         self._last_network_error_time: Optional[datetime] = None
         self._session_expired_flag = False
         self._neighborhoods_cache = None
+        # Single Session for all requests — enables TCP connection reuse on the
+        # LAN backend (keep-alive) and provides better RemoteDisconnected recovery
+        # via urllib3's connection pool. Auth headers are injected per-request in
+        # _headers(), so sharing the Session across QThreads is safe.
+        self._session = requests.Session()
+        _adapter = HTTPAdapter(max_retries=0)  # retry logic lives in _request()
+        self._session.mount("http://", _adapter)
+        self._session.mount("https://", _adapter)
         # Suppress urllib3 InsecureRequestWarning only when we are intentionally
         # skipping verification for a local dev backend; never suppress globally.
         if not self._verify_ssl():
@@ -185,7 +194,7 @@ class TRRCMSApiClient:
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """Authenticate and obtain access token."""
         try:
-            response = requests.post(
+            response = self._session.post(
                 f"{self.base_url}/v1/Auth/login",
                 json={"username": username, "password": password},
                 headers={"Accept-Language": self._get_accept_language()},
@@ -228,7 +237,7 @@ class TRRCMSApiClient:
             return False
 
         try:
-            response = requests.post(
+            response = self._session.post(
                 f"{self.base_url}/v1/Auth/refresh",
                 json={"refreshToken": self.refresh_token},
                 headers={"Accept-Language": self._get_accept_language()},
@@ -252,9 +261,15 @@ class TRRCMSApiClient:
             logger.info("Token refreshed")
             return True
 
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Token refresh rejected by server: {e}")
+            return False
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.warning(f"Token refresh failed (network): {e}")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"Token refresh failed: {e}")
-            return False
+            return None
 
     def logout(self) -> Dict[str, Any]:
         """POST /v1/Auth/logout — invalidate refresh token server-side."""
@@ -299,8 +314,12 @@ class TRRCMSApiClient:
             time_until_expiry = (self.token_expires_at - datetime.now()).total_seconds()
             if time_until_expiry < 300:
                 logger.info("Token expiring soon, refreshing...")
-                if not self.refresh_access_token():
-                    logger.warning("Token refresh failed — session expired")
+                refresh_result = self.refresh_access_token()
+                if refresh_result is None:
+                    # Network error — keep existing token and continue
+                    logger.warning("Proactive token refresh failed (network) — keeping existing token")
+                elif refresh_result is False:
+                    logger.warning("Token refresh rejected — session expired")
                     self.access_token = None
                     self._session_expired_flag = True
                     if self._on_session_expired:
@@ -323,7 +342,7 @@ class TRRCMSApiClient:
             "Accept-Language": self._get_accept_language(),
         }
 
-    _MAX_RETRIES = 2
+    _MAX_RETRIES = 1
 
     def _request(
         self,
@@ -362,7 +381,7 @@ class TRRCMSApiClient:
                     headers.pop("Accept-Language", None)
                 if headers_override:
                     headers.update(headers_override)
-                response = requests.request(
+                response = self._session.request(
                     method=method,
                     url=url,
                     json=json_data,
@@ -413,13 +432,20 @@ class TRRCMSApiClient:
                         )
                     # Only handle if the token hasn't changed (new login) since our request
                     if self.access_token and self.access_token == token_used:
-                        if self.refresh_token and self.refresh_access_token():
-                            continue  # Retry with refreshed token
-                        logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
-                        self.access_token = None
-                        self._session_expired_flag = True
-                        if self._on_session_expired:
-                            self._on_session_expired()
+                        if self.refresh_token:
+                            refresh_result = self.refresh_access_token()
+                            if refresh_result:
+                                continue  # Retry with refreshed token
+                            if refresh_result is None:
+                                # Network error during refresh — keep token, surface as network error
+                                logger.warning(f"[API ERR] 401 {method} {endpoint} — refresh failed (network), keeping token")
+                            else:
+                                # Auth rejection — clear session
+                                logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
+                                self.access_token = None
+                                self._session_expired_flag = True
+                                if self._on_session_expired:
+                                    self._on_session_expired()
                     elif self.access_token != token_used:
                         logger.info(f"401 on {endpoint} ignored — token changed by new session")
                 if status_code == 403:
@@ -1694,7 +1720,7 @@ class TRRCMSApiClient:
             with open(file_path, "rb") as f:
                 files = {"File": (file_name, f, mime_type)}
                 files.update(form_fields)
-                response = requests.post(
+                response = self._session.post(
                     url,
                     files=files,
                     headers=headers,
@@ -1794,7 +1820,7 @@ class TRRCMSApiClient:
             with open(file_path, "rb") as f:
                 files = {"File": (file_name, f, mime_type)}
                 files.update(form_fields)
-                response = requests.post(
+                response = self._session.post(
                     url,
                     files=files,
                     headers=headers,
@@ -1896,11 +1922,11 @@ class TRRCMSApiClient:
                 with open(file_path, "rb") as f:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
-                    response = requests.put(url, files=files, headers=headers,
-                                            timeout=self.config.timeout, verify=self._verify_ssl())
+                    response = self._session.put(url, files=files, headers=headers,
+                                                timeout=self.config.timeout, verify=self._verify_ssl())
             else:
-                response = requests.put(url, files=form_fields, headers=headers,
-                                        timeout=self.config.timeout, verify=self._verify_ssl())
+                response = self._session.put(url, files=form_fields, headers=headers,
+                                             timeout=self.config.timeout, verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -1961,7 +1987,7 @@ class TRRCMSApiClient:
         }
         logger.warning(f"[ID-DOCS DOWNLOAD] GET {url}")
         try:
-            with requests.get(
+            with self._session.get(
                 url, headers=headers, stream=True,
                 timeout=self.config.timeout, verify=self._verify_ssl(),
             ) as resp:
@@ -2040,11 +2066,11 @@ class TRRCMSApiClient:
                 with open(file_path, "rb") as f:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
-                    response = requests.put(url, files=files, headers=headers,
-                                            timeout=self.config.timeout, verify=self._verify_ssl())
+                    response = self._session.put(url, files=files, headers=headers,
+                                                timeout=self.config.timeout, verify=self._verify_ssl())
             else:
-                response = requests.put(url, files=form_fields, headers=headers,
-                                        timeout=self.config.timeout, verify=self._verify_ssl())
+                response = self._session.put(url, files=form_fields, headers=headers,
+                                             timeout=self.config.timeout, verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -2143,7 +2169,7 @@ class TRRCMSApiClient:
         for url in urls:
             try:
                 logger.info(f"[API REQ] GET {url.replace(self.base_url, '')}")
-                response = requests.get(url, headers=headers, timeout=self.config.timeout, verify=self._verify_ssl())
+                response = self._session.get(url, headers=headers, timeout=self.config.timeout, verify=self._verify_ssl())
                 response.raise_for_status()
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 with open(save_path, 'wb') as f:
@@ -3075,7 +3101,7 @@ class TRRCMSApiClient:
         try:
             with open(file_path, "rb") as f:
                 files = {"file": (file_name, f, mime_type)}
-                response = requests.post(
+                response = self._session.post(
                     url, files=files, headers=headers,
                     timeout=self.config.timeout, verify=self._verify_ssl()
                 )

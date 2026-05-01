@@ -23,6 +23,10 @@ EN_TRANSLATIONS = {
     "button.close": "Close",
     "button.retry": "Retry",
 
+    # Network / Connection Errors
+    "error.connection_failed_title": "Failed to Load Data",
+    "error.connection_failed_description": "Could not connect to the service. Check your network connection.",
+
     # Error Messages - Building
     "error.building.create_failed": "Failed to create building. Please check the entered data.",
     "error.building.update_failed": "Failed to update building. Please try again.",
@@ -66,6 +70,7 @@ EN_TRANSLATIONS = {
     "error.api.conflict": "Conflict: This item already exists.",
     "error.api.server": "Server error. Please contact support.",
     "error.api.unknown": "An unexpected error occurred. Please try again.",
+    "error.server.dropped": "Server dropped the connection, changes were not saved.",
 
     # Error Messages - General
     "error.unexpected": "An unexpected error occurred.",

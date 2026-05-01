@@ -353,6 +353,9 @@ class LoadingSpinnerOverlay(QWidget):
         self._spinner.stop()
         self._is_loading = False
         self.hide()
+        parent = self.parent()
+        if parent and isinstance(parent, QWidget):
+            parent.update()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

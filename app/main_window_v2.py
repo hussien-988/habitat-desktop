@@ -553,12 +553,12 @@ class MainWindow(QMainWindow):
             self._on_edit_claim_requested
         )
 
-        # Claim Edit - back to case details / save completed
+        # Claim Edit - back to claim details on save (success or failure) or cancel
         self.pages[Pages.CLAIM_EDIT].back_requested.connect(
-            lambda: self.navigate_to(Pages.SURVEYS)
+            lambda: self.navigate_to(Pages.CLAIM_DETAILS)
         )
         self.pages[Pages.CLAIM_EDIT].save_completed.connect(
-            lambda: self.navigate_to(Pages.SURVEYS)
+            lambda: self.navigate_to(Pages.CLAIM_DETAILS)
         )
 
         # Duplicates page - view comparison
@@ -819,7 +819,7 @@ class MainWindow(QMainWindow):
         """Step 5: Re-auth done — continue to main app."""
         self._hide_login_loading()
 
-        new_user, error = result if isinstance(result, tuple) else (result, None)
+        new_user, error = (result[0], result[1]) if isinstance(result, tuple) else (result, None)
         if new_user and not isinstance(new_user, str):
             self._complete_login(new_user)
         else:
@@ -2131,6 +2131,12 @@ class MainWindow(QMainWindow):
                 return
 
         logger.info("Application closing")
+        self._stop_session_timer()
+        self._stop_token_refresh_timer()
+        try:
+            self.db.close()
+        except Exception:
+            pass
         event.accept()
     
     def showEvent(self, event):

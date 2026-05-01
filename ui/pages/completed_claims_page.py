@@ -736,10 +736,11 @@ class CompletedClaimsPage(QWidget):
     def _on_claims_error(self, error_msg):
         self._loading = False
         self._spinner.hide_loading()
-        Toast.show_toast(self, tr("page.claims.load_error"), Toast.ERROR)
         logger.warning(f"Error loading claims: {error_msg}")
         self.claims_data = []
-        self._populate_cards()
+        from ui.utils.page_helpers import show_error_state
+        show_error_state(self._empty_state, self._stack, error_msg, self._load_claims)
+        self._update_pagination()
 
     def _map_summary(self, s: Dict) -> Dict:
         try:
@@ -794,6 +795,7 @@ class CompletedClaimsPage(QWidget):
             self._clear_cards()
 
             if not self.claims_data:
+                self._empty_state.clear_action()
                 self._stack.setCurrentIndex(1)
                 self._update_empty_text()
                 self._update_pagination()

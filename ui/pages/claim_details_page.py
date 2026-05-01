@@ -1724,28 +1724,32 @@ class ClaimDetailsPage(QWidget):
         self._header.edit_clicked.connect(self._on_edit_or_save_clicked)
 
         if not result.success:
-            Toast.show_toast(self, tr("page.claim_details.save_failed", error=result.message), Toast.ERROR)
-        else:
-            Toast.show_toast(self, tr("page.claim_details.save_success"), Toast.SUCCESS)
+            Toast.show_toast(self, result.message, Toast.ERROR)
+            self._exit_edit_mode(reload=False)
+            return
 
+        Toast.show_toast(self, tr("page.claim_details.save_success"), Toast.SUCCESS)
+        self._exit_edit_mode(reload=True)
+
+    def _exit_edit_mode(self, reload: bool = True) -> None:
         self._is_editing = False
         self._pending_uploads = []
         self._pending_deletes = []
         self._pending_links = []
         self._claim_type_combo = None
         self._ownership_share_input = None
-
         self._animate_relation_card_edit(False)
         self._header.set_editing(False)
         self._header.set_edit_visible(True)
-        self._reload_claim_data()
+        if reload:
+            self._reload_claim_data()
 
-    def _on_save_error(self, error_msg):
+    def _on_save_error(self, error_msg: str) -> None:
         self._spinner.hide_loading()
-        self._header.set_edit_visible(True)
         self._header.edit_clicked.connect(self._on_edit_or_save_clicked)
         logger.error(f"Save error: {error_msg}")
-        Toast.show_toast(self, tr("page.claim_details.save_failed", error=error_msg), Toast.ERROR)
+        Toast.show_toast(self, error_msg, Toast.ERROR)
+        self._exit_edit_mode(reload=False)
 
     def _reload_claim_data(self):
         from controllers.claim_controller import ClaimController

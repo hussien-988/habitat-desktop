@@ -438,6 +438,15 @@ class _EmptyStateCases(QWidget):
     def set_description(self, text: str):
         self._inner.set_description(text)
 
+    def set_action(self, text: str, callback) -> None:
+        self._inner.set_action(text, callback)
+
+    def clear_action(self) -> None:
+        self._inner.clear_action()
+
+    def configure(self, icon_text=None, title=None, description=None) -> None:
+        self._inner.configure(icon_text=icon_text, title=title, description=description)
+
 
 # ---------------------------------------------------------------------------
 #  CaseManagementPage -- Main page widget
@@ -832,10 +841,11 @@ class CaseManagementPage(QWidget):
     def _on_cases_load_error(self, error_msg):
         self._loading = False
         self._spinner.hide_loading()
-        Toast.show_toast(self, tr("page.case_mgmt.load_error"), Toast.ERROR)
         logger.warning(f"Error loading cases: {error_msg}")
         self._cases = []
-        self._populate_cards(self._cases)
+        from ui.utils.page_helpers import show_error_state
+        show_error_state(self._empty_state, self._stack, error_msg, self._load_cases)
+        self._update_pagination()
 
     # -- Card population --
 
@@ -844,6 +854,7 @@ class CaseManagementPage(QWidget):
             self._clear_cards()
 
             if not cases:
+                self._empty_state.clear_action()
                 self._stack.setCurrentIndex(1)
                 self._update_empty_text()
                 self._update_pagination()

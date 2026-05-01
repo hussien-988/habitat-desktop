@@ -370,6 +370,9 @@ class BuildingDetailsPage(QWidget):
     def _on_refresh_details_finished(self, result):
         """Callback: update UI with full building details from API."""
         self._spinner.hide_loading()
+        if not result or not result.get("building"):
+            logger.warning("Refresh details returned empty result")
+            return
         building = result["building"]
         units_data = result["units_data"]
 

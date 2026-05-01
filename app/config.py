@@ -69,7 +69,6 @@ except ImportError:
 # API Settings
 _API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api")
 _API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
-_API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
 _API_USERNAME = os.getenv("API_USERNAME", "")
 _API_PASSWORD = os.getenv("API_PASSWORD", "")
 
@@ -129,7 +128,6 @@ class Config:
     API_BASE_URL: str = _API_BASE_URL  # From .env or default
     API_VERSION: str = "v1"
     API_TIMEOUT: int = _API_TIMEOUT  # From .env or default (30)
-    API_MAX_RETRIES: int = _API_MAX_RETRIES  # From .env or default (3)
     API_USERNAME: str = _API_USERNAME  # From .env or default (admin)
     API_PASSWORD: str = _API_PASSWORD  # From .env or default (Admin@123)
     VERIFY_SSL: bool = _VERIFY_SSL  # Honored only for localhost; remote always verified
@@ -479,10 +477,12 @@ def load_local_settings() -> dict:
 
 
 def save_local_settings(settings: dict):
-    """Save local device settings to data/settings.json."""
+    """Save local device settings to data/settings.json (atomic write)."""
     _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+    tmp = _SETTINGS_FILE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _SETTINGS_FILE)
 
 
 def get_tile_server_url() -> str:

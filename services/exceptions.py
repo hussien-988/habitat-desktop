@@ -294,10 +294,20 @@ class NetworkException(Exception):
         self.original_error = original_error
         self.context = context or CTX_NETWORK
 
+    @property
+    def is_retriable(self) -> bool:
+        msg = str(self.original_error or self).lower()
+        permanent_indicators = (
+            "name or service not known",
+            "no route to host",
+            "connection refused",
+        )
+        return not any(p in msg for p in permanent_indicators)
+
     def humanize(self, context: Optional[str] = None) -> str:
         """Route network errors through the same humanization path."""
-        from services.translation_manager import tr
-        return tr("api.error.network")
+        from services.error_mapper import map_network_error
+        return map_network_error(self)
 
     def log_summary(self) -> str:
         return f"network_error context={self.context} detail={self.message!r}"

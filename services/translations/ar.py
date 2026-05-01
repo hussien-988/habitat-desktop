@@ -23,6 +23,10 @@ AR_TRANSLATIONS = {
     "button.close": "إغلاق",
     "button.retry": "إعادة المحاولة",
 
+    # Network / Connection Errors
+    "error.connection_failed_title": "تعذّر تحميل البيانات",
+    "error.connection_failed_description": "لا يمكن الاتصال بالخدمة. تحقق من الاتصال بالشبكة.",
+
     # Error Messages - Building
     "error.building.create_failed": "فشل في إنشاء المبنى. يرجى التحقق من البيانات المدخلة.",
     "error.building.update_failed": "فشل في تحديث المبنى. يرجى المحاولة مرة أخرى.",
@@ -66,6 +70,7 @@ AR_TRANSLATIONS = {
     "error.api.conflict": "تعارض: هذا العنصر موجود مسبقاً.",
     "error.api.server": "خطأ في الخادم. يرجى الاتصال بالدعم الفني.",
     "error.api.unknown": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+    "error.server.dropped": "قطع الخادم الاتصال، لم يتم حفظ التعديلات.",
 
     # Error Messages - General
     "error.unexpected": "حدث خطأ غير متوقع.",

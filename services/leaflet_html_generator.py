@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 from typing import Dict, Optional
 
-from folium import TileLayer
 from utils.logger import get_logger
 from ui.constants.map_constants import MapConstants
 

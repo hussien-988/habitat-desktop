@@ -2447,11 +2447,17 @@ class BuildingsListPage(QWidget):
     def _on_buildings_load_error(self, error_msg):
         """Handle background loading error."""
         self._spinner.hide_loading()
-        Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
         logger.error(f"Background load failed: {error_msg}")
         self._all_buildings = []
         self._stat_total.set_count(0)
-        self._populate_table_from_buildings()
+        self._empty_state.configure(
+            icon_text="⚠",
+            title=tr("error.connection_failed_title"),
+            description=error_msg or tr("error.connection_failed_description"),
+        )
+        self._empty_state.set_action(tr("button.retry"), self._load_buildings)
+        self._stack.setCurrentIndex(1)
+        self._update_pagination_info(0, 0, 0)
 
     def _populate_table_from_buildings(self):
         """Apply filters, paginate, and create building cards."""
@@ -2469,6 +2475,7 @@ class BuildingsListPage(QWidget):
         self._clear_cards()
 
         if not page_buildings:
+            self._empty_state.clear_action()
             self._stack.setCurrentIndex(1)  # Show empty state
             self._update_pagination_info(0, 0, total)
             return
