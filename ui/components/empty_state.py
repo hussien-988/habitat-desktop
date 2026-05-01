@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Empty State Component - shown when there is no data to display."""
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QPainter, QColor
 
@@ -103,6 +103,50 @@ class EmptyState(QWidget):
         description_label.setFont(desc_font)
         description_label.setStyleSheet(StyleManager.label_subtitle())
         layout.addWidget(description_label)
+
+        layout.addSpacing(16)
+        self._action_btn = QPushButton()
+        self._action_btn.setVisible(False)
+        self._action_btn.setCursor(Qt.PointingHandCursor)
+        self._action_btn.setFixedHeight(ScreenScale.h(40))
+        self._action_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563EB;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 24px;
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: #1D4ED8; }
+            QPushButton:pressed { background-color: #1E40AF; }
+        """)
+        layout.addWidget(self._action_btn, 0, Qt.AlignCenter)
+
+    def set_action(self, text: str, callback) -> None:
+        self._action_btn.setText(text)
+        try:
+            self._action_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self._action_btn.clicked.connect(callback)
+        self._action_btn.setVisible(True)
+
+    def clear_action(self) -> None:
+        self._action_btn.setVisible(False)
+        try:
+            self._action_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+
+    def configure(self, icon_text: str = None, title: str = None,
+                  description: str = None) -> None:
+        if icon_text is not None:
+            self.set_icon(icon_text)
+        if title is not None:
+            self.set_title(title)
+        if description is not None:
+            self.set_description(description)
 
     def set_icon(self, icon_text: str):
         """Update the icon text."""

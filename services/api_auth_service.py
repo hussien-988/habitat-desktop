@@ -35,10 +35,19 @@ class ApiAuthService:
     def __init__(self):
         self.timeout = Config.API_TIMEOUT
 
-        # SSL context that skips verification for localhost self-signed certs
-        self._ssl_ctx = ssl.create_default_context()
-        self._ssl_ctx.check_hostname = False
-        self._ssl_ctx.verify_mode = ssl.CERT_NONE
+    def _build_ssl_context(self, url: str) -> ssl.SSLContext:
+        """Build an SSL context appropriate for the given URL.
+
+        Remote hosts always use the system trust store with full verification.
+        Localhost may opt out via VERIFY_SSL=false to permit self-signed certs
+        in a Docker dev stack.
+        """
+        from app.config import should_verify_ssl
+        ctx = ssl.create_default_context()
+        if not should_verify_ssl(url):
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        return ctx
 
     def _resolve_login_url(self) -> str:
         """Resolve the login URL from current config every call.
@@ -63,30 +72,22 @@ class ApiAuthService:
         """Backwards-compat read-only accessor; resolved fresh each access."""
         return self._resolve_login_url()
 
-    def authenticate(self, username: str, password: str) -> Tuple[Optional[User], str]:
+    def authenticate(self, username: str, password: str) -> Tuple[Optional[User], str, bool]:
         """
         Authenticate a user against the REST API.
 
         POST /Auth/login
         Body: {"username": "...", "password": "..."}
 
-        Expected success response (200):
-            {
-                "user_id": "...",
-                "username": "...",
-                "full_name": "...",
-                "full_name_ar": "...",
-                "role": "...",
-                "email": "...",
-                "is_active": true,
-                "token": "..."   // optional JWT token
-            }
-
         Returns:
-            Tuple of (User or None, error_message)
+            Tuple of (User or None, error_message, is_credential_error)
+            is_credential_error=True only for HTTP 401 (wrong username/password).
+            Network errors, server errors, and policy errors return False so the
+            caller can distinguish them from actual bad-password attempts and avoid
+            penalising the lockout counter unfairly.
         """
         if not username or not password:
-            return None, "يرجى إدخال اسم المستخدم وكلمة المرور"
+            return None, "يرجى إدخال اسم المستخدم وكلمة المرور", True
 
         payload = json.dumps({
             "username": username,
@@ -106,7 +107,7 @@ class ApiAuthService:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout, context=self._ssl_ctx) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=self._build_ssl_context(self.login_url)) as resp:
                 body = resp.read().decode("utf-8")
                 data = json.loads(body)
 
@@ -114,7 +115,7 @@ class ApiAuthService:
             logger.debug(f"API login response keys: {list(data.keys())}")
             user = self._build_user(data)
             logger.debug(f"User token set: {bool(user._api_token)}")
-            return user, ""
+            return user, "", False
 
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8") if e.fp else ""
@@ -127,28 +128,25 @@ class ApiAuthService:
             except (json.JSONDecodeError, KeyError):
                 pass
 
-            if api_msg:
-                return None, api_msg
-
             if e.code == 401:
-                return None, "اسم المستخدم أو كلمة المرور غير صحيحة"
+                return None, api_msg or "اسم المستخدم أو كلمة المرور غير صحيحة", True
             if e.code == 403:
-                return None, "الحساب مغلق. يرجى التواصل مع المدير."
+                return None, api_msg or "الحساب مغلق. يرجى التواصل مع المدير.", False
             if e.code == 429:
-                return None, "عدد المحاولات تجاوز الحد المسموح. حاول لاحقًا."
-            return None, f"خطأ من الخدمة ({e.code})"
+                return None, api_msg or "عدد المحاولات تجاوز الحد المسموح. حاول لاحقًا.", False
+            return None, api_msg or f"خطأ من الخدمة ({e.code})", False
 
         except urllib.error.URLError as e:
             logger.error(f"Cannot connect to API at {self.login_url}: {e.reason}")
-            return None, "لا يمكن الاتصال بالخدمة. تحقق من الاتصال بالشبكة."
+            return None, "لا يمكن الاتصال بالخدمة. تحقق من الاتصال بالشبكة.", False
 
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Invalid API response: {e}")
-            return None, "استجابة غير صالحة من الخدمة."
+            return None, "استجابة غير صالحة من الخدمة.", False
 
         except Exception as e:
             logger.error(f"Unexpected error during API login: {e}")
-            return None, "حدث خطأ غير متوقع."
+            return None, "حدث خطأ غير متوقع.", False
 
     @staticmethod
     def _build_user(data: dict) -> User:

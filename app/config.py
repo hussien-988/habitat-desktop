@@ -69,7 +69,6 @@ except ImportError:
 # API Settings
 _API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8080/api")
 _API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))
-_API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "3"))
 _API_USERNAME = os.getenv("API_USERNAME", "")
 _API_PASSWORD = os.getenv("API_PASSWORD", "")
 
@@ -97,6 +96,12 @@ _GEOSERVER_URL = os.getenv("GEOSERVER_URL", None)
 _GEOSERVER_WORKSPACE = os.getenv("GEOSERVER_WORKSPACE", "trrcms")
 _GEOSERVER_ENABLED = os.getenv("GEOSERVER_ENABLED", "false").lower() in ("true", "1", "yes")
 
+# TLS Settings — default to verifying certificates. Setting VERIFY_SSL=false in
+# .env is honored only for localhost/127.0.0.1 URLs (see should_verify_ssl);
+# never trusted for remote hosts. Frozen builds force-enable verification
+# regardless of the env var (see main.py).
+_VERIFY_SSL = os.getenv("VERIFY_SSL", "true").lower() in ("true", "1", "yes")
+
 
 @dataclass
 class Config:
@@ -123,9 +128,9 @@ class Config:
     API_BASE_URL: str = _API_BASE_URL  # From .env or default
     API_VERSION: str = "v1"
     API_TIMEOUT: int = _API_TIMEOUT  # From .env or default (30)
-    API_MAX_RETRIES: int = _API_MAX_RETRIES  # From .env or default (3)
     API_USERNAME: str = _API_USERNAME  # From .env or default (admin)
     API_PASSWORD: str = _API_PASSWORD  # From .env or default (Admin@123)
+    VERIFY_SSL: bool = _VERIFY_SSL  # Honored only for localhost; remote always verified
 
     # Map Tile Server Configuration
     TILE_SERVER_URL: Optional[str] = _TILE_SERVER_URL
@@ -472,10 +477,12 @@ def load_local_settings() -> dict:
 
 
 def save_local_settings(settings: dict):
-    """Save local device settings to data/settings.json."""
+    """Save local device settings to data/settings.json (atomic write)."""
     _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+    tmp = _SETTINGS_FILE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _SETTINGS_FILE)
 
 
 def get_tile_server_url() -> str:
@@ -536,5 +543,25 @@ def save_language(lang_code: str):
     settings = load_local_settings()
     settings["language"] = lang_code
     save_local_settings(settings)
+
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def should_verify_ssl(url: str) -> bool:
+    """Decide whether to verify TLS for a given URL.
+
+    Remote hosts always verify (Config.VERIFY_SSL is ignored for safety).
+    Localhost may skip verification only when VERIFY_SSL is explicitly false,
+    so a local Docker stack with self-signed certs still works in development.
+    """
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return True
+    if host in _LOCAL_HOSTS:
+        return Config.VERIFY_SSL
+    return True
 
 

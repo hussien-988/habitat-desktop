@@ -869,7 +869,7 @@ class LoginPage(QWidget):
             self._show_error(tr("page.login.connection_error"))
             return
 
-        user, error = result
+        user, error, is_credential_error = result if len(result) == 3 else (*result, True)
 
         if user:
             from app.config import Roles
@@ -882,7 +882,12 @@ class LoginPage(QWidget):
             logger.info(f"Login successful: {username}")
             self.error_label.hide()
             self.login_successful.emit(user)
+        elif not is_credential_error:
+            # Network / server error — show the specific message, don't penalise lockout
+            logger.warning(f"Login blocked by network/server error for {username}: {error}")
+            self._show_error(error)
         else:
+            # Wrong credentials — apply lockout logic
             self._failed_attempts += 1
             logger.warning(f"Login failed: {username} (attempt {self._failed_attempts})")
 
@@ -896,7 +901,7 @@ class LoginPage(QWidget):
                 if max_attempts > 0 and remaining <= 3:
                     self._show_error(tr("page.login.invalid_credentials_remaining", remaining=remaining))
                 else:
-                    self._show_error(tr("page.login.invalid_credentials"))
+                    self._show_error(error or tr("page.login.invalid_credentials"))
 
     def _on_login_error(self, error_msg: str):
         """Handle login worker exception — reset loading state and show error."""

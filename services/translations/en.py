@@ -23,6 +23,10 @@ EN_TRANSLATIONS = {
     "button.close": "Close",
     "button.retry": "Retry",
 
+    # Network / Connection Errors
+    "error.connection_failed_title": "Failed to Load Data",
+    "error.connection_failed_description": "Could not connect to the service. Check your network connection.",
+
     # Error Messages - Building
     "error.building.create_failed": "Failed to create building. Please check the entered data.",
     "error.building.update_failed": "Failed to update building. Please try again.",
@@ -66,6 +70,7 @@ EN_TRANSLATIONS = {
     "error.api.conflict": "Conflict: This item already exists.",
     "error.api.server": "Server error. Please contact support.",
     "error.api.unknown": "An unexpected error occurred. Please try again.",
+    "error.server.dropped": "Server dropped the connection, changes were not saved.",
 
     # Error Messages - General
     "error.unexpected": "An unexpected error occurred.",
@@ -2912,6 +2917,11 @@ EN_TRANSLATIONS = {
     # Backwards-compat alias only.
     "page.import_packages.action.follow_processing": "Follow processing",
 
+    # Global crash handler dialog (utils/crash_handler.py)
+    "error.crash.title": "Unexpected error",
+    "error.crash.body": "An unexpected error occurred inside the application. The full report has been saved to the application logs folder. You can copy the technical details below and share them with support.",
+    "error.crash.copy": "Copy details",
+
     # Structured API error messages (surfaced by services.exceptions.humanize)
     "api.error.generic": "Something went wrong. Please try again.",
     "api.error.server": "The server hit an error while processing this operation. Please try again later or contact the system administrator.",
@@ -2929,6 +2939,7 @@ EN_TRANSLATIONS = {
 
     # Import-specific structured errors
     "import.error.missing_package_file": "This package cannot be processed because the original .uhc file is missing on the server. Please confirm the package was uploaded correctly from the field collector device or contact the system administrator.",
+    "import.error.duplicate_package": "This package was already uploaded. Open the packages list to track its status.",
     "import.error.stage_failed": "Could not start package processing.",
     "import.error.detect_failed": "Could not run duplicate detection on this package.",
     "import.error.approve_failed": "Could not approve the package for import.",

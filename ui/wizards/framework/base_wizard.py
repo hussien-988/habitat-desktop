@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QStackedWidget, QProgressBar
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 
 from .base_step import BaseStep, StepValidationResult
@@ -233,11 +233,15 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
             return
         self._last_next_ms = now
 
-        # Check if we're on the last step
-        if self.navigator.current_index == len(self.steps) - 1:
-            self._handle_submit()
-        else:
-            self.navigator.next_step()
+        self.btn_next.setEnabled(False)
+        try:
+            if self.navigator.current_index == len(self.steps) - 1:
+                self._handle_submit()
+            else:
+                self.navigator.next_step()
+        finally:
+            self._last_next_ms = int(time.time() * 1000)
+            QTimer.singleShot(150, lambda: self.btn_next.setEnabled(True))
 
     def _handle_cancel(self):
         """Handle cancel button click."""

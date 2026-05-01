@@ -760,6 +760,7 @@ class ClaimEditPage(QWidget):
 
             if errors:
                 Toast.show_toast(self, f"{tr('page.claim_edit.errors_prefix')}: {'; '.join(errors)}", Toast.WARNING)
+                self.save_completed.emit()
             else:
                 Toast.show_toast(self, tr("page.claim_edit.claim_updated"), Toast.SUCCESS)
                 self._snapshot_originals()
@@ -767,7 +768,9 @@ class ClaimEditPage(QWidget):
 
         except Exception as e:
             logger.error(f"Save failed: {e}", exc_info=True)
-            Toast.show_toast(self, f"{tr('page.claim_edit.error_saving')}: {e}", Toast.ERROR)
+            from services.error_mapper import map_exception
+            Toast.show_toast(self, map_exception(e), Toast.ERROR)
+            self.save_completed.emit()
         finally:
             self._spinner.hide_loading()
 

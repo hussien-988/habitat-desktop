@@ -799,7 +799,8 @@ class ApplicantInfoStep(BaseStep):
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                     except Exception as e:
                         logger.error(f"Failed to upload ID photo {fp}: {e}")
-                        Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
+                        from services.error_mapper import map_exception
+                        Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
                 self.context.update_data("uploaded_id_photos", list(already_uploaded))
 
             # 7. Cache contact person locally

@@ -57,7 +57,10 @@ class ViewportBounds:
         """Generate cache key (2 decimals ~1.1km — allows small pans to hit cache)."""
         rounded = tuple(round(x, 2) for x in self.to_tuple())
         key_str = f"{rounded[0]}_{rounded[1]}_{rounded[2]}_{rounded[3]}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+        # MD5 is fine here: the digest is only used as a viewport-cache key,
+        # never a security primitive. ``usedforsecurity=False`` documents the
+        # intent and silences static analysers (e.g. bandit B324).
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def area_size(self) -> float:
         """Calculate approximate area size (for cache expiry logic)."""

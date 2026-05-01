@@ -16,6 +16,14 @@ from pathlib import Path
 if sys.platform == 'darwin':
     os.environ.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox')
 
+# Frozen builds (PyInstaller) must never honor developer convenience flags
+# left over in a packaged .env file: forcing them off here closes the
+# auto-login backdoor and refuses any request to skip TLS verification.
+if getattr(sys, "frozen", False):
+    os.environ["DEV_MODE"] = "false"
+    os.environ["DEV_AUTO_LOGIN"] = "false"
+    os.environ["VERIFY_SSL"] = "true"
+
 # Add trrcms directory to Python path
 trrcms_path = Path(__file__).parent / "trrcms"
 sys.path.insert(0, str(trrcms_path))
@@ -400,12 +408,25 @@ def main():
     # Initialize logging
     logger = setup_logger()
 
+    # Install the global crash handler immediately after the logger is ready,
+    # so any exception thrown during the rest of bootstrap (DB init, font
+    # loading, etc.) is captured to a crash file instead of vanishing.
+    from utils.crash_handler import install as _install_crash_handler
+    _install_crash_handler()
+
     try:
         # Create Qt application
         app = QApplication(sys.argv)
         app.setApplicationName(Config.APP_NAME)
         app.setOrganizationName("UN-Habitat")
         app.setOrganizationDomain("unhabitat.org")
+
+        # Stop background ApiWorker threads before the event loop tears
+        # down — without this, Qt prints "QThread: Destroyed while thread
+        # is still running" and the OS may keep the process alive while
+        # half-finished requests complete.
+        from services.worker_registry import stop_all_workers
+        app.aboutToQuit.connect(lambda: stop_all_workers(timeout_ms=2000))
 
         # Initialize language from saved preference (before splash text)
         from services.translation_manager import (

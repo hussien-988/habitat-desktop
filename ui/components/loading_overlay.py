@@ -116,6 +116,9 @@ class LoadingOverlay(QWidget):
 
     def hide_loading(self) -> None:
         self.hide()
+        parent = self.parent()
+        if parent and isinstance(parent, QWidget):
+            parent.update()
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self.parent() and event.type() == QEvent.Resize:

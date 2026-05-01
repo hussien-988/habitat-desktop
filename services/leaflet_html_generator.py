@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 from typing import Dict, Optional
 
-from folium import TileLayer
 from utils.logger import get_logger
 from ui.constants.map_constants import MapConstants
 
@@ -25,6 +24,63 @@ class LeafletHTMLGenerator:
     STATUS_LABELS_AR = MapConstants.STATUS_LABELS_AR
 
     _assets_cache: Dict[str, str] = {}
+
+    @staticmethod
+    def _js_escape(encoded: str) -> str:
+        """Escape sequences that would break out of an HTML <script> block.
+
+        ``</script>`` and HTML comment markers terminate the surrounding tag
+        regardless of where they appear inside the script body — including
+        inside string literals — because the HTML parser runs before the JS
+        parser. Escaping the slashes here keeps the value semantically
+        identical to JS (a backslash-slash is just an escaped slash) while
+        making the payload inert at the HTML layer.
+        """
+        return (
+            encoded
+            .replace("</", "<\\/")
+            .replace("<!--", "<\\!--")
+            .replace("-->", "--\\>")
+        )
+
+    @staticmethod
+    def _safe_js_json(value, fallback: str = '{}') -> str:
+        """Encode JSON-like data for safe embedding in an HTML <script> block.
+
+        Accepts a Python container (dict/list/etc.) or a *JSON-encoded* string
+        — for the latter we parse and re-emit so we can canonicalize and
+        catch malformed payloads up front. Plain (non-JSON) strings should
+        use :py:meth:`_safe_js_string` instead, otherwise they round-trip
+        through the fallback.
+        """
+        if value is None:
+            return fallback
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                return fallback
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            return fallback
+        return LeafletHTMLGenerator._js_escape(encoded)
+
+    @staticmethod
+    def _safe_js_string(value, fallback: str = '""') -> str:
+        """Encode an arbitrary string as a JS string literal, safely.
+
+        Use for values that are *not* JSON — tile URL templates, path
+        fragments, hostnames, etc. — where we want the JS source to contain
+        ``"http://..."`` not the parsed structure.
+        """
+        if value is None:
+            return fallback
+        try:
+            encoded = json.dumps(str(value), ensure_ascii=False)
+        except (TypeError, ValueError):
+            return fallback
+        return LeafletHTMLGenerator._js_escape(encoded)
 
     @classmethod
     def _load_asset(cls, filename: str) -> str:
@@ -721,7 +777,7 @@ class LeafletHTMLGenerator:
         # Determine actual tile URL template — Docker TileServer GL returns its own URL in tiles[0]
         tile_template_from_meta = tile_meta.get('tile_template')
         if tile_template_from_meta:
-            tile_layer_url_js = json.dumps(tile_template_from_meta)
+            tile_layer_url_js = LeafletHTMLGenerator._safe_js_string(tile_template_from_meta)
             tile_status_label = "Docker (" + tile_template_from_meta.split('/')[2] + ")"
         else:
             from urllib.parse import urlparse as _urlparse
@@ -740,7 +796,7 @@ class LeafletHTMLGenerator:
             else:
                 fallback_tile_url = effective_tile_url + "/{z}/{x}/{y}.png"
                 tile_status_label = _hostname or effective_tile_url
-            tile_layer_url_js = json.dumps(fallback_tile_url)
+            tile_layer_url_js = LeafletHTMLGenerator._safe_js_string(fallback_tile_url)
 
         # GeoServer WMS (optional, from .env)
         geoserver_wms_url = ""
@@ -751,30 +807,26 @@ class LeafletHTMLGenerator:
         status_colors = LeafletHTMLGenerator.STATUS_COLORS
         status_labels = LeafletHTMLGenerator.STATUS_LABELS_AR
 
-        # Convert Python dicts to JSON strings for JavaScript
-        status_colors_json = json.dumps(status_colors)
-        status_labels_json = json.dumps(status_labels)
+        # Encode for safe embedding inside <script> tags. _safe_js_json escapes
+        # the few sequences (e.g. </script>, <!--, -->) that an HTML parser
+        # would otherwise treat as tag boundaries even inside JSON string
+        # literals — defending against XSS via attacker-controlled feature
+        # properties (building name, address, etc.) round-tripping from the API.
+        status_colors_json = LeafletHTMLGenerator._safe_js_json(status_colors)
+        status_labels_json = LeafletHTMLGenerator._safe_js_json(status_labels)
 
-        # Embed buildings GeoJSON directly — it's already a valid JSON string
-        if isinstance(buildings_geojson, str) and buildings_geojson.strip():
-            buildings_json = buildings_geojson
-        elif isinstance(buildings_geojson, dict):
-            buildings_json = json.dumps(buildings_geojson)
-        else:
-            buildings_json = '{"type":"FeatureCollection","features":[]}'
+        empty_fc = '{"type":"FeatureCollection","features":[]}'
+        buildings_json = LeafletHTMLGenerator._safe_js_json(buildings_geojson, fallback=empty_fc)
 
-        # Parse existing polygons if provided
         if existing_polygons_geojson:
-            try:
-                existing_polygons_dict = json.loads(existing_polygons_geojson)
-                existing_polygons_json = json.dumps(existing_polygons_dict)
-            except Exception as e:
-                logger.warning(f"Failed to parse existing polygons GeoJSON: {e}")
+            existing_polygons_json = LeafletHTMLGenerator._safe_js_json(existing_polygons_geojson, fallback="")
+            if not existing_polygons_json:
+                logger.warning("Failed to parse existing polygons GeoJSON")
                 existing_polygons_json = None
         else:
             existing_polygons_json = None
 
-        initial_bounds_js = json.dumps(initial_bounds) if initial_bounds else 'null'
+        initial_bounds_js = LeafletHTMLGenerator._safe_js_json(initial_bounds, fallback='null') if initial_bounds else 'null'
 
         # i18n labels — resolved at HTML generation time from current app language
         from services.translation_manager import tr as _tr
@@ -1231,11 +1283,9 @@ class LeafletHTMLGenerator:
 
         Tile range: 15-20 (below 15 = gray, no tiles)
         """
-        try:
-            neighborhoods_dict = json.loads(neighborhoods_geojson)
-            neighborhoods_json = json.dumps(neighborhoods_dict)
-        except Exception as e:
-            logger.warning(f"Failed to parse neighborhoods GeoJSON: {e}")
+        neighborhoods_json = LeafletHTMLGenerator._safe_js_json(neighborhoods_geojson, fallback="")
+        if not neighborhoods_json:
+            logger.warning("Failed to parse neighborhoods GeoJSON")
             return '// Invalid neighborhoods GeoJSON'
 
         selected_code = selected_neighborhood_code or ''
@@ -1324,13 +1374,10 @@ class LeafletHTMLGenerator:
         Returns:
             JavaScript code to add existing polygons layer
         """
-        # Parse and embed directly
-        try:
-            existing_polygons_dict = json.loads(existing_polygons_geojson)
-            existing_polygons_json = json.dumps(existing_polygons_dict)
-        except Exception as e:
-            logger.warning(f"Failed to parse existing polygons GeoJSON: {e}")
-            existing_polygons_json = '{"type":"FeatureCollection","features":[]}'
+        empty_fc = '{"type":"FeatureCollection","features":[]}'
+        existing_polygons_json = LeafletHTMLGenerator._safe_js_json(existing_polygons_geojson, fallback=empty_fc)
+        if existing_polygons_json == empty_fc and existing_polygons_geojson:
+            logger.warning("Failed to parse existing polygons GeoJSON")
 
         return f'''
         // Existing polygons layer (light transparent blue - shows current polygon during edit)
@@ -1386,10 +1433,8 @@ class LeafletHTMLGenerator:
         - Arabic name tooltip on hover
         - Added to layer control overlay
         """
-        try:
-            boundaries_dict = json.loads(boundaries_geojson)
-            boundaries_json = json.dumps(boundaries_dict)
-        except Exception:
+        boundaries_json = LeafletHTMLGenerator._safe_js_json(boundaries_geojson, fallback="")
+        if not boundaries_json:
             return '// Invalid boundaries GeoJSON'
 
         # Zoom threshold: governorates visible earlier, sub-levels only at higher zoom
@@ -1473,10 +1518,8 @@ class LeafletHTMLGenerator:
         Capitals use a larger, orange marker. Other places use a small grey marker.
         Layer auto-hides when zooming into building level (zoom > 12).
         """
-        try:
-            places_list = json.loads(places_json)
-            places_embedded = json.dumps(places_list, ensure_ascii=False)
-        except Exception:
+        places_embedded = LeafletHTMLGenerator._safe_js_json(places_json, fallback="")
+        if not places_embedded:
             return '// Invalid places JSON'
 
         return f'''
@@ -1530,16 +1573,14 @@ class LeafletHTMLGenerator:
         Falls back to generic colored pin if no server SVG available.
         Visible at zoom >= 13.
         """
-        try:
-            landmarks_list = json.loads(landmarks_json)
-            landmarks_embedded = json.dumps(landmarks_list, ensure_ascii=False)
-        except Exception:
+        landmarks_embedded = LeafletHTMLGenerator._safe_js_json(landmarks_json, fallback="")
+        if not landmarks_embedded:
             return '// Invalid landmarks JSON'
 
         # Get server SVG icons if available
         try:
             from services.landmark_icon_service import get_svg_icons_json
-            svg_icons_json = get_svg_icons_json()
+            svg_icons_json = LeafletHTMLGenerator._safe_js_json(get_svg_icons_json(), fallback='{}')
         except Exception:
             svg_icons_json = '{}'
 
@@ -1677,10 +1718,8 @@ class LeafletHTMLGenerator:
         Parses WKT LINESTRING geometry and renders as polylines.
         Visible at zoom >= 13.
         """
-        try:
-            streets_list = json.loads(streets_json)
-            streets_embedded = json.dumps(streets_list, ensure_ascii=False)
-        except Exception:
+        streets_embedded = LeafletHTMLGenerator._safe_js_json(streets_json, fallback="")
+        if not streets_embedded:
             return '// Invalid streets JSON'
 
         return f'''

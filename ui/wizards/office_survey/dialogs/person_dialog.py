@@ -3080,6 +3080,7 @@ class PersonDialog(QDialog):
                 logger.info(f"Identification uploaded: {file_path} (evidence_id={evidence_id})")
             except Exception as e:
                 logger.error(f"Failed to upload identification file {file_path}: {e}")
+                Toast.show_toast(self, map_exception(e), Toast.ERROR)
 
     def _upload_tenure_files(self, relation_id: str):
         """Upload new tenure files and link existing selected documents."""

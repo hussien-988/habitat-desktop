@@ -367,13 +367,13 @@ class UnitsPage(QWidget):
     def _on_load_units_error(self, error_msg):
         self._spinner.hide_loading()
         logger.warning(f"API grouped load failed: {error_msg}")
-        Toast.show_toast(self, tr("page.units.load_error") if tr("page.units.load_error") != "page.units.load_error" else str(error_msg), Toast.ERROR)
         self._groups = []
         self._total_units = 0
         self._total_buildings = 0
         self._rebuild_rows()
         self._current_page = 1
-        self._populate_cards()
+        from ui.utils.page_helpers import show_error_state
+        show_error_state(self._empty_state, self._stack, error_msg, self._load_units)
 
     def _rebuild_rows(self):
         self._rows = []
@@ -398,6 +398,7 @@ class UnitsPage(QWidget):
             self._current_page = min(self._current_page, self._total_pages)
 
             if total_rows == 0:
+                self._empty_state.clear_action()
                 self._stack.setCurrentIndex(1)
                 self._empty_state.set_title(tr("page.units.no_units"))
                 self._update_pagination_info()

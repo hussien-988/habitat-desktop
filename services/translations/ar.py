@@ -23,6 +23,10 @@ AR_TRANSLATIONS = {
     "button.close": "إغلاق",
     "button.retry": "إعادة المحاولة",
 
+    # Network / Connection Errors
+    "error.connection_failed_title": "تعذّر تحميل البيانات",
+    "error.connection_failed_description": "لا يمكن الاتصال بالخدمة. تحقق من الاتصال بالشبكة.",
+
     # Error Messages - Building
     "error.building.create_failed": "فشل في إنشاء المبنى. يرجى التحقق من البيانات المدخلة.",
     "error.building.update_failed": "فشل في تحديث المبنى. يرجى المحاولة مرة أخرى.",
@@ -66,6 +70,7 @@ AR_TRANSLATIONS = {
     "error.api.conflict": "تعارض: هذا العنصر موجود مسبقاً.",
     "error.api.server": "خطأ في الخادم. يرجى الاتصال بالدعم الفني.",
     "error.api.unknown": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+    "error.server.dropped": "قطع الخادم الاتصال، لم يتم حفظ التعديلات.",
 
     # Error Messages - General
     "error.unexpected": "حدث خطأ غير متوقع.",
@@ -2915,6 +2920,11 @@ AR_TRANSLATIONS = {
     # neutral so no caller accidentally mislabels Failed/Cancelled).
     "page.import_packages.action.follow_processing": "متابعة المعالجة",
 
+    # Global crash handler dialog (utils/crash_handler.py)
+    "error.crash.title": "حدث خطأ غير متوقّع",
+    "error.crash.body": "حدث خطأ غير متوقّع داخل التطبيق. تم حفظ التفاصيل الكاملة في مجلد سجلات التطبيق. يمكنك نسخ التفاصيل التقنية أدناه ومشاركتها مع الدعم الفني.",
+    "error.crash.copy": "نسخ التفاصيل",
+
     # Structured API error messages (surfaced by services.api_error.humanize)
     "api.error.generic": "تعذر تنفيذ العملية. يرجى المحاولة لاحقًا.",
     "api.error.server": "حدث خطأ في الخادم أثناء تنفيذ العملية. يرجى المحاولة لاحقًا أو التواصل مع مسؤول النظام.",
@@ -2932,6 +2942,7 @@ AR_TRANSLATIONS = {
 
     # Import-specific structured errors
     "import.error.missing_package_file": "لا يمكن معالجة هذه الحزمة لأن ملف الحزمة الأصلي غير موجود على الخادم. يرجى التأكد من أن الحزمة تم رفعها بشكل صحيح من جهاز جامع البيانات أو التواصل مع مسؤول النظام.",
+    "import.error.duplicate_package": "هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى. تحقّق من قائمة الحزم لمتابعتها.",
     "import.error.stage_failed": "تعذر بدء معالجة الحزمة.",
     "import.error.detect_failed": "تعذر كشف التكرارات لهذه الحزمة.",
     "import.error.approve_failed": "تعذر اعتماد الحزمة للإدخال.",

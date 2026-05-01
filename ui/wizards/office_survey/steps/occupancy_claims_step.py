@@ -378,6 +378,7 @@ class OccupancyClaimsStep(BaseStep):
                                                 Toast.show_toast(self, tr("wizard.person_dialog.link_existing_doc_failed"), Toast.ERROR)
                                 except Exception as e:
                                     logger.error(f"Failed to create relation for person {person_id}: {e}")
+                                    Toast.show_toast(self, map_exception(e), Toast.ERROR)
                     except Exception as e:
                         from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
                         if is_duplicate_nid_error(e):

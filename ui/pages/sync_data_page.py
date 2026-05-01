@@ -621,6 +621,7 @@ class SyncDataPage(QWidget):
             self._clear_cards()
 
             if not items:
+                self._empty_state.clear_action()
                 self._empty_state.set_title(tr("page.sync.no_assignments"))
                 self._stack.setCurrentIndex(1)
                 return
@@ -661,9 +662,9 @@ class SyncDataPage(QWidget):
     def _on_assignments_load_error(self, error_msg):
         """Handle assignment list API error."""
         logger.warning(f"Failed to load assignments: {error_msg}")
-        self._empty_state.set_title(tr("page.sync.load_failed"))
-        self._stack.setCurrentIndex(1)
         self._spinner.hide_loading()
+        from ui.utils.page_helpers import show_error_state
+        show_error_state(self._empty_state, self._stack, error_msg, self._load_assignments)
 
     # -- Card click -> expand detail panel --
 

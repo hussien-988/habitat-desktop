@@ -79,9 +79,12 @@ def map_api_error(error: ApiException) -> str:
 
 def map_network_error(error: NetworkException) -> str:
     """Map network exception to user-friendly translated message."""
-    msg = str(error.original_error) if error.original_error else ""
-    if "timeout" in msg.lower() or "timed out" in msg.lower():
+    msg = str(error.original_error) if error.original_error else str(error)
+    msg_lower = msg.lower()
+    if "timeout" in msg_lower or "timed out" in msg_lower:
         return tr("error.api.timeout")
+    if "remote end closed" in msg_lower or "connection aborted" in msg_lower or "remotedisconnected" in msg_lower:
+        return tr("error.server.dropped")
     return tr("error.api.connection")
 
 

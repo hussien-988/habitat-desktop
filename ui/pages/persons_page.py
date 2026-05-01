@@ -987,12 +987,18 @@ class PersonsPage(QWidget):
     def _on_load_persons_error(self, error_msg):
         self._spinner.hide_loading()
         logger.error(f"Failed to load persons: {error_msg}")
-        Toast.show_toast(self, tr("page.persons.load_failed", error=error_msg), Toast.ERROR)
         self._all_persons = []
         self._total_count = 0
         self._stat_total.set_count(0)
         self.table_model.set_persons([])
-        self._populate_cards()
+        self._empty_state.configure(
+            icon_text="⚠",
+            title=tr("error.connection_failed_title"),
+            description=error_msg or tr("error.connection_failed_description"),
+        )
+        self._empty_state.set_action(tr("button.retry"), self._load_persons)
+        self._stack.setCurrentIndex(1)
+        self._update_pagination()
 
     # -- Card population --
 
@@ -1003,9 +1009,10 @@ class PersonsPage(QWidget):
 
             total = len(self._all_persons)
             if total == 0:
-                self._stack.setCurrentIndex(1)
+                self._empty_state.clear_action()
                 self._empty_state.set_title(tr("page.persons.no_persons"))
                 self._empty_state.set_description(tr("page.persons.empty_description"))
+                self._stack.setCurrentIndex(1)
                 self._update_pagination()
                 return
 
