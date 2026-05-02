@@ -296,7 +296,7 @@ class TRRCMSApiClient:
 
     def get_security_settings(self) -> Dict[str, Any]:
         """GET /v1/security-settings — admin-managed security policy (requires auth)."""
-        return self._request("GET", "/v1/security-settings") or {}
+        return self._request("GET", "/v1/security-settings/current") or {}
 
     def lock_building(self, building_id: str, is_locked: bool) -> Dict[str, Any]:
         """PUT /v1/Buildings/{id}/lock — toggle building lock state."""

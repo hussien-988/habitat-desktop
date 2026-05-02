@@ -141,6 +141,7 @@ class LeafletHTMLGenerator:
         landmarks_json: str = None,  # JSON array of landmarks for map overlay
         streets_json: str = None,  # JSON array of streets for map overlay
         max_selection: Optional[int] = None,  # None=unlimited; 1=single-select replace mode
+        show_building_labels: bool = False,  # Whether to show building_id labels on the map
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -262,6 +263,7 @@ class LeafletHTMLGenerator:
         streets_json,
         local_assets_url=local_assets_url,
         max_selection=max_selection,
+        show_building_labels=show_building_labels,
     )}
 </body>
 </html>
@@ -640,6 +642,25 @@ class LeafletHTMLGenerator:
         .building-id-tooltip::before {{
             border-top-color: rgba(30, 41, 59, 0.92) !important;
         }}
+        /* Building number label shown permanently above preview pin */
+        .building-number-label {{
+            background: rgba(255, 255, 255, 0.96) !important;
+            color: #0072BC !important;
+            border: 1px solid rgba(0, 114, 188, 0.28) !important;
+            border-radius: 999px !important;
+            padding: 2px 7px !important;
+            font-size: 10px !important;
+            font-weight: 700 !important;
+            direction: ltr !important;
+            font-family: 'Segoe UI', Tahoma, sans-serif !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+        }}
+
+        .building-number-label::before {{
+            border-top-color: rgba(255, 255, 255, 0.96) !important;
+        }}
 
         /* Neighborhood Layer Styles */
         .neighborhood-tooltip {{
@@ -761,6 +782,7 @@ class LeafletHTMLGenerator:
         streets_json: str = None,
         local_assets_url: str = '',
         max_selection: Optional[int] = None,
+        show_building_labels: bool = False,
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -842,42 +864,20 @@ class LeafletHTMLGenerator:
         _lbl_buildings    = _tr('page.map.status_buildings')
         _lbl_tile_server  = _tr('page.map.status_tile_server')
 
-        # Build popup JS block - skip popups in multi-select mode (clicking toggles selection)
+        # Build popup JS block — popups are disabled everywhere.
+        # In selection mode, clicking the marker triggers direct selection.
         if enable_multiselect:
-            popup_js_block = '// Multi-select mode: no popups, clicking toggles selection'
-        else:
-            selection_btn_js = (
-                'if (buildingIdForApi) { popup += "<button class=\\"select-building-btn\\" '
-                f'onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\">'
-                f'<span style=\\"font-size:16px\\">✓</span> {_lbl_select}</button>"; }}'
-            ) if enable_selection else '// Selection disabled'
-
+            popup_js_block = '// Multi-select mode: clicking toggles selection'
+        elif enable_selection:
             popup_js_block = (
-                "var popup = '<div class=\"building-popup\" dir=\"auto\">' +\n"
-                "                    '<h4>' + buildingIdDisplay + ' ' +\n"
-                "                    '<span class=\"geometry-badge\">' + geomType + '</span></h4>' +\n"
-                f"                    '<p><span class=\"label\">{_lbl_neighborhood}</span> ' + (props.neighborhood || '{_lbl_not_found}') + '</p>' +\n"
-                f"                    '<p><span class=\"label\">{_lbl_status}</span> ' +\n"
-                "                    '<span class=\"status-badge ' + statusClass + '\">' + statusLabel + '</span></p>' +\n"
-                f"                    '<p><span class=\"label\">{_lbl_units}</span> ' + (props.units || 0) + '</p>';\n"
-                "\n"
-                "                if (props.type) {\n"
-                f"                    popup += '<p><span class=\"label\">{_lbl_type}</span> ' + props.type + '</p>';\n"
-                "                }\n"
-                "\n"
-                "                if (props.is_assigned) {\n"
-                f"                    popup += '<p><span style=\"background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:4px;font-size:12px;\">\\u2713 {_lbl_assigned}</span></p>';\n"
-                "                }\n"
-                "                if (props.is_locked) {\n"
-                f"                    popup += '<p><span style=\"background:#F3F4F6;color:#6B7280;padding:2px 8px;border-radius:4px;font-size:12px;\">\\uD83D\\uDD12 {_lbl_locked}</span></p>';\n"
-                "                }\n"
-                "\n"
-                "                " + selection_btn_js + "\n"
-                "\n"
-                "                popup += '</div>';\n"
-                "\n"
-                "                layer.bindPopup(popup);"
+                "if (buildingIdForApi) {\n"
+                "                    layer.on('click', function() {\n"
+                "                        selectBuilding(buildingIdForApi);\n"
+                "                    });\n"
+                "                }"
             )
+        else:
+            popup_js_block = '// Read-only mode: no interaction'
 
         # Build hover JS block - skip in multi-select mode (multiselect template adds its own)
         if enable_multiselect:
@@ -900,6 +900,7 @@ class LeafletHTMLGenerator:
             )
 
         _max_selection_js = 'null' if max_selection is None else str(int(max_selection))
+        _show_building_labels_js = 'true' if show_building_labels else 'false'
         return f'''
     <script>
         // [PERF] First line of the main map-init script.
@@ -907,6 +908,7 @@ class LeafletHTMLGenerator:
 
         // [UNIFIED-DIALOG] Max selection count: null=unlimited, 1=single-select replace mode.
         window.maxSelection = {_max_selection_js};
+        var showBuildingLabels = {_show_building_labels_js};
 
         L.Icon.Default.imagePath = '{local_assets_url}/images/';
 
@@ -1078,36 +1080,65 @@ class LeafletHTMLGenerator:
 
         var buildingsLayer = L.geoJSON(buildingsData, {{
             pointToLayer: function(feature, latlng) {{
-                var status = getStatusKey(feature.properties.status || 1);
+                var props = feature.properties || {{}};
+
+                var status = getStatusKey(props.status || 1);
                 var color = statusColors[status] || '#0072BC';
-                // [VISUAL] Pre-assigned buildings are distinguished by color only (amber).
-                // They remain fully selectable — no special tooltip, no click block.
-                if (feature.properties.is_assigned === true) {{
+
+                // [VISUAL] Pre-assigned buildings are distinguished by color only.
+                if (props.is_assigned === true) {{
                     color = '#F59E0B';
                 }}
+
                 var innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
+
+                var _showLabels = (
+                    typeof showBuildingLabels !== 'undefined' &&
+                    showBuildingLabels === true
+                );
+
+                var _idLabel = String(
+                    props.building_id_display ||
+                    props.building_id ||
+                    props.building_number ||
+                    ''
+                ).trim();
+
+                // When showing permanent labels, embed the label in the icon HTML directly.
+                // Permanent Leaflet tooltips mis-position inside MarkerCluster groups even
+                // when clustering is disabled — embedding avoids that entirely.
+                var _embeddedLabel = (_showLabels && _idLabel)
+                    ? '<div style="position:absolute;bottom:40px;left:12px;transform:translateX(-50%);' +
+                      'white-space:nowrap;pointer-events:none;color:#0072BC;font-size:10px;font-weight:700;">' +
+                      _idLabel + '</div>'
+                    : '';
+
                 var pinIcon = L.divIcon({{
                     className: 'building-pin-icon',
-                    html: '<div style="position:relative;width:24px;height:36px;">' +
+                    html: '<div style="position:relative;width:24px;height:36px;overflow:visible;">' +
+                          _embeddedLabel +
                           '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                           '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                           'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
                           innerSvg + '</svg></div>',
                     iconSize: [24, 36],
                     iconAnchor: [12, 36],
-                    popupAnchor: [0, -36]
+                    popupAnchor: [0, -36],
+                    tooltipAnchor: [0, -42]
                 }});
-                var _marker = L.marker(latlng, {{icon: pinIcon}});
-                // [UNIFIED-DIALOG] Show building ID on hover
-                var _idLabel = feature.properties.building_id_display || feature.properties.building_id;
-                if (_idLabel) {{
-                    _marker.bindTooltip(String(_idLabel), {{
+
+                var _marker = L.marker(latlng, {{ icon: pinIcon }});
+
+                if (_idLabel && !_showLabels) {{
+                    _marker.bindTooltip(_idLabel, {{
                         permanent: false,
                         direction: 'top',
                         offset: [0, -36],
+                        opacity: 1,
                         className: 'building-id-tooltip'
                     }});
                 }}
+
                 return _marker;
             }},
 

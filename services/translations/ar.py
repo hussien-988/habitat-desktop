@@ -1181,6 +1181,7 @@ AR_TRANSLATIONS = {
     "page.building_details.location": "موقع البناء",
     "page.building_details.open_map": "فتح الخريطة",
     "page.building_details.description": "وصف البناء",
+    "page.building_details.no_description": "لا يوجد وصف",
     "page.building_details.no_uuid": "لم يتم العثور على معرّف المبنى",
     "page.building_details.units_load_failed": "فشل تحميل الوحدات: {error}",
     "page.building_details.no_units": "لا توجد مقاسم لهذا المبنى",

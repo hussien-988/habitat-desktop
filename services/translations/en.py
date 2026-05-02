@@ -1181,6 +1181,7 @@ EN_TRANSLATIONS = {
     "page.building_details.location": "Building Location",
     "page.building_details.open_map": "Open Map",
     "page.building_details.description": "Building Description",
+    "page.building_details.no_description": "No description",
     "page.building_details.no_uuid": "Building identifier not found",
     "page.building_details.units_load_failed": "Failed to load units: {error}",
     "page.building_details.no_units": "No units found for this building",

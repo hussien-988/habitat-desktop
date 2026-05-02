@@ -513,6 +513,7 @@ class BuildingMapDialog(BaseMapDialog):
                 boundaries_geojson=None,
                 boundary_level='neighbourhoods',
                 max_selection=getattr(self, '_max_selection', None),
+                show_building_labels=self._is_view_only,
             )
             if not html:
                 logger.error("generate_leaflet_html returned empty HTML")
