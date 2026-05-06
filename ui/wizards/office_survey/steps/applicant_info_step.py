@@ -235,8 +235,8 @@ class ApplicantInfoStep(BaseStep):
 
         # Row 4 labels: الجنسية | الرقم الوطني | الجنس
         self.lbl_nationality = self._lbl(tr("wizard.person_dialog.nationality"))
-        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id") + " *")
-        self.lbl_gender      = self._lbl(tr("wizard.person_dialog.gender"))
+        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id"))
+        self.lbl_gender      = self._lbl(tr("wizard.person_dialog.gender")+ " *")
         grid.addWidget(self.lbl_nationality, row, 0)
         grid.addWidget(self.lbl_national_id, row, 1)
         grid.addWidget(self.lbl_gender,      row, 2)
@@ -256,13 +256,15 @@ class ApplicantInfoStep(BaseStep):
         grid.addLayout(self._field_box(self.national_id, self._nid_error), row, 1)
 
         self.gender = self._build_gender_radios()
-        grid.addWidget(self.gender, row, 2)
+        self._gender_error = self._err_lbl()
+        grid.addLayout(self._field_box(self.gender, self._gender_error), row, 2)
 
         self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
         self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
         self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
+        self._gender_group.buttonClicked.connect(lambda *_: self._clear_gender_err())
 
         return grid
 
@@ -697,6 +699,25 @@ class ApplicantInfoStep(BaseStep):
         field.setStyleSheet(self._field_styles.get(field, self._input_style()))
         error_lbl.setText("")
         error_lbl.setVisible(False)
+    def _set_gender_err(self):
+        self.gender.setStyleSheet(f"""
+            QWidget {{
+                background: transparent;
+                border: 1.5px solid {Colors.ERROR};
+                border-radius: 8px;
+            }}
+            QRadioButton {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        self._gender_error.setText("!")
+        self._gender_error.setVisible(True)
+
+    def _clear_gender_err(self):
+        self.gender.setStyleSheet("background: transparent;")
+        self._gender_error.setText("")
+        self._gender_error.setVisible(False)
 
     # BaseStep interface
 
@@ -727,11 +748,12 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.landline_digits, self._landline_error)
             result.add_error(tr("wizard.applicant.landline_9_digits"))
 
+        if self._get_gender() is None:
+            self._set_gender_err()
+            result.add_error(tr("wizard.applicant.gender_required"))
+
         nid_text = self.national_id.text().strip()
-        if not nid_text:
-            self._set_err(self.national_id, self._nid_error)
-            result.add_error(tr("wizard.applicant.national_id_required"))
-        elif len(nid_text) != 11 or not nid_text.isdigit():
+        if nid_text and (len(nid_text) != 11 or not nid_text.isdigit()):
             self._set_err(self.national_id, self._nid_error)
             result.add_error(tr("wizard.applicant.national_id_11_digits"))
 
@@ -1076,7 +1098,7 @@ class ApplicantInfoStep(BaseStep):
         self.lbl_last_name.setText(tr("wizard.person_dialog.last_name") + " *")
         self.lbl_mother_name.setText(tr("wizard.person_dialog.mother_name") + " *")
         self.lbl_birth_date.setText(tr("wizard.person_dialog.birth_date"))
-        self.lbl_gender.setText(tr("wizard.person_dialog.gender"))
+        self.lbl_gender.setText(tr("wizard.person_dialog.gender") + " *")
         self.lbl_nationality.setText(tr("wizard.person_dialog.nationality"))
         self.lbl_national_id.setText(tr("wizard.person_dialog.national_id"))
 

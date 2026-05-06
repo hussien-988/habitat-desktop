@@ -2,9 +2,9 @@
 """Field work preparation step 1: select buildings for assignment."""
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QBoxLayout, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QFrame, QToolButton, QStackedWidget,
-    QScrollArea
+    QScrollArea, QGridLayout, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon
@@ -38,7 +38,7 @@ def _connect_auto_direction(field):
     field.textChanged.connect(_detect)
 
 
-class _SelectableBuildingCard(AnimatedCard):
+class _SelectableBuildingCard(AnimatedCard):    
     """Search result building card - lighter style, clicking adds to selection."""
 
     selection_changed = pyqtSignal(object, bool)
@@ -63,77 +63,174 @@ class _SelectableBuildingCard(AnimatedCard):
 
         super().__init__(
             parent,
-            card_height=72,
-            border_radius=8,
+            card_height=84,
+            border_radius=10,
             show_chevron=False,
-            show_strip=True,
-            status_color=status_color,
-            strip_width=3,
+            show_strip=False,
             clickable=True,
             lift_target=1.5,
         )
 
+        self.setMinimumHeight(ScreenScale.h(84))
+        self.setMinimumWidth(ScreenScale.w(250))
+        self.setStyleSheet("""
+            _SelectableBuildingCard {
+                background: #EFF6FF;
+                border-radius: 10px;
+                border: 1px solid #BFDBFE;
+            }
+            _SelectableBuildingCard:hover {
+                background: #DBEAFE;
+                border: 1px solid #93C5FD;
+            }
+        """)
+    def _format_type_text(self):
+        """Build type text without duplicating ':' from translations."""
+        type_display = (getattr(self.building, 'building_type_display', '') or '').strip()
+        if not type_display:
+            return ""
+
+        type_label = (tr('wizard.step1.type_label') or '').strip()
+        type_label = type_label.rstrip(":：").strip()
+
+        if not type_label:
+            return type_display
+
+        return f"{type_label}: {type_display}"
+    def _is_rtl(self):
+        """Return True when the current UI language is RTL."""
+        return get_layout_direction() == Qt.RightToLeft
+
+
+    def _apply_row_direction(self, row_layout): 
+        """Apply current language direction to a horizontal row layout."""
+        row_layout.setDirection(
+            QBoxLayout.RightToLeft if self._is_rtl() else QBoxLayout.LeftToRight
+        )
+
+
+    def _apply_text_alignment(self, label, force_ltr_text=False):
+        """Align label visually by app language, while optionally keeping text LTR."""
+        if force_ltr_text:
+            label.setLayoutDirection(Qt.LeftToRight)
+        else:
+            label.setLayoutDirection(get_layout_direction())
+
+        if get_layout_direction() == Qt.RightToLeft:
+            label.setAlignment(Qt.AlignRight | Qt.AlignAbsolute | Qt.AlignVCenter)
+        else:
+            label.setAlignment(Qt.AlignLeft | Qt.AlignAbsolute | Qt.AlignVCenter)
+
+
     def _build_content(self, layout):
-        """Populate card with building info."""
+        """Populate card with building info using the same mini-card style."""
+        layout.setSpacing(ScreenScale.h(6))
+        self.setLayoutDirection(get_layout_direction())
+        layout.setDirection(QBoxLayout.TopToBottom)
+        # Top row: building code + add/check indicator
         top_row = QHBoxLayout()
-        top_row.setSpacing(8)
+        self._apply_row_direction(top_row)
+        top_row.setSpacing(ScreenScale.w(10))
         top_row.setContentsMargins(0, 0, 0, 0)
 
         self._code_label = QLabel(self.building.building_id or "")
-        self._code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._code_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent;")
-        apply_label_alignment(self._code_label)
+        self._code_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        self._code_label.setStyleSheet("""
+            QLabel {
+                color: #1D4ED8;
+                background: transparent;
+                padding-bottom: 1px;
+            }
+        """)
+        self._apply_text_alignment(self._code_label, force_ltr_text=True)
+
         top_row.addWidget(self._code_label, 1)
 
         self._add_indicator = QLabel("+")
-        self._add_indicator.setFixedSize(22, 22)
+        self._add_indicator.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         self._add_indicator.setAlignment(Qt.AlignCenter)
-        self._add_indicator.setStyleSheet(
-            "color: #2563EB; background: #EFF6FF; border-radius: 11px;"
-            " font-size: 14px; font-weight: bold;"
-        )
-        top_row.addWidget(self._add_indicator)
+        self._add_indicator.setFont(create_font(size=12, weight=FontManager.WEIGHT_BOLD))
+        self._add_indicator.setStyleSheet("""
+            QLabel {
+                color: #2563EB;
+                background: white;
+                border: 1px solid #BFDBFE;
+                border-radius: 15px;
+            }
+        """)
+        top_row.addWidget(self._add_indicator, 0, Qt.AlignVCenter)
+
         layout.addLayout(top_row)
 
+        # Second row: building type + assignment/status badges
         info_row = QHBoxLayout()
-        info_row.setSpacing(10)
+        self._apply_row_direction(info_row)
+        info_row.setSpacing(ScreenScale.w(8))
         info_row.setContentsMargins(0, 0, 0, 0)
 
-        type_display = getattr(self.building, 'building_type_display', '') or ''
-        status_display = getattr(self.building, 'building_status_display', '') or ''
-        secondary_text = f"{tr('wizard.step1.type_label')}: {type_display}"
-        if status_display:
-            secondary_text += f"  |  {tr('wizard.step1.status_label')}: {status_display}"
+        type_text = self._format_type_text()
+        type_label = QLabel(type_text)
+        type_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        type_label.setStyleSheet("""
+            QLabel {
+                color: #2563EB;
+                background: transparent;
+                padding-top: 1px;
+                padding-bottom: 2px;
+            }
+        """)
 
-        secondary_label = QLabel(secondary_text)
-        secondary_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-        secondary_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
-        apply_label_alignment(secondary_label)
-        self._secondary_label = secondary_label
-        info_row.addWidget(secondary_label, 1)
+        self._apply_text_alignment(type_label)
+
+        self._secondary_label = type_label
+        info_row.addWidget(type_label, 1)
 
         if getattr(self.building, 'is_assigned', False) or getattr(self.building, 'has_active_assignment', False):
             assigned_badge = QLabel(tr("building.assigned"))
-            assigned_badge.setFont(create_font(size=7, weight=FontManager.WEIGHT_SEMIBOLD))
-            assigned_badge.setStyleSheet(
-                f"color: white; background: {Colors.PRIMARY_BLUE};"
-                " border-radius: 8px; padding: 2px 7px;"
-            )
+            assigned_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            assigned_badge.setStyleSheet("""
+                QLabel {
+                    color: white;
+                    background: #2563EB;
+                    border-radius: 9px;
+                    padding: 2px 8px 3px 8px;
+                }
+            """)
+            assigned_badge.setAlignment(Qt.AlignCenter)
             self._assigned_badge = assigned_badge
             info_row.addWidget(assigned_badge)
 
-        if getattr(self.building, 'is_locked', False):
-            locked_badge = QLabel(tr("building.locked"))
-            locked_badge.setFont(create_font(size=7, weight=FontManager.WEIGHT_SEMIBOLD))
-            locked_badge.setStyleSheet(
-                "color: white; background: #6c757d;"
-                " border-radius: 8px; padding: 2px 7px;"
-            )
-            self._locked_badge = locked_badge
-            info_row.addWidget(locked_badge)
+        status_display = (getattr(self.building, 'building_status_display', '') or '').strip()
+        if status_display:
+            status_color = self._STATUS_COLORS.get(status_display.lower(), "#64748B")
+            status_badge = QLabel(status_display)
+            status_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            status_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: {status_color};
+                    background: white;
+                    border: 1px solid #E2E8F0;
+                    border-radius: 9px;
+                    padding: 2px 8px 3px 8px;
+                }}
+            """)
+            status_badge.setAlignment(Qt.AlignCenter)
+            info_row.addWidget(status_badge)
 
         layout.addLayout(info_row)
+        layout.addStretch(1)
+    def update_language(self, is_arabic: bool):
+        """Refresh direction and text alignment when language changes."""
+        self.setLayoutDirection(get_layout_direction())
 
+        if hasattr(self, "_code_label"):
+            self._apply_text_alignment(self._code_label, force_ltr_text=True)
+
+        if hasattr(self, "_secondary_label"):
+            self._secondary_label.setText(self._format_type_text())
+            self._apply_text_alignment(self._secondary_label)
+
+        self.update()
     def _apply_base_style(self):
         """Override base style to show selection state."""
         r = self._border_radius
@@ -225,7 +322,7 @@ class _SelectableBuildingCard(AnimatedCard):
 
 
 class _SelectedBuildingRow(QFrame):
-    """Row widget for the selected buildings view - distinct from search result cards."""
+    """Mini card widget for the selected buildings view."""
 
     removal_requested = pyqtSignal(object)
 
@@ -235,33 +332,51 @@ class _SelectedBuildingRow(QFrame):
         self._sub_label = None
         self._setup()
 
+    def _format_type_text(self):
+        """Build type text without duplicating ':' from translations."""
+        type_display = (getattr(self.building, 'building_type_display', '') or '').strip()
+        if not type_display:
+            return ""
+
+        type_label = (tr('wizard.step1.type_label') or '').strip()
+        type_label = type_label.rstrip(":：").strip()
+
+        if not type_label:
+            return type_display
+
+        return f"{type_label}: {type_display}"
+
     def _setup(self):
         self.setLayoutDirection(get_layout_direction())
-        self.setFixedHeight(ScreenScale.h(60))
+        self.setMinimumHeight(ScreenScale.h(78))
+        self.setMinimumWidth(ScreenScale.w(250))
+
         self.setStyleSheet("""
             _SelectedBuildingRow {
-                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #EFF6FF, stop:1 #E0F2FE);
-                border-radius: 8px;
+                background: #EFF6FF;
+                border-radius: 10px;
                 border: 1px solid #BFDBFE;
-                border-right: 3px solid #2563EB;
+            }
+            _SelectedBuildingRow:hover {
+                background: #DBEAFE;
+                border: 1px solid #93C5FD;
             }
         """)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(12, 8, 12, 8)
+        row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(10)
 
         remove_btn = QPushButton("×")
-        remove_btn.setFixedSize(24, 24)
+        remove_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
         remove_btn.setCursor(Qt.PointingHandCursor)
         remove_btn.setStyleSheet("""
             QPushButton {
                 color: #64748B;
                 background: #E2E8F0;
                 border: none;
-                border-radius: 12px;
-                font-size: 14px;
+                border-radius: 13px;
+                font-size: 15px;
                 font-weight: bold;
                 padding: 0;
             }
@@ -271,15 +386,21 @@ class _SelectedBuildingRow(QFrame):
             }
         """)
         remove_btn.clicked.connect(lambda: self.removal_requested.emit(self.building))
-        row.addWidget(remove_btn)
+        row.addWidget(remove_btn, 0, Qt.AlignTop)
 
         info_col = QVBoxLayout()
-        info_col.setSpacing(2)
+        info_col.setSpacing(ScreenScale.h(5))
         info_col.setContentsMargins(0, 0, 0, 0)
 
         code_label = QLabel(self.building.building_id or "")
-        code_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        code_label.setStyleSheet("color: #1E3A8A; background: transparent;")
+        code_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        code_label.setStyleSheet("""
+            QLabel {
+                color: #1D4ED8;
+                background: transparent;
+                padding-bottom: 1px;
+            }
+        """)
         code_label.setLayoutDirection(Qt.LeftToRight)
         if get_layout_direction() == Qt.RightToLeft:
             code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -287,32 +408,45 @@ class _SelectedBuildingRow(QFrame):
             code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         info_col.addWidget(code_label)
 
-        type_display = getattr(self.building, 'building_type_display', '') or ''
-        if type_display:
-            sub_label = QLabel(f"{tr('wizard.step1.type_label')}: {type_display}")
-            sub_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            sub_label.setStyleSheet("color: #64748B; background: transparent;")
+        type_text = self._format_type_text()
+        if type_text:
+            sub_label = QLabel(type_text)
+            sub_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+            sub_label.setStyleSheet("""
+                QLabel {
+                    color: #2563EB;
+                    background: transparent;
+                    padding-top: 1px;
+                    padding-bottom: 2px;
+                }
+            """)
+            if get_layout_direction() == Qt.RightToLeft:
+                sub_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                sub_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self._sub_label = sub_label
             info_col.addWidget(sub_label)
 
         row.addLayout(info_col, 1)
 
         check_circle = QLabel("✓")
-        check_circle.setFixedSize(28, 28)
+        check_circle.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
         check_circle.setAlignment(Qt.AlignCenter)
-        check_circle.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        check_circle.setStyleSheet(
-            "color: white; background: #2563EB; border-radius: 14px;"
-        )
-        row.addWidget(check_circle)
+        check_circle.setFont(create_font(size=12, weight=FontManager.WEIGHT_BOLD))
+        check_circle.setStyleSheet("""
+            QLabel {
+                color: white;
+                background: #2563EB;
+                border-radius: 15px;
+            }
+        """)
+        row.addWidget(check_circle, 0, Qt.AlignVCenter)
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
         if self._sub_label:
-            type_display = getattr(self.building, 'building_type_display', '') or ''
-            self._sub_label.setText(f"{tr('wizard.step1.type_label')}: {type_display}")
+            self._sub_label.setText(self._format_type_text())
         self.update()
-
 
 class FieldWorkPreparationStep1(QWidget):
     """Filter and search buildings for field assignment."""
@@ -329,6 +463,12 @@ class FieldWorkPreparationStep1(QWidget):
         self._confirmed_building_ids = set()
         self._selected_buildings = {}  # {building_id: building_object}
         self._showing_selected_view = False
+        # Server-side pagination state for building results
+        self._current_page = 1
+        self._page_size = 10
+        self._total_count = 0
+        self._total_pages = 1
+        self._current_page_buildings = []
 
         # Cache for filter data (from API)
         self._all_communities = []  # [(code, name_ar, name_en), ...]
@@ -586,10 +726,23 @@ class FieldWorkPreparationStep1(QWidget):
 
         self._suggestions_content = QWidget()
         self._suggestions_content.setStyleSheet("background: transparent;")
+
+        # Outer layout is kept so the selected-buildings view can still show rows.
         self._suggestions_layout = QVBoxLayout(self._suggestions_content)
         self._suggestions_layout.setContentsMargins(4, 4, 4, 4)
         self._suggestions_layout.setSpacing(6)
+
+        # Grid used for API building results: 2 columns × up to 5 rows.
+        self._buildings_grid = QGridLayout()
+        self._buildings_grid.setContentsMargins(0, 0, 0, 0)
+        self._buildings_grid.setHorizontalSpacing(ScreenScale.w(10))
+        self._buildings_grid.setVerticalSpacing(ScreenScale.h(8))
+        self._buildings_grid.setColumnStretch(0, 1)
+        self._buildings_grid.setColumnStretch(1, 1)
+
+        self._suggestions_layout.addLayout(self._buildings_grid)
         self._suggestions_layout.addStretch()
+
         self._suggestions_scroll.setWidget(self._suggestions_content)
 
         # Track suggestion card widgets
@@ -629,6 +782,64 @@ class FieldWorkPreparationStep1(QWidget):
         self._results_stack.setCurrentIndex(0)
 
         main_layout.addWidget(self._results_stack, 1)
+        # -- Pagination bar for server-side building results --
+        self._pagination_container = QFrame()
+        self._pagination_container.setStyleSheet("background: transparent; border: none;")
+
+        pagination_layout = QHBoxLayout(self._pagination_container)
+        pagination_layout.setContentsMargins(0, 8, 0, 0)
+        pagination_layout.setSpacing(ScreenScale.w(12))
+        pagination_layout.addStretch()
+
+        pagination_button_style = f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid rgba(56, 144, 223, 0.35);
+                border-radius: 8px;
+                font-size: 14pt;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background-color: #EFF6FF;
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QPushButton:disabled {{
+                color: #B8C7D9;
+                border-color: #E8EDF2;
+                background-color: transparent;
+            }}
+        """
+
+        self._prev_page_btn = QPushButton("\u276E")
+        self._prev_page_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._prev_page_btn.setStyleSheet(pagination_button_style)
+        self._prev_page_btn.clicked.connect(lambda: self._go_to_results_page(self._current_page - 1))
+        pagination_layout.addWidget(self._prev_page_btn)
+
+        self._field_page_info = QLabel("0-0 / 0")
+        self._field_page_info.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        self._field_page_info.setAlignment(Qt.AlignCenter)
+        self._field_page_info.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.PRIMARY_BLUE};
+                background: transparent;
+                padding: 0 10px;
+                font-weight: 700;
+            }}
+        """)
+        pagination_layout.addWidget(self._field_page_info)
+
+        self._next_page_btn = QPushButton("\u276F")
+        self._next_page_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._next_page_btn.setStyleSheet(pagination_button_style)
+        self._next_page_btn.clicked.connect(lambda: self._go_to_results_page(self._current_page + 1))
+        pagination_layout.addWidget(self._next_page_btn)
+
+        pagination_layout.addStretch()
+
+        self._pagination_container.setVisible(False)
+        main_layout.addWidget(self._pagination_container)
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
@@ -846,7 +1057,14 @@ class FieldWorkPreparationStep1(QWidget):
             self._selection_count_label.setText(
                 f"{tr('wizard.step1.selected_items')} ({count} {tr('wizard.step1.building_unit')})"
             )
+    def _sync_visible_card_selection_state(self):
+        """Sync visible result cards with the saved selected building IDs."""
+        for card in self._suggestion_cards:
+            if not hasattr(card, "is_selected") or not hasattr(card, "building"):
+                continue
 
+            building_id = getattr(card.building, "building_id", None)
+            card.is_selected = building_id in self._selected_building_ids
     def clear_all_selections(self):
         """Clear all selections (used by parent page on refresh)."""
         self._selected_building_ids.clear()
@@ -865,13 +1083,10 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Remove card from view
         if self._showing_selected_view:
-            for card in self._suggestion_cards[:]:
-                if card.building.building_id == building_id:
-                    self._suggestions_layout.removeWidget(card)
-                    self._suggestion_cards.remove(card)
-                    card.deleteLater()
-                    break
-            if not self._suggestion_cards:
+            if self._selected_buildings:
+                self._show_selected_buildings_view()
+            else:
+                self._clear_suggestion_cards()
                 self._showing_selected_view = False
                 self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
                 self._results_stack.setCurrentIndex(0)
@@ -907,17 +1122,42 @@ class FieldWorkPreparationStep1(QWidget):
                 self._results_stack.setCurrentIndex(0)
 
     def _show_selected_buildings_view(self):
-        """Show selected buildings as rows in the results area."""
+        """Show selected buildings as a 2-column grid in the results area."""
         self._clear_suggestion_cards()
         self._showing_selected_view = True
 
-        for bid, building in self._selected_buildings.items():
-            row = _SelectedBuildingRow(building, self._suggestions_content)
-            row.removal_requested.connect(lambda b: self._remove_building_selection(b.building_id))
+        if hasattr(self, "_pagination_container"):
+            self._pagination_container.setVisible(False)
+
+        selected_items = list(self._selected_buildings.items())
+        columns_count = 2
+
+        for row_start in range(0, len(selected_items), columns_count):
+            row_items = selected_items[row_start:row_start + columns_count]
+
+            row_container = QFrame(self._suggestions_content)
+            row_container.setStyleSheet("background: transparent; border: none;")
+
+            row_layout = QHBoxLayout(row_container)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(ScreenScale.w(10))
+
+            for bid, building in row_items:
+                card = _SelectedBuildingRow(building, row_container)
+                card.removal_requested.connect(
+                    lambda b: self._remove_building_selection(b.building_id)
+                )
+
+                row_layout.addWidget(card, 1)
+                self._suggestion_cards.append(card)
+
+            if len(row_items) < columns_count:
+                row_layout.addStretch(1)
+
             self._suggestions_layout.insertWidget(
-                self._suggestions_layout.count() - 1, row
+                self._suggestions_layout.count() - 1,
+                row_container
             )
-            self._suggestion_cards.append(row)
 
         if self._suggestion_cards:
             stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
@@ -937,10 +1177,11 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
-        """Load buildings from Backend API with current filters (non-blocking)."""
+        """Load one server-side page using current filters and search text."""
         self._spinner.show_loading(tr("page.field_step1.searching_buildings"))
 
         filters = self.get_filters()
+
         has_active = None
         assignment_val = filters.get('assignment_status')
         if assignment_val == "false":
@@ -948,33 +1189,43 @@ class FieldWorkPreparationStep1(QWidget):
         elif assignment_val == "true":
             has_active = True
 
+        search_text = (filters.get('search_text') or "").strip()
+
         api = get_api_client()
         self._buildings_worker = ApiWorker(
             api.get_buildings_for_assignment,
-            community_code=filters['community'],
-            neighborhood_code=filters['neighborhood'],
+            community_code=filters.get('community') or None,
+            neighborhood_code=filters.get('neighborhood') or None,
+            building_code=search_text or None,
             has_active_assignment=has_active,
-            page=1,
-            page_size=500
+            page=self._current_page,
+            page_size=self._page_size
         )
         self._buildings_worker.finished.connect(self._on_buildings_loaded)
         self._buildings_worker.error.connect(self._on_buildings_load_error)
         self._buildings_worker.start()
 
     def _on_buildings_loaded(self, response):
-        """Handle API response for building search."""
+        """Handle API response for server-side building search/filter page."""
         try:
             items = response.get("items", [])
             buildings = [self._api_dto_to_building(item) for item in items]
 
-            search_text = self.building_search.text().lower().strip()
-            if search_text:
-                buildings = [
-                    b for b in buildings
-                    if search_text in (b.building_id.lower() if b.building_id else "")
-                ]
+            total_count = response.get("totalCount", len(buildings))
+            try:
+                total_count = int(total_count)
+            except (TypeError, ValueError):
+                total_count = len(buildings)
 
-            logger.info(f"Loaded {len(buildings)} buildings from API")
+            self._current_page_buildings = buildings
+            self._total_count = total_count
+            self._total_pages = max(1, (self._total_count + self._page_size - 1) // self._page_size)
+
+            logger.info(
+                f"Loaded field-work buildings page {self._current_page} "
+                f"with {len(buildings)} items out of {self._total_count}"
+            )
+
             self._clear_suggestion_cards()
 
             if buildings:
@@ -985,6 +1236,9 @@ class FieldWorkPreparationStep1(QWidget):
                 self._shimmer_timer.stop()
                 self.empty_label.set_title(tr("wizard.step1.no_buildings"))
                 self._results_stack.setCurrentIndex(0)
+
+            self._update_pagination_controls()
+
         except Exception as e:
             logger.error(f"Failed to process buildings response: {e}", exc_info=True)
             self._clear_suggestion_cards()
@@ -995,8 +1249,51 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_buildings_load_error(self, error_msg):
         """Handle API error for building search."""
         logger.error(f"Failed to load buildings from API: {error_msg}")
+        self._current_page_buildings = []
+        self._total_count = 0
+        self._total_pages = 1
         self._spinner.hide_loading()
+        self._update_pagination_controls()
         Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
+    def _update_pagination_controls(self):
+        """Update pagination text, buttons, and visibility."""
+        if not hasattr(self, "_pagination_container"):
+            return
+
+        if self._showing_selected_view:
+            self._pagination_container.setVisible(False)
+            return
+
+        if self._total_count <= 0:
+            self._field_page_info.setText("0-0 / 0")
+            self._prev_page_btn.setEnabled(False)
+            self._next_page_btn.setEnabled(False)
+            self._pagination_container.setVisible(False)
+            return
+
+        start_index = ((self._current_page - 1) * self._page_size) + 1
+        end_index = min(
+            start_index + len(self._current_page_buildings) - 1,
+            self._total_count
+        )
+
+        self._field_page_info.setText(f"{start_index}-{end_index} / {self._total_count}")
+
+        self._prev_page_btn.setEnabled(self._current_page > 1)
+        self._next_page_btn.setEnabled(self._current_page < self._total_pages)
+
+        self._pagination_container.setVisible(True)
+
+
+    def _go_to_results_page(self, page):
+        """Navigate to another server-side results page."""
+        if page < 1 or page > self._total_pages or page == self._current_page:
+            return
+
+        self._current_page = page
+        self._clear_suggestion_cards()
+        self._set_suggestions_visible(True)
+        self._load_buildings_from_api()
 
     def _api_dto_to_building(self, dto):
         """Convert API BuildingDto to Building object for UI."""
@@ -1018,32 +1315,44 @@ class FieldWorkPreparationStep1(QWidget):
         return building
 
     def _clear_suggestion_cards(self):
-        """Remove all suggestion cards from the scroll area."""
+        """Remove all suggestion cards while keeping the grid and trailing stretch."""
         self._suggestion_cards.clear()
-        while self._suggestions_layout.count() > 1:  # Keep trailing stretch
-            item = self._suggestions_layout.takeAt(0)
+
+        # Clear API result cards from the grid.
+        if hasattr(self, "_buildings_grid"):
+            while self._buildings_grid.count():
+                item = self._buildings_grid.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+
+        # Clear selected-building rows from the outer layout.
+        # Keep item 0 = buildings grid layout, and last item = trailing stretch.
+        while self._suggestions_layout.count() > 2:
+            item = self._suggestions_layout.takeAt(1)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
 
     def _populate_buildings_list(self, buildings):
-        """Populate the results area with _SelectableBuildingCard widgets."""
+        """Populate the results area as a 2-column grid of selectable cards."""
         self._clear_suggestion_cards()
 
-        for building in buildings:
+        for index, building in enumerate(buildings):
             card = _SelectableBuildingCard(building, self._suggestions_content)
             card.selection_changed.connect(self._on_card_selection_changed)
+            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-            # Restore selection state if already selected
+            # Restore selection state if already selected on another page.
             if building.building_id in self._selected_building_ids:
                 card.is_selected = True
 
-            self._suggestions_layout.insertWidget(
-                self._suggestions_layout.count() - 1, card
-            )
-            self._suggestion_cards.append(card)
+            row = index // 2
+            column = index % 2
 
-        # Stagger fade-in entrance animation for the new cards
+            self._buildings_grid.addWidget(card, row, column)
+            self._suggestion_cards.append(card)
+        self._sync_visible_card_selection_state()
         if self._suggestion_cards:
             stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
 
@@ -1057,13 +1366,7 @@ class FieldWorkPreparationStep1(QWidget):
                         card.is_selected = True
                         break
                 return
-            if getattr(building, 'has_active_assignment', False):
-                Toast.show_toast(self, tr("wizard.step1.building_already_assigned"), Toast.WARNING)
-                for card in self._suggestion_cards:
-                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
-                        card.is_selected = False
-                        break
-                return
+            
             self._on_checkbox_changed(building, Qt.Checked)
             for card in self._suggestion_cards:
                 if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
@@ -1087,23 +1390,19 @@ class FieldWorkPreparationStep1(QWidget):
                     if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
                         card.is_selected = False
                         break
-
+        self._sync_visible_card_selection_state()
     def _on_filter_changed(self):
-        """Handle filter change -- auto-load when a geographic filter is active."""
+        """Reload first server-side page when any filter changes."""
+        self._current_page = 1
         self._clear_suggestion_cards()
-        filters = self.get_filters()
-        has_geo_filter = bool(filters['community'] or filters['neighborhood'])
-        if has_geo_filter:
-            self._load_buildings_from_api()
-            self._set_suggestions_visible(True)
-        else:
-            self._set_suggestions_visible(False)
+        self._set_suggestions_visible(True)
+        self._load_buildings_from_api()
 
     def _on_search(self):
         """Handle search icon click - show suggestions with filtered results."""
         search_text = self.building_search.text().strip()
         logger.debug(f"Searching for: {search_text}")
-
+        self._current_page = 1
         self._load_buildings_from_api()
 
         self._set_suggestions_visible(True)
@@ -1260,10 +1559,16 @@ class FieldWorkPreparationStep1(QWidget):
             inside = False
 
             safe_widgets = [
-                self._suggestions_scroll, self.building_search,
-                self.community_combo, self.community_combo.view(),
-                self.neighborhood_combo, self.neighborhood_combo.view(),
-                self.assignment_status_combo, self.assignment_status_combo.view(),
+                self._suggestions_scroll,
+                self._suggestions_scroll.viewport() if self._suggestions_scroll else None,
+                self._suggestions_content if hasattr(self, "_suggestions_content") else None,
+                self.building_search,
+                self.community_combo,
+                self.community_combo.view(),
+                self.neighborhood_combo,
+                self.neighborhood_combo.view(),
+                self.assignment_status_combo,
+                self.assignment_status_combo.view(),
             ]
             for widget in safe_widgets:
                 if widget is None:
@@ -1274,6 +1579,21 @@ class FieldWorkPreparationStep1(QWidget):
                 if global_rect.contains(click_pos):
                     inside = True
                     break
+            if not inside:
+                clicked_widget = QApplication.widgetAt(click_pos)
+                while clicked_widget is not None:
+                    if clicked_widget in (
+                        getattr(self, "_suggestions_scroll", None),
+                        getattr(self, "_suggestions_content", None),
+                    ):
+                        inside = True
+                        break
+
+                    if clicked_widget in getattr(self, "_suggestion_cards", []):
+                        inside = True
+                        break
+
+                    clicked_widget = clicked_widget.parentWidget()
 
             if not inside:
                 self.building_search.blockSignals(True)
@@ -1287,6 +1607,7 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_search_enter(self):
         """Handle Enter key press in search field -- execute search immediately."""
         self._search_debounce_timer.stop()
+        self._current_page = 1
         self._load_buildings_from_api()
         self._set_suggestions_visible(True)
 

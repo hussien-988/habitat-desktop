@@ -588,28 +588,9 @@ class PasswordDialog(QDialog):
                 return
             self.current_password = current
 
-        is_valid, errors = self._validate_against_policy(pwd)
-        if not is_valid:
-            self._highlight_error(self.password_input)
-            self._policy_error_label.setText("\n".join(errors))
-            self._policy_error_label.show()
-            return
-
         self._policy_error_label.hide()
         self.password = pwd
         self.accept()
-
-    def _validate_against_policy(self, password: str) -> tuple:
-        """Validate password against SecurityService policy."""
-        try:
-            from repositories.database import Database
-            from services.security_service import SecurityService
-            db = Database()
-            svc = SecurityService(db)
-            return svc.validate_password(password)
-        except Exception as e:
-            logger.warning(f"Could not validate password policy: {e}")
-            return True, []
 
     def _highlight_error(self, field: QLineEdit):
         if self._is_dark:

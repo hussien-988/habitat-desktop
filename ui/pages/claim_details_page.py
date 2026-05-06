@@ -975,8 +975,8 @@ class ClaimDetailsPage(QWidget):
 
             if self._is_editing:
                 self._claim_type_combo = QComboBox()
-                self._claim_type_combo.setFixedHeight(ScreenScale.h(36))
-                self._claim_type_combo.setMinimumWidth(ScreenScale.w(160))
+                self._claim_type_combo.setFixedHeight(ScreenScale.h(42))
+                self._claim_type_combo.setMinimumWidth(ScreenScale.w(180))
                 self._claim_type_combo.setStyleSheet(StyleManager.combo_box())
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
@@ -1008,8 +1008,10 @@ class ClaimDetailsPage(QWidget):
             type_row.addStretch()
             type_widget = QWidget()
             type_widget.setStyleSheet("background: transparent; border: none;")
+            type_widget.setMinimumHeight(ScreenScale.h(48))
             type_widget.setLayout(type_row)
             self._relation_content.addWidget(type_widget)
+            self._relation_content.addSpacing(ScreenScale.h(4))
 
             # Ownership share row — only for ownership claim type
             is_ownership_type = (current_type in (1, "1", "ownership"))

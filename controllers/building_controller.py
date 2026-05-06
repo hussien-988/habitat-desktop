@@ -43,7 +43,13 @@ class BuildingFilter:
     assigned_to: Optional[str] = None
     limit: int = 100
     offset: int = 0
-
+@dataclass
+class BuildingsPageResult:
+    """One page of buildings loaded from the API."""
+    items: List[Building]
+    total_count: int
+    page: int
+    page_size: int
 
 class BuildingController(BaseController):
     """
@@ -447,7 +453,73 @@ class BuildingController(BaseController):
             logger.error(f"load_buildings failed: {e}", exc_info=True)
             self._emit_error("load_buildings", error_msg)
             return OperationResult.fail(message=error_msg)
+    def load_buildings_page(
+        self,
+        filter_: Optional[BuildingFilter] = None,
+        page: int = 1,
+        page_size: int = 10
+    ) -> OperationResult[BuildingsPageResult]:
+        """
+        Load one page of buildings from the API.
 
+        Best practice for large datasets:
+        - Do not load all buildings into memory.
+        - Ask the backend for only the current page.
+        - Use totalCount from the backend to build pagination UI.
+        """
+        try:
+            self._emit_started("load_buildings_page")
+
+            filter_ = filter_ or self._current_filter
+            page = max(1, int(page or 1))
+            page_size = max(1, int(page_size or 10))
+
+            response = self._api_service.get_buildings_for_assignment(
+                neighborhood_code=filter_.neighborhood_code,
+                building_code=filter_.search_text,
+                building_type=filter_.building_type,
+                building_status=filter_.building_status,
+                page=page,
+                page_size=page_size
+            )
+
+            buildings = []
+            for item in response.get("items", []):
+                building = self._api_dto_to_building(item)
+                buildings.append(building)
+
+            total_count = response.get("totalCount", len(buildings))
+            try:
+                total_count = int(total_count)
+            except (TypeError, ValueError):
+                total_count = len(buildings)
+
+            page_result = BuildingsPageResult(
+                items=buildings,
+                total_count=total_count,
+                page=page,
+                page_size=page_size
+            )
+
+            self._buildings_cache = buildings
+            self._current_filter = filter_
+
+            logger.info(
+                f"Loaded buildings page {page} "
+                f"with {len(buildings)} items "
+                f"out of {total_count}"
+            )
+
+            self._emit_completed("load_buildings_page", True)
+            self.buildings_loaded.emit(buildings)
+
+            return OperationResult.ok(data=page_result)
+
+        except Exception as e:
+            error_msg = map_exception(e)
+            logger.error(f"load_buildings_page failed: {e}", exc_info=True)
+            self._emit_error("load_buildings_page", error_msg)
+            return OperationResult.fail(message=error_msg)
     def search_buildings(self, search_text: str) -> OperationResult[List[Building]]:
         """
         Search buildings by text via API.

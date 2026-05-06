@@ -35,7 +35,7 @@ from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
 from repositories.database import Database
-from controllers.building_controller import BuildingController
+from controllers.building_controller import BuildingController, BuildingFilter
 from services.export_service import ExportService
 from services.validation_service import ValidationService
 from ui.components.rtl_combo import RtlCombo
@@ -2253,11 +2253,12 @@ class BuildingsListPage(QWidget):
         self.export_service = export_service
         self.i18n = i18n
         self.map_view = None
-        self._buildings = []  # Store buildings list
-        self._all_buildings = []  # Store unfiltered buildings
+        self._buildings = []  # Current visible buildings
+        self._all_buildings = []  # Current page buildings loaded from server
         self._current_page = 1
-        self._rows_per_page = 11
+        self._rows_per_page = 10
         self._total_pages = 1
+        self._total_count = 0
 
         # Active filters (same as field_work_preparation_page)
         self._active_filters = {
@@ -2375,26 +2376,58 @@ class BuildingsListPage(QWidget):
         content_layout.addWidget(self._stack)
 
         # Pagination bar
+        # Pagination bar
         self._pagination_bar = QHBoxLayout()
-        self._pagination_bar.setContentsMargins(0, 8, 0, 0)
+        self._pagination_bar.setContentsMargins(0, 10, 0, 0)
+        self._pagination_bar.setSpacing(ScreenScale.w(12))
         self._pagination_bar.addStretch()
 
+        pagination_arrow_style = f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid rgba(56, 144, 223, 0.35);
+                border-radius: 8px;
+                font-size: 14pt;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background-color: #EFF6FF;
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QPushButton:disabled {{
+                color: #B8C7D9;
+                border-color: #E8EDF2;
+                background-color: transparent;
+            }}
+        """
+
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
-        self._prev_btn.setStyleSheet(StyleManager.pagination_button())
+        self._prev_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._prev_btn.setStyleSheet(pagination_arrow_style)
         self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
         self._pagination_bar.addWidget(self._prev_btn)
 
         self._page_info = QLabel("1-0 / 0")
-        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        self._page_info.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        self._page_info.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.PRIMARY_BLUE};
+                background: transparent;
+                padding: 0 10px;
+                font-weight: 700;
+            }}
+        """)
+        self._page_info.setAlignment(Qt.AlignCenter)
         self._pagination_bar.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
-        self._next_btn.setStyleSheet(StyleManager.pagination_button())
+        self._next_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._next_btn.setStyleSheet(pagination_arrow_style)
         self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
         self._pagination_bar.addWidget(self._next_btn)
+
+        self._pagination_bar.addStretch()
 
         content_layout.addLayout(self._pagination_bar)
 
@@ -2429,18 +2462,37 @@ class BuildingsListPage(QWidget):
         self._load_worker.start()
 
     def _fetch_buildings_bg(self):
-        """Background thread: load from controller."""
-        return self.building_controller.load_buildings()
+        """Background thread: load one page from the API."""
+        filter_params = BuildingFilter(
+            neighborhood_code=self._active_filters.get('neighborhood'),
+            building_type=self._active_filters.get('building_type'),
+            building_status=self._active_filters.get('building_status'),
+            search_text=self._search_text or None,
+            limit=self._rows_per_page,
+            offset=(self._current_page - 1) * self._rows_per_page,
+        )
+
+        return self.building_controller.load_buildings_page(
+            filter_=filter_params,
+            page=self._current_page,
+            page_size=self._rows_per_page,
+        )
 
     def _on_buildings_loaded(self, result):
-        """Main thread callback after buildings loaded."""
+        """Main thread callback after buildings page loaded."""
         self._spinner.hide_loading()
-        if result.success:
-            self._all_buildings = result.data
+
+        if result.success and result.data:
+            page_result = result.data
+            self._all_buildings = page_result.items
+            self._total_count = page_result.total_count
+            self._current_page = page_result.page
+            self._rows_per_page = page_result.page_size
         else:
             Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
             logger.error(f"Failed to load buildings: {result.message}")
             self._all_buildings = []
+            self._total_count = 0
 
         self._populate_table_from_buildings()
 
@@ -2449,6 +2501,7 @@ class BuildingsListPage(QWidget):
         self._spinner.hide_loading()
         logger.error(f"Background load failed: {error_msg}")
         self._all_buildings = []
+        self._total_count = 0
         self._stat_total.set_count(0)
         self._empty_state.configure(
             icon_text="⚠",
@@ -2460,16 +2513,16 @@ class BuildingsListPage(QWidget):
         self._update_pagination_info(0, 0, 0)
 
     def _populate_table_from_buildings(self):
-        """Apply filters, paginate, and create building cards."""
-        self._buildings = self._apply_filters(self._all_buildings)
-        self._stat_total.set_count(len(self._all_buildings))
+        """Create cards for the current server-side page."""
+        page_buildings = self._all_buildings
+        self._buildings = page_buildings
 
-        total = len(self._buildings)
+        total = self._total_count
+        self._stat_total.set_count(total)
         self._total_pages = max(1, (total + self._rows_per_page - 1) // self._rows_per_page)
 
         start_idx = (self._current_page - 1) * self._rows_per_page
-        end_idx = min(start_idx + self._rows_per_page, total)
-        page_buildings = self._buildings[start_idx:end_idx]
+        end_idx = min(start_idx + len(page_buildings), total)
 
         # Clear old cards
         self._clear_cards()
@@ -2746,25 +2799,10 @@ class BuildingsListPage(QWidget):
         self._search_debounce.start()
 
     def _execute_building_search(self):
-        """Run search: API search if text present, else reload all buildings."""
+        """Run server-side search from the first page."""
         self._search_debounce.stop()
-        if not self._search_text:
-            self._load_buildings()
-            return
-
-        self._clear_cards()
-        self._spinner.show_loading(tr("page.buildings.loading") or "جاري البحث...")
-
-        search_text = self._search_text
-
-        def _do_search():
-            return self.building_controller.search_buildings(search_text)
-
-        self._search_worker = ApiWorker(_do_search)
-        self._search_worker.finished.connect(self._on_search_results)
-        self._search_worker.error.connect(self._on_search_error)
-        self._search_worker.start()
-
+        self._current_page = 1
+        self._load_buildings()
     def _on_search_results(self, result):
         """Display search results in card grid."""
         self._spinner.hide_loading()
@@ -2824,15 +2862,14 @@ class BuildingsListPage(QWidget):
         self._next_btn.setEnabled(self._current_page < self._total_pages)
 
     def _go_to_page(self, page):
-        """Navigate to a specific page."""
-        if 1 <= page <= self._total_pages:
+        """Navigate to a specific server-side page."""
+        if 1 <= page <= self._total_pages and page != self._current_page:
             self._current_page = page
-            self._populate_table_from_buildings()
+            self._load_buildings()
 
     def _on_page_changed(self, page):
         """Handle page change."""
-        self._current_page = page
-        self._populate_table_from_buildings()
+        self._go_to_page(page)
 
     def _show_on_map(self, building: Building):
         """

@@ -116,6 +116,8 @@ class ModificationReasonDialog(QDialog):
         reason_label = QLabel(tr("dialog.modification_reason.reason_label").format(min_length=_MIN_REASON_LENGTH))
         reason_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         reason_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
+        reason_label.setWordWrap(True)
+        reason_label.setMinimumHeight(ScreenScale.h(24))
         layout.addWidget(reason_label)
 
         # Reason input
@@ -141,8 +143,10 @@ class ModificationReasonDialog(QDialog):
 
         # Error label (hidden initially)
         self._error_label = QLabel()
-        self._error_label.setFont(create_font(size=9))
+        self._error_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         self._error_label.setStyleSheet(f"color: {Colors.ERROR};")
+        self._error_label.setWordWrap(True)
+        self._error_label.setMinimumHeight(ScreenScale.h(26))
         self._error_label.hide()
         layout.addWidget(self._error_label)
 

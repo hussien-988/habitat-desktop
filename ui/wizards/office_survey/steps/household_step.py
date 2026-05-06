@@ -741,16 +741,16 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: gender sum <= householdSize
+        # Validate: gender sum must equal householdSize (backend rule)
         gender_sum = self.hh_male_count.value() + self.hh_female_count.value()
-        if gender_sum > total_entered:
-            result.add_error(tr("wizard.household.gender_exceeds_total"))
+        if gender_sum != total_entered:
+            result.add_error(tr("wizard.household.gender_must_equal_total"))
             return result
 
-        # Validate: age sum <= householdSize
+        # Validate: age sum must equal householdSize (backend rule)
         age_sum = self.hh_adult_count.value() + self.hh_child_count.value() + self.hh_elderly_count.value()
-        if age_sum > total_entered:
-            result.add_error(tr("wizard.household.age_exceeds_total"))
+        if age_sum != total_entered:
+            result.add_error(tr("wizard.household.age_must_equal_total"))
             return result
 
         # Validate: disabled count must not exceed total members

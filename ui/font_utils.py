@@ -97,6 +97,20 @@ class FontManager:
         #         QFontDatabase.addApplicationFont(font_path)
         pass
 
+    # Minimum point size to keep Arabic text legible on small screens
+    _MIN_SCALED_POINT_SIZE = 7
+
+    @staticmethod
+    def _scaled_point_size(size: int) -> int:
+        """Apply ScreenScale to a font point size with a legibility floor."""
+        try:
+            from ui.design_system import ScreenScale
+            scale = ScreenScale.scale()
+        except Exception:
+            scale = 1.0
+        scaled = int(round(size * scale))
+        return max(FontManager._MIN_SCALED_POINT_SIZE, scaled)
+
     @staticmethod
     def create_font(
         size: int = SIZE_BODY,
@@ -107,8 +121,11 @@ class FontManager:
         """
         Create a QFont with proper configuration.
 
+        The provided point size is scaled via ScreenScale so typography stays
+        proportional with the rest of the responsive UI.
+
         Args:
-            size: Font size in points (default: 10pt)
+            size: Font size in points (default: 10pt) — scaled via ScreenScale
             weight: Font weight (default: 400)
             letter_spacing: Letter spacing in pixels (default: 0)
             families: Custom font family list (default: uses PRIMARY_FONT_FAMILY)
@@ -128,7 +145,7 @@ class FontManager:
 
         font = QFont()
         font.setFamilies(families)
-        font.setPointSize(size)
+        font.setPointSize(FontManager._scaled_point_size(size))
         font.setWeight(weight)
         font.setLetterSpacing(QFont.AbsoluteSpacing, letter_spacing)
 

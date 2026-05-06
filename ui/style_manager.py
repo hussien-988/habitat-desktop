@@ -679,8 +679,8 @@ class StyleManager:
                 background-color: {Colors.SURFACE};
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: {BorderRadius.SM}px;
-                padding: 8px 12px;
-                min-height: 20px;
+                padding: 4px 12px;
+                min-height: 24px;
                 min-width: 100px;
                 color: {Colors.TEXT_PRIMARY};
             }}
@@ -689,14 +689,13 @@ class StyleManager:
             }}
             QComboBox::drop-down {{
                 border: none;
-                width: 24px;
+                width: 30px;
+                subcontrol-position: right center;
             }}
             QComboBox::down-arrow {{
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid {Colors.TEXT_PRIMARY};
-                margin-right: 8px;
+                image: url({_IMAGES_DIR}/down.png);
+                width: 12px;
+                height: 12px;
             }}
             QComboBox QAbstractItemView {{
                 background-color: {Colors.SURFACE};

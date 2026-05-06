@@ -294,10 +294,6 @@ class TRRCMSApiClient:
             body["userId"] = user_id
         return self._request("POST", "/v1/auth/change-password", body) or {}
 
-    def get_security_settings(self) -> Dict[str, Any]:
-        """GET /v1/security-settings — admin-managed security policy (requires auth)."""
-        return self._request("GET", "/v1/security-settings/current") or {}
-
     def lock_building(self, building_id: str, is_locked: bool) -> Dict[str, Any]:
         """PUT /v1/Buildings/{id}/lock — toggle building lock state."""
         return self._request("PUT", f"/v1/Buildings/{building_id}/lock", {"isLocked": is_locked}) or {}

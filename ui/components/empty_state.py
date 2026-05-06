@@ -82,27 +82,27 @@ class EmptyState(QWidget):
         layout.addSpacing(24)
 
         # Title
-        title_label = QLabel(self.title_text)
-        title_label.setAlignment(Qt.AlignCenter)
+        self._title_label = QLabel(self.title_text)
+        self._title_label.setAlignment(Qt.AlignCenter)
         # Use centralized font utility
         title_font = create_font(size=FontManager.SIZE_TITLE, weight=QFont.DemiBold)
-        title_label.setFont(title_font)
-        title_label.setStyleSheet(StyleManager.label_title())
-        layout.addWidget(title_label)
+        self._title_label.setFont(title_font)
+        self._title_label.setStyleSheet(StyleManager.label_title())
+        layout.addWidget(self._title_label)
 
         # Spacing between title and description
         layout.addSpacing(8)
 
         # Description
-        description_label = QLabel(self.description_text)
-        description_label.setAlignment(Qt.AlignCenter)
-        description_label.setWordWrap(True)
-        description_label.setMaximumWidth(ScreenScale.w(400))
+        self._description_label = QLabel(self.description_text)
+        self._description_label.setAlignment(Qt.AlignCenter)
+        self._description_label.setWordWrap(True)
+        self._description_label.setMaximumWidth(ScreenScale.w(400))
         # Use centralized font utility
         desc_font = create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR)
-        description_label.setFont(desc_font)
-        description_label.setStyleSheet(StyleManager.label_subtitle())
-        layout.addWidget(description_label)
+        self._description_label.setFont(desc_font)
+        self._description_label.setStyleSheet(StyleManager.label_subtitle())
+        layout.addWidget(self._description_label)
 
         layout.addSpacing(16)
         self._action_btn = QPushButton()
@@ -160,15 +160,11 @@ class EmptyState(QWidget):
     def set_title(self, title: str):
         """Update the title text."""
         self.title_text = title
-        for widget in self.findChildren(QLabel):
-            if widget.font().pointSize() == 18:
-                widget.setText(title)
-                break
+        if hasattr(self, "_title_label") and self._title_label:
+            self._title_label.setText(title)
 
     def set_description(self, description: str):
         """Update the description text."""
         self.description_text = description
-        for widget in self.findChildren(QLabel):
-            if widget.font().pointSize() == 14 and widget.wordWrap():
-                widget.setText(description)
-                break
+        if hasattr(self, "_description_label") and self._description_label:
+            self._description_label.setText(description)

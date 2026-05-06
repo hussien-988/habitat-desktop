@@ -36,6 +36,7 @@ from ui.font_utils import FontManager, create_font
 from ui.design_system import Colors, ScreenScale
 from services.translation_manager import tr, get_layout_direction
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.components.building_location_map_preview import BuildingLocationMapPreview
 
 logger = get_logger(__name__)
 
@@ -473,110 +474,21 @@ class BuildingSelectionStep(BaseStep):
 
             return section, value
 
-        # Section 1: Map (left)
+        # Section 1: Map (left) - Interactive Leaflet preview
         map_section = QVBoxLayout()
-        map_section.setSpacing(0)  # No spacing - manual control
+        map_section.setSpacing(0)
 
-        # Map container (QLabel to support QPixmap)
-        map_container = QLabel()
-        map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))  # Width: 400px, Height: 130px        map_container.setAlignment(Qt.AlignCenter)
-        map_container.setObjectName("mapContainer")
+        self.map_preview = BuildingLocationMapPreview(
+            button_text=tr("wizard.building.open_map"),
+            height=130,
+            parent=self,
+        )
+        self.map_preview.setFixedWidth(ScreenScale.w(400))
+        self.map_preview.setFixedHeight(ScreenScale.h(130))
+        self.map_preview.expand_requested.connect(self._open_map_dialog)
 
-        # Load background map image using Icon component (absolute paths)
-        from ui.components.icon import Icon
-
-        # Try to load map image (image-40.png or map-placeholder.png)
-        map_bg_pixmap = Icon.load_pixmap("image-40", size=None)
-        if not map_bg_pixmap or map_bg_pixmap.isNull():
-            # Fallback to map-placeholder
-            map_bg_pixmap = Icon.load_pixmap("map-placeholder", size=None)
-
-        if map_bg_pixmap and not map_bg_pixmap.isNull():
-            # Scale to exact size while maintaining quality
-            scaled_bg = map_bg_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
-            map_container.setPixmap(scaled_bg)
-
-        # Styling with border-radius (works with QLabel)
-        map_container.setStyleSheet(f"""
-            QLabel#mapContainer {{
-                background-color: #E8E8E8;
-                border-radius: 8px;
-            }}
-        """)
-
-        # Layout for map container (no automatic layout - manual positioning)
-        # We'll use absolute positioning for button and icon
-
-        # White button in top-left corner (opposite to title)
-        # Dimensions: 94×20px, border-radius: 5px, padding: 4px
-        map_button = QPushButton(map_container)
-        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))  # Width: 94px, Height: 20px        map_button.move(8, 8)  # Position in top-left corner with small margin
-        map_button.setCursor(Qt.PointingHandCursor)
-
-        # Icon: pill.png with PRIMARY_BLUE color using Icon.load_pixmap
-        from ui.components.icon import Icon
-        icon_pixmap = Icon.load_pixmap("pill", size=12)
-        if icon_pixmap and not icon_pixmap.isNull():
-            map_button.setIcon(QIcon(icon_pixmap))
-            map_button.setIconSize(QSize(12, 12))
-
-        # Map button text
-        map_button.setText(tr("wizard.building.open_map"))
-        map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
-
-        # Professional shadow effect for floating appearance
-        map_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: white;
-                color: {Colors.PRIMARY_BLUE};
-                border: none;
-                border-radius: 5px;
-                padding: 4px;
-                text-align: center;
-            }}
-            QPushButton:hover {{
-                background-color: #F5F5F5;
-            }}
-        """)
-
-        # Apply shadow effect using QGraphicsDropShadowEffect for professional floating look
-        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(8)  # Soft blur
-        shadow.setXOffset(0)  # Centered shadow
-        shadow.setYOffset(2)  # Slight offset downward
-        shadow.setColor(QColor(0, 0, 0, 60))  # Semi-transparent black (alpha: 60/255)
-        map_button.setGraphicsEffect(shadow)
-
-        map_button.clicked.connect(self._open_map_dialog)
-
-        # Location icon in center of map
-        # carbon_location-filled.png - larger size for better visibility
-        location_icon = QLabel(map_container)
-        from ui.components.icon import Icon
-        location_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
-        if location_pixmap and not location_pixmap.isNull():
-            location_icon.setPixmap(location_pixmap)
-            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
-            # Position in center: (400-56)/2 = 172, (130-56)/2 = 37
-            location_icon.move(172, 37)
-
-            # Professional design: transparent background
-            # Note: Qt doesn't support CSS filter property, removed to prevent warnings
-            location_icon.setStyleSheet("""
-                background: transparent;
-            """)
-        else:
-            # Fallback: use text emoji with larger size
-            location_icon.setText("📍")
-            location_icon.setFont(create_font(size=32, weight=FontManager.WEIGHT_REGULAR))
-            location_icon.setStyleSheet("background: transparent;")
-            location_icon.setAlignment(Qt.AlignCenter)
-            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
-            location_icon.move(172, 37)
-
-        map_section.addWidget(map_container)
-        map_section.addStretch(1)  # Push content to top
+        map_section.addWidget(self.map_preview)
+        map_section.addStretch(1)
 
         content_row.addLayout(map_section, stretch=1)
 
@@ -651,6 +563,10 @@ class BuildingSelectionStep(BaseStep):
             self.ui_general_desc.setText(getattr(selected_building, 'general_description', tr("wizard.building.general_description_fallback")))
             self.ui_location_desc.setText(getattr(selected_building, 'location_description', tr("wizard.building.location_description")))
 
+            # Update interactive map preview
+            if hasattr(self, 'map_preview'):
+                self.map_preview.set_building(selected_building)
+
             # Show location card
             self.location_card.setVisible(True)
 
@@ -722,6 +638,10 @@ class BuildingSelectionStep(BaseStep):
             # Update location card
             self.ui_general_desc.setText(getattr(selected_building, 'general_description', tr("wizard.building.general_description_fallback")))
             self.ui_location_desc.setText(getattr(selected_building, 'location_description', tr("wizard.building.location_description")))
+
+            # Update interactive map preview
+            if hasattr(self, 'map_preview'):
+                self.map_preview.set_building(selected_building)
 
             # Show cards
             self._update_address_display(selected_building)
@@ -856,10 +776,9 @@ class BuildingSelectionStep(BaseStep):
         self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
         self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
 
-        # Update map thumbnail if coordinates are available
-        if hasattr(building, 'latitude') and hasattr(building, 'longitude'):
-            # TODO: Load actual map thumbnail from coordinates
-            pass
+        # Update interactive map preview
+        if hasattr(self, 'map_preview'):
+            self.map_preview.set_building(building)
 
         # Show location card
         self.location_card.setVisible(True)
@@ -926,6 +845,11 @@ class BuildingSelectionStep(BaseStep):
                 # Update location card
                 self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
                 self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
+
+                # Update interactive map preview
+                if hasattr(self, 'map_preview'):
+                    self.map_preview.set_building(building)
+
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
@@ -1092,6 +1016,11 @@ class BuildingSelectionStep(BaseStep):
                 # Update location card
                 self.ui_general_desc.setText(getattr(building, 'general_description', tr("wizard.building.general_description_fallback")))
                 self.ui_location_desc.setText(getattr(building, 'location_description', tr("wizard.building.location_description")))
+
+                # Update interactive map preview
+                if hasattr(self, 'map_preview'):
+                    self.map_preview.set_building(building)
+
                 self.location_card.setVisible(True)
 
                 self.buildings_list.setVisible(False)
@@ -1240,6 +1169,11 @@ class BuildingSelectionStep(BaseStep):
             # Update location card
             self.ui_general_desc.setText(getattr(self.context.building, 'general_description', tr("wizard.building.general_description_fallback")))
             self.ui_location_desc.setText(getattr(self.context.building, 'location_description', tr("wizard.building.location_description")))
+
+            # Update interactive map preview
+            if hasattr(self, 'map_preview'):
+                self.map_preview.set_building(self.context.building)
+
             self.location_card.setVisible(True)
 
             # حقل البحث فارغ + إخفاء كارد الاقتراحات (البناء مختار بالفعل)
