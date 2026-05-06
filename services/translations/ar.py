@@ -615,6 +615,7 @@ AR_TRANSLATIONS = {
     "wizard.person_dialog.choose_files": "اختر ملفات",
     "wizard.person_dialog.files_selected": "تم اختيار {count} ملف",
     "wizard.person_dialog.nid_required": "الرقم الوطني مطلوب",
+    "wizard.person_dialog.gender_required": "الجنس مطلوب",
     "wizard.person_dialog.nid_must_be_11": "يجب أن يكون 11 رقم",
     "wizard.person_dialog.nid_exists": "الرقم موجود مسبقاً",
     "wizard.person_dialog.nid_available": "الرقم متاح",

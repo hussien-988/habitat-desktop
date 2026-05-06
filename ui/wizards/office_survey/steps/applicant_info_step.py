@@ -132,27 +132,47 @@ class ApplicantInfoStep(BaseStep):
         doc_type_row.setContentsMargins(0, 0, 0, 4)
         self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
         self.lbl_id_doc_type.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
-        self._id_doc_type_combo = QComboBox()
+        self._id_doc_type_combo = RtlCombo()
         self._id_doc_type_combo.setFocusPolicy(Qt.ClickFocus)
+
         from services.display_mappings import get_identification_document_type_options
         for code, label in get_identification_document_type_options():
             if code == 0:
                 continue
             self._id_doc_type_combo.addItem(label, code)
-        self._id_doc_type_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #D0D7E2; border-radius: 8px;
-                padding: 6px 10px; background: #F8FAFF; color: #2C3E50;
-                font-size: 13px; min-height: 28px;
+
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        self._id_doc_type_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid #D0D7E2;
+                border-radius: 8px;
+                padding: 6px 10px;
+                background: #F8FAFF;
+                color: #2C3E50;
+                font-size: 13px;
+                min-height: 28px;
                 outline: none;
-            }
-            QComboBox:focus { border: 1.5px solid #3890DF; }
-            QComboBox::drop-down { border: none; width: 28px; }
-            QComboBox::down-arrow {
-                image: none; width: 0; height: 0;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-top: 5px solid #7F8C9B;
-            }
+            }}
+            QComboBox QLineEdit {{
+                border: none;
+                background: transparent;
+                color: #2C3E50;
+                padding: 0px 24px 0px 24px;
+                selection-background-color: transparent;
+            }}
+            QComboBox:focus {{
+                border: 1.5px solid #3890DF;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 28px;
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 12px;
+                height: 12px;
+            }}
         """)
         doc_type_row.addWidget(self.lbl_id_doc_type)
         doc_type_row.addWidget(self._id_doc_type_combo, 1)
@@ -411,19 +431,68 @@ class ApplicantInfoStep(BaseStep):
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
         self._update_upload_thumbnails("id_upload", self.uploaded_files)
+    def _thumbnail_columns_for_frame(self, frame: QFrame) -> int:
+        """Calculate thumbnail columns based on the actual available width."""
+        available_width = frame.width() - ScreenScale.w(48)
+        thumb_width = ScreenScale.w(58)
+
+        if available_width <= 0:
+            return 1
+
+        return max(1, available_width // thumb_width)
+
+
+    def _sync_upload_scroll_height(self, frame: QFrame, file_count: int, columns: int):
+        """Keep uploaded thumbnails area compact, with vertical scroll only when needed."""
+        if not hasattr(frame, "_thumbnails_scroll"):
+            return
+
+        if file_count <= 0:
+            frame._thumbnails_scroll.setVisible(False)
+            return
+
+        rows = (file_count + columns - 1) // columns
+        visible_rows = min(rows, 2)
+
+        row_height = ScreenScale.h(58)
+        spacing = ScreenScale.h(6)
+        vertical_padding = ScreenScale.h(4)
+
+        height = visible_rows * row_height
+        if visible_rows > 1:
+            height += (visible_rows - 1) * spacing
+        height += vertical_padding
+
+        frame._thumbnails_scroll.setFixedHeight(height)
+        frame._thumbnails_scroll.setVisible(True)
 
     def _update_upload_thumbnails(self, obj_name: str, file_paths: list):
         frame = self.findChild(QFrame, obj_name)
         if not frame or not hasattr(frame, "_thumbnails_layout"):
             return
+
         layout = frame._thumbnails_layout
+
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        for fp in file_paths:
-            layout.addWidget(self._create_thumbnail_widget(fp, self._remove_uploaded_file))
 
+        columns = self._thumbnail_columns_for_frame(frame)
+        self._sync_upload_scroll_height(frame, len(file_paths), columns)
+
+        if not file_paths:
+            return
+
+        for index, fp in enumerate(file_paths):
+            row = index // columns
+            col = index % columns
+            layout.addWidget(
+                self._create_thumbnail_widget(fp, self._remove_uploaded_file),
+                row,
+                col,
+                Qt.AlignRight | Qt.AlignTop,
+            )
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         container = QWidget()
         container.setFixedSize(ScreenScale.w(52), ScreenScale.h(52))
@@ -503,7 +572,7 @@ class ApplicantInfoStep(BaseStep):
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(ScreenScale.h(60))
+        frame.setMinimumHeight(ScreenScale.h(68))
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
                 border: 2px dashed rgba(56, 144, 223, 0.35);
@@ -516,26 +585,45 @@ class ApplicantInfoStep(BaseStep):
             }}
         """)
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(16, 10, 16, 10)
+        frame_layout.setContentsMargins(16, 12, 16, 12)
         frame_layout.setSpacing(8)
 
-        row_layout = QHBoxLayout()
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(8)
+        # Uploaded files area — above the upload action row
+        thumbnails_scroll = QScrollArea()
+        thumbnails_scroll.setWidgetResizable(True)
+        thumbnails_scroll.setFrameShape(QFrame.NoFrame)
+        thumbnails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        thumbnails_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        thumbnails_scroll.setVisible(False)
+        thumbnails_scroll.setStyleSheet(        
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         thumbnails_container = QWidget()
         thumbnails_container.setStyleSheet("border: none; background: transparent;")
-        thumbnails_layout = QHBoxLayout(thumbnails_container)
+
+        thumbnails_layout = QGridLayout(thumbnails_container)
         thumbnails_layout.setContentsMargins(0, 0, 0, 0)
-        thumbnails_layout.setSpacing(6)
-        row_layout.addWidget(thumbnails_container)
-        row_layout.addStretch()
+        thumbnails_layout.setHorizontalSpacing(ScreenScale.w(6))
+        thumbnails_layout.setVerticalSpacing(ScreenScale.h(6))
+        thumbnails_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        thumbnails_scroll.setWidget(thumbnails_container)
+        frame_layout.addWidget(thumbnails_scroll)
+
+        # Upload action row — icon and text stay on their own line
+        upload_row = QHBoxLayout()
+        upload_row.setContentsMargins(0, 0, 0, 0)
+        upload_row.setSpacing(8)
+
+        upload_row.addStretch()
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
+        icon_lbl.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("border: none; background: transparent;")
-        up_px = Icon.load_pixmap("upload_file", size=22)
+        icon_lbl.setStyleSheet("border: none; background: transparent; padding: 0px; margin: 0px;")
+        up_px = Icon.load_pixmap("upload_file", size=20)
         if up_px and not up_px.isNull():
             icon_lbl.setPixmap(up_px)
         else:
@@ -543,7 +631,7 @@ class ApplicantInfoStep(BaseStep):
             icon_lbl.setStyleSheet("border: none; font-size: 18px; color: #3890DF; background: transparent;")
         icon_lbl.setCursor(Qt.PointingHandCursor)
         icon_lbl.mousePressEvent = lambda e: browse_callback()
-        row_layout.addWidget(icon_lbl)
+        upload_row.addWidget(icon_lbl)
 
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
@@ -556,13 +644,23 @@ class ApplicantInfoStep(BaseStep):
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
-        row_layout.addWidget(text_btn)
-        row_layout.addStretch()
-        frame_layout.addLayout(row_layout)
+        upload_row.addWidget(text_btn)
+
+        upload_row.addStretch()
+        frame_layout.addLayout(upload_row)
 
         frame._thumbnails_container = thumbnails_container
         frame._thumbnails_layout = thumbnails_layout
+        frame._thumbnails_scroll = thumbnails_scroll
         frame._text_btn = text_btn
+        original_resize_event = frame.resizeEvent
+
+        def _resize_upload_frame(event, current_frame=frame, original_handler=original_resize_event):
+            if original_handler:
+                original_handler(event)
+            self._update_upload_thumbnails(current_frame.objectName(), self.uploaded_files)
+
+        frame.resizeEvent = _resize_upload_frame
         return frame
 
     # Editable birth combos + gender radios
