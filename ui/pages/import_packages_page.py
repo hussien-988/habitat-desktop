@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QMenu, QAction, QStackedWidget, QPushButton,
-    QScrollArea, QLineEdit, QComboBox, QSizePolicy,
+    QScrollArea, QComboBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QCursor
@@ -264,49 +264,81 @@ class ImportPackagesPage(QWidget):
         content_layout.addWidget(self._subtitle)
 
         # Filters bar (local filtering of currently loaded packages)
+        # Filters bar (local filtering of currently loaded packages)
         self._filters_bar = QFrame()
-        self._filters_bar.setStyleSheet(
-            "QFrame { background: transparent; border: none; }"
-        )
+        self._filters_bar.setObjectName("ImportFiltersBar")
         self._filters_bar.setLayoutDirection(get_layout_direction())
+        self._filters_bar.setStyleSheet("""
+            QFrame#ImportFiltersBar {
+                background: #F8FAFC;
+                border: 1px solid #E5E7EB;
+                border-radius: 12px;
+            }
+
+            QLabel#ImportStatusFilterLabel {
+                color: #475569;
+                background: transparent;
+                border: none;
+            }
+            QLabel#ImportFilterResultsLabel {
+                color: #64748B;
+                background: transparent;
+                border: none;
+                padding: 0 4px;
+            }
+
+            QComboBox {
+                background: white;
+                border: 1px solid #CBD5E1;
+                border-radius: 9px;
+                padding: 0 12px;
+                color: #1E293B;
+            }
+
+            QComboBox:hover {
+        border-color: #94A3B8;
+            }
+
+            QComboBox:focus {
+                border-color: #3890DF;
+            }
+
+            QComboBox::drop-down {
+                border: none;
+                width: 28px;
+            }
+        """)
+
         filters_layout = QHBoxLayout(self._filters_bar)
-        filters_layout.setContentsMargins(0, 0, 0, 12)
+        filters_layout.setContentsMargins(12, 10, 12, 10)
         filters_layout.setSpacing(10)
 
-        self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText(
-            tr("page.import_packages.search_placeholder")
+        self._status_filter_label = QLabel(tr("page.import_packages.status_filter_label"))
+        self._status_filter_label.setObjectName("ImportStatusFilterLabel")
+        self._status_filter_label.setFont(
+            create_font(size=9, weight=FontManager.WEIGHT_MEDIUM)
         )
-        self._search_input.setFixedHeight(ScreenScale.h(36))
-        self._search_input.setStyleSheet("""
-            QLineEdit {
-                background: white;
-                border: 1px solid #D1D5DB;
-                border-radius: 8px;
-                padding: 0 12px;
-                color: #2C3E50;
-            }
-            QLineEdit:focus { border-color: #3890DF; }
-        """)
-        self._search_input.textChanged.connect(self._on_filters_changed)
-        filters_layout.addWidget(self._search_input, 1)
+        apply_label_alignment(self._status_filter_label)
 
         self._status_filter_combo = QComboBox()
         self._status_filter_combo.setFixedHeight(ScreenScale.h(36))
-        self._status_filter_combo.setMinimumWidth(ScreenScale.w(170))
-        self._status_filter_combo.setStyleSheet("""
-            QComboBox {
-                background: white;
-                border: 1px solid #D1D5DB;
-                border-radius: 8px;
-                padding: 0 12px;
-                color: #2C3E50;
-            }
-            QComboBox:focus { border-color: #3890DF; }
-        """)
+        self._status_filter_combo.setMinimumWidth(ScreenScale.w(220))
+        self._status_filter_combo.setMaximumWidth(ScreenScale.w(280))
+
+        self._filter_results_label = QLabel("")
+        self._filter_results_label.setObjectName("ImportFilterResultsLabel")
+        self._filter_results_label.setFont(
+            create_font(size=9, weight=FontManager.WEIGHT_REGULAR)
+        )
+        apply_label_alignment(self._filter_results_label)
+
         self._populate_status_filter()
         self._status_filter_combo.currentIndexChanged.connect(self._on_filters_changed)
+
+        filters_layout.addWidget(self._status_filter_label)
         filters_layout.addWidget(self._status_filter_combo)
+        filters_layout.addWidget(self._filter_results_label)
+        filters_layout.addStretch(1)
 
         content_layout.addWidget(self._filters_bar)
 
@@ -577,53 +609,103 @@ class ImportPackagesPage(QWidget):
         """Flip between active queue and history modes (single toggle button)."""
         new_mode = "history" if self._mode == "queue" else "queue"
         self._set_mode(new_mode)
-
     def _populate_status_filter(self):
-        """Fill the status filter dropdown for the current mode."""
-        from services.import_status_map import status_label_key, ACTIVE_QUEUE, HISTORY
-        prev_data = self._status_filter_combo.currentData() if self._status_filter_combo.count() else None
-        self._status_filter_combo.blockSignals(True)
-        self._status_filter_combo.clear()
-        self._status_filter_combo.addItem(tr("page.import_packages.filter_all_statuses"), None)
-        codes = sorted(ACTIVE_QUEUE) if getattr(self, "_mode", "queue") == "queue" else sorted(HISTORY)
-        for code in codes:
-            self._status_filter_combo.addItem(tr(status_label_key(code)), code)
-        if prev_data is not None:
-            idx = self._status_filter_combo.findData(prev_data)
-            if idx >= 0:
-                self._status_filter_combo.setCurrentIndex(idx)
-        self._status_filter_combo.blockSignals(False)
+        """Fill the status filter dropdown with all import package statuses.
 
+        The options come from services.import_status_map to keep the UI DRY
+        and language-switch friendly.
+        """
+        from services.import_status_map import status_filter_options
+
+        prev_data = (
+            self._status_filter_combo.currentData()
+            if self._status_filter_combo.count()
+            else None
+        )
+
+        self._status_filter_combo.blockSignals(True)
+
+        try:
+            self._status_filter_combo.clear()
+            self._status_filter_combo.addItem(
+                tr("page.import_packages.filter_all_statuses"),
+                None
+            )
+
+            for code, label_key in status_filter_options():
+                self._status_filter_combo.addItem(tr(label_key), code)
+
+            if prev_data is not None:
+                idx = self._status_filter_combo.findData(prev_data)
+                if idx >= 0:
+                    self._status_filter_combo.setCurrentIndex(idx)
+
+        finally:
+            self._status_filter_combo.blockSignals(False)
     def _on_filters_changed(self, *_):
         """Reset to first page and re-render with the current filters applied."""
         self._current_page = 1
         self._render_current_mode()
 
     def _apply_local_filters(self, items):
-        """Apply search + status filters in-memory."""
-        query = (self._search_input.text() or "").strip().lower()
+        """Apply the selected status filter in-memory."""
         status_value = self._status_filter_combo.currentData()
         result = []
+
         for pkg in items:
             if status_value is not None:
                 raw = pkg.get("status", 0)
                 code = int(raw) if isinstance(raw, int) or (isinstance(raw, str) and raw.isdigit()) else 0
+
                 if code != status_value:
                     continue
-            if query:
-                name = (pkg.get("packageName") or pkg.get("name") or "").lower()
-                if query not in name:
-                    continue
+
             result.append(pkg)
+
         return result
+    def _update_filter_results_label(self, total_count: int, filtered_count: int):
+        """Update the small filter result summary next to the status filter."""
+        if not hasattr(self, "_filter_results_label"):
+            return
+
+        if filtered_count == total_count:
+            text = tr("page.import_packages.filter_results_all").format(
+                count=total_count
+            )
+        else:
+            text = tr("page.import_packages.filter_results_filtered").format(
+                shown=filtered_count,
+                total=total_count,
+            )
+
+        self._filter_results_label.setText(text)
+        apply_label_alignment(self._filter_results_label)
 
     def _render_current_mode(self):
-        """Re-render cards for the current mode using current filters/pagination."""
+        """Re-render cards using current filters/pagination.
+
+        When a specific status filter is selected the search runs against
+        ALL loaded packages, regardless of the active/history mode toggle —
+        so picking "Completed" while viewing the active queue surfaces the
+        completed packages anyway. With no status filter selected, the view
+        respects the mode partition.
+        """
         if not hasattr(self, "_queue_packages"):
             return
-        base_items = (self._queue_packages if self._mode == "queue"
-                      else self._history_packages)
+
+        status_value = (
+            self._status_filter_combo.currentData()
+            if hasattr(self, "_status_filter_combo") else None
+        )
+        if status_value is not None:
+            base_items = getattr(self, "_packages", []) or []
+        else:
+            base_items = (self._queue_packages if self._mode == "queue"
+                          else self._history_packages)
+
         filtered = self._apply_local_filters(base_items)
+        self._update_filter_results_label(len(base_items), len(filtered))
+
         self._mode_total = len(filtered)
         self._total_pages = max(1, (self._mode_total + self._rows_per_page - 1) // self._rows_per_page)
         if self._current_page > self._total_pages:
@@ -841,50 +923,51 @@ class ImportPackagesPage(QWidget):
 
         Only ACTIONABLE statuses (Pending → Completed progression) enable
         the button. Dead-end statuses (Quarantined, Cancelled, Failed,
-        ValidationFailed, PartiallyCompleted) leave the button disabled —
-        opening the wizard for them used to show a brief info dialog and
-        then bounce back to the list, which the user found annoying.
+        ValidationFailed, PartiallyCompleted) leave the button disabled.
         """
         from services.import_status_map import (
             action_label_key, is_actionable_status,
         )
 
-        has_sel = bool(self._selected_pkg_id)
-        if has_sel and self._selected_card is not None:
+        has_valid_selection = bool(self._selected_pkg_id and self._selected_card is not None)
+
+        if hasattr(self, "_action_bar"):
+            self._action_bar.setVisible(has_valid_selection)
+
+        if has_valid_selection:
             name = self._selected_card._data.get("package_name", "") or self._selected_pkg_id
             status_code = self._selected_card._data.get("status_code", 0)
+
             self._selected_label.setText(
                 tr("page.import_packages.selected_prefix").format(name=name)
             )
             self._selected_label.setVisible(True)
+
             actionable = is_actionable_status(status_code) if status_code else True
+
             if status_code and actionable:
-                # Actionable status — show the status-specific label
-                # ("بدء المعالجة"، "عرض التقرير"، etc.) and enable click.
                 self._start_btn.setVisible(True)
                 self._start_btn.setEnabled(True)
                 self._start_btn.setText(tr(action_label_key(status_code)))
                 self._start_btn.setToolTip("")
+
             elif status_code:
-                # Non-actionable terminal status (Quarantined, Failed,
-                # Cancelled, ValidationFailed, PartiallyCompleted): hide
-                # the action button entirely. No "view reason" pseudo-
-                # action — the badge in the card already communicates
-                # the state and clicking through used to flash a useless
-                # bounce screen.
                 self._start_btn.setVisible(False)
                 self._start_btn.setEnabled(False)
                 self._start_btn.setToolTip("")
+
             else:
                 self._start_btn.setVisible(True)
                 self._start_btn.setEnabled(True)
                 self._start_btn.setText(tr("page.import_packages.start_processing"))
                 self._start_btn.setToolTip("")
+
         else:
-            self._start_btn.setVisible(True)
-            self._start_btn.setEnabled(False)
             self._selected_label.clear()
             self._selected_label.setVisible(False)
+
+            self._start_btn.setVisible(False)
+            self._start_btn.setEnabled(False)
             self._start_btn.setText(tr("page.import_packages.start_processing"))
             self._start_btn.setToolTip("")
 
@@ -1094,10 +1177,12 @@ class ImportPackagesPage(QWidget):
         # Filters bar — placeholder + status options + direction.
         if hasattr(self, "_filters_bar"):
             self._filters_bar.setLayoutDirection(get_layout_direction())
-        if hasattr(self, "_search_input"):
-            self._search_input.setPlaceholderText(
-                tr("page.import_packages.search_placeholder")
+        if hasattr(self, "_status_filter_label"):
+            self._status_filter_label.setText(
+                tr("page.import_packages.status_filter_label")
             )
+            apply_label_alignment(self._status_filter_label)
+        
         if hasattr(self, "_status_filter_combo"):
             self._populate_status_filter()
 

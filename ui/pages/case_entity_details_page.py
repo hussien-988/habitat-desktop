@@ -435,16 +435,26 @@ class _CaseEntityHeader(QWidget):
             self._badges_layout.insertWidget(self._badges_layout.count() - 1, badge)
 
     def update_editable_state(self, is_editable: bool):
-        """Update toggle button text based on current editable state."""
+        """Update toggle button text. The lock toggle is hidden in the UI
+        per UX decision, but its text is still kept in sync in case the
+        button is re-enabled in the future. Revisit stays enabled whenever
+        the action row is visible — it no longer depends on the editable
+        flag because the user has no way to flip that flag from the UI."""
         if is_editable:
             self._toggle_editable_btn.setText(tr("page.case_entity.lock_editing"))
         else:
             self._toggle_editable_btn.setText(tr("page.case_entity.unlock_editing"))
-        self._revisit_btn.setEnabled(is_editable)
+        self._revisit_btn.setEnabled(True)
 
     def set_actions_visible(self, visible: bool):
-        """Show/hide action buttons based on role."""
-        self._toggle_editable_btn.setVisible(visible)
+        """Show/hide action buttons based on role.
+
+        Lock-editing button is permanently hidden per UX request — only the
+        Revisit button is exposed. The toggle widget and its signal stay in
+        place so the underlying logic (toggle_editable_clicked) is preserved
+        and can be re-surfaced later without re-wiring.
+        """
+        self._toggle_editable_btn.setVisible(False)
         self._revisit_btn.setVisible(visible)
 
     def update_texts(self):

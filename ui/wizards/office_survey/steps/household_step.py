@@ -343,16 +343,18 @@ class HouseholdStep(BaseStep):
             _spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
             _spin.setButtonSymbols(QSpinBox.NoButtons)
             setattr(self, _attr, _spin)
+            # Cell wrapper — fully transparent. Only the inner spinbox shows
+            # its own border; the label sits free above it without an extra
+            # frame/box around it.
             _cell_w = QFrame()
             _cell_w.setStyleSheet("""
                 QFrame {
-                    background-color: #F8FAFF;
-                    border: 1px solid #E8EFF6;
-                    border-radius: 10px;
+                    background: transparent;
+                    border: none;
                 }
             """)
             _cell_layout = QVBoxLayout(_cell_w)
-            _cell_layout.setContentsMargins(10, 8, 10, 8)
+            _cell_layout.setContentsMargins(0, 0, 0, 0)
             _cell_layout.setSpacing(4)
             _cell_layout.addWidget(_lbl)
             _cell_layout.addWidget(self._create_composition_spinbox(_spin))

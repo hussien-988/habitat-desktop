@@ -2045,3 +2045,59 @@ def generate_leaflet_html(
         buildings_geojson,
         **kwargs
     )
+
+
+def generate_leaflet_preview_html(
+    tile_server_url: str,
+    center_lat: float,
+    center_lon: float,
+    zoom: int = 18,
+    max_zoom: int = 20,
+) -> str:
+    """Minimal Leaflet HTML for a single-building preview.
+
+    Embeds only leaflet.css + leaflet.js — skips clustering plugin, qwebchannel,
+    legend, layer/drawing controls, perf tracing JS, and all overlays. Renders
+    one marker at the supplied center.
+    """
+    leaflet_css = LeafletHTMLGenerator._load_asset("leaflet.css")
+    leaflet_js = LeafletHTMLGenerator._load_asset("leaflet.js")
+    safe_tile_url = LeafletHTMLGenerator._safe_js_string(
+        tile_server_url.rstrip("/") + "/{z}/{x}/{y}.png"
+    )
+
+    return f"""<!DOCTYPE html>
+<html dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>{leaflet_css}</style>
+<style>html,body,#map{{margin:0;padding:0;height:100%;width:100%;background:#E8E8E8;}}</style>
+<script>{leaflet_js}</script>
+</head>
+<body>
+<div id="map"></div>
+<script>
+(function(){{
+    var map = L.map('map', {{
+        zoomControl: false,
+        attributionControl: false,
+        fadeAnimation: false,
+        zoomAnimation: false,
+        markerZoomAnimation: false
+    }}).setView([{center_lat}, {center_lon}], {zoom});
+    L.tileLayer({safe_tile_url}, {{maxZoom: {max_zoom}}}).addTo(map);
+    var pinIcon = L.divIcon({{
+        className: 'building-pin-icon',
+        html: '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+              '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+              'fill="#0072BC" stroke="#fff" stroke-width="2"/>' +
+              '<circle cx="12" cy="12" r="4" fill="#fff"/></svg>',
+        iconSize: [24, 36],
+        iconAnchor: [12, 36]
+    }});
+    L.marker([{center_lat}, {center_lon}], {{ icon: pinIcon }}).addTo(map);
+}})();
+</script>
+</body>
+</html>"""

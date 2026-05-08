@@ -161,7 +161,8 @@ class BuildingInfoStep(BaseStep):
         from PyQt5.QtCore import QSize
         from ui.components.icon import Icon
 
-        card = make_step_card()
+        # No shadow — this card hosts the map preview QWebEngineView.
+        card = make_step_card(with_shadow=False)
         card.setMinimumWidth(ScreenScale.w(360))
 
         card_layout = QVBoxLayout(card)

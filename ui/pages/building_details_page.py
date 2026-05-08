@@ -153,8 +153,9 @@ class BuildingDetailsPage(QWidget):
         self.stats_card, self.stats_content = self._create_simple_card()
         self._scroll_layout.addWidget(self.stats_card)
 
-        # Card 3: Location
-        self.location_card, self.location_content = self._create_simple_card()
+        # Card 3: Location — no shadow (hosts a QWebEngineView; offscreen blur
+        # would throttle WebEngine paint).
+        self.location_card, self.location_content = self._create_simple_card(with_shadow=False)
         self._scroll_layout.addWidget(self.location_card)
 
         self._scroll_layout.addStretch()
@@ -240,12 +241,13 @@ class BuildingDetailsPage(QWidget):
 
         return card, content_layout, title_lbl, subtitle_lbl
 
-    def _create_simple_card(self) -> tuple:
+    def _create_simple_card(self, with_shadow: bool = True) -> tuple:
         """Create a simple card (no header). Returns (card, content_layout)."""
         card = QFrame()
         card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(StyleManager.data_card())
-        self._add_shadow(card)
+        if with_shadow:
+            self._add_shadow(card)
 
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(20, 16, 20, 16)
@@ -312,9 +314,11 @@ class BuildingDetailsPage(QWidget):
         self._scroll.show()
         self._populate_cards(building)
 
-        # Progressive reveal animation for cards
+        # Progressive reveal animation for cards. location_card is excluded —
+        # animating opacity on a QWebEngineView container forces extra repaints
+        # while the map is still loading.
         from ui.animation_utils import stagger_fade_in
-        stagger_fade_in([self.info_card, self.stats_card, self.location_card])
+        stagger_fade_in([self.info_card, self.stats_card])
 
         # Fetch full details + unit counts in background
         building_id_for_api = building.building_uuid or building.building_id

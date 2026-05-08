@@ -6,11 +6,8 @@ Shows an embedded Leaflet map for a building and emits expand_requested
 when the user wants to open the full map dialog.
 """
 
-from PyQt5.QtWidgets import (
-    QFrame, QLabel, QPushButton, QGraphicsDropShadowEffect, QSizePolicy
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.components.icon import Icon
 from ui.design_system import Colors, ScreenScale
@@ -42,6 +39,8 @@ class BuildingLocationMapPreview(QFrame):
         self._web_view = None
         self._fallback_label = None
         self._height = ScreenScale.h(height)
+        self._html_worker = None
+        self._pending_html = None
 
         self.setObjectName("buildingLocationMapPreview")
         self.setMinimumHeight(self._height)
@@ -53,28 +52,6 @@ class BuildingLocationMapPreview(QFrame):
                 border: none;
             }
         """)
-
-        if HAS_WEBENGINE:
-            self._web_view = QWebEngineView(self)
-            self._web_view.setContextMenuPolicy(Qt.NoContextMenu)
-
-            try:
-                from services.web_profile import get_shared_map_profile
-                shared_profile = get_shared_map_profile()
-                if shared_profile is not None:
-                    page = QWebEnginePage(shared_profile, self._web_view)
-                    self._web_view.setPage(page)
-            except Exception as e:
-                logger.warning(f"Could not attach shared profile to preview map: {e}")
-
-            settings = self._web_view.settings()
-            settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
-            settings.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
-            settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
-
-            self._web_view.hide()
-            self._web_view.loadFinished.connect(self._on_map_loaded)
 
         self._fallback_label = QLabel(self)
         self._fallback_label.setAlignment(Qt.AlignCenter)
@@ -100,7 +77,7 @@ class BuildingLocationMapPreview(QFrame):
             QPushButton {{
                 background-color: rgba(255, 255, 255, 230);
                 color: {Colors.PRIMARY_BLUE};
-                border: none;
+                border: 1px solid rgba(0, 0, 0, 30);
                 border-radius: 15px;
                 padding-bottom: 1px;
             }}
@@ -114,13 +91,6 @@ class BuildingLocationMapPreview(QFrame):
                 background-color: #F0F0F0;
             }}
         """)
-
-        btn_shadow = QGraphicsDropShadowEffect()
-        btn_shadow.setBlurRadius(10)
-        btn_shadow.setXOffset(0)
-        btn_shadow.setYOffset(2)
-        btn_shadow.setColor(QColor(0, 0, 0, 70))
-        self._expand_btn.setGraphicsEffect(btn_shadow)
 
         self._expand_btn.clicked.connect(self.expand_requested.emit)
 
@@ -140,6 +110,34 @@ class BuildingLocationMapPreview(QFrame):
 
         self._show_fallback()
 
+    def _ensure_web_view(self):
+        """Lazily create the QWebEngineView on first real use."""
+        if self._web_view is not None or not HAS_WEBENGINE:
+            return self._web_view
+
+        self._web_view = QWebEngineView(self)
+        self._web_view.setContextMenuPolicy(Qt.NoContextMenu)
+
+        try:
+            from services.web_profile import get_shared_map_profile
+            shared_profile = get_shared_map_profile()
+            if shared_profile is not None:
+                page = QWebEnginePage(shared_profile, self._web_view)
+                self._web_view.setPage(page)
+        except Exception as e:
+            logger.warning(f"Could not attach shared profile to preview map: {e}")
+
+        settings = self._web_view.settings()
+        settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
+
+        self._web_view.setGeometry(0, 0, self.width(), self.height())
+        self._web_view.hide()
+        self._web_view.loadFinished.connect(self._on_map_loaded)
+        return self._web_view
+
     def _on_map_loaded(self, ok: bool):
         """Hide loading overlay once the map finishes loading."""
         if hasattr(self, '_loading_label'):
@@ -156,50 +154,66 @@ class BuildingLocationMapPreview(QFrame):
             self._show_fallback()
             return
 
+        # Show loading overlay immediately so the card paints quickly,
+        # then build the HTML off the UI thread and apply when ready.
+        self._fallback_label.hide()
+        self._loading_label.setGeometry(0, 0, self.width(), self.height())
+        self._loading_label.show()
+        self._loading_label.raise_()
+
+        # Cancel any in-flight build for a previous building
+        if self._html_worker is not None:
+            try:
+                self._html_worker.finished.disconnect()
+                self._html_worker.error.disconnect()
+            except Exception:
+                pass
+            self._html_worker = None
+
         try:
-            from services.tile_server_manager import get_tile_server_url
-            from services.leaflet_html_generator import generate_leaflet_html
-            from services.geojson_converter import GeoJSONConverter
-
-            center_lat, center_lon = center
-
-            buildings_geojson = GeoJSONConverter.buildings_to_geojson(
-                [building],
-                force_points=True
-            )
-
-            html = generate_leaflet_html(
-                tile_server_url=get_tile_server_url().rstrip("/"),
-                buildings_geojson=buildings_geojson,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                zoom=18,
-                max_zoom=20,
-                show_legend=False,
-                show_layer_control=False,
-                enable_selection=False,
-                enable_multiselect=False,
-                enable_viewport_loading=False,
-                enable_drawing=False,
-                skip_fit_bounds=True,
-                landmarks_json="[]",
-                streets_json="[]",
-                boundaries_geojson=None,
-                neighborhoods_geojson=None,
-                show_building_labels=True,
-            )
-
-            self._fallback_label.hide()
-            self._loading_label.setGeometry(0, 0, self.width(), self.height())
-            self._loading_label.show()
-            self._loading_label.raise_()
-            self._web_view.show()
-            self._web_view.setHtml(html)
-            self._expand_btn.raise_()
-
+            from services.api_worker import ApiWorker
+            self._html_worker = ApiWorker(self._build_preview_html, center)
+            self._html_worker.finished.connect(self._on_html_ready)
+            self._html_worker.error.connect(self._on_html_error)
+            self._html_worker.start()
         except Exception as e:
-            logger.warning(f"Could not render building location preview map: {e}")
+            logger.warning(f"Async HTML build failed, falling back to sync: {e}")
+            try:
+                html = self._build_preview_html(center)
+                self._on_html_ready(html)
+            except Exception:
+                self._show_fallback()
+
+    def _build_preview_html(self, center):
+        """Build a lightweight Leaflet HTML for one building. Runs on a worker thread."""
+        from services.tile_server_manager import get_tile_server_url
+        from services.leaflet_html_generator import generate_leaflet_preview_html
+
+        center_lat, center_lon = center
+        return generate_leaflet_preview_html(
+            tile_server_url=get_tile_server_url(),
+            center_lat=center_lat,
+            center_lon=center_lon,
+            zoom=18,
+            max_zoom=20,
+        )
+
+    def _on_html_ready(self, html: str):
+        """Apply the prebuilt HTML to the (lazily created) WebEngineView."""
+        if not html:
             self._show_fallback()
+            return
+        view = self._ensure_web_view()
+        if view is None:
+            self._show_fallback()
+            return
+        view.show()
+        view.setHtml(html)
+        self._expand_btn.raise_()
+
+    def _on_html_error(self, msg: str):
+        logger.warning(f"Could not build building location preview HTML: {msg}")
+        self._show_fallback()
 
     def _get_building_center(self, building):
         """Extract building center from latitude/longitude or geo_location."""
@@ -296,7 +310,6 @@ class BuildingLocationMapPreview(QFrame):
         margin = ScreenScale.w(12)
         btn_width = self._expand_btn.width()
 
-        
         x = width - btn_width - margin
 
         self._expand_btn.move(x, ScreenScale.h(12))
