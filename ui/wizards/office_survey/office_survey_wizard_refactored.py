@@ -77,6 +77,12 @@ class OfficeSurveyWizard(BaseWizard):
         self._edit_return_index = 5  # Always return to review step (index 5)
         super().__init__(parent)
 
+        try:
+            from ui.perf_quiet import quieten_widget_tree
+            quieten_widget_tree(self)
+        except Exception:
+            pass
+
         # Connect base wizard signals to survey-specific signals
         self.wizard_completed.connect(self.survey_completed.emit)
         self.wizard_cancelled.connect(self.survey_cancelled.emit)

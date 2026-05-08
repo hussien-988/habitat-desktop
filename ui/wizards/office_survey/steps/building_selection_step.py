@@ -531,11 +531,20 @@ class BuildingSelectionStep(BaseStep):
         """
         from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
 
-        selected_buildings = show_multiselect_map_dialog(
-            db=self.context.db,
-            parent=self,
-            max_selection=1,
-        )
+        # Suspend the inline preview so it does not contend with the dialog's
+        # own QWebEngineView for the shared profile / renderer pool.
+        preview = getattr(self, 'map_preview', None)
+        if preview is not None:
+            preview.suspend()
+        try:
+            selected_buildings = show_multiselect_map_dialog(
+                db=self.context.db,
+                parent=self,
+                max_selection=1,
+            )
+        finally:
+            if preview is not None:
+                preview.resume()
 
         if not selected_buildings:
             return
@@ -600,27 +609,39 @@ class BuildingSelectionStep(BaseStep):
             logger.warning(f"Could not get auth token: {e}")
             Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
 
+        # Suspend the inline preview while the full dialog is open.
+        preview = getattr(self, 'map_preview', None)
+        if preview is not None:
+            preview.suspend()
+
         # If we already have a selected building, open in VIEW-ONLY mode
         if hasattr(self, 'selected_building') and self.selected_building:
-            # View-only mode: show the building, don't allow re-selection
-            show_building_map_dialog(
-                db=self.context.db,
-                selected_building_id=self.selected_building.building_uuid or self.selected_building.building_id,
-                auth_token=auth_token,
-                read_only=True,
-                selected_building=self.selected_building,
-                parent=self
-            )
+            try:
+                show_building_map_dialog(
+                    db=self.context.db,
+                    selected_building_id=self.selected_building.building_uuid or self.selected_building.building_id,
+                    auth_token=auth_token,
+                    read_only=True,
+                    selected_building=self.selected_building,
+                    parent=self
+                )
+            finally:
+                if preview is not None:
+                    preview.resume()
             return
 
         # If no building selected yet, open in SELECTION mode
-        selected_building = show_building_map_dialog(
-            db=self.context.db,
-            selected_building_id=None,
-            auth_token=auth_token,
-            read_only=False,  # Selection mode
-            parent=self
-        )
+        try:
+            selected_building = show_building_map_dialog(
+                db=self.context.db,
+                selected_building_id=None,
+                auth_token=auth_token,
+                read_only=False,  # Selection mode
+                parent=self
+            )
+        finally:
+            if preview is not None:
+                preview.resume()
 
         if selected_building:
             # Update context and UI

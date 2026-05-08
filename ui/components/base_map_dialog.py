@@ -420,16 +420,7 @@ class BaseMapDialog(QDialog):
             if HAS_WEBCHANNEL:
                 self._setup_webchannel()
 
-            # Loading indicator — absolute overlay on top of web_view.
-            # Stays visible until _on_load_finished so there is never a dark gap.
-            self._loading_label = QLabel(tr("dialog.map.loading_map"), self._map_container)
-            self._loading_label.setGeometry(0, 0, map_w, map_h)
-            self._loading_label.setAlignment(Qt.AlignCenter)
-            self._loading_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            self._loading_label.setStyleSheet(
-                f"background-color: {Colors.BACKGROUND}; color: {Colors.TEXT_SECONDARY}; border-radius: 8px;"
-            )
-            self._loading_label.raise_()
+            self._loading_label = None
 
             self.web_view.loadFinished.connect(self._on_load_finished)
             content_layout.addWidget(self._map_container)
@@ -931,8 +922,6 @@ class BaseMapDialog(QDialog):
             self._map_container.setFixedSize(map_w, map_h)
         if hasattr(self, 'web_view') and self.web_view:
             self.web_view.setGeometry(0, 0, map_w, map_h)
-        if hasattr(self, '_loading_label') and self._loading_label:
-            self._loading_label.setGeometry(0, 0, map_w, map_h)
 
     def _find_main_window(self):
         """Walk up the parent chain to find the MainWindow (has 'pages' dict)."""
@@ -984,21 +973,69 @@ class BaseMapDialog(QDialog):
                 pass
         self._paused_parent_timers = []
 
+    def _suspend_parent_shadow_effects(self):
+        from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+        self._suspended_shadow_effects = []
+        parent = self.parent()
+        if parent is None:
+            return
+        try:
+            children = parent.findChildren(QWidget)
+        except Exception:
+            return
+        for w in children:
+            try:
+                eff = w.graphicsEffect()
+            except RuntimeError:
+                continue
+            if not isinstance(eff, QGraphicsDropShadowEffect):
+                continue
+            try:
+                if eff.isEnabled():
+                    eff.setEnabled(False)
+                    self._suspended_shadow_effects.append(eff)
+            except RuntimeError:
+                pass
+
+    def _resume_parent_shadow_effects(self):
+        for eff in getattr(self, '_suspended_shadow_effects', []):
+            try:
+                eff.setEnabled(True)
+            except RuntimeError:
+                pass
+        self._suspended_shadow_effects = []
+
     def showEvent(self, event):
-        """Show the gray overlay only when the dialog actually becomes visible.
-        Supports pre-warm flows where the dialog is instantiated but not shown."""
         super().showEvent(event)
         self._pause_parent_decorative_timers()
+        self._suspend_parent_shadow_effects()
         if getattr(self, '_overlay', None) is not None:
             try:
                 self._overlay.show()
                 self._overlay.raise_()
             except Exception:
                 pass
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, self._invalidate_map_size)
+        QTimer.singleShot(150, self._invalidate_map_size)
+
+    def _invalidate_map_size(self):
+        if not self.web_view:
+            return
+        try:
+            self.web_view.page().runJavaScript(
+                "if(typeof map!=='undefined'&&map){"
+                "  if(map.invalidateSize){map.invalidateSize(false);}"
+                "  if(typeof tileLayer!=='undefined'&&tileLayer&&tileLayer.redraw){tileLayer.redraw();}"
+                "}"
+            )
+        except Exception:
+            pass
 
     def hideEvent(self, event):
         """Hide the overlay when the dialog is hidden (on close/reject/accept)."""
         self._resume_parent_decorative_timers()
+        self._resume_parent_shadow_effects()
         if getattr(self, '_overlay', None) is not None:
             try:
                 self._overlay.hide()
@@ -1009,22 +1046,12 @@ class BaseMapDialog(QDialog):
     def _on_load_finished(self, success):
         """Called when web_view finishes loading HTML."""
         if success:
-            # Hide the overlay label now that HTML (and its own spinner) is ready.
-            if hasattr(self, '_loading_label') and self._loading_label:
-                self._loading_label.hide()
             if self.web_view:
                 self.web_view.page().runJavaScript(
                     "if(typeof map!=='undefined'&&map&&map.invalidateSize){map.invalidateSize(false);}"
                 )
         else:
             logger.error("Map HTML failed to load")
-            if hasattr(self, '_loading_label') and self._loading_label:
-                self._loading_label.setText(tr("dialog.map.map_load_failed"))
-                self._loading_label.setStyleSheet(
-                    f"background-color: {Colors.BACKGROUND}; color: {Colors.ERROR}; border-radius: 8px;"
-                )
-                self._loading_label.show()
-                self._loading_label.raise_()
 
     def _on_bridge_ready(self):
         """Called when QWebChannel bridge is ready — map is interactive."""
@@ -1297,6 +1324,17 @@ class BaseMapDialog(QDialog):
         except Exception as e:
             logger.error(f"Error updating map buildings: {e}", exc_info=True)
 
+    def _snap_to(self, lat, lng, zoom=17):
+        """Instantly center the map on a coordinate (no animation)."""
+        if not self.web_view:
+            return
+        js_code = f"""
+        if (typeof map !== 'undefined') {{
+            try {{ map.setView([{lat}, {lng}], {zoom}, {{ animate: false }}); }} catch(e) {{}}
+        }}
+        """
+        self.web_view.page().runJavaScript(js_code)
+
     def _fly_to(self, lat, lng, zoom=17):
         """Execute smooth flyTo on the Leaflet map."""
         js_code = f"""
@@ -1454,15 +1492,6 @@ class BaseMapDialog(QDialog):
         if not self.web_view:
             logger.warning("WebView not available")
             return
-
-        # Ensure the overlay label is visible and on top while the new HTML loads.
-        if hasattr(self, '_loading_label') and self._loading_label:
-            self._loading_label.setText(tr("dialog.map.loading_map"))
-            self._loading_label.setStyleSheet(
-                f"background-color: {Colors.BACKGROUND}; color: {Colors.TEXT_SECONDARY}; border-radius: 8px;"
-            )
-            self._loading_label.show()
-            self._loading_label.raise_()
 
         from services.tile_server_manager import get_local_server_url
         base_url = QUrl(get_local_server_url())

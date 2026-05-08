@@ -50,6 +50,10 @@ class BuildingDetailsPage(QWidget):
         self.building_controller = BuildingController(db)
         self.current_building = None
         self._user_role = None
+        # Persistent preview — created once, reused across _populate_cards
+        # calls so we don't tear down a QWebEngineView mid-load on every
+        # API refresh / language toggle.
+        self._map_preview = None
 
         self._setup_ui()
 
@@ -414,13 +418,19 @@ class BuildingDetailsPage(QWidget):
             return "-"
 
         return "-" if numeric_value == 0 else str(numeric_value)
-    def _clear_layout(self, layout):
+    def _clear_layout(self, layout, keep=()):
+        """Remove children from layout; widgets in `keep` are detached intact."""
+        keep_set = set(keep) if keep else set()
         while layout.count():
             item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                self._clear_layout(item.layout())
+            widget = item.widget() if item else None
+            if widget is not None:
+                if widget in keep_set:
+                    widget.setParent(None)
+                else:
+                    widget.deleteLater()
+            elif item is not None and item.layout():
+                self._clear_layout(item.layout(), keep=keep)
     def _display_text_or_fallback(self, value, fallback_key: str) -> str:
         """Return clean display text, or localized fallback when value is empty."""
         if value is None:
@@ -434,9 +444,13 @@ class BuildingDetailsPage(QWidget):
         return text
     def _populate_cards(self, building: Building):
         """Populate all 3 cards with building data."""
+        # Detach the persistent map preview before wiping the location layout
+        # so we don't destroy its QWebEngineView (and restart map load) on
+        # every refresh or language toggle.
+        keep = (self._map_preview,) if self._map_preview is not None else ()
         self._clear_layout(self.info_content)
         self._clear_layout(self.stats_content)
-        self._clear_layout(self.location_content)
+        self._clear_layout(self.location_content, keep=keep)
 
         building_code = building.building_id_formatted or building.building_id_display or building.building_id or "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
@@ -532,16 +546,21 @@ class BuildingDetailsPage(QWidget):
         content_row = QHBoxLayout()
         content_row.setSpacing(24)
 
-        # Reusable interactive location preview
-        map_preview = BuildingLocationMapPreview(
-            button_text=tr("page.building_details.open_map"),
-            height=260,
-            parent=self
-        )
-        map_preview.set_building(building)
-        map_preview.expand_requested.connect(self._open_map_dialog)
+        # Reusable interactive location preview — created once and kept across
+        # populate calls. set_building() is idempotent and dedups identical
+        # coordinates, so calling it after an API refresh is a no-op when
+        # nothing changed.
+        if self._map_preview is None:
+            self._map_preview = BuildingLocationMapPreview(
+                button_text=tr("page.building_details.open_map"),
+                height=260,
+                parent=self
+            )
+            self._map_preview.expand_requested.connect(self._open_map_dialog)
 
-        content_row.addWidget(map_preview, stretch=2)
+        self._map_preview.set_building(building)
+
+        content_row.addWidget(self._map_preview, stretch=2)
 
         # General description
         gen_desc_section = QVBoxLayout()
@@ -602,14 +621,22 @@ class BuildingDetailsPage(QWidget):
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
 
-        show_building_map_dialog(
-            db=self.db,
-            selected_building_id=self.current_building.building_uuid or self.current_building.building_id,
-            auth_token=auth_token,
-            read_only=True,
-            selected_building=self.current_building,
-            parent=self
-        )
+        # Suspend the preview map while the full dialog is open so they don't
+        # contend for the shared QWebEngine renderer / tile profile.
+        if self._map_preview is not None:
+            self._map_preview.suspend()
+        try:
+            show_building_map_dialog(
+                db=self.db,
+                selected_building_id=self.current_building.building_uuid or self.current_building.building_id,
+                auth_token=auth_token,
+                read_only=True,
+                selected_building=self.current_building,
+                parent=self
+            )
+        finally:
+            if self._map_preview is not None:
+                self._map_preview.resume()
 
     def update_language(self, is_arabic: bool):
         direction = get_layout_direction()
@@ -621,6 +648,8 @@ class BuildingDetailsPage(QWidget):
         self._stat_units.set_label(tr("page.building_details.units_count"))
         self._info_title_lbl.setText(tr("page.building_details.card_title"))
         self._info_subtitle_lbl.setText(tr("page.building_details.card_subtitle"))
+        if self._map_preview is not None:
+            self._map_preview.update_language()
         if self.current_building:
             is_locked = getattr(self.current_building, 'is_locked', False)
             self._lock_btn.setText(

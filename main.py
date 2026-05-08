@@ -421,6 +421,9 @@ def main():
         app.setOrganizationName("UN-Habitat")
         app.setOrganizationDomain("unhabitat.org")
 
+        from ui.perf_quiet import apply_global_perf_quietening
+        apply_global_perf_quietening()
+
         # Stop background ApiWorker threads before the event loop tears
         # down — without this, Qt prints "QThread: Destroyed while thread
         # is still running" and the OS may keep the process alive while
@@ -481,6 +484,11 @@ def main():
         # Re-apply default font now that ScreenScale is initialized,
         # so the app-wide default reflects responsive scaling.
         set_application_default_font()
+        try:
+            from ui.perf_quiet import quieten_widget_tree
+            quieten_widget_tree(window)
+        except Exception:
+            pass
         splash.set_progress(1.0)
         app.processEvents()
         window.show()
