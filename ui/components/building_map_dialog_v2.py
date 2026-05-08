@@ -555,6 +555,7 @@ class BuildingMapDialog(BaseMapDialog):
                     boundary_level='neighbourhoods',
                     max_selection=getattr(self, '_max_selection', None),
                     show_building_labels=self._is_view_only,
+                    skip_fit_bounds=self._is_view_only,
                 )
                 if cache_key is not None and html:
                     _cache_view_only_html(cache_key, html)
