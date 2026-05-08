@@ -19,6 +19,24 @@ from services.translation_manager import tr
 logger = get_logger(__name__)
 
 
+_VIEW_ONLY_HTML_CACHE: dict = {}
+_VIEW_ONLY_HTML_CACHE_MAX = 16
+
+
+def _cache_view_only_html(key, html: str) -> None:
+    if not html:
+        return
+    if key in _VIEW_ONLY_HTML_CACHE:
+        return
+    if len(_VIEW_ONLY_HTML_CACHE) >= _VIEW_ONLY_HTML_CACHE_MAX:
+        try:
+            oldest = next(iter(_VIEW_ONLY_HTML_CACHE))
+            _VIEW_ONLY_HTML_CACHE.pop(oldest, None)
+        except StopIteration:
+            pass
+    _VIEW_ONLY_HTML_CACHE[key] = html
+
+
 class _BuildingsWorker(QThread):
     """Background worker for loading buildings data."""
     finished = pyqtSignal(dict)
@@ -466,9 +484,11 @@ class BuildingMapDialog(BaseMapDialog):
                 has_building_center=self._has_building_center,
             )
 
-        # Start buildings fetch immediately (parallel with HTML generation)
-        QTimer.singleShot(0, self._prefetch_buildings_early)
-        QTimer.singleShot(50, self._start_map_load)
+        if self._is_view_only:
+            QTimer.singleShot(0, self._start_map_load)
+        else:
+            QTimer.singleShot(0, self._prefetch_buildings_early)
+            QTimer.singleShot(50, self._start_map_load)
 
     def _start_map_load(self):
         """Show map immediately with tiles, then load buildings in background."""
@@ -487,34 +507,57 @@ class BuildingMapDialog(BaseMapDialog):
         center_lon = self._initial_center_lon or MapConstants.DEFAULT_CENTER_LON
         zoom = self._initial_zoom or 15
 
-        # For view-only with a located building, zoom in close
         if self._is_view_only and getattr(self, '_has_building_center', False):
-            zoom = 18
+            zoom = 16
 
-        # Show map immediately with empty buildings
         empty_geojson = '{"type":"FeatureCollection","features":[]}'
-        try:
-            html = generate_leaflet_html(
-                tile_server_url=tile_url.rstrip('/'),
-                buildings_geojson=empty_geojson,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                zoom=zoom,
-                max_zoom=20,
-                show_legend=False,
-                show_layer_control=False,
-                enable_selection=(not self._is_view_only),
-                enable_multiselect=self._enable_multiselect_in_map,
-                enable_viewport_loading=True,
-                enable_drawing=False,
-                neighborhoods_geojson=None,
-                landmarks_json='[]',
-                streets_json='[]',
-                boundaries_geojson=None,
-                boundary_level='neighbourhoods',
-                max_selection=getattr(self, '_max_selection', None),
-                show_building_labels=self._is_view_only,
+        view_only_geojson = empty_geojson
+        if self._is_view_only and self._fallback_building is not None:
+            try:
+                view_only_geojson = GeoJSONConverter.buildings_to_geojson(
+                    [self._fallback_building], force_points=True
+                )
+            except Exception as e:
+                logger.warning(f"Could not pre-build view-only GeoJSON: {e}")
+                view_only_geojson = empty_geojson
+
+        cache_key = None
+        html = None
+        if self._is_view_only:
+            cache_key = (
+                'v4', round(center_lat or 0, 6), round(center_lon or 0, 6),
+                int(zoom), self._selected_building_id or '',
+                tile_url.rstrip('/'),
             )
+            html = _VIEW_ONLY_HTML_CACHE.get(cache_key)
+            if html is not None and self._perf_trace:
+                self._perf_trace.mark('html_cache_hit', html_kb=round(len(html) / 1024, 1))
+
+        try:
+            if html is None:
+                html = generate_leaflet_html(
+                    tile_server_url=tile_url.rstrip('/'),
+                    buildings_geojson=(view_only_geojson if self._is_view_only else empty_geojson),
+                    center_lat=center_lat,
+                    center_lon=center_lon,
+                    zoom=zoom,
+                    max_zoom=20,
+                    show_legend=False,
+                    show_layer_control=False,
+                    enable_selection=(not self._is_view_only),
+                    enable_multiselect=self._enable_multiselect_in_map,
+                    enable_viewport_loading=(not self._is_view_only),
+                    enable_drawing=False,
+                    neighborhoods_geojson=None,
+                    landmarks_json='[]',
+                    streets_json='[]',
+                    boundaries_geojson=None,
+                    boundary_level='neighbourhoods',
+                    max_selection=getattr(self, '_max_selection', None),
+                    show_building_labels=self._is_view_only,
+                )
+                if cache_key is not None and html:
+                    _cache_view_only_html(cache_key, html)
             if not html:
                 logger.error("generate_leaflet_html returned empty HTML")
                 self._show_map_error(tr("dialog.map.map_load_failed"))
@@ -571,8 +614,7 @@ class BuildingMapDialog(BaseMapDialog):
         }})();
         """
 
-        # Buildings worker started early in _prefetch_buildings_early; start here only if missed
-        if self._buildings_worker is None:
+        if self._buildings_worker is None and not self._is_view_only:
             if self._perf_trace:
                 self._perf_trace.mark('buildings_worker_start_late')
             self._buildings_worker = _BuildingsWorker(
@@ -725,40 +767,18 @@ class BuildingMapDialog(BaseMapDialog):
             if self.web_view:
                 if self._perf_trace:
                     trace_ref = self._perf_trace
-                    dialog_ref = self
-                    def _on_inject_done(_result, _trace=trace_ref, _dlg=dialog_ref):
-                        from services.map_perf_logger import (
-                            snapshot_active_timers, snapshot_running_threads,
-                            count_web_engine_views,
-                        )
-                        _trace.mark(
-                            'buildings_inject_done',
-                            active_timers=snapshot_active_timers(),
-                            running_threads=snapshot_running_threads(),
-                            web_views=count_web_engine_views(),
-                        )
+                    def _on_inject_done(_result, _trace=trace_ref):
+                        _trace.mark('buildings_inject_done')
                         _trace.summary()
-                        # Probe main-thread responsiveness for 5s after map ready.
-                        # Confirms whether the user-perceived ongoing lag is
-                        # main-thread starvation. Skip if already running.
-                        if getattr(_dlg, '_perf_heartbeat', None) is None:
-                            try:
-                                from services.map_perf_logger import MainThreadHeartbeat
-                                _dlg._perf_heartbeat = MainThreadHeartbeat(
-                                    _trace, _dlg, interval_ms=50,
-                                    duration_ms=5000, stall_threshold_ms=100.0,
-                                )
-                                _dlg._perf_heartbeat.start()
-                            except Exception as e:
-                                logger.warning(f"Heartbeat probe failed to start: {e}")
                     self.web_view.page().runJavaScript(js_inject, _on_inject_done)
                 else:
                     self.web_view.page().runJavaScript(js_inject)
 
             if self._is_view_only and focus_building_id and center_lat and center_lon:
-                self._fly_to(center_lat, center_lon, 18)
-                QTimer.singleShot(2500, lambda: self._open_building_popup_immediate(
-                    focus_building_id, center_lat, center_lon))
+                self._snap_to(center_lat, center_lon, 16)
+                self._open_building_popup_immediate(
+                    focus_building_id, center_lat, center_lon
+                )
 
         except Exception as e:
             logger.error(f"Error injecting buildings: {e}", exc_info=True)
@@ -788,10 +808,19 @@ class BuildingMapDialog(BaseMapDialog):
                 self._inject_layers(self._pending_layers_data)
                 self._pending_layers_data = None
 
-            # Start layers worker now that the page is visible. Running it
-            # earlier caused its JSON parsing / normalize_* loops to hold the
-            # GIL and starve Qt/Chromium during the critical render window.
-            if self._layers_worker is None:
+            if self._is_view_only and self._fallback_building is not None:
+                fb = self._fallback_building
+                center_lat = self._initial_center_lat
+                center_lon = self._initial_center_lon
+                focus_id = (
+                    self._selected_building_id
+                    or getattr(fb, 'building_id', None)
+                    or getattr(fb, 'building_uuid', None)
+                )
+                if center_lat and center_lon and focus_id:
+                    self._open_building_popup_immediate(focus_id, center_lat, center_lon)
+
+            if self._layers_worker is None and not self._is_view_only:
                 self._layers_worker = _LayersWorker(self._auth_token, perf_trace=self._perf_trace)
                 self._layers_worker.finished.connect(self._on_layers_ready)
                 self._layers_worker.error.connect(lambda e: logger.warning(f"Layers loading failed: {e}"))

@@ -184,16 +184,40 @@ class LeafletHTMLGenerator:
 
         drawing_css = ''
         drawing_js = ''
-        clustering_css = f'''
+
+        _needs_bridge = bool(
+            enable_selection or enable_viewport_loading
+            or enable_drawing or enable_multiselect
+        )
+        _has_many_buildings = True  # default: assume clustered usage
+        if not _needs_bridge:
+            try:
+                import json as _json
+                _parsed = _json.loads(buildings_geojson) if isinstance(buildings_geojson, str) else (buildings_geojson or {})
+                _has_many_buildings = len(_parsed.get('features') or []) > 1
+            except Exception:
+                _has_many_buildings = True
+
+        if _has_many_buildings:
+            clustering_css = f'''
     <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.css")}</style>
     <style>{LeafletHTMLGenerator._load_asset("MarkerCluster.Default.css")}</style>'''
-        clustering_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.markercluster.js")}</script>'
-        qwebchannel_content = LeafletHTMLGenerator._get_qwebchannel_content()
-        qwebchannel_tag = (
-            f'<script>{qwebchannel_content}</script>'
-            if qwebchannel_content else
-            '<script src="qrc:///qtwebchannel/qwebchannel.js"></script>'
-        )
+            clustering_js = f'<script>{LeafletHTMLGenerator._load_asset("leaflet.markercluster.js")}</script>'
+        else:
+            clustering_css = ''
+            clustering_js = ''
+
+        _skip_loading_overlay = not _needs_bridge and not _has_many_buildings
+
+        if _needs_bridge:
+            qwebchannel_content = LeafletHTMLGenerator._get_qwebchannel_content()
+            qwebchannel_tag = (
+                f'<script>{qwebchannel_content}</script>'
+                if qwebchannel_content else
+                '<script src="qrc:///qtwebchannel/qwebchannel.js"></script>'
+            )
+        else:
+            qwebchannel_tag = ''
 
         html = f'''
 <!DOCTYPE html>
@@ -231,10 +255,10 @@ class LeafletHTMLGenerator:
 </head>
 <body>
     <div id="map"></div>
-    <div id="map-loading-overlay">
+    {'' if _skip_loading_overlay else f'''<div id="map-loading-overlay">
         <div class="loading-spinner"></div>
         <div class="loading-text">{_loading_text}</div>
-    </div>
+    </div>'''}
     {LeafletHTMLGenerator._get_javascript(
         tile_server_url,
         buildings_geojson,
@@ -943,6 +967,21 @@ class LeafletHTMLGenerator:
         tileLayer.addTo(map);
         if (typeof window._mp === 'function') window._mp('tile_layer_added');
         tileLayer.on('load', function() {{ if (typeof window._mp === 'function') window._mp('tile_layer_loaded'); }});
+
+        (function() {{
+            var mapEl = document.getElementById('map');
+            if (!mapEl) return;
+            var doInvalidate = function() {{
+                try {{ if (map && map.invalidateSize) map.invalidateSize(false); }} catch (e) {{}}
+            }};
+            if (typeof ResizeObserver === 'function') {{
+                var ro = new ResizeObserver(doInvalidate);
+                ro.observe(mapEl);
+            }}
+            window.addEventListener('load', doInvalidate);
+            setTimeout(doInvalidate, 0);
+            setTimeout(doInvalidate, 200);
+        }})();
         // GeoServer WMS overlay (optional, configured via .env)
         var geoserverWmsUrl = '{geoserver_wms_url}';
         if (geoserverWmsUrl && geoserverWmsUrl !== '' && geoserverWmsUrl !== 'None') {{
@@ -1068,8 +1107,14 @@ class LeafletHTMLGenerator:
                 animateAddingMarkers: false
             }});
         }} else {{
-            console.warn('MarkerCluster not available, using featureGroup fallback');
             markers = L.featureGroup();
+            if (typeof markers.addLayers !== 'function') {{
+                markers.addLayers = function(layers) {{
+                    var self = this;
+                    (layers || []).forEach(function(l) {{ self.addLayer(l); }});
+                    return self;
+                }};
+            }}
         }}
 
         // Points layer for all buildings
@@ -2053,18 +2098,23 @@ def generate_leaflet_preview_html(
     center_lon: float,
     zoom: int = 18,
     max_zoom: int = 20,
+    building_label: str = "",
 ) -> str:
     """Minimal Leaflet HTML for a single-building preview.
 
     Embeds only leaflet.css + leaflet.js — skips clustering plugin, qwebchannel,
     legend, layer/drawing controls, perf tracing JS, and all overlays. Renders
-    one marker at the supplied center.
+    one marker at the supplied center; when `building_label` is provided it is
+    drawn directly above the pin (embedded in the icon HTML so positioning is
+    independent of any tooltip framework).
     """
     leaflet_css = LeafletHTMLGenerator._load_asset("leaflet.css")
     leaflet_js = LeafletHTMLGenerator._load_asset("leaflet.js")
     safe_tile_url = LeafletHTMLGenerator._safe_js_string(
         tile_server_url.rstrip("/") + "/{z}/{x}/{y}.png"
     )
+    label_text = (building_label or "").strip()
+    safe_label_js = LeafletHTMLGenerator._safe_js_string(label_text)
 
     return f"""<!DOCTYPE html>
 <html dir="rtl">
@@ -2087,12 +2137,22 @@ def generate_leaflet_preview_html(
         markerZoomAnimation: false
     }}).setView([{center_lat}, {center_lon}], {zoom});
     L.tileLayer({safe_tile_url}, {{maxZoom: {max_zoom}}}).addTo(map);
+    var label = {safe_label_js};
+    var labelHtml = label
+      ? '<div style="position:absolute;left:12px;bottom:40px;transform:translateX(-50%);'
+        + 'white-space:nowrap;pointer-events:none;background:rgba(255,255,255,0.92);'
+        + 'color:#0072BC;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;'
+        + 'border:1px solid rgba(0,114,188,0.35);box-shadow:0 1px 2px rgba(0,0,0,0.12);">'
+        + label + '</div>'
+      : '';
     var pinIcon = L.divIcon({{
         className: 'building-pin-icon',
-        html: '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
-              '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
-              'fill="#0072BC" stroke="#fff" stroke-width="2"/>' +
-              '<circle cx="12" cy="12" r="4" fill="#fff"/></svg>',
+        html: '<div style="position:relative;width:24px;height:36px;overflow:visible;">'
+              + labelHtml
+              + '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">'
+              + '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" '
+              + 'fill="#0072BC" stroke="#fff" stroke-width="2"/>'
+              + '<circle cx="12" cy="12" r="4" fill="#fff"/></svg></div>',
         iconSize: [24, 36],
         iconAnchor: [12, 36]
     }});
