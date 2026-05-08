@@ -2719,7 +2719,6 @@ class PersonDialog(QDialog):
             'birth_date': self._build_birth_date_iso(),
             # Tab 2
             'person_role': self.person_role.currentData(),
-            'relationship_type': self.person_role.currentData(),  # backward compat
             'phone': self._format_phone(self.phone.text().strip()),
             'email': self.email.text().strip() or None,
             'landline': ("0" + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else None,
@@ -2917,10 +2916,13 @@ class PersonDialog(QDialog):
                 return
             self._api_person_id = person_id
             person_data = self.get_person_data()
-            # Only link to unit if person has a relation type (claim)
-            # Otherwise person is just a household member
+            # Only link to unit if person has a relation type (claim from Tab 3).
+            # Do NOT fall back to person_role/relationship_type: those are
+            # RelationshipToHead codes (head/spouse/child) — sending them as
+            # RelationType would silently register the person as Owner because
+            # RelationshipToHead.head=1 collides with RelationType.Owner=1.
             relation_data = person_data.get('relation_data', {})
-            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+            rel_type = relation_data.get('rel_type')
 
             link_success = True
             if rel_type and self._survey_id and self._unit_id:
@@ -3028,11 +3030,13 @@ class PersonDialog(QDialog):
             if self.uploaded_files and self._survey_id and person_id:
                 self._upload_identification_files(person_id)
 
-            # Step 2: Link person to property unit only if relation type is set
-            # Persons without rel_type are household members only
+            # Step 2: Link person to property unit only if a property relation
+            # type was set in Tab 3. Persons without rel_type are household
+            # members only. Never fall back to person_role/relationship_type:
+            # those are RelationshipToHead, not RelationType.
             link_success = True
             relation_data = person_data.get('relation_data', {})
-            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+            rel_type = relation_data.get('rel_type')
 
             if rel_type and self._survey_id and self._unit_id and person_id:
                 relation_data['person_id'] = person_id

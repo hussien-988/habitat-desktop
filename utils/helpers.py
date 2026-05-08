@@ -155,40 +155,48 @@ def parse_building_id(building_id: str) -> dict:
     """
     Parse a 17-digit building ID into components.
 
-    Args:
-        building_id: Building ID string (e.g., "01-01-01-001-001-00001")
+    Accepts both formats:
+    - Dashed: "02-00-00-001-001-00001"
+    - Continuous (server format): "02000000100100001"
 
     Returns:
-        Dictionary with parsed components
+        Dictionary with parsed components, or {"error": ...} on invalid input.
     """
-    parts = building_id.split("-")
+    if not building_id:
+        return {"error": "Empty building ID"}
 
-    if len(parts) != 6:
+    # Strip dashes — server stores 17 contiguous digits
+    bid = building_id.replace("-", "")
+
+    if len(bid) != 17 or not bid.isdigit():
         return {"error": "Invalid building ID format"}
 
     return {
-        "governorate_code": parts[0],
-        "district_code": parts[1],
-        "subdistrict_code": parts[2],
-        "community_code": parts[3],
-        "neighborhood_code": parts[4],
-        "building_number": parts[5],
+        "governorate_code": bid[0:2],
+        "district_code":    bid[2:4],
+        "subdistrict_code": bid[4:6],
+        "community_code":   bid[6:9],
+        "neighborhood_code": bid[9:12],
+        "building_number":  bid[12:17],
     }
 
 
 def generate_building_id(
-    governorate: str = "01",
-    district: str = "01",
-    subdistrict: str = "01",
-    community: str = "001",
-    neighborhood: str = "001",
-    building: str = "00001"
+    governorate: str,
+    district: str,
+    subdistrict: str,
+    community: str,
+    neighborhood: str,
+    building: str,
 ) -> str:
     """
-    Generate a building ID from components.
+    Generate a dashed building ID from raw admin codes.
+
+    All arguments are required — no Aleppo-specific defaults.
+    For the contiguous 17-digit form used by the API, drop the dashes.
 
     Returns:
-        17-digit building ID string
+        Dashed string: "02-00-00-001-001-00001"
     """
     return f"{governorate}-{district}-{subdistrict}-{community}-{neighborhood}-{building}"
 

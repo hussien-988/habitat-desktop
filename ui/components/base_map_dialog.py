@@ -390,10 +390,16 @@ class BaseMapDialog(QDialog):
             self.web_view = QWebEngineView(self._map_container)
             self.web_view.setGeometry(0, 0, map_w, map_h)
 
-            # Install the perf-capturing page so JS console.log("[MAP_PERF_JS]...")
-            # statements flow into our MapPerfTrace timeline.
+            # Install the perf-capturing page on the shared maps profile so
+            # Leaflet assets and tile images are reused from the HTTP cache
+            # across the preview map and full-screen map dialog.
             try:
-                _perf_page = _PerfWebEnginePage(self.web_view)
+                from services.web_profile import get_shared_map_profile
+                shared_profile = get_shared_map_profile()
+                if shared_profile is not None:
+                    _perf_page = _PerfWebEnginePage(shared_profile, self.web_view)
+                else:
+                    _perf_page = _PerfWebEnginePage(self.web_view)
                 self.web_view.setPage(_perf_page)
             except Exception as _e:
                 logger.warning(f"Could not install perf page: {_e}")

@@ -672,10 +672,12 @@ class TRRCMSApiClient:
         survey_status: Optional[str] = None,
         governorate_code: Optional[str] = None,
         subdistrict_code: Optional[str] = None,
+        governorate_pcode: Optional[str] = None,
+        subdistrict_pcode: Optional[str] = None,
         page: int = 1,
         page_size: int = 100
     ) -> Dict[str, Any]:
-        
+
         # Parse WKT to coordinates array [[lng, lat], ...]
         # WKT format: "POLYGON((lon1 lat1, lon2 lat2, ...))"
         try:
@@ -692,12 +694,15 @@ class TRRCMSApiClient:
             logger.error(f"Failed to parse polygon WKT: {e}")
             raise ValueError(f"Invalid polygon WKT format: {polygon_wkt}")
 
-        payload = {
+        payload: Dict[str, Any] = {
             "coordinates": coordinates,
-            "governorateCode": governorate_code or "01",  # Default: Aleppo
             "page": page,
-            "pageSize": page_size
+            "pageSize": page_size,
         }
+        if governorate_pcode:
+            payload["governoratePCode"] = governorate_pcode
+        elif governorate_code:
+            payload["governorateCode"] = governorate_code
 
         # Add optional filters
         if has_active_assignment is not None:
@@ -706,10 +711,15 @@ class TRRCMSApiClient:
         if survey_status:
             payload["surveyStatus"] = survey_status
 
-        if subdistrict_code:
+        if subdistrict_pcode:
+            payload["subDistrictPCode"] = subdistrict_pcode
+        elif subdistrict_code:
             payload["subdistrictCode"] = subdistrict_code
 
-        logger.debug(f"Searching buildings for assignment: governorateCode=01, page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}")
+        logger.debug(
+            f"Searching buildings for assignment: gov={governorate_pcode or governorate_code}, "
+            f"page={page}, pageSize={page_size}, hasActiveAssignment={has_active_assignment}"
+        )
         response = self._request(
             "POST", "/v1/BuildingAssignments/buildings/search",
             json_data=payload,
@@ -731,6 +741,11 @@ class TRRCMSApiClient:
         sub_district_code=None,
         community_code=None,
         neighborhood_code=None,
+        governorate_pcode=None,
+        district_pcode=None,
+        sub_district_pcode=None,
+        community_pcode=None,
+        neighborhood_pcode=None,
         building_code=None,
         building_type=None,
         building_status=None,
@@ -747,18 +762,29 @@ class TRRCMSApiClient:
     ) -> Dict[str, Any]:
         """
         GET /api/v1/BuildingAssignments/buildings — all Swagger parameters.
+        Accepts raw codes or OCHA pCodes; pCodes take precedence per level when both are given.
         """
         params = {"page": page, "pageSize": page_size}
 
-        if governorate_code:
+        if governorate_pcode:
+            params["governoratePCode"] = governorate_pcode
+        elif governorate_code:
             params["governorateCode"] = governorate_code
-        if district_code:
+        if district_pcode:
+            params["districtPCode"] = district_pcode
+        elif district_code:
             params["districtCode"] = district_code
-        if sub_district_code:
+        if sub_district_pcode:
+            params["subDistrictPCode"] = sub_district_pcode
+        elif sub_district_code:
             params["subDistrictCode"] = sub_district_code
-        if community_code:
+        if community_pcode:
+            params["communityPCode"] = community_pcode
+        elif community_code:
             params["communityCode"] = community_code
-        if neighborhood_code:
+        if neighborhood_pcode:
+            params["neighborhoodPCode"] = neighborhood_pcode
+        elif neighborhood_code:
             params["neighborhoodCode"] = neighborhood_code
         if building_code:
             params["buildingCode"] = building_code
@@ -973,6 +999,12 @@ class TRRCMSApiClient:
             "neighborhoodCode": get_value('neighborhood_code', 'neighborhoodCode', ''),
             "neighborhoodName": get_value('neighborhood_name', 'neighborhoodName', ''),
             "neighborhoodNameAr": get_value('neighborhood_name_ar', 'neighborhoodNameAr', ''),
+            # OCHA P-Codes (preferred — server resolves either raw or pCode)
+            "governoratePCode":  get_value('governorate_pcode', 'governoratePCode'),
+            "districtPCode":     get_value('district_pcode', 'districtPCode'),
+            "subDistrictPCode":  get_value('subdistrict_pcode', 'subDistrictPCode'),
+            "communityPCode":    get_value('community_pcode', 'communityPCode'),
+            "neighborhoodPCode": get_value('neighborhood_pcode', 'neighborhoodPCode'),
             "buildingNumber": get_value('building_number', 'buildingNumber', ''),
             "buildingType": get_value('building_type', 'buildingType'),
             "buildingStatus": get_value('building_status', 'buildingStatus'),
@@ -1650,7 +1682,7 @@ class TRRCMSApiClient:
             if val:
                 api_data["occupancyType"] = int(val)
         if 'ownership_share' in relation_data:
-            api_data["ownershipShare"] = relation_data['ownership_share'] / 2400.0
+            api_data["ownershipShare"] = relation_data['ownership_share']
         if 'has_documents' in relation_data:
             api_data["hasEvidence"] = relation_data['has_documents']
 
@@ -2244,12 +2276,21 @@ class TRRCMSApiClient:
         return {k: v for k, v in api_data.items() if v is not None}
 
     def _convert_relation_to_api_format(self, relation_data: Dict[str, Any], survey_id: str, unit_id: str) -> Dict[str, Any]:
-        """Convert relation data to API format (LinkPersonToPropertyUnitCommand)."""
-        rel_type = relation_data.get('rel_type') or relation_data.get('relationship_type', 99)
+        """Convert relation data to API format (LinkPersonToPropertyUnitCommand).
+
+        rel_type must be a RelationType enum (Owner/Tenant/Heir/...). Callers
+        must NOT pass RelationshipToHead codes (head/spouse/child) here — the
+        enum codes collide (head=1 == Owner=1) and would silently register
+        the person as Owner.
+        """
+        rel_type = relation_data.get('rel_type')
         if isinstance(rel_type, int):
             relation_type_int = rel_type
         else:
-            relation_type_int = 99
+            raise ValueError(
+                f"link_person_to_unit requires an integer rel_type "
+                f"(RelationType enum), got {rel_type!r}"
+            )
 
         occupancy_type = relation_data.get('contract_type') or relation_data.get('occupancy_type', None)
         if isinstance(occupancy_type, int) and occupancy_type > 0:
@@ -2259,13 +2300,9 @@ class TRRCMSApiClient:
 
         ownership_share_raw = relation_data.get('ownership_share', None)
         if ownership_share_raw is not None and ownership_share_raw > 0:
-            ownership_share_decimal = ownership_share_raw / 2400.0
-            if ownership_share_decimal > 1.0:
-                logger.warning(f"OwnershipShare: {ownership_share_raw}/2400={ownership_share_decimal} > 1.0, capping")
-                ownership_share_decimal = 1.0
-            logger.info(f"OwnershipShare: input={ownership_share_raw} shares -> API={ownership_share_decimal}")
+            ownership_share_value = ownership_share_raw
         else:
-            ownership_share_decimal = None
+            ownership_share_value = None
 
         has_evidence = relation_data.get('has_documents', False)
 
@@ -2279,12 +2316,8 @@ class TRRCMSApiClient:
 
         if occupancy_type_int:
             api_data["occupancyType"] = occupancy_type_int
-        if ownership_share_decimal is not None:
-            api_data["ownershipShare"] = ownership_share_decimal
-        elif relation_type_int == 1:
-            # Backend requires ownershipShare for Owner type, default to 1.0 (100%)
-            api_data["ownershipShare"] = 1.0
-            logger.info("OwnershipShare: defaulting to 1.0 (100%) for Owner relation type")
+        if ownership_share_value is not None:
+            api_data["ownershipShare"] = ownership_share_value
 
         contract_details = relation_data.get('evidence_desc', '') or relation_data.get('contract_details', '')
         if contract_details:
@@ -2672,34 +2705,63 @@ class TRRCMSApiClient:
         """Get all governorates."""
         return self._request("GET", "/v1/administrative-divisions/governorates")
 
-    def get_districts(self, governorate_code: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get districts, optionally filtered by governorate."""
+    def get_districts(
+        self,
+        governorate_code: Optional[str] = None,
+        governorate_pcode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get districts. Filters by raw code or OCHA pCode (e.g. "SY02")."""
         params = {}
-        if governorate_code:
+        if governorate_pcode:
+            params["governoratePCode"] = governorate_pcode
+        elif governorate_code:
             params["governorateCode"] = governorate_code
         return self._request("GET", "/v1/administrative-divisions/districts", params=params)
 
-    def get_sub_districts(self, governorate_code: Optional[str] = None,
-                          district_code: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get sub-districts, optionally filtered by governorate and district."""
+    def get_sub_districts(
+        self,
+        governorate_code: Optional[str] = None,
+        district_code: Optional[str] = None,
+        governorate_pcode: Optional[str] = None,
+        district_pcode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get sub-districts. Filters by raw codes or OCHA pCodes."""
         params = {}
-        if governorate_code:
-            params["governorateCode"] = governorate_code
-        if district_code:
-            params["districtCode"] = district_code
+        if district_pcode:
+            params["districtPCode"] = district_pcode
+        elif governorate_pcode:
+            params["governoratePCode"] = governorate_pcode
+        else:
+            if governorate_code:
+                params["governorateCode"] = governorate_code
+            if district_code:
+                params["districtCode"] = district_code
         return self._request("GET", "/v1/administrative-divisions/sub-districts", params=params)
 
-    def get_communities(self, governorate_code: Optional[str] = None,
-                        district_code: Optional[str] = None,
-                        sub_district_code: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get communities, optionally filtered by governorate, district, and sub-district."""
+    def get_communities(
+        self,
+        governorate_code: Optional[str] = None,
+        district_code: Optional[str] = None,
+        sub_district_code: Optional[str] = None,
+        governorate_pcode: Optional[str] = None,
+        district_pcode: Optional[str] = None,
+        sub_district_pcode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get communities. Filters by raw codes or OCHA pCodes."""
         params = {}
-        if governorate_code:
-            params["governorateCode"] = governorate_code
-        if district_code:
-            params["districtCode"] = district_code
-        if sub_district_code:
-            params["subDistrictCode"] = sub_district_code
+        if sub_district_pcode:
+            params["subDistrictPCode"] = sub_district_pcode
+        elif district_pcode:
+            params["districtPCode"] = district_pcode
+        elif governorate_pcode:
+            params["governoratePCode"] = governorate_pcode
+        else:
+            if governorate_code:
+                params["governorateCode"] = governorate_code
+            if district_code:
+                params["districtCode"] = district_code
+            if sub_district_code:
+                params["subDistrictCode"] = sub_district_code
         return self._request("GET", "/v1/administrative-divisions/communities", params=params)
 
     def get_neighborhoods_by_bounds(self, sw_lat: float, sw_lng: float, ne_lat: float, ne_lng: float) -> List[Dict[str, Any]]:
@@ -2745,29 +2807,45 @@ class TRRCMSApiClient:
             logger.warning(f"No neighborhood found at ({latitude}, {longitude}): {e}")
             return None
 
-    def get_neighborhoods(self, governorate_code: Optional[str] = None, district_code: Optional[str] = None,
-                         subdistrict_code: Optional[str] = None, community_code: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_neighborhoods(
+        self,
+        governorate_code: Optional[str] = None,
+        district_code: Optional[str] = None,
+        subdistrict_code: Optional[str] = None,
+        community_code: Optional[str] = None,
+        governorate_pcode: Optional[str] = None,
+        district_pcode: Optional[str] = None,
+        sub_district_pcode: Optional[str] = None,
+        community_pcode: Optional[str] = None,
+        neighborhood_pcode: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Get all neighborhoods with optional hierarchy filters.
+        Get neighborhoods with optional hierarchy filters.
 
-        Args:
-            governorate_code: Filter by governorate
-            district_code: Filter by district
-            subdistrict_code: Filter by sub-district
-            community_code: Filter by community
-
-        Returns:
-            List of neighborhoods with full details
+        Filters accept raw codes OR OCHA pCodes (server resolves either).
+        The deepest pCode supplied is sufficient.
         """
         params = {}
-        if governorate_code:
-            params["governorateCode"] = governorate_code
-        if district_code:
-            params["districtCode"] = district_code
-        if subdistrict_code:
-            params["subDistrictCode"] = subdistrict_code
-        if community_code:
-            params["communityCode"] = community_code
+        # Prefer the deepest pCode available
+        if neighborhood_pcode:
+            params["neighborhoodPCode"] = neighborhood_pcode
+        elif community_pcode:
+            params["communityPCode"] = community_pcode
+        elif sub_district_pcode:
+            params["subDistrictPCode"] = sub_district_pcode
+        elif district_pcode:
+            params["districtPCode"] = district_pcode
+        elif governorate_pcode:
+            params["governoratePCode"] = governorate_pcode
+        else:
+            if governorate_code:
+                params["governorateCode"] = governorate_code
+            if district_code:
+                params["districtCode"] = district_code
+            if subdistrict_code:
+                params["subDistrictCode"] = subdistrict_code
+            if community_code:
+                params["communityCode"] = community_code
 
         # Cache only the unfiltered full list (common hot path from _resolve_address_names)
         if not params and self._neighborhoods_cache is not None:

@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QMenu, QAction, QStackedWidget, QPushButton,
-    QScrollArea,
+    QScrollArea, QLineEdit, QComboBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QCursor
@@ -263,6 +263,53 @@ class ImportPackagesPage(QWidget):
         apply_label_alignment(self._subtitle)
         content_layout.addWidget(self._subtitle)
 
+        # Filters bar (local filtering of currently loaded packages)
+        self._filters_bar = QFrame()
+        self._filters_bar.setStyleSheet(
+            "QFrame { background: transparent; border: none; }"
+        )
+        self._filters_bar.setLayoutDirection(get_layout_direction())
+        filters_layout = QHBoxLayout(self._filters_bar)
+        filters_layout.setContentsMargins(0, 0, 0, 12)
+        filters_layout.setSpacing(10)
+
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText(
+            tr("page.import_packages.search_placeholder")
+        )
+        self._search_input.setFixedHeight(ScreenScale.h(36))
+        self._search_input.setStyleSheet("""
+            QLineEdit {
+                background: white;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 0 12px;
+                color: #2C3E50;
+            }
+            QLineEdit:focus { border-color: #3890DF; }
+        """)
+        self._search_input.textChanged.connect(self._on_filters_changed)
+        filters_layout.addWidget(self._search_input, 1)
+
+        self._status_filter_combo = QComboBox()
+        self._status_filter_combo.setFixedHeight(ScreenScale.h(36))
+        self._status_filter_combo.setMinimumWidth(ScreenScale.w(170))
+        self._status_filter_combo.setStyleSheet("""
+            QComboBox {
+                background: white;
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 0 12px;
+                color: #2C3E50;
+            }
+            QComboBox:focus { border-color: #3890DF; }
+        """)
+        self._populate_status_filter()
+        self._status_filter_combo.currentIndexChanged.connect(self._on_filters_changed)
+        filters_layout.addWidget(self._status_filter_combo)
+
+        content_layout.addWidget(self._filters_bar)
+
         self._stack = QStackedWidget()
 
         # Page 0: scroll area with card container
@@ -338,13 +385,14 @@ class ImportPackagesPage(QWidget):
 
         self._start_btn = QPushButton(tr("page.import_packages.start_processing"))
         self._start_btn.setCursor(Qt.PointingHandCursor)
-        self._start_btn.setFixedHeight(ScreenScale.h(42))
-        self._start_btn.setMinimumWidth(ScreenScale.w(220))
-        self._start_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._start_btn.setMinimumHeight(ScreenScale.h(42))
+        self._start_btn.setMinimumWidth(ScreenScale.w(260))
+        self._start_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self._start_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         self._start_btn.setStyleSheet(
             "QPushButton { background: #3890DF; color: white; border: none;"
-            " border-radius: 10px; padding: 10px 28px; font-size: 11pt;"
-            " font-weight: 600; }"
+            " border-radius: 10px; padding: 0 18px; font-size: 11pt;"
+            " font-weight: 600; min-height: 44px; }"
             " QPushButton:hover { background: #1A74C8; }"
             " QPushButton:disabled { background: #CBD5E1; color: #F0F5FF; }"
         )
@@ -437,31 +485,65 @@ class ImportPackagesPage(QWidget):
         self._spinner.show_loading(tr("page.import_packages.loading_packages"))
 
         try:
-            # Backend /packages supports only a single status filter; fetch one
-            # generously-sized page and partition client-side into active/history.
-            # Revisit if a single package list exceeds the page size.
-            result = self.import_controller.get_packages(
-                page=1,
-                page_size=100,
-                status_filter=None,
-            )
+            # Backend /packages supports only a single status filter, so we
+            # fetch all packages and partition client-side into active/history.
+            # Use a paged fetch loop with a safety cap so the UI never silently
+            # drops packages when the total exceeds the first-page size.
+            FETCH_PAGE_SIZE = 100
+            MAX_TOTAL = 1000  # hard cap to prevent runaway loops
 
             items = []
             total_count = 0
 
-            if result.success:
-                data = result.data or {}
-                if isinstance(data, dict):
-                    items = data.get("items", [])
-                    total_count = data.get("totalCount", len(items))
-                elif isinstance(data, list):
-                    items = data
+            first_result = self.import_controller.get_packages(
+                page=1,
+                page_size=FETCH_PAGE_SIZE,
+                status_filter=None,
+            )
+
+            if first_result.success:
+                first_data = first_result.data or {}
+                if isinstance(first_data, dict):
+                    items = list(first_data.get("items", []))
+                    total_count = first_data.get("totalCount", len(items))
+                elif isinstance(first_data, list):
+                    items = list(first_data)
                     total_count = len(items)
+
+                effective_total = min(total_count, MAX_TOTAL)
+                page_idx = 2
+                while len(items) < effective_total:
+                    more_result = self.import_controller.get_packages(
+                        page=page_idx,
+                        page_size=FETCH_PAGE_SIZE,
+                        status_filter=None,
+                    )
+                    if not more_result.success:
+                        logger.warning(
+                            "Failed to fetch packages page %s: %s",
+                            page_idx, more_result.message,
+                        )
+                        break
+                    more_data = more_result.data or {}
+                    more_items = (
+                        more_data.get("items", []) if isinstance(more_data, dict)
+                        else (more_data if isinstance(more_data, list) else [])
+                    )
+                    if not more_items:
+                        break
+                    items.extend(more_items)
+                    page_idx += 1
+
+                if total_count > MAX_TOTAL:
+                    logger.warning(
+                        "Import package total (%s) exceeds cap (%s); only first %s loaded",
+                        total_count, MAX_TOTAL, MAX_TOTAL,
+                    )
             else:
-                logger.error("Failed to load packages: %s", result.message)
+                logger.error("Failed to load packages: %s", first_result.message)
                 ErrorHandler.show_error(
                     self,
-                    result.message_ar or tr("page.import_packages.load_failed"),
+                    first_result.message_ar or tr("page.import_packages.load_failed"),
                 )
 
             def _status_of(pkg):
@@ -484,15 +566,7 @@ class ImportPackagesPage(QWidget):
             self._stat_active.set_count(len(self._queue_packages))
             self._stat_history.set_count(len(self._history_packages))
 
-            mode_items = (self._queue_packages if self._mode == "queue"
-                          else self._history_packages)
-            mode_total = len(mode_items)
-            self._total_pages = max(1, (mode_total + self._rows_per_page - 1) // self._rows_per_page)
-
-            # Slice for current page
-            start = (self._current_page - 1) * self._rows_per_page
-            end = start + self._rows_per_page
-            self._populate_cards(mode_items[start:end], mode_total)
+            self._render_current_mode()
         except Exception as exc:
             logger.error("Load packages exception: %s", exc)
         finally:
@@ -503,6 +577,60 @@ class ImportPackagesPage(QWidget):
         """Flip between active queue and history modes (single toggle button)."""
         new_mode = "history" if self._mode == "queue" else "queue"
         self._set_mode(new_mode)
+
+    def _populate_status_filter(self):
+        """Fill the status filter dropdown for the current mode."""
+        from services.import_status_map import status_label_key, ACTIVE_QUEUE, HISTORY
+        prev_data = self._status_filter_combo.currentData() if self._status_filter_combo.count() else None
+        self._status_filter_combo.blockSignals(True)
+        self._status_filter_combo.clear()
+        self._status_filter_combo.addItem(tr("page.import_packages.filter_all_statuses"), None)
+        codes = sorted(ACTIVE_QUEUE) if getattr(self, "_mode", "queue") == "queue" else sorted(HISTORY)
+        for code in codes:
+            self._status_filter_combo.addItem(tr(status_label_key(code)), code)
+        if prev_data is not None:
+            idx = self._status_filter_combo.findData(prev_data)
+            if idx >= 0:
+                self._status_filter_combo.setCurrentIndex(idx)
+        self._status_filter_combo.blockSignals(False)
+
+    def _on_filters_changed(self, *_):
+        """Reset to first page and re-render with the current filters applied."""
+        self._current_page = 1
+        self._render_current_mode()
+
+    def _apply_local_filters(self, items):
+        """Apply search + status filters in-memory."""
+        query = (self._search_input.text() or "").strip().lower()
+        status_value = self._status_filter_combo.currentData()
+        result = []
+        for pkg in items:
+            if status_value is not None:
+                raw = pkg.get("status", 0)
+                code = int(raw) if isinstance(raw, int) or (isinstance(raw, str) and raw.isdigit()) else 0
+                if code != status_value:
+                    continue
+            if query:
+                name = (pkg.get("packageName") or pkg.get("name") or "").lower()
+                if query not in name:
+                    continue
+            result.append(pkg)
+        return result
+
+    def _render_current_mode(self):
+        """Re-render cards for the current mode using current filters/pagination."""
+        if not hasattr(self, "_queue_packages"):
+            return
+        base_items = (self._queue_packages if self._mode == "queue"
+                      else self._history_packages)
+        filtered = self._apply_local_filters(base_items)
+        self._mode_total = len(filtered)
+        self._total_pages = max(1, (self._mode_total + self._rows_per_page - 1) // self._rows_per_page)
+        if self._current_page > self._total_pages:
+            self._current_page = self._total_pages
+        start = (self._current_page - 1) * self._rows_per_page
+        end = start + self._rows_per_page
+        self._populate_cards(filtered[start:end], self._mode_total)
 
     def _set_mode(self, mode: str):
         """Switch between active queue and history views."""
@@ -520,6 +648,9 @@ class ImportPackagesPage(QWidget):
             self._empty_state.set_description(tr("page.import_packages.history_empty"))
             self._btn_toggle.setText(tr("page.import_packages.show_queue"))
             self._subtitle.setText(tr("page.import_packages.subtitle_history"))
+        # Mode-specific status filter options
+        if hasattr(self, "_status_filter_combo"):
+            self._populate_status_filter()
         self._load_packages()
 
     def _populate_cards(self, items, total_count):
@@ -604,15 +735,16 @@ class ImportPackagesPage(QWidget):
     # -- Pagination --------------------------------------------------------
 
     def _update_pagination(self):
-        if self._total_count == 0:
+        mode_total = getattr(self, "_mode_total", 0)
+        if mode_total == 0:
             self._page_label.setText("0")
             self._prev_btn.setEnabled(False)
             self._next_btn.setEnabled(False)
             return
 
         start = (self._current_page - 1) * self._rows_per_page + 1
-        end = min(start + self._rows_per_page - 1, self._total_count)
-        self._page_label.setText(f"{start}-{end} / {self._total_count}")
+        end = min(start + self._rows_per_page - 1, mode_total)
+        self._page_label.setText(f"{start}-{end} / {mode_total}")
         self._prev_btn.setEnabled(self._current_page > 1)
         self._next_btn.setEnabled(self._current_page < self._total_pages)
 
@@ -958,6 +1090,16 @@ class ImportPackagesPage(QWidget):
         self._rows_label.setText(tr("page.import_packages.rows_per_page"))
         self._start_btn.setText(tr("page.import_packages.start_processing"))
         self._update_action_bar()
+
+        # Filters bar — placeholder + status options + direction.
+        if hasattr(self, "_filters_bar"):
+            self._filters_bar.setLayoutDirection(get_layout_direction())
+        if hasattr(self, "_search_input"):
+            self._search_input.setPlaceholderText(
+                tr("page.import_packages.search_placeholder")
+            )
+        if hasattr(self, "_status_filter_combo"):
+            self._populate_status_filter()
 
         # Empty state
         if self._mode == "queue":

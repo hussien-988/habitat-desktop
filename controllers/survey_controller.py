@@ -113,6 +113,7 @@ class SurveyController:
             claim_dto = None
             contact_person_dto = None
 
+            all_persons_list = []
             futures = {}
             with ThreadPoolExecutor(max_workers=5) as executor:
                 if building_id:
@@ -123,7 +124,10 @@ class SurveyController:
                     futures['persons'] = executor.submit(api.get_persons_for_household, survey_id, hh_id)
                 if claim_id:
                     futures['claim'] = executor.submit(api.get_claim_by_id, claim_id)
-                futures['contact'] = executor.submit(api.get_contact_person, survey_id)
+                # Always fetch contact person via the survey-scoped endpoint.
+                # The detail response can return contactPersonId=null for draft
+                # surveys, and contact persons aren't always household members.
+                futures['contact_person'] = executor.submit(api.get_contact_person, survey_id)
 
             # Collect results with individual error handling
             if 'building' in futures:
@@ -144,24 +148,10 @@ class SurveyController:
 
             if 'persons' in futures:
                 try:
-                    all_persons_list = futures['persons'].result()
+                    all_persons_list = futures['persons'].result() or []
                     person_map = {p.get("id"): p for p in all_persons_list}
                 except Exception as e:
                     logger.warning(f"Failed to fetch household persons: {e}")
-
-            if not person_map:
-                person_ids = {
-                    rel.get("personId")
-                    for rel in (detail.get("relations") or [])
-                    if rel.get("personId")
-                }
-                for pid in person_ids:
-                    try:
-                        person_dto = api.get_person_by_id(pid)
-                        if person_dto:
-                            person_map[pid] = person_dto
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch person {pid}: {e}")
 
             if 'claim' in futures:
                 try:
@@ -169,15 +159,16 @@ class SurveyController:
                 except Exception as e:
                     logger.warning(f"Failed to fetch claim {claim_id}: {e}")
 
-            try:
-                contact_person_dto = futures['contact'].result()
-            except Exception as e:
-                logger.debug(f"Contact person not available: {e}")
+            survey_contact_person_dto = None
+            if 'contact_person' in futures:
+                try:
+                    survey_contact_person_dto = futures['contact_person'].result()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch survey contact person: {e}")
 
-            # Process persons + relations from survey detail
-            persons = []
+            # Build relations list from survey detail (kept for ownership tracking)
             relations = []
-            seen_person_ids = set()
+            relation_by_person_id = {}
             for rel in (detail.get("relations") or []):
                 person_id = rel.get("personId")
                 relations.append({
@@ -186,14 +177,40 @@ class SurveyController:
                     "unit_id": rel.get("propertyUnitId", ""),
                     "relation_type": rel.get("relationType", ""),
                 })
-                if not person_id or person_id in seen_person_ids:
-                    continue
-                seen_person_ids.add(person_id)
-                person_dto = person_map.get(person_id)
-                if person_dto:
-                    persons.append(ClaimController._map_person_dto(person_dto, rel))
-                else:
-                    logger.debug(f"Person {person_id} not found in household persons")
+                if person_id:
+                    relation_by_person_id.setdefault(person_id, rel)
+
+            # Build persons list straight from the household persons endpoint
+            # (which already includes the contact person via isContactPerson).
+            persons = []
+            contact_person_dto = None
+            seen_person_ids = set()
+            for person_dto in all_persons_list:
+                pid = person_dto.get("id", "")
+                rel = relation_by_person_id.get(pid, {})
+                persons.append(ClaimController._map_person_dto(person_dto, rel))
+                if pid:
+                    seen_person_ids.add(pid)
+                if person_dto.get("isContactPerson") and not contact_person_dto:
+                    contact_person_dto = person_dto
+
+            # Prefer the survey-scoped contact person (works for draft surveys
+            # where the detail response omits contactPersonId, and for contact
+            # persons that aren't household members).
+            if survey_contact_person_dto:
+                contact_person_dto = survey_contact_person_dto
+                cp_id = survey_contact_person_dto.get("id", "")
+                if cp_id and cp_id not in seen_person_ids:
+                    rel = relation_by_person_id.get(cp_id, {})
+                    persons.append(
+                        ClaimController._map_person_dto(survey_contact_person_dto, rel)
+                    )
+                    seen_person_ids.add(cp_id)
+
+            # Fallback: if neither source returned the contact person but the
+            # survey detail referenced one, pick it up from person_map by id.
+            if not contact_person_dto and contact_person_id:
+                contact_person_dto = person_map.get(contact_person_id)
 
             # Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)

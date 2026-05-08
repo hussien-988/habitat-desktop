@@ -21,11 +21,12 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 try:
-    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings, QWebEnginePage
     HAS_WEBENGINE = True
 except ImportError:
     QWebEngineView = None
     QWebEngineSettings = None
+    QWebEnginePage = None
     HAS_WEBENGINE = False
 
 
@@ -57,6 +58,15 @@ class BuildingLocationMapPreview(QFrame):
             self._web_view = QWebEngineView(self)
             self._web_view.setContextMenuPolicy(Qt.NoContextMenu)
 
+            try:
+                from services.web_profile import get_shared_map_profile
+                shared_profile = get_shared_map_profile()
+                if shared_profile is not None:
+                    page = QWebEnginePage(shared_profile, self._web_view)
+                    self._web_view.setPage(page)
+            except Exception as e:
+                logger.warning(f"Could not attach shared profile to preview map: {e}")
+
             settings = self._web_view.settings()
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
             settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
@@ -64,6 +74,7 @@ class BuildingLocationMapPreview(QFrame):
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
 
             self._web_view.hide()
+            self._web_view.loadFinished.connect(self._on_map_loaded)
 
         self._fallback_label = QLabel(self)
         self._fallback_label.setAlignment(Qt.AlignCenter)
@@ -113,7 +124,27 @@ class BuildingLocationMapPreview(QFrame):
 
         self._expand_btn.clicked.connect(self.expand_requested.emit)
 
+        self._loading_label = QLabel(self)
+        self._loading_label.setAlignment(Qt.AlignCenter)
+        self._loading_label.setText(tr("component.loading.default"))
+        self._loading_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
+        self._loading_label.setStyleSheet("""
+            QLabel {
+                background-color: #E8E8E8;
+                color: #64748B;
+                border-radius: 12px;
+                border: none;
+            }
+        """)
+        self._loading_label.hide()
+
         self._show_fallback()
+
+    def _on_map_loaded(self, ok: bool):
+        """Hide loading overlay once the map finishes loading."""
+        if hasattr(self, '_loading_label'):
+            self._loading_label.hide()
+        self._expand_btn.raise_()
 
     def set_building(self, building):
         """Render the building location on the embedded preview map."""
@@ -159,6 +190,9 @@ class BuildingLocationMapPreview(QFrame):
             )
 
             self._fallback_label.hide()
+            self._loading_label.setGeometry(0, 0, self.width(), self.height())
+            self._loading_label.show()
+            self._loading_label.raise_()
             self._web_view.show()
             self._web_view.setHtml(html)
             self._expand_btn.raise_()
@@ -255,6 +289,9 @@ class BuildingLocationMapPreview(QFrame):
 
         if self._fallback_label:
             self._fallback_label.setGeometry(0, 0, width, height)
+
+        if hasattr(self, '_loading_label') and self._loading_label:
+            self._loading_label.setGeometry(0, 0, width, height)
 
         margin = ScreenScale.w(12)
         btn_width = self._expand_btn.width()

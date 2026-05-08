@@ -638,7 +638,8 @@ class ClaimController(BaseController):
             "floor_number": dto.get("floorNumber", 0),
             "unit_type": dto.get("unitType", 0),
             "apartment_status": dto.get("status") or dto.get("unitStatus", 0),
-            "apartment_number": str(dto.get("numberOfRooms") or 0),
+            "apartment_number": dto.get("apartmentNumber") or dto.get("unitIdentifier") or "",
+            "number_of_rooms": dto.get("numberOfRooms") or 0,
             "area_sqm": dto.get("areaSquareMeters") or dto.get("areaSqm", 0),
             "property_description": dto.get("description", ""),
         }

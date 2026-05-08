@@ -127,11 +127,13 @@ class _SelectableBuildingCard(AnimatedCard):
         layout.setSpacing(ScreenScale.h(6))
         self.setLayoutDirection(get_layout_direction())
         layout.setDirection(QBoxLayout.TopToBottom)
+        self._row_layouts = []
         # Top row: building code + add/check indicator
         top_row = QHBoxLayout()
         self._apply_row_direction(top_row)
         top_row.setSpacing(ScreenScale.w(10))
         top_row.setContentsMargins(0, 0, 0, 0)
+        self._row_layouts.append(top_row)
 
         self._code_label = QLabel(self.building.building_id or "")
         self._code_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
@@ -167,6 +169,7 @@ class _SelectableBuildingCard(AnimatedCard):
         self._apply_row_direction(info_row)
         info_row.setSpacing(ScreenScale.w(8))
         info_row.setContentsMargins(0, 0, 0, 0)
+        self._row_layouts.append(info_row)
 
         type_text = self._format_type_text()
         type_label = QLabel(type_text)
@@ -223,12 +226,19 @@ class _SelectableBuildingCard(AnimatedCard):
         """Refresh direction and text alignment when language changes."""
         self.setLayoutDirection(get_layout_direction())
 
+        if hasattr(self, "_row_layouts"):
+            for row in self._row_layouts:
+                self._apply_row_direction(row)
+
         if hasattr(self, "_code_label"):
             self._apply_text_alignment(self._code_label, force_ltr_text=True)
 
         if hasattr(self, "_secondary_label"):
             self._secondary_label.setText(self._format_type_text())
             self._apply_text_alignment(self._secondary_label)
+
+        if hasattr(self, "_assigned_badge") and self._assigned_badge:
+            self._assigned_badge.setText(tr("building.assigned"))
 
         self.update()
     def _apply_base_style(self):
@@ -366,6 +376,12 @@ class _SelectedBuildingRow(QFrame):
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(10)
+        from PyQt5.QtWidgets import QBoxLayout as _QBoxLayout
+        row.setDirection(
+            _QBoxLayout.RightToLeft if get_layout_direction() == Qt.RightToLeft
+            else _QBoxLayout.LeftToRight
+        )
+        self._row = row
 
         remove_btn = QPushButton("×")
         remove_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
@@ -406,6 +422,7 @@ class _SelectedBuildingRow(QFrame):
             code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         else:
             code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._code_label = code_label
         info_col.addWidget(code_label)
 
         type_text = self._format_type_text()
@@ -444,8 +461,27 @@ class _SelectedBuildingRow(QFrame):
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
+
+        from PyQt5.QtWidgets import QBoxLayout as _QBoxLayout
+        if hasattr(self, '_row'):
+            self._row.setDirection(
+                _QBoxLayout.RightToLeft if get_layout_direction() == Qt.RightToLeft
+                else _QBoxLayout.LeftToRight
+            )
+
+        if hasattr(self, '_code_label'):
+            if get_layout_direction() == Qt.RightToLeft:
+                self._code_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                self._code_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
         if self._sub_label:
             self._sub_label.setText(self._format_type_text())
+            if get_layout_direction() == Qt.RightToLeft:
+                self._sub_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            else:
+                self._sub_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
         self.update()
 
 class FieldWorkPreparationStep1(QWidget):
@@ -474,6 +510,9 @@ class FieldWorkPreparationStep1(QWidget):
         self._all_communities = []  # [(code, name_ar, name_en), ...]
         self._all_neighborhoods = []  # [(code, name_ar, name_en, community_code), ...]
         self._all_neighborhoods_raw = []
+        # raw code -> OCHA pCode (preferred for backend filters per OCHA migration guide)
+        self._comm_pcode_by_code: dict = {}
+        self._neigh_pcode_by_code: dict = {}
 
         self._setup_ui()
 
@@ -490,11 +529,13 @@ class FieldWorkPreparationStep1(QWidget):
         api = get_api_client()
 
         def _fetch():
+            # Aleppo city subdistrict — OCHA pCode takes precedence over raw codes.
+            from app.config import Config
             communities = api.get_communities(
-                governorate_code="01", district_code="01", sub_district_code="01"
+                sub_district_pcode=Config.ALEPPO_SUBDISTRICT_PCODE
             )
             neighborhoods = api.get_neighborhoods(
-                governorate_code="01", district_code="01", subdistrict_code="01"
+                sub_district_pcode=Config.ALEPPO_SUBDISTRICT_PCODE
             )
             return communities, neighborhoods
 
@@ -503,6 +544,8 @@ class FieldWorkPreparationStep1(QWidget):
             communities, neighborhoods = result
             self._all_communities = []
             self._all_neighborhoods = []
+            self._comm_pcode_by_code = {}
+            self._neigh_pcode_by_code = {}
 
             for c in communities:
                 if c.get("isActive", True):
@@ -511,6 +554,9 @@ class FieldWorkPreparationStep1(QWidget):
                     name_en = c.get("nameEnglish", "") or name_ar
                     if code and (name_ar or name_en):
                         self._all_communities.append((code, name_ar, name_en))
+                        pcode = c.get("pCode") or ""
+                        if pcode:
+                            self._comm_pcode_by_code[code] = pcode
             self._all_communities.sort(key=lambda x: x[1])
 
             lang = get_language()
@@ -530,6 +576,9 @@ class FieldWorkPreparationStep1(QWidget):
                 comm_code = n.get("communityCode", "")
                 if code and (name_ar or name_en):
                     self._all_neighborhoods.append((code, name_ar, name_en, comm_code))
+                    pcode = n.get("pCode") or ""
+                    if pcode:
+                        self._neigh_pcode_by_code[code] = pcode
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
             self.neighborhood_combo.clear()
@@ -567,10 +616,10 @@ class FieldWorkPreparationStep1(QWidget):
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(16)
 
-        # Filter 1: City
-        filter1_container, self._filter1_label = self._create_filter_field(tr("filter.step1.city"))
+        # Filter 1: Community
+        filter1_container, self._filter1_label = self._create_filter_field(tr("filter.step1.community"))
         self.community_combo = QComboBox()
-        self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
+        self.community_combo.setPlaceholderText(tr("filter.step1.select_community"))
         self._style_combo(self.community_combo)
         self.community_combo.currentIndexChanged.connect(self._on_community_changed)
         filter1_container.layout().addWidget(self.community_combo)
@@ -695,6 +744,67 @@ class FieldWorkPreparationStep1(QWidget):
         self._selection_count_label.setStyleSheet(f"color: {Colors.PRIMARY_BLUE}; background: transparent;")
         self._selection_count_label.setVisible(False)
         main_layout.addWidget(self._selection_count_label)
+
+        # -- Sticky Selection Bar (visible whenever ≥1 building selected) --
+        self._sel_bar = QFrame()
+        self._sel_bar.setObjectName("stickySelBar")
+        self._sel_bar.setStyleSheet("""
+            QFrame#stickySelBar {
+                background: #EFF6FF;
+                border: 1px solid #BFDBFE;
+                border-radius: 10px;
+            }
+            QFrame#stickySelBar QLabel {
+                background: transparent;
+                border: none;
+            }
+        """)
+        sel_bar_layout = QHBoxLayout(self._sel_bar)
+        sel_bar_layout.setContentsMargins(14, 8, 14, 8)
+        sel_bar_layout.setSpacing(10)
+
+        self._sel_bar_count_label = QLabel()
+        self._sel_bar_count_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        self._sel_bar_count_label.setStyleSheet("color: #1D4ED8;")
+        sel_bar_layout.addWidget(self._sel_bar_count_label, 1)
+
+        self._sel_bar_view_btn = QPushButton(tr("wizard.step1.view_selected") or "عرض المختارة")
+        self._sel_bar_view_btn.setFixedHeight(ScreenScale.h(32))
+        self._sel_bar_view_btn.setCursor(Qt.PointingHandCursor)
+        self._sel_bar_view_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0 14px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background: #1E40AF; }}
+            QPushButton:disabled {{ background: #94A3B8; }}
+        """)
+        self._sel_bar_view_btn.clicked.connect(self._on_view_selected_clicked)
+        sel_bar_layout.addWidget(self._sel_bar_view_btn)
+
+        self._sel_bar_clear_btn = QPushButton(tr("wizard.step1.clear_all") or "إلغاء الكل")
+        self._sel_bar_clear_btn.setFixedHeight(ScreenScale.h(32))
+        self._sel_bar_clear_btn.setCursor(Qt.PointingHandCursor)
+        self._sel_bar_clear_btn.setStyleSheet("""
+            QPushButton {
+                background: white;
+                color: #DC2626;
+                border: 1px solid #FCA5A5;
+                border-radius: 8px;
+                padding: 0 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #FEF2F2; border-color: #EF4444; }
+        """)
+        self._sel_bar_clear_btn.clicked.connect(self._on_clear_selection_clicked)
+        sel_bar_layout.addWidget(self._sel_bar_clear_btn)
+
+        self._sel_bar.setVisible(False)
+        main_layout.addWidget(self._sel_bar)
 
         # -- Results Area (fills remaining space) --
         self._suggestions_scroll = QScrollArea()
@@ -954,9 +1064,12 @@ class FieldWorkPreparationStep1(QWidget):
 
             self._all_communities = []
             self._all_neighborhoods = []
+            self._comm_pcode_by_code = {}
+            self._neigh_pcode_by_code = {}
 
+            from app.config import Config
             communities = api.get_communities(
-                governorate_code="01", district_code="01", sub_district_code="01"
+                sub_district_pcode=Config.ALEPPO_SUBDISTRICT_PCODE
             )
             for c in communities:
                 if c.get("isActive", True):
@@ -965,6 +1078,9 @@ class FieldWorkPreparationStep1(QWidget):
                     name_en = c.get("nameEnglish", "") or name_ar
                     if code and (name_ar or name_en):
                         self._all_communities.append((code, name_ar, name_en))
+                        pcode = c.get("pCode") or ""
+                        if pcode:
+                            self._comm_pcode_by_code[code] = pcode
             self._all_communities.sort(key=lambda x: x[1])
 
             lang = get_language()
@@ -977,7 +1093,7 @@ class FieldWorkPreparationStep1(QWidget):
             self.community_combo.blockSignals(False)
 
             neighborhoods = api.get_neighborhoods(
-                governorate_code="01", district_code="01", subdistrict_code="01"
+                sub_district_pcode=Config.ALEPPO_SUBDISTRICT_PCODE
             )
             self._all_neighborhoods_raw = neighborhoods
             for n in neighborhoods:
@@ -987,6 +1103,9 @@ class FieldWorkPreparationStep1(QWidget):
                 comm_code = n.get("communityCode", "")
                 if code and (name_ar or name_en):
                     self._all_neighborhoods.append((code, name_ar, name_en, comm_code))
+                    pcode = n.get("pCode") or ""
+                    if pcode:
+                        self._neigh_pcode_by_code[code] = pcode
             self._all_neighborhoods.sort(key=lambda x: x[1])
 
             self.neighborhood_combo.clear()
@@ -1049,7 +1168,7 @@ class FieldWorkPreparationStep1(QWidget):
             self.page.enable_next_button(count > 0)
 
     def _update_selected_card_visibility(self):
-        """Show/hide selection count label."""
+        """Show/hide selection count label and sticky selection bar."""
         count = len(self._selected_building_ids)
         has_selection = count > 0
         self._selection_count_label.setVisible(has_selection)
@@ -1057,6 +1176,39 @@ class FieldWorkPreparationStep1(QWidget):
             self._selection_count_label.setText(
                 f"{tr('wizard.step1.selected_items')} ({count} {tr('wizard.step1.building_unit')})"
             )
+
+        if hasattr(self, "_sel_bar"):
+            self._sel_bar.setVisible(has_selection)
+            if has_selection:
+                label = tr('wizard.step1.selected_items') or "تم اختيار"
+                unit = tr('wizard.step1.building_unit') or "مبنى"
+                self._sel_bar_count_label.setText(f"{label}: {count} {unit}")
+                self._sel_bar_view_btn.setText(
+                    tr('wizard.step1.show_selected_only')
+                    if self._showing_selected_view
+                    else (tr('wizard.step1.view_selected') or "عرض المختارة")
+                )
+
+    def _on_view_selected_clicked(self):
+        """Toggle between selected view and search results."""
+        if self._showing_selected_view:
+            self._set_suggestions_visible(True)
+            if any(getattr(self, attr, None) for attr in ('community_combo', 'neighborhood_combo')):
+                self._load_buildings_from_api()
+        else:
+            self._show_selected_buildings_view()
+        self._update_selected_card_visibility()
+
+    def _on_clear_selection_clicked(self):
+        """Clear all selections after confirmation."""
+        from ui.error_handler import ErrorHandler
+        if not ErrorHandler.confirm(
+            self,
+            tr("wizard.step1.confirm_clear_all") or "هل تريد إلغاء كل المباني المختارة؟",
+            tr("common.confirm") or "تأكيد",
+        ):
+            return
+        self.clear_all_selections()
     def _sync_visible_card_selection_state(self):
         """Sync visible result cards with the saved selected building IDs."""
         for card in self._suggestion_cards:
@@ -1192,10 +1344,17 @@ class FieldWorkPreparationStep1(QWidget):
         search_text = (filters.get('search_text') or "").strip()
 
         api = get_api_client()
+        # Prefer OCHA pCode for backend filters per migration guide; raw codes are fallback.
+        comm_code = filters.get('community') or None
+        neigh_code = filters.get('neighborhood') or None
+        comm_pcode = self._comm_pcode_by_code.get(comm_code) if comm_code else None
+        neigh_pcode = self._neigh_pcode_by_code.get(neigh_code) if neigh_code else None
         self._buildings_worker = ApiWorker(
             api.get_buildings_for_assignment,
-            community_code=filters.get('community') or None,
-            neighborhood_code=filters.get('neighborhood') or None,
+            community_code=None if comm_pcode else comm_code,
+            neighborhood_code=None if neigh_pcode else neigh_code,
+            community_pcode=comm_pcode,
+            neighborhood_pcode=neigh_pcode,
             building_code=search_text or None,
             has_active_assignment=has_active,
             page=self._current_page,
@@ -1233,6 +1392,14 @@ class FieldWorkPreparationStep1(QWidget):
                 self._shimmer_timer.start()
                 self._populate_buildings_list(buildings)
             else:
+                # If we landed on an empty page beyond the first, fall back
+                # to the previous page automatically (prevents users from
+                # getting stuck on a stale empty page after pagination).
+                if self._current_page > 1:
+                    self._current_page -= 1
+                    self._spinner.hide_loading()
+                    self._load_buildings_from_api()
+                    return
                 self._shimmer_timer.stop()
                 self.empty_label.set_title(tr("wizard.step1.no_buildings"))
                 self._results_stack.setCurrentIndex(0)
@@ -1616,7 +1783,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.setLayoutDirection(get_layout_direction())
 
         # Filter labels
-        self._filter1_label.setText(tr("filter.step1.city"))
+        self._filter1_label.setText(tr("filter.step1.community"))
         self._filter2_label.setText(tr("filter.step1.neighborhood"))
         self._filter3_label.setText(tr("filter.step1.assignment_status"))
 
@@ -1633,7 +1800,7 @@ class FieldWorkPreparationStep1(QWidget):
             if idx >= 0:
                 self.community_combo.setCurrentIndex(idx)
         self.community_combo.blockSignals(False)
-        self.community_combo.setPlaceholderText(tr("filter.step1.select_city"))
+        self.community_combo.setPlaceholderText(tr("filter.step1.select_community"))
 
         # Rebuild neighborhood combo with correct language names, preserve selection
         current_neighborhood = self.neighborhood_combo.currentData()

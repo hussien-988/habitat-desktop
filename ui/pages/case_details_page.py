@@ -679,9 +679,8 @@ class CaseDetailsPage(QWidget):
         title_box.addWidget(title_lbl)
         title_box.addWidget(sub_lbl)
 
-        h_layout.addWidget(icon_label)
-        h_layout.addLayout(title_box)
-        h_layout.addStretch()
+        h_layout.addWidget(icon_label, 0, Qt.AlignTop)
+        h_layout.addLayout(title_box, 1)
         layout.addWidget(header)
 
     # -- Field helpers --
@@ -836,9 +835,10 @@ class CaseDetailsPage(QWidget):
         ref = ctx.reference_number or ctx.get_data("survey_id") or ""
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
         status_lower = str(status).lower()
-        is_draft = status_lower in ("draft", "1", "")
-        is_obstructed = status_lower in ("obstructed", "4")
-        is_finalized = not is_draft and not is_obstructed
+        is_cancelled = status_lower in ("cancelled", "8")
+        is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
+        is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
+        is_finalized = (not is_cancelled) and (not is_draft) and (not is_obstructed)
 
         can_manage = self._user_role in ("admin", "data_manager")
         can_resume_obstructed = is_obstructed and can_manage
@@ -873,9 +873,13 @@ class CaseDetailsPage(QWidget):
 
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
         status_lower = str(status).lower()
-        is_draft = status_lower in ("draft", "1", "")
-        is_obstructed = status_lower in ("obstructed", "4")
-        if is_obstructed:
+        is_cancelled = status_lower in ("cancelled", "8")
+        is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
+        is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
+        if is_cancelled:
+            status_display = tr("mapping.survey_status.cancelled")
+            s_bg, s_fg, s_br = "#FEF2F2", "#DC2626", "#FECACA"
+        elif is_obstructed:
             status_display = tr("page.case_details.status_obstructed")
             s_bg, s_fg, s_br = "#FFFBEB", "#B45309", "#FCD34D"
         elif is_draft:

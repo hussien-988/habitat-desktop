@@ -883,23 +883,24 @@ class ApplicantInfoStep(BaseStep):
                     )
                 except Exception as e:
                     from services.exceptions import ApiException
+                    from services.error_mapper import map_exception
                     if isinstance(e, ApiException) and e.status_code == 409:
                         from services.error_mapper import build_duplicate_person_message
                         result.add_error(build_duplicate_person_message(e.response_data))
                     else:
                         logger.error(f"Contact person API failed: {e}")
-                        result.add_error(tr("wizard.applicant.save_failed"))
+                        result.add_error(map_exception(e))
             else:
                 try:
                     self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
                     logger.info(f"Contact person {existing_cp_id} updated")
                 except Exception as e:
-                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message, map_exception
                     if is_duplicate_nid_error(e):
                         result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
                     else:
                         logger.error(f"Contact person update failed: {e}")
-                        result.add_error(tr("wizard.applicant.update_failed"))
+                        result.add_error(map_exception(e))
 
             # 6. Upload ID photos
             person_id = self.context.get_data("contact_person_id")
@@ -925,18 +926,6 @@ class ApplicantInfoStep(BaseStep):
 
             # 7. Cache contact person locally
             self._save_contact_person_locally(survey_id)
-
-            # 8. Save intervieweeName
-            try:
-                a = self.context.applicant or {}
-                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-                interviewee_name = " ".join(p for p in parts if p) or a.get("full_name")
-                if interviewee_name:
-                    self._api_client.save_draft_to_backend(survey_id, {"interviewee_name": interviewee_name})
-                    logger.info(f"intervieweeName saved: {interviewee_name}")
-            except Exception as e:
-                logger.warning(f"Could not save interviewee name: {e}")
-                Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 

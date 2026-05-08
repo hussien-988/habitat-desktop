@@ -260,10 +260,14 @@ class Config:
     DATETIME_FORMAT: str = "%Y-%m-%d %H:%M:%S"
     DATE_FORMAT_DISPLAY: str = "%d/%m/%Y"
 
-    # Administrative Codes (Aleppo)
-    DEFAULT_GOVERNORATE_CODE: str = "01"
+    # Administrative Codes (Aleppo) — OCHA P-Code convention
+    DEFAULT_GOVERNORATE_CODE: str = "02"
     DEFAULT_GOVERNORATE_NAME: str = "Aleppo"
     DEFAULT_GOVERNORATE_NAME_AR: str = "حلب"
+    ALEPPO_GOVERNORATE_PCODE: str = "SY02"
+    ALEPPO_DISTRICT_PCODE: str = "SY0200"
+    ALEPPO_SUBDISTRICT_PCODE: str = "SY020000"
+    ALEPPO_CITY_COMMUNITY_PCODE: str = "C1007"
 
 
 # Page identifiers

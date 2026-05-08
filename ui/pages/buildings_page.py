@@ -276,6 +276,14 @@ class AddBuildingPage(QWidget):
         # DivisionsService for cascading dropdowns
         self._divisions = DivisionsService()
 
+        # pCode lookup tables — populated alongside cascading dropdowns
+        # so the page can send governoratePCode/districtPCode/... on writes.
+        self._gov_pcode_by_code: dict = {}
+        self._dist_pcode_by_code: dict = {}
+        self._subdist_pcode_by_code: dict = {}
+        self._comm_pcode_by_code: dict = {}
+        self._neigh_pcode_by_code: dict = {}
+
         # Field 1: رمز المحافظة (Governorate) - Dropdown
         gov_container = QVBoxLayout()
         gov_container.setSpacing(6)
@@ -284,8 +292,10 @@ class AddBuildingPage(QWidget):
         gov_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.governorate_combo = CodeDisplayCombo()
         self.governorate_combo.addItem(tr("page.buildings.select_governorate"), "")
-        for code, en, ar in self._divisions.get_governorates():
+        for code, pcode, en, ar in self._divisions.get_governorates():
             self.governorate_combo.addItem(f"{code} - {ar}", code)
+            if pcode:
+                self._gov_pcode_by_code[code] = pcode
         self.governorate_combo.setCurrentIndex(1)  # Default: Aleppo
         self.governorate_combo.setStyleSheet(code_combo_style)
         self.governorate_combo.setFixedHeight(ScreenScale.h(45))
@@ -1029,24 +1039,40 @@ class AddBuildingPage(QWidget):
         return widget
 
     def _get_gov_code(self) -> str:
-        """Get governorate code from combo or fallback."""
-        return self.governorate_combo.currentData() or "01"
+        """Get governorate code from combo (empty if none selected)."""
+        return self.governorate_combo.currentData() or ""
 
     def _get_district_code(self) -> str:
-        """Get district code from combo or fallback."""
-        return self.district_combo.currentData() or "01"
+        """Get district code from combo (empty if none selected)."""
+        return self.district_combo.currentData() or ""
 
     def _get_subdistrict_code(self) -> str:
-        """Get subdistrict code from combo or fallback."""
-        return self.subdistrict_combo.currentData() or "01"
+        """Get subdistrict code from combo (empty if none selected)."""
+        return self.subdistrict_combo.currentData() or ""
 
     def _get_community_code(self) -> str:
-        """Get community code from combo or fallback."""
-        return self.community_combo.currentData() or "001"
+        """Get community code from combo (empty if none selected)."""
+        return self.community_combo.currentData() or ""
 
     def _get_neighborhood_code(self) -> str:
         """Get neighborhood code from combo (empty string if none selected)."""
         return self.neighborhood_combo.currentData() or ""
+
+    # OCHA P-Code accessors — return "" when no mapping exists yet.
+    def _get_gov_pcode(self) -> str:
+        return self._gov_pcode_by_code.get(self._get_gov_code(), "")
+
+    def _get_district_pcode(self) -> str:
+        return self._dist_pcode_by_code.get(self._get_district_code(), "")
+
+    def _get_subdistrict_pcode(self) -> str:
+        return self._subdist_pcode_by_code.get(self._get_subdistrict_code(), "")
+
+    def _get_community_pcode(self) -> str:
+        return self._comm_pcode_by_code.get(self._get_community_code(), "")
+
+    def _get_neighborhood_pcode(self) -> str:
+        return self._neigh_pcode_by_code.get(self._get_neighborhood_code(), "")
 
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
@@ -1704,6 +1730,12 @@ class AddBuildingPage(QWidget):
             "neighborhood_code": neigh_code,
             "neighborhood_name": neigh_name_en,
             "neighborhood_name_ar": neigh_name_ar,
+            # OCHA P-Codes (preferred when present; backend accepts either pCode or raw)
+            "governorate_pcode": self._get_gov_pcode(),
+            "district_pcode": self._get_district_pcode(),
+            "subdistrict_pcode": self._get_subdistrict_pcode(),
+            "community_pcode": self._get_community_pcode(),
+            "neighborhood_pcode": self._get_neighborhood_pcode(),
             # BBBBB: Building Number
             "building_number": self.building_number.text().strip(),
             # Building Details
@@ -1763,12 +1795,17 @@ class AddBuildingPage(QWidget):
     def _on_governorate_changed(self):
         """Cascading: governorate → fill districts."""
         gov_code = self._get_gov_code()
+        gov_pcode = self._get_gov_pcode()
         self.district_combo.blockSignals(True)
         self.district_combo.clear()
         self.district_combo.addItem(tr("page.add_building.select_district"), "")
+        self._dist_pcode_by_code.clear()
         if gov_code:
-            for code, en, ar in self._divisions.get_districts(gov_code):
+            rows = self._divisions.get_districts(gov_code=gov_code, gov_pcode=gov_pcode)
+            for code, pcode, en, ar in rows:
                 self.district_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._dist_pcode_by_code[code] = pcode
             if self.district_combo.count() > 1:
                 self.district_combo.setCurrentIndex(1)
         self.district_combo.blockSignals(False)
@@ -1778,12 +1815,21 @@ class AddBuildingPage(QWidget):
         """Cascading: district → fill subdistricts."""
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
+        gov_pcode = self._get_gov_pcode()
+        dist_pcode = self._get_district_pcode()
         self.subdistrict_combo.blockSignals(True)
         self.subdistrict_combo.clear()
         self.subdistrict_combo.addItem(tr("page.add_building.select_subdistrict"), "")
+        self._subdist_pcode_by_code.clear()
         if gov_code and dist_code:
-            for code, en, ar in self._divisions.get_subdistricts(gov_code, dist_code):
+            rows = self._divisions.get_subdistricts(
+                gov_code=gov_code, dist_code=dist_code,
+                gov_pcode=gov_pcode, dist_pcode=dist_pcode,
+            )
+            for code, pcode, en, ar in rows:
                 self.subdistrict_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._subdist_pcode_by_code[code] = pcode
             if self.subdistrict_combo.count() > 1:
                 self.subdistrict_combo.setCurrentIndex(1)
         self.subdistrict_combo.blockSignals(False)
@@ -1794,12 +1840,22 @@ class AddBuildingPage(QWidget):
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
+        gov_pcode = self._get_gov_pcode()
+        dist_pcode = self._get_district_pcode()
+        subdist_pcode = self._get_subdistrict_pcode()
         self.community_combo.blockSignals(True)
         self.community_combo.clear()
         self.community_combo.addItem(tr("page.add_building.select_community"), "")
+        self._comm_pcode_by_code.clear()
         if gov_code and dist_code and subdist_code:
-            for code, en, ar in self._divisions.get_communities(gov_code, dist_code, subdist_code):
+            rows = self._divisions.get_communities(
+                gov_code=gov_code, dist_code=dist_code, subdist_code=subdist_code,
+                gov_pcode=gov_pcode, dist_pcode=dist_pcode, subdist_pcode=subdist_pcode,
+            )
+            for code, pcode, en, ar in rows:
                 self.community_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._comm_pcode_by_code[code] = pcode
             if self.community_combo.count() > 1:
                 self.community_combo.setCurrentIndex(1)
         self.community_combo.blockSignals(False)
@@ -1813,32 +1869,42 @@ class AddBuildingPage(QWidget):
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
         comm_code = self._get_community_code()
+        comm_pcode = self._get_community_pcode()
+        subdist_pcode = self._get_subdistrict_pcode()
 
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
         self.neighborhood_combo.addItem(tr("page.add_building.select_neighborhood"), "")
         self.neighborhood_combo.blockSignals(False)
+        self._neigh_pcode_by_code.clear()
 
         if gov_code and dist_code and subdist_code and comm_code:
             self._spinner.show_loading(tr("component.loading.default"))
             self._neighborhoods_api_worker = ApiWorker(
-                self._fetch_neighborhoods_bg, gov_code, dist_code, subdist_code, comm_code
+                self._fetch_neighborhoods_bg,
+                gov_code, dist_code, subdist_code, comm_code,
+                comm_pcode, subdist_pcode,
             )
             self._neighborhoods_api_worker.finished.connect(self._on_neighborhoods_api_loaded)
             self._neighborhoods_api_worker.error.connect(self._on_neighborhoods_api_error)
             self._neighborhoods_api_worker.start()
 
-    def _fetch_neighborhoods_bg(self, gov_code, dist_code, subdist_code, comm_code):
-        """Background: fetch neighborhoods from API."""
+    def _fetch_neighborhoods_bg(
+        self, gov_code, dist_code, subdist_code, comm_code,
+        comm_pcode="", subdist_pcode="",
+    ):
+        """Background: fetch neighborhoods from API (prefers pCode when available)."""
         api_client = get_api_client()
-        if api_client is not None:
-            return api_client.get_neighborhoods(
-                governorate_code=gov_code,
-                district_code=dist_code,
-                subdistrict_code=subdist_code,
-                community_code=comm_code
-            )
-        return []
+        if api_client is None:
+            return []
+        return api_client.get_neighborhoods(
+            governorate_code=gov_code,
+            district_code=dist_code,
+            subdistrict_code=subdist_code,
+            community_code=comm_code,
+            community_pcode=comm_pcode or None,
+            sub_district_pcode=subdist_pcode or None,
+        )
 
     def _on_neighborhoods_api_loaded(self, neighborhoods):
         """Callback: populate neighborhood combo with API results."""
@@ -1850,7 +1916,10 @@ class AddBuildingPage(QWidget):
         for n in neighborhoods:
             code = n.get("neighborhoodCode", n.get("code", ""))
             name_ar = n.get("nameArabic", n.get("name_ar", ""))
+            pcode = n.get("pCode") or ""
             self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
+            if code and pcode:
+                self._neigh_pcode_by_code[code] = pcode
         if self.neighborhood_combo.count() > 1:
             self.neighborhood_combo.setCurrentIndex(1)
         self.neighborhood_combo.blockSignals(False)

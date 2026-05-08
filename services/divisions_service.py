@@ -5,18 +5,28 @@ Administrative Divisions Service — API-only.
 Reads hierarchical data (governorate -> district -> subdistrict -> community)
 from Backend API.
 
+Each level can be queried by raw code or OCHA pCode. The deepest pCode
+provided is sufficient — the backend infers parent levels.
+
 Usage:
     service = DivisionsService()
     governorates = service.get_governorates()
-    districts = service.get_districts("01")  # Aleppo
-    subdistricts = service.get_subdistricts("01", "03")  # Al-Bab
-    communities = service.get_communities("01", "03", "02")  # Tadef
+    districts = service.get_districts(gov_pcode="SY02")            # by pCode
+    districts = service.get_districts(gov_code="02")               # by raw code
+    subdistricts = service.get_subdistricts(gov_pcode="SY02", dist_pcode="SY0200")
+    communities = service.get_communities(subdist_pcode="SY020000")
+
+Result tuple shape: (code, pCode, name_en, name_ar)
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
+
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# (code, pCode, name_en, name_ar)
+DivisionRow = Tuple[str, str, str, str]
 
 
 class DivisionsService:
@@ -35,10 +45,18 @@ class DivisionsService:
         if self._initialized:
             return
         self._initialized = True
+        self._governorates_cache: Optional[List[DivisionRow]] = None
+        self._districts_cache: dict = {}
+        self._subdistricts_cache: dict = {}
+        self._communities_cache: dict = {}
+
+    def invalidate(self):
+        """Force-clear all cached admin divisions (used by OCHA migration on first launch)."""
         self._governorates_cache = None
-        self._districts_cache = {}
-        self._subdistricts_cache = {}
-        self._communities_cache = {}
+        self._districts_cache.clear()
+        self._subdistricts_cache.clear()
+        self._communities_cache.clear()
+        logger.info("DivisionsService cache invalidated")
 
     def _get_api_client(self):
         """Get API client if available."""
@@ -48,51 +66,80 @@ class DivisionsService:
         except Exception:
             return None
 
-    def get_governorates(self) -> List[Tuple[str, str, str]]:
-        """Get all governorates as [(code, name_en, name_ar)]."""
+    @staticmethod
+    def _row(item: dict, code_field: str = "code") -> DivisionRow:
+        """Build a (code, pCode, name_en, name_ar) row from an API item."""
+        return (
+            item.get(code_field, "") or "",
+            item.get("pCode", "") or "",
+            item.get("nameEnglish", "") or "",
+            item.get("nameArabic", "") or "",
+        )
+
+    def get_governorates(self) -> List[DivisionRow]:
+        """Get all governorates as [(code, pCode, name_en, name_ar)]."""
         if self._governorates_cache is not None:
             return self._governorates_cache
 
         api = self._get_api_client()
-        items = api.get_governorates()
+        items = api.get_governorates() or []
         self._governorates_cache = [
-            (g.get("code", ""), g.get("nameEnglish", ""), g.get("nameArabic", ""))
-            for g in items if g.get("isActive", True)
+            self._row(g) for g in items if g.get("isActive", True)
         ]
         return self._governorates_cache
 
-    def get_districts(self, gov_code: str) -> List[Tuple[str, str, str]]:
-        """Get districts for a governorate as [(code, name_en, name_ar)]."""
-        if gov_code in self._districts_cache:
-            return self._districts_cache[gov_code]
+    def get_districts(
+        self,
+        gov_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+    ) -> List[DivisionRow]:
+        """Get districts under a governorate (by raw code or pCode)."""
+        cache_key = gov_pcode or gov_code or ""
+        if cache_key in self._districts_cache:
+            return self._districts_cache[cache_key]
 
         api = self._get_api_client()
-        items = api.get_districts(governorate_code=gov_code)
-        self._districts_cache[gov_code] = [
-            (d.get("code", ""), d.get("nameEnglish", ""), d.get("nameArabic", ""))
-            for d in items if d.get("isActive", True)
+        items = api.get_districts(
+            governorate_code=gov_code, governorate_pcode=gov_pcode
+        ) or []
+        self._districts_cache[cache_key] = [
+            self._row(d) for d in items if d.get("isActive", True)
         ]
-        return self._districts_cache[gov_code]
+        return self._districts_cache[cache_key]
 
-    def get_subdistricts(self, gov_code: str, dist_code: str) -> List[Tuple[str, str, str]]:
-        """Get subdistricts for a district as [(code, name_en, name_ar)]."""
-        cache_key = (gov_code, dist_code)
+    def get_subdistricts(
+        self,
+        gov_code: Optional[str] = None,
+        dist_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+        dist_pcode: Optional[str] = None,
+    ) -> List[DivisionRow]:
+        """Get subdistricts under a district (by raw codes or pCodes)."""
+        cache_key = dist_pcode or (gov_code, dist_code)
         if cache_key in self._subdistricts_cache:
             return self._subdistricts_cache[cache_key]
 
         api = self._get_api_client()
         items = api.get_sub_districts(
-            governorate_code=gov_code, district_code=dist_code
-        )
+            governorate_code=gov_code, district_code=dist_code,
+            governorate_pcode=gov_pcode, district_pcode=dist_pcode,
+        ) or []
         self._subdistricts_cache[cache_key] = [
-            (s.get("code", ""), s.get("nameEnglish", ""), s.get("nameArabic", ""))
-            for s in items if s.get("isActive", True)
+            self._row(s) for s in items if s.get("isActive", True)
         ]
         return self._subdistricts_cache[cache_key]
 
-    def get_communities(self, gov_code: str, dist_code: str, subdist_code: str) -> List[Tuple[str, str, str]]:
-        """Get communities for a subdistrict as [(code, name_en, name_ar)]."""
-        cache_key = (gov_code, dist_code, subdist_code)
+    def get_communities(
+        self,
+        gov_code: Optional[str] = None,
+        dist_code: Optional[str] = None,
+        subdist_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+        dist_pcode: Optional[str] = None,
+        subdist_pcode: Optional[str] = None,
+    ) -> List[DivisionRow]:
+        """Get communities under a subdistrict (by raw codes or pCodes)."""
+        cache_key = subdist_pcode or (gov_code, dist_code, subdist_code)
         if cache_key in self._communities_cache:
             return self._communities_cache[cache_key]
 
@@ -101,25 +148,25 @@ class DivisionsService:
             items = api.get_communities(
                 governorate_code=gov_code,
                 district_code=dist_code,
-                sub_district_code=subdist_code
-            )
-            result = [
-                (c.get("code", ""), c.get("nameEnglish", ""), c.get("nameArabic", ""))
-                for c in items if c.get("isActive", True)
-            ]
+                sub_district_code=subdist_code,
+                governorate_pcode=gov_pcode,
+                district_pcode=dist_pcode,
+                sub_district_pcode=subdist_pcode,
+            ) or []
+            result = [self._row(c) for c in items if c.get("isActive", True)]
             if result:
                 self._communities_cache[cache_key] = result
                 return result
         except Exception:
             pass
 
-    # Local fallback from populated places dataset
+        # Local fallback from populated places dataset
         try:
             from services import boundary_service
             places = boundary_service.get_places_list(admin3_pcode=subdist_code)
             if places:
                 result = [
-                    (p.get('pcode', ''), p.get('name_en', ''), p.get('name_ar', ''))
+                    (p.get('pcode', ''), '', p.get('name_en', ''), p.get('name_ar', ''))
                     for p in places
                 ]
                 self._communities_cache[cache_key] = result
@@ -130,30 +177,97 @@ class DivisionsService:
         self._communities_cache[cache_key] = []
         return []
 
+    # -------- Convenience name lookups (return Arabic + English names) --------
+
     def get_governorate_name(self, gov_code: str) -> Tuple[str, str]:
-        """Get (name_en, name_ar) for a governorate."""
-        for code, name_en, name_ar in self.get_governorates():
+        """Get (name_en, name_ar) for a governorate by raw code."""
+        for code, _pcode, name_en, name_ar in self.get_governorates():
             if code == gov_code:
+                return (name_en, name_ar)
+        return ("", "")
+
+    def get_governorate_name_by_pcode(self, gov_pcode: str) -> Tuple[str, str]:
+        """Get (name_en, name_ar) for a governorate by pCode."""
+        for _code, pcode, name_en, name_ar in self.get_governorates():
+            if pcode == gov_pcode:
                 return (name_en, name_ar)
         return ("", "")
 
     def get_district_name(self, gov_code: str, dist_code: str) -> Tuple[str, str]:
         """Get (name_en, name_ar) for a district."""
-        for code, name_en, name_ar in self.get_districts(gov_code):
+        for code, _pcode, name_en, name_ar in self.get_districts(gov_code=gov_code):
             if code == dist_code:
                 return (name_en, name_ar)
         return ("", "")
 
     def get_subdistrict_name(self, gov_code: str, dist_code: str, subdist_code: str) -> Tuple[str, str]:
         """Get (name_en, name_ar) for a subdistrict."""
-        for code, name_en, name_ar in self.get_subdistricts(gov_code, dist_code):
+        for code, _pcode, name_en, name_ar in self.get_subdistricts(gov_code=gov_code, dist_code=dist_code):
             if code == subdist_code:
                 return (name_en, name_ar)
         return ("", "")
 
     def get_community_name(self, gov_code: str, dist_code: str, subdist_code: str, comm_code: str) -> Tuple[str, str]:
         """Get (name_en, name_ar) for a community."""
-        for code, name_en, name_ar in self.get_communities(gov_code, dist_code, subdist_code):
+        for code, _pcode, name_en, name_ar in self.get_communities(
+            gov_code=gov_code, dist_code=dist_code, subdist_code=subdist_code
+        ):
             if code == comm_code:
+                return (name_en, name_ar)
+        return ("", "")
+
+    def get_district_name_by_pcode(
+        self,
+        dist_pcode: str,
+        gov_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """Get (name_en, name_ar) for a district by pCode. Needs gov context to fetch list."""
+        if not dist_pcode:
+            return ("", "")
+        for _code, pcode, name_en, name_ar in self.get_districts(
+            gov_code=gov_code, gov_pcode=gov_pcode
+        ):
+            if pcode == dist_pcode:
+                return (name_en, name_ar)
+        return ("", "")
+
+    def get_subdistrict_name_by_pcode(
+        self,
+        subdist_pcode: str,
+        gov_code: Optional[str] = None,
+        dist_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+        dist_pcode: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """Get (name_en, name_ar) for a subdistrict by pCode. Needs district context."""
+        if not subdist_pcode:
+            return ("", "")
+        for _code, pcode, name_en, name_ar in self.get_subdistricts(
+            gov_code=gov_code, dist_code=dist_code,
+            gov_pcode=gov_pcode, dist_pcode=dist_pcode,
+        ):
+            if pcode == subdist_pcode:
+                return (name_en, name_ar)
+        return ("", "")
+
+    def get_community_name_by_pcode(
+        self,
+        comm_pcode: str,
+        gov_code: Optional[str] = None,
+        dist_code: Optional[str] = None,
+        subdist_code: Optional[str] = None,
+        gov_pcode: Optional[str] = None,
+        dist_pcode: Optional[str] = None,
+        subdist_pcode: Optional[str] = None,
+    ) -> Tuple[str, str]:
+        """Get (name_en, name_ar) for a community by pCode. Needs subdistrict context."""
+        if not comm_pcode:
+            return ("", "")
+        for _code, pcode, name_en, name_ar in self.get_communities(
+            gov_code=gov_code, dist_code=dist_code, subdist_code=subdist_code,
+            gov_pcode=gov_pcode, dist_pcode=dist_pcode, subdist_pcode=subdist_pcode,
+        ):
+            if pcode == comm_pcode:
                 return (name_en, name_ar)
         return ("", "")

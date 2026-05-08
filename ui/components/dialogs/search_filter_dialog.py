@@ -247,7 +247,7 @@ class SearchFilterDialog(QDialog):
         try:
             from services.divisions_service import DivisionsService
             service = DivisionsService()
-            for code, name_en, name_ar in service.get_governorates():
+            for code, _pcode, name_en, name_ar in service.get_governorates():
                 self.address_combo.addItem(name_ar, code)
         except Exception:
             pass

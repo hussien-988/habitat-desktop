@@ -89,13 +89,6 @@ class PersonUnitRelation:
         return statuses.get(self.verification_status, self.verification_status)
 
     @property
-    def ownership_percentage(self) -> float:
-        """Calculate ownership percentage from shares (2400 = 100%)."""
-        if self.ownership_share > 0:
-            return (self.ownership_share / 2400.0) * 100
-        return 0.0
-
-    @property
     def evidence_id_list(self) -> List[str]:
         """Get list of evidence IDs."""
         if self.evidence_ids:

@@ -655,6 +655,7 @@ class CasesPage(QWidget):
         self._user_role = role
         self._user_id = user_id
         self._all_data = []
+        self._contact_names = {}
         self._buildings_cache = {}
         self._clear_cards()
 
@@ -841,10 +842,51 @@ class CasesPage(QWidget):
             logger.warning(f"Paginated surveys fetch failed: {e}")
             raise
 
+        if name:
+            def _is_cancelled(s):
+                v = s.get("status") or s.get("surveyStatus")
+                return v in (8, "8", "cancelled", "Cancelled")
+            filtered = [s for s in surveys if not _is_cancelled(s)]
+            removed = len(surveys) - len(filtered)
+            if removed:
+                surveys = filtered
+                total_count = max(0, total_count - removed)
+
+        # Resolve up-to-date contact-person full names from the survey-scoped
+        # endpoint. The list response's contactPersonFullName can be stale and
+        # contactPersonId is not always returned for draft surveys, so fetch
+        # the contact person via /v1/Surveys/{surveyId}/contact-person.
+        contact_names: Dict[str, str] = {}
+        survey_ids = [s.get("id") for s in surveys if s.get("id")]
+        if survey_ids:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=min(8, len(survey_ids))) as executor:
+                futures = {
+                    executor.submit(api.get_contact_person, sid): sid
+                    for sid in survey_ids
+                }
+                for fut in as_completed(futures):
+                    sid = futures[fut]
+                    try:
+                        person = fut.result()
+                        if person:
+                            full = person.get("fullNameArabic") or " ".join(
+                                p for p in [
+                                    person.get("firstNameArabic"),
+                                    person.get("fatherNameArabic"),
+                                    person.get("familyNameArabic"),
+                                ] if p
+                            ).strip()
+                            if full:
+                                contact_names[sid] = full
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch contact person for survey {sid}: {e}")
+
         return {
             "surveys": surveys,
             "status": status,
             "total_count": total_count,
+            "contact_names": contact_names,
         }
 
     def _on_surveys_loaded(self, result):
@@ -852,6 +894,7 @@ class CasesPage(QWidget):
             self._total_count = result.get("total_count", 0)
 
             surveys = result.get("surveys", [])
+            self._contact_names = result.get("contact_names", {}) or {}
             self._all_data = [self._map_survey(s) for s in surveys]
 
             logger.info(f"Loaded {len(self._all_data)} surveys (status={result.get('status')})")
@@ -906,10 +949,15 @@ class CasesPage(QWidget):
             _str_map = {"draft": "draft", "finalized": "finalized", "obstructed": "obstructed"}
             computed_status = _str_map.get(str(_raw).lower(), self._active_tab)
 
+        survey_id = s.get("id")
+        resolved_name = (
+            (self._contact_names or {}).get(survey_id)
+            if survey_id else None
+        )
         return {
             "claim_id": s.get("referenceCode") or s.get("id", "N/A"),
             "claim_uuid": s.get("id", ""),
-            "claimant_name": s.get("contactPersonFullName") or s.get("intervieweeName") or tr("page.cases.unspecified"),
+            "claimant_name": resolved_name or s.get("contactPersonFullName") or s.get("intervieweeName") or tr("page.cases.unspecified"),
             "date": (s.get("surveyDate") or "")[:10],
             "status": computed_status,
             "building_id": s.get("buildingNumber") or (building_obj.building_id if building_obj else ""),

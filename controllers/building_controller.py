@@ -101,10 +101,13 @@ class BuildingController(BaseController):
 
     @classmethod
     def _resolve_admin_names(cls, gov_code: str, dist_code: str,
-                              subdist_code: str, community_code: str = "") -> Dict[str, str]:
+                              subdist_code: str, community_code: str = "",
+                              gov_pcode: str = "", dist_pcode: str = "",
+                              subdist_pcode: str = "", community_pcode: str = "") -> Dict[str, str]:
         """
         Resolve governorate/district/subdistrict/community names from codes.
-        Uses DivisionsService (API-first with JSON fallback).
+        Uses DivisionsService (API-first with JSON fallback). Prefers OCHA pCode
+        when supplied (more stable across renumbering); falls back to raw codes.
         """
         result = {
             "governorate_name_ar": "",
@@ -113,25 +116,48 @@ class BuildingController(BaseController):
             "community_name_ar": ""
         }
 
-        if not gov_code:
+        if not gov_code and not gov_pcode:
             return result
 
         try:
             from services.divisions_service import DivisionsService
             service = DivisionsService()
 
-            _, name_ar = service.get_governorate_name(gov_code)
-            result["governorate_name_ar"] = name_ar
+            if gov_pcode:
+                _, name_ar = service.get_governorate_name_by_pcode(gov_pcode)
+                result["governorate_name_ar"] = name_ar
+            if not result["governorate_name_ar"] and gov_code:
+                _, name_ar = service.get_governorate_name(gov_code)
+                result["governorate_name_ar"] = name_ar
 
-            if dist_code:
+            if dist_pcode:
+                _, name_ar = service.get_district_name_by_pcode(
+                    dist_pcode, gov_code=gov_code, gov_pcode=gov_pcode
+                )
+                result["district_name_ar"] = name_ar
+            if not result["district_name_ar"] and dist_code and gov_code:
                 _, name_ar = service.get_district_name(gov_code, dist_code)
                 result["district_name_ar"] = name_ar
 
-            if dist_code and subdist_code:
+            if subdist_pcode:
+                _, name_ar = service.get_subdistrict_name_by_pcode(
+                    subdist_pcode,
+                    gov_code=gov_code, dist_code=dist_code,
+                    gov_pcode=gov_pcode, dist_pcode=dist_pcode,
+                )
+                result["subdistrict_name_ar"] = name_ar
+            if not result["subdistrict_name_ar"] and gov_code and dist_code and subdist_code:
                 _, name_ar = service.get_subdistrict_name(gov_code, dist_code, subdist_code)
                 result["subdistrict_name_ar"] = name_ar
 
-            if dist_code and subdist_code and community_code:
+            if community_pcode:
+                _, name_ar = service.get_community_name_by_pcode(
+                    community_pcode,
+                    gov_code=gov_code, dist_code=dist_code, subdist_code=subdist_code,
+                    gov_pcode=gov_pcode, dist_pcode=dist_pcode, subdist_pcode=subdist_pcode,
+                )
+                result["community_name_ar"] = name_ar
+            if not result["community_name_ar"] and gov_code and dist_code and subdist_code and community_code:
                 _, name_ar = service.get_community_name(gov_code, dist_code, subdist_code, community_code)
                 result["community_name_ar"] = name_ar
 
@@ -674,6 +700,14 @@ class BuildingController(BaseController):
         community_code = dto.get("communityCode", "")
         neighborhood_code = dto.get("neighborhoodCode", "")
 
+        # OCHA pCodes (added 2026-05). May be empty for legacy DTOs.
+        gov_pcode = dto.get("governoratePCode", "") or ""
+        dist_pcode = dto.get("districtPCode", "") or ""
+        subdist_pcode = dto.get("subDistrictPCode", "") or ""
+        community_pcode = dto.get("communityPCode", "") or ""
+        neighborhood_pcode = dto.get("neighborhoodPCode", "") or ""
+        community_external_pcode = dto.get("externalPCode")
+
         # Fallback: extract codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
         if not gov_code and len(building_id) == 17 and building_id.isdigit():
             gov_code = building_id[0:2]
@@ -690,9 +724,14 @@ class BuildingController(BaseController):
         neighborhood_name = dto.get("neighborhoodName") or dto.get("neighborhoodNameAr") or dto.get("nameArabic") or ""
         neighborhood_name = neighborhood_name.strip() if neighborhood_name else ""
 
-        # Resolve missing names from local JSON files
-        if not gov_name or not dist_name or not subdist_name:
-            resolved = self._resolve_admin_names(gov_code, dist_code, subdist_code, community_code)
+        # Fallback chain for missing names: pCode lookup (preferred) -> raw code lookup.
+        # Per OCHA migration guide: legacy buildings may have empty denormalized names.
+        if not gov_name or not dist_name or not subdist_name or not community_name:
+            resolved = self._resolve_admin_names(
+                gov_code, dist_code, subdist_code, community_code,
+                gov_pcode=gov_pcode, dist_pcode=dist_pcode,
+                subdist_pcode=subdist_pcode, community_pcode=community_pcode,
+            )
             gov_name = gov_name or resolved["governorate_name_ar"]
             dist_name = dist_name or resolved["district_name_ar"]
             subdist_name = subdist_name or resolved["subdistrict_name_ar"]
@@ -723,6 +762,12 @@ class BuildingController(BaseController):
             neighborhood_code=neighborhood_code,
             neighborhood_name=neighborhood_name or neighborhood_code,
             neighborhood_name_ar=neighborhood_name,
+            governorate_pcode=gov_pcode,
+            district_pcode=dist_pcode,
+            subdistrict_pcode=subdist_pcode,
+            community_pcode=community_pcode,
+            community_external_pcode=community_external_pcode,
+            neighborhood_pcode=neighborhood_pcode,
             building_number=dto.get("buildingNumber", ""),
             building_type=dto.get("buildingType") ,
             building_status=dto.get("status") or dto.get("buildingStatus"),

@@ -45,7 +45,6 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_status_display, get_unit_type_display, get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
-from ui.components.bottom_sheet import BottomSheet
 from app.config import Config
 
 logger = get_logger(__name__)
@@ -211,8 +210,6 @@ class UnitSelectionStep(BaseStep):
 
         units_main_layout.addLayout(header_layout)
 
-        # BottomSheet reference for unit creation (created on demand)
-        self._unit_sheet = None
         self._pending_auto_select_uuid = None  # UUID to auto-select after async load
 
         # Empty state widget (shown when no units)
@@ -550,7 +547,7 @@ class UnitSelectionStep(BaseStep):
         unit_type_val = get_unit_type_display(unit.unit_type) if unit.unit_type else "-"
         status_key = getattr(unit, 'apartment_status', None)
         status_val = get_unit_status_display(status_key) if status_key is not None else "-"
-        rooms_val = str(unit.apartment_number) if unit.apartment_number else "-"
+        rooms_val = str(unit.number_of_rooms) if getattr(unit, 'number_of_rooms', 0) else "-"
         if unit.area_sqm:
             try:
                 area_val = f"{float(unit.area_sqm):.2f} {tr('wizard.unit.area_unit')}"
@@ -769,371 +766,41 @@ class UnitSelectionStep(BaseStep):
     # ── Inline Unit Form ──
 
     def _show_add_unit_form(self):
-        """Show unit creation form in a BottomSheet overlay."""
-        form_widget = self._build_unit_form_widget()
+        """Show unit creation dialog (UnitDialog modal)."""
+        from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
+        from PyQt5.QtWidgets import QDialog
 
-        parent = self.window()
-        self._unit_sheet = BottomSheet.custom(
-            parent,
-            tr("wizard.unit_dialog.title_add"),
-            form_widget,
-            no_buttons=True
-        )
-        # Hide wizard header save button while the unit form sheet is open
-        wizard = self.window()
-        if hasattr(wizard, 'save_btn'):
-            self._wizard_save_was_visible = wizard.save_btn.isVisible()
-            wizard.save_btn.setVisible(False)
-        else:
-            self._wizard_save_was_visible = False
-
-    def _cancel_inline_unit(self):
-        """Close the BottomSheet."""
-        if self._unit_sheet:
-            self._unit_sheet.close_sheet()
-        self._restore_wizard_save_btn()
-
-    def _restore_wizard_save_btn(self):
-        """Restore wizard header save button after the unit sheet closes."""
-        wizard = self.window()
-        if hasattr(wizard, '_sync_header_save_visibility'):
-            wizard._sync_header_save_visibility()
-        elif hasattr(wizard, 'save_btn') and getattr(self, '_wizard_save_was_visible', False):
-            wizard.save_btn.setVisible(True)
-        self._wizard_save_was_visible = False
-
-    def _create_spinbox_with_arrows(self, spinbox: QSpinBox) -> QFrame:
-        """Create a spinbox widget with icon arrows."""
-        container = QFrame()
-        container.setFixedHeight(ScreenScale.h(48))
-        container.setStyleSheet("""
-            QFrame {
-                border: 1.5px solid #D0D7E2;
-                border-radius: 10px;
-                background-color: #FFFFFF;
-            }
-        """)
-        h = QHBoxLayout(container)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(0)
-
-        spinbox.setStyleSheet("""
-            QSpinBox {
-                padding: 8px 14px;
-                border: none;
-                background: transparent;
-                font-size: 10pt;
-                color: #2C3E50;
-                min-height: 30px;
-                selection-background-color: transparent;
-                selection-color: #2C3E50;
-            }
-            QSpinBox:focus { border: none; outline: 0; }
-            QSpinBox::up-button, QSpinBox::down-button { width: 0px; border: none; }
-        """)
-        h.addWidget(spinbox, 1)
-
-        arrow_container = QFrame()
-        arrow_container.setFixedWidth(ScreenScale.w(30))
-        arrow_container.setStyleSheet("""
-            QFrame {
-                border: none;
-                border-left: 1.5px solid #D0D7E2;
-                background: transparent;
-                border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;
-            }
-        """)
-        arrow_layout = QVBoxLayout(arrow_container)
-        arrow_layout.setContentsMargins(0, 0, 0, 0)
-        arrow_layout.setSpacing(0)
-
-        up_label = QLabel()
-        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(20))
-        up_label.setAlignment(Qt.AlignCenter)
-        up_px = Icon.load_pixmap("^", size=10)
-        if up_px and not up_px.isNull():
-            up_label.setPixmap(up_px)
-        else:
-            up_label.setText("^")
-            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
-        up_label.setCursor(Qt.PointingHandCursor)
-        up_label.mousePressEvent = lambda _: spinbox.stepUp()
-        arrow_layout.addWidget(up_label)
-
-        down_label = QLabel()
-        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(20))
-        down_label.setAlignment(Qt.AlignCenter)
-        down_px = Icon.load_pixmap("v", size=10)
-        if down_px and not down_px.isNull():
-            down_label.setPixmap(down_px)
-        else:
-            down_label.setText("v")
-            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
-        down_label.setCursor(Qt.PointingHandCursor)
-        down_label.mousePressEvent = lambda _: spinbox.stepDown()
-        arrow_layout.addWidget(down_label)
-
-        h.addWidget(arrow_container)
-        return container
-
-    def _build_unit_form_widget(self) -> QWidget:
-        """Build the unit form fields widget for BottomSheet."""
-        form = QWidget()
-        form.setStyleSheet("background: transparent; QLabel { background: transparent; border: none; }")
-        form_layout = QVBoxLayout(form)
-        form_layout.setContentsMargins(0, 0, 0, 0)
-        form_layout.setSpacing(12)
-
-        label_style = "color: #64748B; background: transparent; border: none;"
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        combo_style = FORM_FIELD_STYLE + f"""
-            QComboBox::down-arrow {{ image: url({down_img}); width: 12px; height: 12px; }}
-        """
-
-        # Row 1: Floor number | Unit number
-        row1 = QHBoxLayout()
-        row1.setSpacing(16)
-
-        self._if_floor = QSpinBox()
-        self._if_floor.setRange(-3, 100)
-        self._if_floor.setAlignment(Qt.AlignRight)
-        self._if_floor.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_floor.setButtonSymbols(QSpinBox.NoButtons)
-        floor_widget = self._create_spinbox_with_arrows(self._if_floor)
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.floor_number"), floor_widget, label_style), 1)
-
-        self._if_unit_num = QSpinBox()
-        self._if_unit_num.setRange(0, 9999)
-        self._if_unit_num.setAlignment(Qt.AlignRight)
-        self._if_unit_num.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_unit_num.setButtonSymbols(QSpinBox.NoButtons)
-        unit_widget = self._create_spinbox_with_arrows(self._if_unit_num)
-        row1.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_number"), unit_widget, label_style), 1)
-        form_layout.addLayout(row1)
-
-        # Row 2: Unit type | Unit status
-        row2 = QHBoxLayout()
-        row2.setSpacing(16)
-
-        self._if_type = RtlCombo()
-        self._if_type.setStyleSheet(combo_style)
-        self._if_type.setFixedHeight(ScreenScale.h(48))
-        self._if_type.addItem(tr("wizard.unit_dialog.select"), 0)
-        for code, label in get_unit_type_options():
-            self._if_type.addItem(label, code)
-        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_type"), self._if_type, label_style), 1)
-
-        self._if_status = RtlCombo()
-        self._if_status.setStyleSheet(combo_style)
-        self._if_status.setFixedHeight(ScreenScale.h(48))
-        self._if_status.addItem(tr("wizard.unit_dialog.select"), 0)
-        for code, label in get_unit_status_options():
-            self._if_status.addItem(label, code)
-        row2.addLayout(self._make_bs_field(tr("wizard.unit_dialog.unit_status"), self._if_status, label_style), 1)
-        form_layout.addLayout(row2)
-
-        # Row 3: Rooms | Area
-        row3 = QHBoxLayout()
-        row3.setSpacing(16)
-
-        self._if_rooms = QSpinBox()
-        self._if_rooms.setRange(0, 20)
-        self._if_rooms.setAlignment(Qt.AlignRight)
-        self._if_rooms.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        self._if_rooms.setButtonSymbols(QSpinBox.NoButtons)
-        rooms_widget = self._create_spinbox_with_arrows(self._if_rooms)
-        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.rooms"), rooms_widget, label_style), 1)
-
-        self._if_area = QLineEdit()
-        self._if_area.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
-        self._if_area.setFixedHeight(ScreenScale.h(48))
-        self._if_area.setStyleSheet(FORM_FIELD_STYLE)
-        area_validator = QDoubleValidator(0.0, 999999.99, 2, self._if_area)
-        area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
-        area_validator.setNotation(QDoubleValidator.StandardNotation)
-        self._if_area.setValidator(area_validator)
-        row3.addLayout(self._make_bs_field(tr("wizard.unit_dialog.area"), self._if_area, label_style), 1)
-        form_layout.addLayout(row3)
-
-        # Description (full width)
-        self._if_desc = QTextEdit()
-        self._if_desc.setMinimumHeight(ScreenScale.h(90))
-        self._if_desc.setMaximumHeight(ScreenScale.h(110))
-        self._if_desc.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
-        self._if_desc.setStyleSheet(FORM_FIELD_STYLE)
-        form_layout.addLayout(self._make_bs_field(tr("wizard.unit_dialog.description"), self._if_desc, label_style))
-
-        # Buttons row
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(12)
-
-        cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setFixedHeight(ScreenScale.h(44))
-        cancel_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        cancel_btn.setStyleSheet(FOOTER_SECONDARY_STYLE)
-        cancel_btn.clicked.connect(self._cancel_inline_unit)
-        btn_row.addWidget(cancel_btn, 1)
-
-        save_btn = QPushButton(tr("common.save"))
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setFixedHeight(ScreenScale.h(44))
-        save_btn.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        save_btn.setStyleSheet(FOOTER_PRIMARY_STYLE)
-        save_btn.clicked.connect(self._save_inline_unit)
-        btn_row.addWidget(save_btn, 1)
-
-        form_layout.addLayout(btn_row)
-
-        return form
-
-    def _make_bs_field(self, label_text: str, widget, label_style: str = "") -> QVBoxLayout:
-        """Create a labeled form field for the BottomSheet form."""
-        col = QVBoxLayout()
-        col.setSpacing(4)
-        lbl = QLabel(label_text)
-        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        lbl.setStyleSheet(label_style or "color: #64748B; background: transparent; border: none;")
-        col.addWidget(lbl)
-        col.addWidget(widget)
-        return col
-
-    def _save_inline_unit(self):
-        """Validate and save the inline unit form via API."""
-        target = self._unit_sheet or self.window() or self
-        # Basic validation (mirrors UnitDialog._validate_basic)
-        if not self._if_type.currentData():
-            Toast.show_toast(target, tr("wizard.unit_dialog.select_type_warning"), Toast.WARNING)
+        if not self.context.building:
+            Toast.show_toast(self.window() or self, tr("wizard.unit.add_button"), Toast.WARNING)
             return
-        if self._if_unit_num.value() == 0:
-            Toast.show_toast(target, tr("wizard.unit_dialog.enter_number_warning"), Toast.WARNING)
-            return
-        area_text = self._if_area.text().strip()
-        if area_text:
-            try:
-                float(area_text)
-            except ValueError:
-                Toast.show_toast(target, tr("wizard.unit_dialog.area_numbers_only"), Toast.WARNING)
-                return
 
-        # Set auth token
         main_window = self.window()
-        if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
-            self._api_service.set_access_token(main_window._api_token)
-            self.unit_controller.set_auth_token(main_window._api_token)
-
-        # Check uniqueness then create.
-        # Use a single spinner target throughout: the sheet overlay if the
-        # sheet is open (so it renders above the backdrop), otherwise the
-        # step spinner. The same target is used for the creation call in
-        # _do_create_unit so the spinner never appears twice.
-        _sheet = self._unit_sheet
-        _use_sheet = _sheet is not None and hasattr(_sheet, "show_loading")
-
-        def _hide_check_spinner():
-            if _use_sheet and _sheet is not None:
-                try:
-                    _sheet.hide_loading()
-                except Exception:
-                    pass
-            else:
-                self._spinner.hide_loading()
-
-        def _do_fetch():
-            return self.unit_controller.get_units_for_building(self.context.building.building_uuid)
-
-        def _on_fetched(result):
-            if result.success and result.data:
-                unit_number = str(self._if_unit_num.value())
-                floor = self._if_floor.value()
-                for u in result.data:
-                    u_num = getattr(u, 'apartment_number', None) or getattr(u, 'unit_number', None)
-                    u_floor = getattr(u, 'floor_number', None)
-                    if u_num == unit_number and u_floor == floor:
-                        _hide_check_spinner()
-                        Toast.show_toast(self._unit_sheet or self, tr("wizard.unit_dialog.number_taken"), Toast.WARNING)
-                        return
-            self._do_create_unit()
-
-        def _on_fetch_error(msg):
-            logger.error(f"Error checking uniqueness: {msg}")
-            self._do_create_unit()
-
-        if _use_sheet:
-            _sheet.show_loading(tr("component.loading.default"))
-        else:
-            self._spinner.show_loading(tr("component.loading.default"))
-        self._save_worker = ApiWorker(_do_fetch)
-        self._save_worker.finished.connect(_on_fetched)
-        self._save_worker.error.connect(_on_fetch_error)
-        self._save_worker.start()
-
-    def _do_create_unit(self):
-        """Create the unit via API after uniqueness check passes."""
-        area_text = self._if_area.text().strip()
-        area_value = float(area_text) if area_text else None
-        unit_data = {
-            'unit_uuid': str(uuid.uuid4()),
-            'building_id': self.context.building.building_id,
-            'building_uuid': self.context.building.building_uuid,
-            'unit_type': self._if_type.currentData() or 1,
-            'status': self._if_status.currentData() or 1,
-            'apartment_status': self._if_status.currentData() or 1,
-            'floor_number': self._if_floor.value(),
-            'unit_number': str(self._if_unit_num.value()),
-            'apartment_number': str(self._if_unit_num.value()),
-            'number_of_rooms': self._if_rooms.value(),
-            'area_sqm': area_value,
-            'property_description': self._if_desc.toPlainText().strip() or None,
-        }
+        auth_token = getattr(main_window, '_api_token', None) if main_window else None
 
         survey_id = self.context.get_data("survey_id")
+
+        dialog = UnitDialog(
+            building=self.context.building,
+            db=self.context.db,
+            parent=self.window(),
+            auth_token=auth_token,
+        )
         if survey_id:
-            unit_data['survey_id'] = survey_id
+            dialog._survey_id = survey_id
 
-        # Spinner is already shown by _save_inline_unit — do not show again.
-        sheet = self._unit_sheet
-
-        try:
-            response = self._api_service.create_property_unit(unit_data)
-            logger.info("Property unit created successfully via inline form")
+        if dialog.exec_() == QDialog.Accepted:
+            unit_data = dialog.get_unit_data()
+            created = getattr(dialog, '_created_unit_data', None) or {}
+            api_uuid = created.get('id') or created.get('unitUuid') or unit_data.get('unit_uuid')
+            if api_uuid:
+                unit_data['unit_uuid'] = api_uuid
 
             self.context.is_new_unit = True
             self.context.new_unit_data = unit_data
 
-            api_uuid = None
-            if response:
-                api_uuid = response.get('id') or response.get('unitUuid')
-            if api_uuid:
-                logger.info(f"Using API-generated unit UUID: {api_uuid}")
-                self.context.new_unit_data['unit_uuid'] = api_uuid
-
-            # Close BottomSheet and refresh units list
-            if self._unit_sheet:
-                self._unit_sheet.close_sheet()
-            self._restore_wizard_save_btn()
-
-            # Store UUID for auto-selection after async load completes
             self._pending_auto_select_uuid = api_uuid
             self._loaded_building_uuid = None
             self._load_units()
-
-        except Exception as e:
-            logger.error(f"API unit creation failed: {e}")
-            target = self._unit_sheet or self.window() or self
-            if "409" in str(e):
-                Toast.show_toast(target, tr("wizard.unit_dialog.duplicate_unit"), Toast.ERROR)
-            else:
-                Toast.show_toast(target, str(e), Toast.ERROR)
-        finally:
-            if sheet is not None and hasattr(sheet, "hide_loading"):
-                try:
-                    sheet.hide_loading()
-                except Exception:
-                    pass
-            else:
-                self._spinner.hide_loading()
 
     # _make_icon_header is now shared via wizard_styles.make_icon_header
 

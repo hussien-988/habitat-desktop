@@ -1239,8 +1239,10 @@ class StyleManager:
     @staticmethod
     def dark_combo_box() -> str:
         """Dark-themed combo box for use inside DarkHeaderZone."""
-        return """
-            QComboBox {
+        from app.config import Config
+        down_img = str(Config.IMAGES_DIR / "down-light.png").replace("\\", "/")
+        return f"""
+            QComboBox {{
                 background: rgba(10, 22, 40, 140);
                 color: white;
                 border: 1px solid rgba(56, 144, 223, 35);
@@ -1248,20 +1250,18 @@ class StyleManager:
                 padding: 6px 12px;
                 font-size: 10pt;
                 min-width: 140px;
-            }
-            QComboBox:hover { border-color: rgba(56, 144, 223, 80); }
-            QComboBox::drop-down {
+            }}
+            QComboBox:hover {{ border-color: rgba(56, 144, 223, 80); }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 24px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid rgba(255, 255, 255, 0.5);
-                margin-right: 8px;
-            }
-            QComboBox QAbstractItemView {
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 10px;
+                height: 6px;
+            }}
+            QComboBox QAbstractItemView {{
                 background: #0F1E36;
                 color: white;
                 border: 1px solid rgba(56, 144, 223, 40);
@@ -1269,7 +1269,7 @@ class StyleManager:
                 selection-background-color: rgba(56, 144, 223, 50);
                 outline: none;
                 padding: 4px;
-            }
+            }}
         """
 
     @staticmethod
