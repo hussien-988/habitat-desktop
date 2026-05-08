@@ -478,6 +478,9 @@ def main():
                            QColor(255, 255, 255, 120))
         app.processEvents()
         window = MainWindow(db, saved_lang)
+        # Re-apply default font now that ScreenScale is initialized,
+        # so the app-wide default reflects responsive scaling.
+        set_application_default_font()
         splash.set_progress(1.0)
         app.processEvents()
         window.show()

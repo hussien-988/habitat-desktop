@@ -207,9 +207,10 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 var layersBatch = [];
                 L.geoJSON({type: 'FeatureCollection', features: newFeatures}, {
                     pointToLayer: function(feature, latlng) {
-                        var status = getStatusKey(feature.properties.status || 1);
+                        var props = feature.properties;
+                        var status = getStatusKey(props.status || 1);
                         var color = statusColors[status] || '#0072BC';
-                        var isAssigned = feature.properties.is_assigned === true;
+                        var isAssigned = props.is_assigned === true;
                         var innerSvg;
                         if (isAssigned) {
                             color = '#F59E0B';
@@ -217,9 +218,19 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         } else {
                             innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
                         }
+
+                        var _showLabels = (typeof showBuildingLabels !== 'undefined' && showBuildingLabels === true);
+                        var _idLabel = String(props.building_id_display || props.building_id || '').trim();
+                        var _embeddedLabel = (_showLabels && _idLabel)
+                            ? '<div style="position:absolute;bottom:40px;left:12px;transform:translateX(-50%);' +
+                              'white-space:nowrap;pointer-events:none;color:#0072BC;font-size:10px;font-weight:700;">' +
+                              _idLabel + '</div>'
+                            : '';
+
                         var pinIcon = L.divIcon({
                             className: 'building-pin-icon',
-                            html: '<div style="position:relative;width:24px;height:36px;">' +
+                            html: '<div style="position:relative;width:24px;height:36px;overflow:visible;">' +
+                                  _embeddedLabel +
                                   '<svg width="24" height="36" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
                                   '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
                                   'fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
@@ -240,31 +251,12 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                             return;
                         }
 
-                        var status = props.status || 'intact';
-                        var statusLabel = statusLabels[status] || status;
-                        var statusClass = 'status-' + status;
-                        var geomType = props.geometry_type || 'Point';
-                        var buildingIdDisplay = props.building_id_display || props.building_id || 'مبنى';
                         var buildingIdForApi = props.building_uuid || props.building_id;
-
-                        var popup = '<div class="building-popup">' +
-                            '<h4>' + buildingIdDisplay + ' ' +
-                            '<span class="geometry-badge">' + geomType + '</span></h4>' +
-                            '<p><span class="label">الحي:</span> ' + (props.neighborhood || 'غير محدد') + '</p>' +
-                            '<p><span class="label">الحالة:</span> ' +
-                            '<span class="status-badge ' + statusClass + '">' + statusLabel + '</span></p>' +
-                            '<p><span class="label">الوحدات:</span> ' + (props.units || 0) + '</p>';
-
-                        if (props.type) {
-                            popup += '<p><span class="label">النوع:</span> ' + props.type + '</p>';
+                        if (buildingIdForApi && typeof window.selectBuilding === 'function') {
+                            layer.on('click', function() {
+                                window.selectBuilding(buildingIdForApi);
+                            });
                         }
-
-                        if (typeof window.selectBuilding === 'function' && buildingIdForApi) {
-                            popup += "<button class=\\"select-building-btn\\" onclick=\\"selectBuilding(&apos;" + buildingIdForApi + "&apos;)\\\"><span style=\\"font-size:16px\\">✓</span> اختيار هذا المبنى</button>";
-                        }
-
-                        popup += '</div>';
-                        layer.bindPopup(popup);
                     }
                 });
 

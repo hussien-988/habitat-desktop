@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QWidget, QComboBox,
     QGridLayout, QTextEdit, QTabWidget,
-    QRadioButton, QButtonGroup, QSizePolicy
+    QRadioButton, QButtonGroup, QSizePolicy, QScrollArea
 )
 from PyQt5.QtCore import Qt, QUrl, QTimer, QLocale, QDate
 from PyQt5.QtGui import QColor, QPixmap, QRegExpValidator, QDoubleValidator, QIntValidator
@@ -450,6 +450,7 @@ class PersonDialog(QDialog):
         self.father_name.textChanged.connect(self._update_all_progress)
         self.mother_name.textChanged.connect(self._update_all_progress)
         self._gender_group.buttonClicked.connect(self._update_all_progress)
+        self._gender_group.buttonClicked.connect(lambda *_: self._clear_gender_error())
         self.nationality.currentIndexChanged.connect(self._update_all_progress)
         self.national_id.textChanged.connect(self._update_all_progress)
 
@@ -487,7 +488,6 @@ class PersonDialog(QDialog):
                 bool(self.mother_name.text().strip()),
                 self._get_gender() is not None,
                 self.nationality.currentIndex() > 0,
-                bool(self.national_id.text().strip()),
             ]
         elif tab_index == 1:
             fields = [
@@ -620,7 +620,7 @@ class PersonDialog(QDialog):
 
         # Row: Birth Date (col 0) | National ID (col 1)
         grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.national_id") + " *", label_style), row, 1)
+        grid.addWidget(self._label(tr("wizard.person_dialog.national_id") , label_style), row, 1)
         row += 1
         birth_layout = QHBoxLayout()
         birth_layout.setSpacing(6)
@@ -665,7 +665,7 @@ class PersonDialog(QDialog):
 
         # Row: Nationality (col 0) | Gender (col 1)
         grid.addWidget(self._label(tr("wizard.person_dialog.nationality"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.gender"), label_style), row, 1)
+        grid.addWidget(self._label(tr("wizard.person_dialog.gender") + " *", label_style), row, 1)
         row += 1
         self.nationality = RtlCombo()
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
@@ -675,13 +675,23 @@ class PersonDialog(QDialog):
         grid.addWidget(self.nationality, row, 0)
 
         self.gender = self._build_gender_radios()
-        grid.addWidget(self.gender, row, 1)
+        self._gender_error = QLabel("")
+        self._gender_error.setStyleSheet(self._error_label_style())
+        self._gender_error.setVisible(False)
+
+        gender_container = QVBoxLayout()
+        gender_container.setSpacing(2)
+        gender_container.setContentsMargins(0, 0, 0, 0)
+        gender_container.addWidget(self.gender)
+        gender_container.addWidget(self._gender_error)
+
+        grid.addLayout(gender_container, row, 1)
         row += 1
 
         # ID Document Type selector
         grid.addWidget(self._label(tr("wizard.person_dialog.id_document_type"), label_style), row, 0, 1, 2)
         row += 1
-        self.id_doc_type_combo = QComboBox()
+        self.id_doc_type_combo = RtlCombo()
         from services.display_mappings import get_identification_document_type_options
         for code, label in get_identification_document_type_options():
             if code == 0:
@@ -1029,8 +1039,9 @@ class PersonDialog(QDialog):
         choose_btn.setCursor(Qt.PointingHandCursor)
         choose_btn.clicked.connect(self._choose_existing_document)
         # Insert into the upload frame's row layout (before the trailing stretch)
-        row_layout = self._rel_upload_frame.layout().itemAt(0).layout()
-        row_layout.insertWidget(row_layout.count() - 1, choose_btn)
+        row_layout = getattr(self._rel_upload_frame, "_upload_row_layout", None)
+        if row_layout is not None:
+            row_layout.insertWidget(row_layout.count() - 1, choose_btn)
         grid.addWidget(self._rel_upload_frame, row, 0, 1, 2)
 
         # Toggle upload frame visibility based on radio
@@ -1086,14 +1097,53 @@ class PersonDialog(QDialog):
         if callback:
             btn.clicked.connect(callback)
         return btn
+    def _thumbnail_columns_for_frame(self, frame: QFrame) -> int:
+        """Calculate thumbnail columns based on the actual available width."""
+        available_width = frame.width() - ScreenScale.w(32)
+        thumb_width = ScreenScale.w(58)
+
+        if available_width <= 0:
+            parent_width = frame.parentWidget().width() if frame.parentWidget() else 0
+            available_width = parent_width - ScreenScale.w(32)
+
+        if available_width <= 0:
+            return 1
+
+        return max(1, available_width // thumb_width)
+
+
+    def _sync_upload_scroll_height(self, frame: QFrame, file_count: int, columns: int):
+        """Keep thumbnails area compact, with vertical scroll only when needed."""
+        if not hasattr(frame, "_thumbnails_scroll"):
+            return
+
+        if file_count <= 0:
+            frame._thumbnails_scroll.setVisible(False)
+            return
+
+        rows = (file_count + columns - 1) // columns
+        visible_rows = min(rows, 2)
+
+        row_height = ScreenScale.h(58)
+        spacing = ScreenScale.h(6)
+        vertical_padding = ScreenScale.h(4)
+
+        height = visible_rows * row_height
+        if visible_rows > 1:
+            height += (visible_rows - 1) * spacing
+        height += vertical_padding
+
+        frame._thumbnails_scroll.setFixedHeight(height)
+        frame._thumbnails_scroll.setVisible(True)
 
     def _create_upload_frame(self, browse_callback, obj_name: str, button_text: str = None) -> QFrame:
-        """Create a file upload frame with icon + blue text + thumbnail previews."""
+        """Create a file upload frame with responsive thumbnails above the upload action."""
         from ui.components.icon import Icon
+        from ui.style_manager import StyleManager
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(ScreenScale.h(55))
+        frame.setMinimumHeight(ScreenScale.h(64))
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
                 border: 2px dashed rgba(56, 144, 223, 0.3);
@@ -1103,29 +1153,44 @@ class PersonDialog(QDialog):
         """)
 
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(12, 8, 12, 8)
+        frame_layout.setContentsMargins(12, 10, 12, 10)
         frame_layout.setSpacing(6)
 
-        # Row: centered icon + text, thumbnails on the side
+        # Uploaded files area — responsive wrap above the upload action row
+        thumbnails_scroll = QScrollArea()
+        thumbnails_scroll.setWidgetResizable(True)
+        thumbnails_scroll.setFrameShape(QFrame.NoFrame)
+        thumbnails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        thumbnails_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        thumbnails_scroll.setVisible(False)
+        thumbnails_scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
+
+        thumbnails_container = QWidget()
+        thumbnails_container.setStyleSheet("border: none; background: transparent;")
+
+        thumbnails_layout = QGridLayout(thumbnails_container)
+        thumbnails_layout.setContentsMargins(0, 0, 0, 0)
+        thumbnails_layout.setHorizontalSpacing(ScreenScale.w(6))
+        thumbnails_layout.setVerticalSpacing(ScreenScale.h(6))
+        thumbnails_layout.setAlignment(Qt.AlignRight | Qt.AlignTop)
+
+        thumbnails_scroll.setWidget(thumbnails_container)
+        frame_layout.addWidget(thumbnails_scroll)
+
+        # Upload action row — icon and text stay on their own line
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(6)
 
-        # Thumbnails container (left side in RTL = trailing end)
-        thumbnails_container = QWidget()
-        thumbnails_container.setStyleSheet("border: none; background: transparent;")
-        thumbnails_layout = QHBoxLayout(thumbnails_container)
-        thumbnails_layout.setContentsMargins(0, 0, 0, 0)
-        thumbnails_layout.setSpacing(6)
-        row_layout.addWidget(thumbnails_container)
-
         row_layout.addStretch()
 
-        # Upload icon (centered)
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+        icon_lbl.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("border: none; background: transparent;")
+        icon_lbl.setStyleSheet("border: none; background: transparent; padding: 0px; margin: 0px;")
         upload_pixmap = Icon.load_pixmap("upload_file", size=20)
         if upload_pixmap and not upload_pixmap.isNull():
             icon_lbl.setPixmap(upload_pixmap)
@@ -1136,7 +1201,6 @@ class PersonDialog(QDialog):
         icon_lbl.mousePressEvent = lambda e: browse_callback()
         row_layout.addWidget(icon_lbl)
 
-        # Blue underlined text (centered, next to icon)
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
             QPushButton {
@@ -1155,13 +1219,26 @@ class PersonDialog(QDialog):
         row_layout.addWidget(text_btn)
 
         row_layout.addStretch()
-
         frame_layout.addLayout(row_layout)
 
-        # Store references
         frame._thumbnails_container = thumbnails_container
         frame._thumbnails_layout = thumbnails_layout
+        frame._thumbnails_scroll = thumbnails_scroll
+        frame._upload_row_layout = row_layout
         frame._text_btn = text_btn
+        original_resize_event = frame.resizeEvent
+
+        def _resize_upload_frame(event, current_frame=frame, original_handler=original_resize_event):
+            if original_handler:
+                original_handler(event)
+
+            if current_frame.objectName() == "id_upload":
+                self._update_upload_thumbnails("id_upload", self.uploaded_files)
+            elif current_frame.objectName() == "rel_upload":
+                self._refresh_relation_thumbnails()
+
+        frame.resizeEvent = _resize_upload_frame
+
         return frame
 
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
@@ -1228,25 +1305,32 @@ class PersonDialog(QDialog):
     def _update_upload_thumbnails(self, obj_name: str, file_paths: list):
         """Refresh thumbnail display in the specified upload frame."""
         frame = self.findChild(QFrame, obj_name)
-        if not frame or not hasattr(frame, '_thumbnails_layout'):
+        if not frame or not hasattr(frame, "_thumbnails_layout"):
             return
 
         layout = frame._thumbnails_layout
-        # Clear existing thumbnails
+
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        # Add new thumbnails
         if obj_name == "id_upload":
             remove_fn = self._remove_uploaded_file
         else:
             remove_fn = self._remove_relation_file
 
-        for fp in file_paths:
+        columns = self._thumbnail_columns_for_frame(frame)
+        self._sync_upload_scroll_height(frame, len(file_paths), columns)
+
+        if not file_paths:
+            return
+
+        for index, fp in enumerate(file_paths):
+            row = index // columns
+            col = index % columns
             thumb_widget = self._create_thumbnail_widget(fp, remove_fn)
-            layout.addWidget(thumb_widget)
+            layout.addWidget(thumb_widget, row, col, Qt.AlignRight | Qt.AlignTop)
 
     def _remove_uploaded_file(self, file_path: str):
         """Remove an ID photo file and refresh thumbnails.
@@ -1332,7 +1416,8 @@ class PersonDialog(QDialog):
 
     def _build_gender_radios(self) -> QWidget:
         container = QWidget()
-        container.setStyleSheet("background: transparent;")
+        container.setObjectName("genderRadioContainer")
+        container.setStyleSheet("QWidget#genderRadioContainer { background: transparent; border: none; }")
         lay = QHBoxLayout(container)
         lay.setContentsMargins(2, 2, 2, 2)
         lay.setSpacing(ScreenScale.w(14))
@@ -1389,7 +1474,9 @@ class PersonDialog(QDialog):
         self._gender_group.setExclusive(True)
 
     def _input_style(self) -> str:
+        
         """Custom input style with light background."""
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         return """
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
                 border: 1px solid rgba(56, 144, 223, 0.2);
@@ -1421,11 +1508,9 @@ class PersonDialog(QDialog):
                 subcontrol-position: right center;
             }
             QComboBox::down-arrow {
-                image: none;
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid #9CA3AF;
+                image: url(__DOWN_IMG__);
+                width: 12px;
+                height: 12px;
             }
             QComboBox QAbstractItemView {
                 background-color: #FFFFFF;
@@ -1470,7 +1555,7 @@ class PersonDialog(QDialog):
             QComboBox QAbstractItemView QScrollBar::sub-page:vertical {
                 background: none;
             }
-        """
+        """.replace("__DOWN_IMG__", down_img)
 
     def _error_label_style(self) -> str:
         """Style for inline validation error labels."""
@@ -1478,6 +1563,7 @@ class PersonDialog(QDialog):
 
     def _input_error_style(self) -> str:
         """Input style with red border for validation error state."""
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         return """
             QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox {
                 border: 2px solid #e74c3c;
@@ -1509,13 +1595,11 @@ class PersonDialog(QDialog):
                 subcontrol-position: right center;
             }
             QComboBox::down-arrow {
-                image: none;
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid rgba(200, 220, 240, 0.6);
+                image: url(__DOWN_IMG__);
+                width: 12px;
+                height: 12px;
             }
-        """
+        """.replace("__DOWN_IMG__", down_img)
 
     def _set_field_error(self, field, error_label, message):
         """Show inline error: red border on field + small ⚠ indicator below."""
@@ -1533,7 +1617,21 @@ class PersonDialog(QDialog):
             field.setStyleSheet(self._input_style())
         error_label.setText("")
         error_label.setVisible(False)
+    def _set_gender_error(self, message: str):
+        self.gender.setStyleSheet(f"""
+            QWidget#genderRadioContainer {{
+                background: transparent;
+                border: 1.5px solid {Colors.ERROR};
+                border-radius: 8px;
+            }}
+        """)
+        self._gender_error.setText(message)
+        self._gender_error.setVisible(True)
 
+    def _clear_gender_error(self):
+        self.gender.setStyleSheet("QWidget#genderRadioContainer { background: transparent; border: none; }")
+        self._gender_error.setText("")
+        self._gender_error.setVisible(False)
     def _clear_all_errors(self):
         """Clear all inline validation errors."""
         error_pairs = [
@@ -1549,7 +1647,8 @@ class PersonDialog(QDialog):
         for field, label in error_pairs:
             if label.isVisible():
                 self._clear_field_error(field, label)
-
+            if hasattr(self, "_gender_error") and self._gender_error.isVisible():
+                self._clear_gender_error()
     def _date_input_style(self) -> str:
         """Custom date input style with light blue background."""
         cal_img = str(Config.IMAGES_DIR / "calender.png").replace("\\", "/")
@@ -1682,7 +1781,11 @@ class PersonDialog(QDialog):
         if not mother:
             Toast.show_toast(self, tr("wizard.person_dialog.enter_mother_name"), Toast.ERROR)
             return
-
+        gender_valid, gender_error = self._validate_gender()
+        if not gender_valid:
+            self._set_gender_error(tr(gender_error))
+            Toast.show_toast(self, tr(gender_error), Toast.ERROR)
+            return
         nid = self.national_id.text().strip()
         if nid:
             if len(nid) != 11 or not nid.isdigit():
@@ -1917,25 +2020,34 @@ class PersonDialog(QDialog):
     def _refresh_relation_thumbnails(self):
         """Refresh relation document thumbnails including existing doc labels."""
         frame = self.findChild(QFrame, "rel_upload")
-        if not frame or not hasattr(frame, '_thumbnails_layout'):
+        if not frame or not hasattr(frame, "_thumbnails_layout"):
             return
 
         layout = frame._thumbnails_layout
+
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        for entry in self.relation_uploaded_files:
-            if entry.get('_selected_existing'):
-                # Existing doc: show as a styled label with remove button
-                display = entry.get('_display_name', tr("wizard.person_dialog.document_default"))
+        columns = self._thumbnail_columns_for_frame(frame)
+        self._sync_upload_scroll_height(frame, len(self.relation_uploaded_files), columns)
+
+        if not self.relation_uploaded_files:
+            return
+
+        for index, entry in enumerate(self.relation_uploaded_files):
+            if entry.get("_selected_existing"):
+                display = entry.get("_display_name", tr("wizard.person_dialog.document_default"))
                 widget = self._create_existing_doc_widget(display, entry)
-            elif entry.get('path'):
-                widget = self._create_thumbnail_widget(entry['path'], self._remove_relation_file)
+            elif entry.get("path"):
+                widget = self._create_thumbnail_widget(entry["path"], self._remove_relation_file)
             else:
                 continue
-            layout.addWidget(widget)
+
+            row = index // columns
+            col = index % columns
+            layout.addWidget(widget, row, col, Qt.AlignRight | Qt.AlignTop)
 
     def _create_existing_doc_widget(self, display_name: str, entry: dict) -> QWidget:
         """Create a thumbnail widget for an existing server document with preview."""
@@ -2450,14 +2562,18 @@ class PersonDialog(QDialog):
         return len(digits) == 9
 
     def _validate_national_id(self):
-        """Validate national ID format. Uniqueness is checked server-side (409). Returns (valid, error_key)."""
+        """Validate national ID format only when provided. Returns (valid, error_key)."""
         nid = self.national_id.text().strip()
         if not nid:
-            return False, "wizard.person_dialog.nid_required"
+            return True, None
         if len(nid) != 11 or not nid.isdigit():
             return False, "wizard.person_dialog.nid_invalid"
         return True, None
-
+    def _validate_gender(self):
+        """Gender is required."""
+        if self._get_gender() is None:
+            return False, "wizard.person_dialog.gender_required"
+        return True, None
     # Load / Save Data
 
     def _load_person_data(self, data: Dict):
@@ -2603,7 +2719,6 @@ class PersonDialog(QDialog):
             'birth_date': self._build_birth_date_iso(),
             # Tab 2
             'person_role': self.person_role.currentData(),
-            'relationship_type': self.person_role.currentData(),  # backward compat
             'phone': self._format_phone(self.phone.text().strip()),
             'email': self.email.text().strip() or None,
             'landline': ("0" + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else None,
@@ -2648,6 +2763,11 @@ class PersonDialog(QDialog):
             has_error = True
         if not self.last_name.text().strip():
             self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
+            has_error = True
+        gender_valid, gender_error = self._validate_gender()
+        if not gender_valid:
+            self._set_gender_error(tr(gender_error))
+            self.tab_widget.setCurrentIndex(0)
             has_error = True
         nid_valid, nid_error = self._validate_national_id()
         if not nid_valid:
@@ -2706,7 +2826,11 @@ class PersonDialog(QDialog):
             has_error = True
             from ui.components.toast import Toast
             Toast.show_toast(self, tr("wizard.person_dialog.mother_name_required"), Toast.ERROR)
-
+        gender_valid, gender_error = self._validate_gender()
+        if not gender_valid:
+            self._set_gender_error(tr(gender_error))
+            self.tab_widget.setCurrentIndex(0)
+            has_error = True
         nid_valid, nid_error = self._validate_national_id()
         if not nid_valid:
             self._set_field_error(self.national_id, self._nid_error, tr(nid_error))
@@ -2792,10 +2916,13 @@ class PersonDialog(QDialog):
                 return
             self._api_person_id = person_id
             person_data = self.get_person_data()
-            # Only link to unit if person has a relation type (claim)
-            # Otherwise person is just a household member
+            # Only link to unit if person has a relation type (claim from Tab 3).
+            # Do NOT fall back to person_role/relationship_type: those are
+            # RelationshipToHead codes (head/spouse/child) — sending them as
+            # RelationType would silently register the person as Owner because
+            # RelationshipToHead.head=1 collides with RelationType.Owner=1.
             relation_data = person_data.get('relation_data', {})
-            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+            rel_type = relation_data.get('rel_type')
 
             link_success = True
             if rel_type and self._survey_id and self._unit_id:
@@ -2903,11 +3030,13 @@ class PersonDialog(QDialog):
             if self.uploaded_files and self._survey_id and person_id:
                 self._upload_identification_files(person_id)
 
-            # Step 2: Link person to property unit only if relation type is set
-            # Persons without rel_type are household members only
+            # Step 2: Link person to property unit only if a property relation
+            # type was set in Tab 3. Persons without rel_type are household
+            # members only. Never fall back to person_role/relationship_type:
+            # those are RelationshipToHead, not RelationType.
             link_success = True
             relation_data = person_data.get('relation_data', {})
-            rel_type = relation_data.get('rel_type') or person_data.get('relationship_type')
+            rel_type = relation_data.get('rel_type')
 
             if rel_type and self._survey_id and self._unit_id and person_id:
                 relation_data['person_id'] = person_id

@@ -679,8 +679,8 @@ class StyleManager:
                 background-color: {Colors.SURFACE};
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: {BorderRadius.SM}px;
-                padding: 8px 12px;
-                min-height: 20px;
+                padding: 4px 12px;
+                min-height: 24px;
                 min-width: 100px;
                 color: {Colors.TEXT_PRIMARY};
             }}
@@ -689,14 +689,13 @@ class StyleManager:
             }}
             QComboBox::drop-down {{
                 border: none;
-                width: 24px;
+                width: 30px;
+                subcontrol-position: right center;
             }}
             QComboBox::down-arrow {{
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid {Colors.TEXT_PRIMARY};
-                margin-right: 8px;
+                image: url({_IMAGES_DIR}/down.png);
+                width: 12px;
+                height: 12px;
             }}
             QComboBox QAbstractItemView {{
                 background-color: {Colors.SURFACE};
@@ -1240,8 +1239,10 @@ class StyleManager:
     @staticmethod
     def dark_combo_box() -> str:
         """Dark-themed combo box for use inside DarkHeaderZone."""
-        return """
-            QComboBox {
+        from app.config import Config
+        down_img = str(Config.IMAGES_DIR / "down-light.png").replace("\\", "/")
+        return f"""
+            QComboBox {{
                 background: rgba(10, 22, 40, 140);
                 color: white;
                 border: 1px solid rgba(56, 144, 223, 35);
@@ -1249,20 +1250,18 @@ class StyleManager:
                 padding: 6px 12px;
                 font-size: 10pt;
                 min-width: 140px;
-            }
-            QComboBox:hover { border-color: rgba(56, 144, 223, 80); }
-            QComboBox::drop-down {
+            }}
+            QComboBox:hover {{ border-color: rgba(56, 144, 223, 80); }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 24px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 5px solid rgba(255, 255, 255, 0.5);
-                margin-right: 8px;
-            }
-            QComboBox QAbstractItemView {
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 10px;
+                height: 6px;
+            }}
+            QComboBox QAbstractItemView {{
                 background: #0F1E36;
                 color: white;
                 border: 1px solid rgba(56, 144, 223, 40);
@@ -1270,7 +1269,7 @@ class StyleManager:
                 selection-background-color: rgba(56, 144, 223, 50);
                 outline: none;
                 padding: 4px;
-            }
+            }}
         """
 
     @staticmethod

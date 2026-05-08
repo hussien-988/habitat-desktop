@@ -415,7 +415,7 @@ class CompletedClaimsPage(QWidget):
         self._header.add_row2_widget(self._search_bar)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText(tr("page.claims.search_placeholder"))
+        self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
         self._search.setFixedSize(ScreenScale.w(280), ScreenScale.h(34))
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
@@ -442,6 +442,7 @@ class CompletedClaimsPage(QWidget):
             icon_label.move(10, 9)
             icon_label.setStyleSheet("background: transparent; border: none;")
         self._search.returnPressed.connect(self._on_search_triggered)
+        self._search.textChanged.connect(self._on_search_changed)
         self._search.textChanged.connect(self._on_search_text_changed)
 
         # Attach clear action to search field
@@ -621,6 +622,19 @@ class CompletedClaimsPage(QWidget):
 
     def refresh(self, data=None):
         self._navigating = False
+
+        if isinstance(data, dict):
+            reference_code = (data.get("reference_code") or "").strip()
+            if reference_code:
+                self._search.blockSignals(True)
+                self._search.setText(reference_code)
+                self._search.blockSignals(False)
+
+                self._current_page = 1
+                self._enter_search_mode()
+                self._load_claims()
+                return
+
         now = int(time.time() * 1000)
         if now - self._last_refresh_ms < 5000 and self.claims_data:
             return
@@ -650,32 +664,59 @@ class CompletedClaimsPage(QWidget):
         total_count = 0
 
         if search_text:
-            normalized = search_text.strip().upper()
+            reference_code = search_text.strip()
             summaries = []
             try:
-                claim = api.get_claim_by_number(normalized)
-                if isinstance(claim, dict) and claim.get("claimNumber"):
-                    # Normalize ClaimDto -> summary shape expected by _map_summary.
-                    # Claim status enum (1=draft..7=archived); approved/rejected/archived = closed.
-                    raw_status = claim.get("status", 0)
-                    case_status = CASE_STATUS_CLOSED if raw_status in (5, 6, 7) else CASE_STATUS_OPEN
-                    normalized_claim = dict(claim)
-                    normalized_claim["caseStatus"] = case_status
-                    normalized_claim["buildingCode"] = (
-                        claim.get("buildingCode")
-                        or claim.get("buildingId")
-                        or claim.get("propertyUnitId")
-                        or ""
+                raw_surveys = api._request("GET", "/v1/Surveys/office", params={
+                    "referenceCode": reference_code,
+                    "page": 1,
+                    "pageSize": 10,
+                    "sortBy": "SurveyDate",
+                    "sortDirection": "desc",
+                })
+
+                if isinstance(raw_surveys, dict):
+                    surveys = (
+                        raw_surveys.get("surveys")
+                        or raw_surveys.get("items")
+                        or raw_surveys.get("data")
+                        or []
                     )
-                    normalized_claim["referenceCode"] = (
-                        claim.get("referenceCode") or claim.get("claimNumber", "")
+                else:
+                    surveys = raw_surveys if isinstance(raw_surveys, list) else []
+
+                survey_ids = []
+                for survey in surveys:
+                    if not isinstance(survey, dict):
+                        continue
+                    survey_id = (
+                        survey.get("id")
+                        or survey.get("surveyVisitId")
+                        or survey.get("surveyId")
                     )
-                    summaries = [normalized_claim]
-                    total_count = 1
+                    if survey_id and survey_id not in survey_ids:
+                        survey_ids.append(survey_id)
+
+                all_summaries = []
+                for survey_id in survey_ids:
+                    raw_claims = api._request("GET", "/v2/claims/summaries", params={
+                        "surveyVisitId": survey_id,
+                        "page": 1,
+                        "pageSize": 100,
+                    })
+                    if isinstance(raw_claims, dict):
+                        all_summaries.extend(raw_claims.get("items", []))
+                    elif isinstance(raw_claims, list):
+                        all_summaries.extend(raw_claims)
+
+                total_count = len(all_summaries)
+                start = (self._current_page - 1) * self._page_size
+                summaries = all_summaries[start:start + self._page_size]
             except Exception as e:
-                logger.warning(f"Claim number lookup failed: {e}")
+                logger.warning(f"Reference code claim lookup failed: {e}")
                 summaries = []
                 total_count = 0
+
         else:
             try:
                 raw = api._request("GET", "/v2/claims/summaries", params={
@@ -796,6 +837,9 @@ class CompletedClaimsPage(QWidget):
 
             if not self.claims_data:
                 self._empty_state.clear_action()
+                if self._search_mode:
+                    term = self._search.text().strip()
+                    self._search_bar.update_count(term, 0)
                 self._stack.setCurrentIndex(1)
                 self._update_empty_text()
                 self._update_pagination()
@@ -805,7 +849,7 @@ class CompletedClaimsPage(QWidget):
 
             # Update search result count in header
             if self._search_mode:
-                total = len(self.claims_data)
+                total = self._total_count or len(self.claims_data)
                 term = self._search.text().strip()
                 self._search_bar.update_count(term, total)
 
@@ -857,10 +901,10 @@ class CompletedClaimsPage(QWidget):
                 widget.deleteLater()
 
     def _update_empty_text(self):
-        if self._search_mode:
-            term = self._search.text().strip()
-            self._empty_state.set_title(tr("page.claims.no_search_results"))
-            self._empty_state.set_description(f"\"{term}\"")
+        term = self._search.text().strip()
+        if self._search_mode or term:
+            self._empty_state.set_title(tr("page.claims.no_claims_for_survey"))
+            self._empty_state.set_description(f"\"{term}\"" if term else "")
         else:
             msg = tr("page.claims.empty_open") if self._active_tab == "open" else tr("page.claims.empty_closed")
             self._empty_state.set_title(msg)

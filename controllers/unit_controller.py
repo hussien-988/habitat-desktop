@@ -414,6 +414,7 @@ class UnitController(BaseController):
             apartment_number=dto.get("apartmentNumber") or dto.get("unitIdentifier") or "",
             apartment_status=dto.get("status") or dto.get("apartmentStatus") or "occupied",
             property_description=dto.get("description") or dto.get("propertyDescription") or "",
+            number_of_rooms=dto.get("numberOfRooms") or 0,
             area_sqm=dto.get("areaSquareMeters") or dto.get("areaSqm"),
         )
 

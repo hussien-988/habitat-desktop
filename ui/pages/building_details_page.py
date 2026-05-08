@@ -10,8 +10,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QScrollArea,
     QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QColor
 
 from models.building import Building
 from repositories.database import Database
@@ -31,6 +31,7 @@ from utils.i18n import I18n
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction, get_text_alignment
 from utils.logger import get_logger
+from ui.components.building_location_map_preview import BuildingLocationMapPreview
 
 logger = get_logger(__name__)
 
@@ -401,7 +402,14 @@ class BuildingDetailsPage(QWidget):
         """Callback: API fetch failed, keep existing data."""
         self._spinner.hide_loading()
         logger.warning(f"Background building details fetch failed: {error_msg}")
+    def _format_zero_as_dash(self, value):
+        """Display 0 as '-' for count fields without changing the real data."""
+        try:
+            numeric_value = int(value or 0)
+        except (TypeError, ValueError):
+            return "-"
 
+        return "-" if numeric_value == 0 else str(numeric_value)
     def _clear_layout(self, layout):
         while layout.count():
             item = layout.takeAt(0)
@@ -409,7 +417,17 @@ class BuildingDetailsPage(QWidget):
                 item.widget().deleteLater()
             elif item.layout():
                 self._clear_layout(item.layout())
+    def _display_text_or_fallback(self, value, fallback_key: str) -> str:
+        """Return clean display text, or localized fallback when value is empty."""
+        if value is None:
+            return tr(fallback_key)
 
+        text = str(value).strip()
+
+        if not text or text.lower() in ("none", "null", "nan"):
+            return tr(fallback_key)
+
+        return text
     def _populate_cards(self, building: Building):
         """Populate all 3 cards with building data."""
         self._clear_layout(self.info_content)
@@ -419,16 +437,24 @@ class BuildingDetailsPage(QWidget):
         building_code = building.building_id_formatted or building.building_id_display or building.building_id or "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
         building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
-        units_count = str(getattr(building, 'number_of_units', 0))
-        apartments_count = str(getattr(building, 'number_of_apartments', 0))
-        shops_count = str(getattr(building, 'number_of_shops', 0))
+        raw_units_count = getattr(building, 'number_of_units', 0)
+        raw_apartments_count = getattr(building, 'number_of_apartments', 0)
+        raw_shops_count = getattr(building, 'number_of_shops', 0)
+
+        units_count = self._format_zero_as_dash(raw_units_count)
+        apartments_count = self._format_zero_as_dash(raw_apartments_count)
+        shops_count = self._format_zero_as_dash(raw_shops_count)
+
         try:
-            self._stat_units.set_count(int(units_count))
+            self._stat_units.set_count(int(raw_units_count or 0), zero_as_dash=True)
         except (ValueError, TypeError):
-            self._stat_units.set_count(0)
+            self._stat_units.set_count(0, zero_as_dash=True)
         entry_date = format_date(getattr(building, 'created_at', None)) or "-"
         location_desc = getattr(building, 'location_description', '-') or '-'
-        general_desc = getattr(building, 'general_description', '-') or '-'
+        general_desc = self._display_text_or_fallback(
+            getattr(building, 'general_description', None),
+            "page.building_details.no_description"
+        )
         num_label = QLabel(building_code)
         num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
@@ -502,64 +528,16 @@ class BuildingDetailsPage(QWidget):
         content_row = QHBoxLayout()
         content_row.setSpacing(24)
 
-        # Map placeholder
-        map_container = QLabel()
-        map_container.setFixedSize(ScreenScale.w(400), ScreenScale.h(130))
-        map_container.setAlignment(Qt.AlignCenter)
-        map_container.setObjectName("detailsMapContainer")
-        map_container.setStyleSheet("QLabel#detailsMapContainer { background-color: #E8E8E8; border-radius: 8px; }")
-        map_pixmap = Icon.load_pixmap("image-40", size=None)
-        if not map_pixmap or map_pixmap.isNull():
-            map_pixmap = Icon.load_pixmap("map-placeholder", size=None)
-        if map_pixmap and not map_pixmap.isNull():
-            map_container.setPixmap(map_pixmap.scaled(400, 130, Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
-        else:
-            loc_fallback = Icon.load_pixmap("carbon_location-filled", size=48)
-            if loc_fallback and not loc_fallback.isNull():
-                map_container.setPixmap(loc_fallback)
+        # Reusable interactive location preview
+        map_preview = BuildingLocationMapPreview(
+            button_text=tr("page.building_details.open_map"),
+            height=260,
+            parent=self
+        )
+        map_preview.set_building(building)
+        map_preview.expand_requested.connect(self._open_map_dialog)
 
-        # "فتح الخريطة" button
-        map_button = QPushButton(map_container)
-        map_button.setFixedSize(ScreenScale.w(94), ScreenScale.h(20))
-        map_button.move(8, 8)
-        map_button.setCursor(Qt.PointingHandCursor)
-        pill_pixmap = Icon.load_pixmap("pill", size=12)
-        if pill_pixmap and not pill_pixmap.isNull():
-            map_button.setIcon(QIcon(pill_pixmap))
-            map_button.setIconSize(QSize(12, 12))
-        map_button.setText(tr("page.building_details.open_map"))
-        map_button.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
-        map_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: white;
-                color: {Colors.PRIMARY_BLUE};
-                border: none;
-                border-radius: 5px;
-                padding: 4px;
-                text-align: center;
-            }}
-            QPushButton:hover {{
-                background-color: #F5F5F5;
-            }}
-        """)
-        btn_shadow = QGraphicsDropShadowEffect()
-        btn_shadow.setBlurRadius(8)
-        btn_shadow.setXOffset(0)
-        btn_shadow.setYOffset(2)
-        btn_shadow.setColor(QColor(0, 0, 0, 60))
-        map_button.setGraphicsEffect(btn_shadow)
-        map_button.clicked.connect(self._open_map_dialog)
-
-        # Location pin icon
-        location_icon = QLabel(map_container)
-        loc_pixmap = Icon.load_pixmap("carbon_location-filled", size=56)
-        if loc_pixmap and not loc_pixmap.isNull():
-            location_icon.setPixmap(loc_pixmap)
-            location_icon.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
-            location_icon.move(172, 37)
-            location_icon.setStyleSheet("background: transparent;")
-
-        content_row.addWidget(map_container)
+        content_row.addWidget(map_preview, stretch=2)
 
         # General description
         gen_desc_section = QVBoxLayout()

@@ -33,9 +33,14 @@ class StatPill(QWidget):
         self._text_lbl.setStyleSheet("color: rgba(139, 172, 200, 220); background: transparent;")
         layout.addWidget(self._text_lbl)
 
-    def set_count(self, count: int):
+    def set_count(self, count: int, zero_as_dash: bool = False):
         self._count = count
-        self._count_lbl.setText(str(count))
+
+        if zero_as_dash and count == 0:
+            self._count_lbl.setText("-")
+        else:
+            self._count_lbl.setText(str(count))
+
         self.update()
 
     def set_label(self, text: str):

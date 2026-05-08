@@ -61,10 +61,8 @@ class LoginPage(QWidget):
         self.auth_service = ApiAuthService()
         self.password_visible = False
         self._arabic_re = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]")
-
-        # Login lockout tracking
-        self._failed_attempts = 0
-        self._lockout_until = None
+        self._current_local_error_key = None
+        self._current_local_error_params = {}
 
         # Constellation particles
         random.seed(99)
@@ -836,19 +834,12 @@ class LoginPage(QWidget):
             self.password_input.setEchoMode(QLineEdit.Password)
 
     def _on_login(self):
-        """Handle login attempt with lockout enforcement."""
-        from datetime import datetime, timedelta
-
-        if self._lockout_until and datetime.now() < self._lockout_until:
-            remaining = int((self._lockout_until - datetime.now()).total_seconds()) // 60 + 1
-            self._show_error(tr("page.login.account_locked", minutes=remaining))
-            return
-
+        """Submit login request to backend; backend enforces lockout/policy."""
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
         if not username or not password:
-            self._show_error(tr("page.login.fields_required"))
+            self._show_local_error("page.login.fields_required")
             return
 
         self._set_login_loading(True)
@@ -862,11 +853,10 @@ class LoginPage(QWidget):
 
     def _on_login_result(self, result, username):
         """Handle login result from async worker."""
-        from datetime import datetime, timedelta
         self._set_login_loading(False)
 
         if isinstance(result, Exception):
-            self._show_error(tr("page.login.connection_error"))
+            self._show_local_error("page.login.connection_error")
             return
 
         user, error, is_credential_error = result if len(result) == 3 else (*result, True)
@@ -874,34 +864,15 @@ class LoginPage(QWidget):
         if user:
             from app.config import Roles
             if user.role in Roles.NON_LOGIN_ROLES:
-                self._show_error(tr("page.login.not_authorized"))
+                self._show_local_error("page.login.not_authorized")
                 return
 
-            self._failed_attempts = 0
-            self._lockout_until = None
             logger.info(f"Login successful: {username}")
-            self.error_label.hide()
+            self._hide_error()
             self.login_successful.emit(user)
-        elif not is_credential_error:
-            # Network / server error — show the specific message, don't penalise lockout
-            logger.warning(f"Login blocked by network/server error for {username}: {error}")
-            self._show_error(error)
         else:
-            # Wrong credentials — apply lockout logic
-            self._failed_attempts += 1
-            logger.warning(f"Login failed: {username} (attempt {self._failed_attempts})")
-
-            max_attempts, lockout_minutes = self._get_lockout_settings()
-            if max_attempts > 0 and self._failed_attempts >= max_attempts:
-                self._lockout_until = datetime.now() + timedelta(minutes=lockout_minutes)
-                self._show_error(tr("page.login.lockout_exceeded", minutes=lockout_minutes))
-                logger.warning(f"Account locked for {lockout_minutes} min after {self._failed_attempts} failed attempts")
-            else:
-                remaining = max_attempts - self._failed_attempts
-                if max_attempts > 0 and remaining <= 3:
-                    self._show_error(tr("page.login.invalid_credentials_remaining", remaining=remaining))
-                else:
-                    self._show_error(error or tr("page.login.invalid_credentials"))
+            logger.warning(f"Login failed: {username} ({'credentials' if is_credential_error else 'network/server'}): {error}")
+            self._show_error(error or tr("page.login.invalid_credentials"))
 
     def _on_login_error(self, error_msg: str):
         """Handle login worker exception — reset loading state and show error."""
@@ -920,28 +891,29 @@ class LoginPage(QWidget):
         else:
             self.login_btn.setText(getattr(self, '_original_btn_text', tr("page.login.sign_in")))
 
-    def _get_lockout_settings(self) -> tuple:
-        """Get lockout settings from SecurityService."""
-        try:
-            from services.security_service import SecurityService
-            if self.db:
-                svc = SecurityService(self.db)
-            else:
-                from repositories.database import Database
-                svc = SecurityService(Database())
-            settings = svc.get_settings()
-            return settings.max_failed_login_attempts, settings.account_lockout_duration_minutes
-        except Exception as e:
-            logger.warning(f"Could not load lockout settings: {e}")
-            return 5, 15
-
     def _show_error(self, message: str):
-        """Show error message"""
-        self.error_label.setText(message)
-        self.error_label.show()
+        """Show a raw API/server error message.
 
+        Raw API messages are already localized by the backend using Accept-Language.
+        They should not be translated again by the client.
+        """
+        self._current_local_error_key = None
+        self._current_local_error_params = {}
+
+        self.error_label.setText(message or "")
+        self.error_label.show()
+    def _show_local_error(self, key: str, **params):
+        """Show a client-side translated error and keep its key for language refresh."""
+        self._current_local_error_key = key
+        self._current_local_error_params = params or {}
+
+        self.error_label.setText(tr(key, **self._current_local_error_params))
+        self.error_label.show()
     def _hide_error(self):
-        """Hide error message"""
+        """Hide error message and clear stored local error state."""
+        self._current_local_error_key = None
+        self._current_local_error_params = {}
+
         if self.error_label.isVisible():
             self.error_label.hide()
 
@@ -949,7 +921,7 @@ class LoginPage(QWidget):
         """Clear form fields"""
         self.username_input.clear()
         self.password_input.clear()
-        self.error_label.hide()
+        self._hide_error()
 
     def refresh(self, data=None):
         """Refresh the page"""
@@ -999,7 +971,12 @@ class LoginPage(QWidget):
         if hasattr(self, "_btn_settings"):
             server_text = "\u0627\u0644\u062e\u0627\u062f\u0645" if tm_get_language() == "ar" else "Server"
             self._btn_settings.setText("\u25A3  " + server_text)
-
+        # Refresh only client-side/local errors.
+        # API errors are raw messages from backend and should remain as returned.
+        if self.error_label.isVisible() and self._current_local_error_key:
+            self.error_label.setText(
+                tr(self._current_local_error_key, **self._current_local_error_params)
+            )
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:

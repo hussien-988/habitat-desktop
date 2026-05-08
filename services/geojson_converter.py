@@ -392,6 +392,7 @@ class GeoJSONConverter:
         properties = {
             "building_id": building.building_id,
             "building_id_display": building.building_id_display,
+            "building_number": getattr(building, "building_number", "") or "",
             "building_uuid": building.building_uuid or building.building_id,
             "status": building.building_status or "intact",
             "neighborhood": building.neighborhood_name_ar or building.neighborhood_name or "",

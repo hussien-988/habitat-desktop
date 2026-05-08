@@ -136,11 +136,6 @@ class MainWindow(QMainWindow):
         self._back_to_case_entity = False
         self._case_entity_case_id = None
 
-        # Session timeout tracking
-        self._session_timer = None
-        self._last_activity = None
-        self._session_timeout_ms = 0
-
         # Proactive token refresh timer
         self._token_refresh_timer = None
 
@@ -544,6 +539,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.SURVEY_DETAILS].revert_requested.connect(
             self._on_revert_survey_to_draft
         )
+        # View linked claims from finalized survey details
+        self.pages[Pages.SURVEY_DETAILS].view_linked_claims_requested.connect(
+            self._on_view_linked_claims_requested
+        )
 
         # Claim Details page signals
         self.pages[Pages.CLAIM_DETAILS].back_requested.connect(
@@ -638,15 +637,6 @@ class MainWindow(QMainWindow):
         self._vocab_worker = ApiWorker(_background_vocab_refresh)
         self._vocab_worker.start()
 
-        # Fetch admin-managed security policy from backend (fire-and-forget)
-        def _background_security_policy_refresh():
-            from services.security_service import SecurityService
-            if not SecurityService.fetch_from_api():
-                logger.warning("Security policy fetch returned no data — using local fallback")
-
-        self._security_policy_worker = ApiWorker(_background_security_policy_refresh)
-        self._security_policy_worker.start()
-
         # Pre-initialize map services in background (tile server + landmark icons)
         import threading
         threading.Thread(target=self._prewarm_map_services, daemon=True).start()
@@ -713,9 +703,6 @@ class MainWindow(QMainWindow):
         finally:
             self._hide_login_loading()
             QApplication.processEvents()
-
-        # Start session timeout timer
-        self._start_session_timer()
 
         # Load field assignment filter data async (requires valid API token)
         if Pages.FIELD_ASSIGNMENT in self.pages:
@@ -910,42 +897,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_login_spinner') and self._login_spinner:
             self._login_spinner.hide_loading()
 
-    def _start_session_timer(self):
-        """Start session inactivity timer based on security settings."""
-        from datetime import datetime
-        timeout_minutes = 30
-        if self.db:
-            try:
-                from services.security_service import SecurityService
-                svc = SecurityService(self.db)
-                settings = svc.get_settings()
-                timeout_minutes = settings.session_timeout_minutes
-            except Exception as e:
-                logger.warning(f"Could not load session timeout setting: {e}")
-
-        self._session_timeout_ms = timeout_minutes * 60 * 1000
-        self._last_activity = datetime.now()
-
-        # Install app-wide event filter for activity tracking
-        from PyQt5.QtWidgets import QApplication
-        QApplication.instance().installEventFilter(self)
-
-        # Check every 60 seconds
-        if self._session_timer is None:
-            self._session_timer = QTimer(self)
-            self._session_timer.timeout.connect(self._check_session_timeout)
-        self._session_timer.start(60000)
-        logger.info(f"Session timeout set to {timeout_minutes} minutes")
-
-    def _stop_session_timer(self):
-        """Stop session inactivity timer."""
-        if self._session_timer:
-            self._session_timer.stop()
-        from PyQt5.QtWidgets import QApplication
-        app = QApplication.instance()
-        if app:
-            app.removeEventFilter(self)
-
     def _start_token_refresh_timer(self):
         """Start proactive token refresh every 15 minutes."""
         self._stop_token_refresh_timer()
@@ -976,45 +927,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.warning(f"Proactive token refresh error: {e}")
 
-    def eventFilter(self, obj, event):
-        """Track user activity for session timeout."""
-        from datetime import datetime
-        etype = event.type()
-        if etype in (QEvent.MouseMove, QEvent.KeyPress,
-                     QEvent.MouseButtonPress, QEvent.Wheel):
-            self._last_activity = datetime.now()
-        return super().eventFilter(obj, event)
-
-    def _check_session_timeout(self):
-        """Check if session has timed out due to inactivity."""
-        from datetime import datetime
-        if not self.current_user or not self._last_activity:
-            return
-        elapsed_ms = (datetime.now() - self._last_activity).total_seconds() * 1000
-        if elapsed_ms >= self._session_timeout_ms:
-            self._session_timer.stop()
-            logger.warning("Session timed out due to inactivity")
-            from ui.components.dialogs.message_dialog import MessageDialog
-            MessageDialog.show_warning(
-                self,
-                "انتهاء الجلسة",
-                "انتهت مهلة الجلسة بسبب عدم النشاط. سيتم تسجيل الخروج تلقائياً."
-            )
-            self._force_logout()
-
     def _force_logout(self):
-        """Force logout without confirmation dialog (session timeout)."""
+        """Force logout without confirmation dialog (e.g., backend session expiry)."""
         if self.current_user:
-            logger.info(f"Force logout (session timeout): {self.current_user.username}")
+            logger.info(f"Force logout: {self.current_user.username}")
             try:
                 from services.api_client import get_api_client
                 get_api_client().logout()
             except Exception as e:
                 logger.warning(f"API logout failed: {e}")
-            from services.security_service import SecurityService
-            SecurityService.clear_cache()
             self.current_user = None
-            self._stop_session_timer()
             self._stop_token_refresh_timer()
             self._show_login()
 
@@ -1099,10 +1021,7 @@ class MainWindow(QMainWindow):
             Toast.WARNING,
             5000
         )
-        from services.security_service import SecurityService
-        SecurityService.clear_cache()
         self.current_user = None
-        self._stop_session_timer()
         self._stop_token_refresh_timer()
         self._show_login()
 
@@ -1142,10 +1061,7 @@ class MainWindow(QMainWindow):
                     get_api_client().logout()
                 except Exception as e:
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
-                from services.security_service import SecurityService
-                SecurityService.clear_cache()
                 self.current_user = None
-                self._stop_session_timer()
                 self._stop_token_refresh_timer()
                 # Clear login fields for security
                 login_page = self.pages.get(Pages.LOGIN)
@@ -1781,6 +1697,14 @@ class MainWindow(QMainWindow):
         worker.error.connect(_on_err)
         self._case_survey_worker = worker
         worker.start()
+    def _on_view_linked_claims_requested(self, reference_code: str):
+        reference_code = (reference_code or "").strip()
+        if not reference_code:
+            logger.warning("Cannot navigate to linked claims without reference code")
+            return
+
+        logger.info(f"Navigating to linked claims for survey reference: {reference_code}")
+        self.navigate_to(Pages.CLAIMS, {"reference_code": reference_code})
 
     def _on_case_details_back(self):
         """Navigate back from CaseDetailsPage (survey details).
@@ -2131,7 +2055,6 @@ class MainWindow(QMainWindow):
                 return
 
         logger.info("Application closing")
-        self._stop_session_timer()
         self._stop_token_refresh_timer()
         try:
             self.db.close()

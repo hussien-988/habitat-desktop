@@ -77,7 +77,7 @@ def _past_iso(days_back=30):
 
 
 def _make_building(
-    building_id, gov="01", dist="01", sub="01",
+    building_id, gov="02", dist="00", sub="00",
     comm="001", neigh="001", lat=None, lon=None,
     btype=None, bstatus=None, floors=None, year=None,
 ):

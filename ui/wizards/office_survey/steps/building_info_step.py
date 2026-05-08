@@ -30,6 +30,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from utils.logger import get_logger
+from ui.components.building_location_map_preview import BuildingLocationMapPreview
 
 logger = get_logger(__name__)
 
@@ -175,70 +176,17 @@ class BuildingInfoStep(BaseStep):
         card_layout.addLayout(header_layout)
         card_layout.addWidget(make_divider())
 
-        self._map_container = QLabel()
-        self._map_container.setMinimumSize(ScreenScale.w(320), ScreenScale.h(200))
-        self._map_container.setMaximumHeight(ScreenScale.h(280))
-        self._map_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._map_container.setAlignment(Qt.AlignCenter)
-        self._map_container.setObjectName("mapContainer")
-        self._map_container.setStyleSheet("""
-            QLabel#mapContainer {
-                background-color: #E8E8E8;
-                border-radius: 8px;
-            }
-        """)
+        self._map_preview = BuildingLocationMapPreview(
+            button_text=tr("wizard.building_info.open_map"),
+            height=200,
+            parent=self,
+        )
+        self._map_preview.setMinimumSize(ScreenScale.w(320), ScreenScale.h(200))
+        self._map_preview.setMaximumHeight(ScreenScale.h(280))
+        self._map_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._map_preview.expand_requested.connect(self._open_map_view)
 
-        map_bg = Icon.load_pixmap("image-40", size=None)
-        if not map_bg or map_bg.isNull():
-            map_bg = Icon.load_pixmap("map-placeholder", size=None)
-        if map_bg and not map_bg.isNull():
-            self._map_container.setPixmap(
-                map_bg.scaled(
-                    ScreenScale.w(800), ScreenScale.h(220),
-                    Qt.IgnoreAspectRatio, Qt.SmoothTransformation,
-                )
-            )
-
-        loc_icon_lbl = QLabel(self._map_container)
-        loc_px = Icon.load_pixmap("carbon_location-filled", size=48)
-        if loc_px and not loc_px.isNull():
-            loc_icon_lbl.setPixmap(loc_px)
-            loc_icon_lbl.setFixedSize(loc_px.size())
-            loc_icon_lbl.setAlignment(Qt.AlignCenter)
-            loc_icon_lbl.move(ScreenScale.w(160), ScreenScale.h(80))
-            loc_icon_lbl.setStyleSheet("background: transparent;")
-        self._map_loc_icon = loc_icon_lbl
-
-        map_button = QPushButton(self._map_container)
-        map_button.setMinimumSize(ScreenScale.w(96), ScreenScale.h(24))
-        map_button.move(ScreenScale.w(8), ScreenScale.h(8))
-        map_button.setCursor(Qt.PointingHandCursor)
-        pill_px = Icon.load_pixmap("pill", size=12)
-        if pill_px and not pill_px.isNull():
-            map_button.setIcon(QIcon(pill_px))
-            map_button.setIconSize(QSize(12, 12))
-        map_button.setText(tr("wizard.building_info.open_map"))
-        map_button.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        map_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: white;
-                color: {Colors.PRIMARY_BLUE};
-                border: none;
-                border-radius: 5px;
-                padding: 4px 10px;
-                text-align: center;
-            }}
-        """)
-        shadow = QGraphicsDropShadowEffect(map_button)
-        shadow.setBlurRadius(8)
-        shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 60))
-        map_button.setGraphicsEffect(shadow)
-        map_button.clicked.connect(self._open_map_view)
-        self._map_button = map_button
-
-        card_layout.addWidget(self._map_container, stretch=1)
+        card_layout.addWidget(self._map_preview, stretch=1)
 
         meta_row = QHBoxLayout()
         meta_row.setContentsMargins(0, 0, 0, 0)
@@ -392,6 +340,10 @@ class BuildingInfoStep(BaseStep):
             self.f_location_status.setText(f"{tr('wizard.building_info.coordinates')}: {lat:.6f}, {lon:.6f}")
         else:
             self.f_location_status.setText("")
+
+        # Card 3 — interactive map preview
+        if hasattr(self, "_map_preview"):
+            self._map_preview.set_building(b)
 
         # Card 3 — description
         desc = (
@@ -656,7 +608,8 @@ class BuildingInfoStep(BaseStep):
         self._docs_btn.setText(tr("wizard.building_info.show_documents"))
         self._desc_lbl.setText(tr("wizard.building_info.description_label"))
         self.f_description.setPlaceholderText(tr("wizard.building_info.no_description"))
-        self._map_button.setText(tr("wizard.building_info.open_map"))
+        if hasattr(self, "_map_preview"):
+            self._map_preview._expand_btn.setToolTip(tr("wizard.building_info.open_map"))
 
     def collect_data(self) -> dict:
         return {}

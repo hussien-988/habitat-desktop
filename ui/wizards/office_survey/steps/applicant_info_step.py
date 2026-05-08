@@ -132,27 +132,47 @@ class ApplicantInfoStep(BaseStep):
         doc_type_row.setContentsMargins(0, 0, 0, 4)
         self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
         self.lbl_id_doc_type.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
-        self._id_doc_type_combo = QComboBox()
+        self._id_doc_type_combo = RtlCombo()
         self._id_doc_type_combo.setFocusPolicy(Qt.ClickFocus)
+
         from services.display_mappings import get_identification_document_type_options
         for code, label in get_identification_document_type_options():
             if code == 0:
                 continue
             self._id_doc_type_combo.addItem(label, code)
-        self._id_doc_type_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #D0D7E2; border-radius: 8px;
-                padding: 6px 10px; background: #F8FAFF; color: #2C3E50;
-                font-size: 13px; min-height: 28px;
+
+        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+        self._id_doc_type_combo.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid #D0D7E2;
+                border-radius: 8px;
+                padding: 6px 10px;
+                background: #F8FAFF;
+                color: #2C3E50;
+                font-size: 13px;
+                min-height: 28px;
                 outline: none;
-            }
-            QComboBox:focus { border: 1.5px solid #3890DF; }
-            QComboBox::drop-down { border: none; width: 28px; }
-            QComboBox::down-arrow {
-                image: none; width: 0; height: 0;
-                border-left: 5px solid transparent; border-right: 5px solid transparent;
-                border-top: 5px solid #7F8C9B;
-            }
+            }}
+            QComboBox QLineEdit {{
+                border: none;
+                background: transparent;
+                color: #2C3E50;
+                padding: 0px 24px 0px 24px;
+                selection-background-color: transparent;
+            }}
+            QComboBox:focus {{
+                border: 1.5px solid #3890DF;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 28px;
+                subcontrol-position: right center;
+            }}
+            QComboBox::down-arrow {{
+                image: url({down_img});
+                width: 12px;
+                height: 12px;
+            }}
         """)
         doc_type_row.addWidget(self.lbl_id_doc_type)
         doc_type_row.addWidget(self._id_doc_type_combo, 1)
@@ -235,8 +255,8 @@ class ApplicantInfoStep(BaseStep):
 
         # Row 4 labels: الجنسية | الرقم الوطني | الجنس
         self.lbl_nationality = self._lbl(tr("wizard.person_dialog.nationality"))
-        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id") + " *")
-        self.lbl_gender      = self._lbl(tr("wizard.person_dialog.gender"))
+        self.lbl_national_id = self._lbl(tr("wizard.person_dialog.national_id"))
+        self.lbl_gender      = self._lbl(tr("wizard.person_dialog.gender")+ " *")
         grid.addWidget(self.lbl_nationality, row, 0)
         grid.addWidget(self.lbl_national_id, row, 1)
         grid.addWidget(self.lbl_gender,      row, 2)
@@ -256,13 +276,15 @@ class ApplicantInfoStep(BaseStep):
         grid.addLayout(self._field_box(self.national_id, self._nid_error), row, 1)
 
         self.gender = self._build_gender_radios()
-        grid.addWidget(self.gender, row, 2)
+        self._gender_error = self._err_lbl()
+        grid.addLayout(self._field_box(self.gender, self._gender_error), row, 2)
 
         self.first_name.textChanged.connect(lambda: self._clear_err(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_err(self.last_name, self._last_name_error))
         self.father_name.textChanged.connect(lambda: self._clear_err(self.father_name, self._father_name_error))
         self.mother_name.textChanged.connect(lambda: self._clear_err(self.mother_name, self._mother_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_err(self.national_id, self._nid_error))
+        self._gender_group.buttonClicked.connect(lambda *_: self._clear_gender_err())
 
         return grid
 
@@ -409,19 +431,68 @@ class ApplicantInfoStep(BaseStep):
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
         self._update_upload_thumbnails("id_upload", self.uploaded_files)
+    def _thumbnail_columns_for_frame(self, frame: QFrame) -> int:
+        """Calculate thumbnail columns based on the actual available width."""
+        available_width = frame.width() - ScreenScale.w(48)
+        thumb_width = ScreenScale.w(58)
+
+        if available_width <= 0:
+            return 1
+
+        return max(1, available_width // thumb_width)
+
+
+    def _sync_upload_scroll_height(self, frame: QFrame, file_count: int, columns: int):
+        """Keep uploaded thumbnails area compact, with vertical scroll only when needed."""
+        if not hasattr(frame, "_thumbnails_scroll"):
+            return
+
+        if file_count <= 0:
+            frame._thumbnails_scroll.setVisible(False)
+            return
+
+        rows = (file_count + columns - 1) // columns
+        visible_rows = min(rows, 2)
+
+        row_height = ScreenScale.h(58)
+        spacing = ScreenScale.h(6)
+        vertical_padding = ScreenScale.h(4)
+
+        height = visible_rows * row_height
+        if visible_rows > 1:
+            height += (visible_rows - 1) * spacing
+        height += vertical_padding
+
+        frame._thumbnails_scroll.setFixedHeight(height)
+        frame._thumbnails_scroll.setVisible(True)
 
     def _update_upload_thumbnails(self, obj_name: str, file_paths: list):
         frame = self.findChild(QFrame, obj_name)
         if not frame or not hasattr(frame, "_thumbnails_layout"):
             return
+
         layout = frame._thumbnails_layout
+
         while layout.count():
             item = layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        for fp in file_paths:
-            layout.addWidget(self._create_thumbnail_widget(fp, self._remove_uploaded_file))
 
+        columns = self._thumbnail_columns_for_frame(frame)
+        self._sync_upload_scroll_height(frame, len(file_paths), columns)
+
+        if not file_paths:
+            return
+
+        for index, fp in enumerate(file_paths):
+            row = index // columns
+            col = index % columns
+            layout.addWidget(
+                self._create_thumbnail_widget(fp, self._remove_uploaded_file),
+                row,
+                col,
+                Qt.AlignRight | Qt.AlignTop,
+            )
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         container = QWidget()
         container.setFixedSize(ScreenScale.w(52), ScreenScale.h(52))
@@ -501,7 +572,7 @@ class ApplicantInfoStep(BaseStep):
 
         frame = QFrame()
         frame.setObjectName(obj_name)
-        frame.setMinimumHeight(ScreenScale.h(60))
+        frame.setMinimumHeight(ScreenScale.h(68))
         frame.setStyleSheet(f"""
             QFrame#{obj_name} {{
                 border: 2px dashed rgba(56, 144, 223, 0.35);
@@ -514,26 +585,45 @@ class ApplicantInfoStep(BaseStep):
             }}
         """)
         frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(16, 10, 16, 10)
+        frame_layout.setContentsMargins(16, 12, 16, 12)
         frame_layout.setSpacing(8)
 
-        row_layout = QHBoxLayout()
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(8)
+        # Uploaded files area — above the upload action row
+        thumbnails_scroll = QScrollArea()
+        thumbnails_scroll.setWidgetResizable(True)
+        thumbnails_scroll.setFrameShape(QFrame.NoFrame)
+        thumbnails_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        thumbnails_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        thumbnails_scroll.setVisible(False)
+        thumbnails_scroll.setStyleSheet(        
+            "QScrollArea { border: none; background: transparent; }"
+            + StyleManager.scrollbar()
+        )
 
         thumbnails_container = QWidget()
         thumbnails_container.setStyleSheet("border: none; background: transparent;")
-        thumbnails_layout = QHBoxLayout(thumbnails_container)
+
+        thumbnails_layout = QGridLayout(thumbnails_container)
         thumbnails_layout.setContentsMargins(0, 0, 0, 0)
-        thumbnails_layout.setSpacing(6)
-        row_layout.addWidget(thumbnails_container)
-        row_layout.addStretch()
+        thumbnails_layout.setHorizontalSpacing(ScreenScale.w(6))
+        thumbnails_layout.setVerticalSpacing(ScreenScale.h(6))
+        thumbnails_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        thumbnails_scroll.setWidget(thumbnails_container)
+        frame_layout.addWidget(thumbnails_scroll)
+
+        # Upload action row — icon and text stay on their own line
+        upload_row = QHBoxLayout()
+        upload_row.setContentsMargins(0, 0, 0, 0)
+        upload_row.setSpacing(8)
+
+        upload_row.addStretch()
 
         icon_lbl = QLabel()
-        icon_lbl.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
+        icon_lbl.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("border: none; background: transparent;")
-        up_px = Icon.load_pixmap("upload_file", size=22)
+        icon_lbl.setStyleSheet("border: none; background: transparent; padding: 0px; margin: 0px;")
+        up_px = Icon.load_pixmap("upload_file", size=20)
         if up_px and not up_px.isNull():
             icon_lbl.setPixmap(up_px)
         else:
@@ -541,7 +631,7 @@ class ApplicantInfoStep(BaseStep):
             icon_lbl.setStyleSheet("border: none; font-size: 18px; color: #3890DF; background: transparent;")
         icon_lbl.setCursor(Qt.PointingHandCursor)
         icon_lbl.mousePressEvent = lambda e: browse_callback()
-        row_layout.addWidget(icon_lbl)
+        upload_row.addWidget(icon_lbl)
 
         text_btn = QPushButton(button_text or tr("wizard.person_dialog.attach_id_photos"))
         text_btn.setStyleSheet("""
@@ -554,13 +644,23 @@ class ApplicantInfoStep(BaseStep):
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
-        row_layout.addWidget(text_btn)
-        row_layout.addStretch()
-        frame_layout.addLayout(row_layout)
+        upload_row.addWidget(text_btn)
+
+        upload_row.addStretch()
+        frame_layout.addLayout(upload_row)
 
         frame._thumbnails_container = thumbnails_container
         frame._thumbnails_layout = thumbnails_layout
+        frame._thumbnails_scroll = thumbnails_scroll
         frame._text_btn = text_btn
+        original_resize_event = frame.resizeEvent
+
+        def _resize_upload_frame(event, current_frame=frame, original_handler=original_resize_event):
+            if original_handler:
+                original_handler(event)
+            self._update_upload_thumbnails(current_frame.objectName(), self.uploaded_files)
+
+        frame.resizeEvent = _resize_upload_frame
         return frame
 
     # Editable birth combos + gender radios
@@ -697,6 +797,25 @@ class ApplicantInfoStep(BaseStep):
         field.setStyleSheet(self._field_styles.get(field, self._input_style()))
         error_lbl.setText("")
         error_lbl.setVisible(False)
+    def _set_gender_err(self):
+        self.gender.setStyleSheet(f"""
+            QWidget {{
+                background: transparent;
+                border: 1.5px solid {Colors.ERROR};
+                border-radius: 8px;
+            }}
+            QRadioButton {{
+                border: none;
+                background: transparent;
+            }}
+        """)
+        self._gender_error.setText("!")
+        self._gender_error.setVisible(True)
+
+    def _clear_gender_err(self):
+        self.gender.setStyleSheet("background: transparent;")
+        self._gender_error.setText("")
+        self._gender_error.setVisible(False)
 
     # BaseStep interface
 
@@ -727,11 +846,12 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.landline_digits, self._landline_error)
             result.add_error(tr("wizard.applicant.landline_9_digits"))
 
+        if self._get_gender() is None:
+            self._set_gender_err()
+            result.add_error(tr("wizard.applicant.gender_required"))
+
         nid_text = self.national_id.text().strip()
-        if not nid_text:
-            self._set_err(self.national_id, self._nid_error)
-            result.add_error(tr("wizard.applicant.national_id_required"))
-        elif len(nid_text) != 11 or not nid_text.isdigit():
+        if nid_text and (len(nid_text) != 11 or not nid_text.isdigit()):
             self._set_err(self.national_id, self._nid_error)
             result.add_error(tr("wizard.applicant.national_id_11_digits"))
 
@@ -763,23 +883,24 @@ class ApplicantInfoStep(BaseStep):
                     )
                 except Exception as e:
                     from services.exceptions import ApiException
+                    from services.error_mapper import map_exception
                     if isinstance(e, ApiException) and e.status_code == 409:
                         from services.error_mapper import build_duplicate_person_message
                         result.add_error(build_duplicate_person_message(e.response_data))
                     else:
                         logger.error(f"Contact person API failed: {e}")
-                        result.add_error(tr("wizard.applicant.save_failed"))
+                        result.add_error(map_exception(e))
             else:
                 try:
                     self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
                     logger.info(f"Contact person {existing_cp_id} updated")
                 except Exception as e:
-                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message, map_exception
                     if is_duplicate_nid_error(e):
                         result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
                     else:
                         logger.error(f"Contact person update failed: {e}")
-                        result.add_error(tr("wizard.applicant.update_failed"))
+                        result.add_error(map_exception(e))
 
             # 6. Upload ID photos
             person_id = self.context.get_data("contact_person_id")
@@ -805,18 +926,6 @@ class ApplicantInfoStep(BaseStep):
 
             # 7. Cache contact person locally
             self._save_contact_person_locally(survey_id)
-
-            # 8. Save intervieweeName
-            try:
-                a = self.context.applicant or {}
-                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
-                interviewee_name = " ".join(p for p in parts if p) or a.get("full_name")
-                if interviewee_name:
-                    self._api_client.save_draft_to_backend(survey_id, {"interviewee_name": interviewee_name})
-                    logger.info(f"intervieweeName saved: {interviewee_name}")
-            except Exception as e:
-                logger.warning(f"Could not save interviewee name: {e}")
-                Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 
@@ -1076,7 +1185,7 @@ class ApplicantInfoStep(BaseStep):
         self.lbl_last_name.setText(tr("wizard.person_dialog.last_name") + " *")
         self.lbl_mother_name.setText(tr("wizard.person_dialog.mother_name") + " *")
         self.lbl_birth_date.setText(tr("wizard.person_dialog.birth_date"))
-        self.lbl_gender.setText(tr("wizard.person_dialog.gender"))
+        self.lbl_gender.setText(tr("wizard.person_dialog.gender") + " *")
         self.lbl_nationality.setText(tr("wizard.person_dialog.nationality"))
         self.lbl_national_id.setText(tr("wizard.person_dialog.national_id"))
 

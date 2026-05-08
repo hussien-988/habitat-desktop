@@ -35,7 +35,7 @@ from services.divisions_service import DivisionsService
 from services.api_client import get_api_client
 from models.building import Building
 from repositories.database import Database
-from controllers.building_controller import BuildingController
+from controllers.building_controller import BuildingController, BuildingFilter
 from services.export_service import ExportService
 from services.validation_service import ValidationService
 from ui.components.rtl_combo import RtlCombo
@@ -276,6 +276,14 @@ class AddBuildingPage(QWidget):
         # DivisionsService for cascading dropdowns
         self._divisions = DivisionsService()
 
+        # pCode lookup tables — populated alongside cascading dropdowns
+        # so the page can send governoratePCode/districtPCode/... on writes.
+        self._gov_pcode_by_code: dict = {}
+        self._dist_pcode_by_code: dict = {}
+        self._subdist_pcode_by_code: dict = {}
+        self._comm_pcode_by_code: dict = {}
+        self._neigh_pcode_by_code: dict = {}
+
         # Field 1: رمز المحافظة (Governorate) - Dropdown
         gov_container = QVBoxLayout()
         gov_container.setSpacing(6)
@@ -284,8 +292,10 @@ class AddBuildingPage(QWidget):
         gov_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         self.governorate_combo = CodeDisplayCombo()
         self.governorate_combo.addItem(tr("page.buildings.select_governorate"), "")
-        for code, en, ar in self._divisions.get_governorates():
+        for code, pcode, en, ar in self._divisions.get_governorates():
             self.governorate_combo.addItem(f"{code} - {ar}", code)
+            if pcode:
+                self._gov_pcode_by_code[code] = pcode
         self.governorate_combo.setCurrentIndex(1)  # Default: Aleppo
         self.governorate_combo.setStyleSheet(code_combo_style)
         self.governorate_combo.setFixedHeight(ScreenScale.h(45))
@@ -1029,24 +1039,40 @@ class AddBuildingPage(QWidget):
         return widget
 
     def _get_gov_code(self) -> str:
-        """Get governorate code from combo or fallback."""
-        return self.governorate_combo.currentData() or "01"
+        """Get governorate code from combo (empty if none selected)."""
+        return self.governorate_combo.currentData() or ""
 
     def _get_district_code(self) -> str:
-        """Get district code from combo or fallback."""
-        return self.district_combo.currentData() or "01"
+        """Get district code from combo (empty if none selected)."""
+        return self.district_combo.currentData() or ""
 
     def _get_subdistrict_code(self) -> str:
-        """Get subdistrict code from combo or fallback."""
-        return self.subdistrict_combo.currentData() or "01"
+        """Get subdistrict code from combo (empty if none selected)."""
+        return self.subdistrict_combo.currentData() or ""
 
     def _get_community_code(self) -> str:
-        """Get community code from combo or fallback."""
-        return self.community_combo.currentData() or "001"
+        """Get community code from combo (empty if none selected)."""
+        return self.community_combo.currentData() or ""
 
     def _get_neighborhood_code(self) -> str:
         """Get neighborhood code from combo (empty string if none selected)."""
         return self.neighborhood_combo.currentData() or ""
+
+    # OCHA P-Code accessors — return "" when no mapping exists yet.
+    def _get_gov_pcode(self) -> str:
+        return self._gov_pcode_by_code.get(self._get_gov_code(), "")
+
+    def _get_district_pcode(self) -> str:
+        return self._dist_pcode_by_code.get(self._get_district_code(), "")
+
+    def _get_subdistrict_pcode(self) -> str:
+        return self._subdist_pcode_by_code.get(self._get_subdistrict_code(), "")
+
+    def _get_community_pcode(self) -> str:
+        return self._comm_pcode_by_code.get(self._get_community_code(), "")
+
+    def _get_neighborhood_pcode(self) -> str:
+        return self._neigh_pcode_by_code.get(self._get_neighborhood_code(), "")
 
     def _update_building_id(self):
         """Generate building ID in format: GG-DD-SS-CCC-NNN-BBBBB"""
@@ -1704,6 +1730,12 @@ class AddBuildingPage(QWidget):
             "neighborhood_code": neigh_code,
             "neighborhood_name": neigh_name_en,
             "neighborhood_name_ar": neigh_name_ar,
+            # OCHA P-Codes (preferred when present; backend accepts either pCode or raw)
+            "governorate_pcode": self._get_gov_pcode(),
+            "district_pcode": self._get_district_pcode(),
+            "subdistrict_pcode": self._get_subdistrict_pcode(),
+            "community_pcode": self._get_community_pcode(),
+            "neighborhood_pcode": self._get_neighborhood_pcode(),
             # BBBBB: Building Number
             "building_number": self.building_number.text().strip(),
             # Building Details
@@ -1763,12 +1795,17 @@ class AddBuildingPage(QWidget):
     def _on_governorate_changed(self):
         """Cascading: governorate → fill districts."""
         gov_code = self._get_gov_code()
+        gov_pcode = self._get_gov_pcode()
         self.district_combo.blockSignals(True)
         self.district_combo.clear()
         self.district_combo.addItem(tr("page.add_building.select_district"), "")
+        self._dist_pcode_by_code.clear()
         if gov_code:
-            for code, en, ar in self._divisions.get_districts(gov_code):
+            rows = self._divisions.get_districts(gov_code=gov_code, gov_pcode=gov_pcode)
+            for code, pcode, en, ar in rows:
                 self.district_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._dist_pcode_by_code[code] = pcode
             if self.district_combo.count() > 1:
                 self.district_combo.setCurrentIndex(1)
         self.district_combo.blockSignals(False)
@@ -1778,12 +1815,21 @@ class AddBuildingPage(QWidget):
         """Cascading: district → fill subdistricts."""
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
+        gov_pcode = self._get_gov_pcode()
+        dist_pcode = self._get_district_pcode()
         self.subdistrict_combo.blockSignals(True)
         self.subdistrict_combo.clear()
         self.subdistrict_combo.addItem(tr("page.add_building.select_subdistrict"), "")
+        self._subdist_pcode_by_code.clear()
         if gov_code and dist_code:
-            for code, en, ar in self._divisions.get_subdistricts(gov_code, dist_code):
+            rows = self._divisions.get_subdistricts(
+                gov_code=gov_code, dist_code=dist_code,
+                gov_pcode=gov_pcode, dist_pcode=dist_pcode,
+            )
+            for code, pcode, en, ar in rows:
                 self.subdistrict_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._subdist_pcode_by_code[code] = pcode
             if self.subdistrict_combo.count() > 1:
                 self.subdistrict_combo.setCurrentIndex(1)
         self.subdistrict_combo.blockSignals(False)
@@ -1794,12 +1840,22 @@ class AddBuildingPage(QWidget):
         gov_code = self._get_gov_code()
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
+        gov_pcode = self._get_gov_pcode()
+        dist_pcode = self._get_district_pcode()
+        subdist_pcode = self._get_subdistrict_pcode()
         self.community_combo.blockSignals(True)
         self.community_combo.clear()
         self.community_combo.addItem(tr("page.add_building.select_community"), "")
+        self._comm_pcode_by_code.clear()
         if gov_code and dist_code and subdist_code:
-            for code, en, ar in self._divisions.get_communities(gov_code, dist_code, subdist_code):
+            rows = self._divisions.get_communities(
+                gov_code=gov_code, dist_code=dist_code, subdist_code=subdist_code,
+                gov_pcode=gov_pcode, dist_pcode=dist_pcode, subdist_pcode=subdist_pcode,
+            )
+            for code, pcode, en, ar in rows:
                 self.community_combo.addItem(f"{code} - {ar}", code)
+                if pcode:
+                    self._comm_pcode_by_code[code] = pcode
             if self.community_combo.count() > 1:
                 self.community_combo.setCurrentIndex(1)
         self.community_combo.blockSignals(False)
@@ -1813,32 +1869,42 @@ class AddBuildingPage(QWidget):
         dist_code = self._get_district_code()
         subdist_code = self._get_subdistrict_code()
         comm_code = self._get_community_code()
+        comm_pcode = self._get_community_pcode()
+        subdist_pcode = self._get_subdistrict_pcode()
 
         self.neighborhood_combo.blockSignals(True)
         self.neighborhood_combo.clear()
         self.neighborhood_combo.addItem(tr("page.add_building.select_neighborhood"), "")
         self.neighborhood_combo.blockSignals(False)
+        self._neigh_pcode_by_code.clear()
 
         if gov_code and dist_code and subdist_code and comm_code:
             self._spinner.show_loading(tr("component.loading.default"))
             self._neighborhoods_api_worker = ApiWorker(
-                self._fetch_neighborhoods_bg, gov_code, dist_code, subdist_code, comm_code
+                self._fetch_neighborhoods_bg,
+                gov_code, dist_code, subdist_code, comm_code,
+                comm_pcode, subdist_pcode,
             )
             self._neighborhoods_api_worker.finished.connect(self._on_neighborhoods_api_loaded)
             self._neighborhoods_api_worker.error.connect(self._on_neighborhoods_api_error)
             self._neighborhoods_api_worker.start()
 
-    def _fetch_neighborhoods_bg(self, gov_code, dist_code, subdist_code, comm_code):
-        """Background: fetch neighborhoods from API."""
+    def _fetch_neighborhoods_bg(
+        self, gov_code, dist_code, subdist_code, comm_code,
+        comm_pcode="", subdist_pcode="",
+    ):
+        """Background: fetch neighborhoods from API (prefers pCode when available)."""
         api_client = get_api_client()
-        if api_client is not None:
-            return api_client.get_neighborhoods(
-                governorate_code=gov_code,
-                district_code=dist_code,
-                subdistrict_code=subdist_code,
-                community_code=comm_code
-            )
-        return []
+        if api_client is None:
+            return []
+        return api_client.get_neighborhoods(
+            governorate_code=gov_code,
+            district_code=dist_code,
+            subdistrict_code=subdist_code,
+            community_code=comm_code,
+            community_pcode=comm_pcode or None,
+            sub_district_pcode=subdist_pcode or None,
+        )
 
     def _on_neighborhoods_api_loaded(self, neighborhoods):
         """Callback: populate neighborhood combo with API results."""
@@ -1850,7 +1916,10 @@ class AddBuildingPage(QWidget):
         for n in neighborhoods:
             code = n.get("neighborhoodCode", n.get("code", ""))
             name_ar = n.get("nameArabic", n.get("name_ar", ""))
+            pcode = n.get("pCode") or ""
             self.neighborhood_combo.addItem(f"{code} - {name_ar}", code)
+            if code and pcode:
+                self._neigh_pcode_by_code[code] = pcode
         if self.neighborhood_combo.count() > 1:
             self.neighborhood_combo.setCurrentIndex(1)
         self.neighborhood_combo.blockSignals(False)
@@ -2253,11 +2322,12 @@ class BuildingsListPage(QWidget):
         self.export_service = export_service
         self.i18n = i18n
         self.map_view = None
-        self._buildings = []  # Store buildings list
-        self._all_buildings = []  # Store unfiltered buildings
+        self._buildings = []  # Current visible buildings
+        self._all_buildings = []  # Current page buildings loaded from server
         self._current_page = 1
-        self._rows_per_page = 11
+        self._rows_per_page = 10
         self._total_pages = 1
+        self._total_count = 0
 
         # Active filters (same as field_work_preparation_page)
         self._active_filters = {
@@ -2375,26 +2445,58 @@ class BuildingsListPage(QWidget):
         content_layout.addWidget(self._stack)
 
         # Pagination bar
+        # Pagination bar
         self._pagination_bar = QHBoxLayout()
-        self._pagination_bar.setContentsMargins(0, 8, 0, 0)
+        self._pagination_bar.setContentsMargins(0, 10, 0, 0)
+        self._pagination_bar.setSpacing(ScreenScale.w(12))
         self._pagination_bar.addStretch()
 
+        pagination_arrow_style = f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Colors.PRIMARY_BLUE};
+                border: 1px solid rgba(56, 144, 223, 0.35);
+                border-radius: 8px;
+                font-size: 14pt;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background-color: #EFF6FF;
+                border-color: {Colors.PRIMARY_BLUE};
+            }}
+            QPushButton:disabled {{
+                color: #B8C7D9;
+                border-color: #E8EDF2;
+                background-color: transparent;
+            }}
+        """
+
         self._prev_btn = QPushButton("\u276E")
-        self._prev_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
-        self._prev_btn.setStyleSheet(StyleManager.pagination_button())
+        self._prev_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._prev_btn.setStyleSheet(pagination_arrow_style)
         self._prev_btn.clicked.connect(lambda: self._go_to_page(self._current_page - 1))
         self._pagination_bar.addWidget(self._prev_btn)
 
         self._page_info = QLabel("1-0 / 0")
-        self._page_info.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        self._page_info.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        self._page_info.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        self._page_info.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.PRIMARY_BLUE};
+                background: transparent;
+                padding: 0 10px;
+                font-weight: 700;
+            }}
+        """)
+        self._page_info.setAlignment(Qt.AlignCenter)
         self._pagination_bar.addWidget(self._page_info)
 
         self._next_btn = QPushButton("\u276F")
-        self._next_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(28))
-        self._next_btn.setStyleSheet(StyleManager.pagination_button())
+        self._next_btn.setFixedSize(ScreenScale.w(36), ScreenScale.h(32))
+        self._next_btn.setStyleSheet(pagination_arrow_style)
         self._next_btn.clicked.connect(lambda: self._go_to_page(self._current_page + 1))
         self._pagination_bar.addWidget(self._next_btn)
+
+        self._pagination_bar.addStretch()
 
         content_layout.addLayout(self._pagination_bar)
 
@@ -2429,18 +2531,37 @@ class BuildingsListPage(QWidget):
         self._load_worker.start()
 
     def _fetch_buildings_bg(self):
-        """Background thread: load from controller."""
-        return self.building_controller.load_buildings()
+        """Background thread: load one page from the API."""
+        filter_params = BuildingFilter(
+            neighborhood_code=self._active_filters.get('neighborhood'),
+            building_type=self._active_filters.get('building_type'),
+            building_status=self._active_filters.get('building_status'),
+            search_text=self._search_text or None,
+            limit=self._rows_per_page,
+            offset=(self._current_page - 1) * self._rows_per_page,
+        )
+
+        return self.building_controller.load_buildings_page(
+            filter_=filter_params,
+            page=self._current_page,
+            page_size=self._rows_per_page,
+        )
 
     def _on_buildings_loaded(self, result):
-        """Main thread callback after buildings loaded."""
+        """Main thread callback after buildings page loaded."""
         self._spinner.hide_loading()
-        if result.success:
-            self._all_buildings = result.data
+
+        if result.success and result.data:
+            page_result = result.data
+            self._all_buildings = page_result.items
+            self._total_count = page_result.total_count
+            self._current_page = page_result.page
+            self._rows_per_page = page_result.page_size
         else:
             Toast.show_toast(self, tr("page.buildings.load_error"), Toast.ERROR)
             logger.error(f"Failed to load buildings: {result.message}")
             self._all_buildings = []
+            self._total_count = 0
 
         self._populate_table_from_buildings()
 
@@ -2449,6 +2570,7 @@ class BuildingsListPage(QWidget):
         self._spinner.hide_loading()
         logger.error(f"Background load failed: {error_msg}")
         self._all_buildings = []
+        self._total_count = 0
         self._stat_total.set_count(0)
         self._empty_state.configure(
             icon_text="⚠",
@@ -2460,16 +2582,16 @@ class BuildingsListPage(QWidget):
         self._update_pagination_info(0, 0, 0)
 
     def _populate_table_from_buildings(self):
-        """Apply filters, paginate, and create building cards."""
-        self._buildings = self._apply_filters(self._all_buildings)
-        self._stat_total.set_count(len(self._all_buildings))
+        """Create cards for the current server-side page."""
+        page_buildings = self._all_buildings
+        self._buildings = page_buildings
 
-        total = len(self._buildings)
+        total = self._total_count
+        self._stat_total.set_count(total)
         self._total_pages = max(1, (total + self._rows_per_page - 1) // self._rows_per_page)
 
         start_idx = (self._current_page - 1) * self._rows_per_page
-        end_idx = min(start_idx + self._rows_per_page, total)
-        page_buildings = self._buildings[start_idx:end_idx]
+        end_idx = min(start_idx + len(page_buildings), total)
 
         # Clear old cards
         self._clear_cards()
@@ -2746,25 +2868,10 @@ class BuildingsListPage(QWidget):
         self._search_debounce.start()
 
     def _execute_building_search(self):
-        """Run search: API search if text present, else reload all buildings."""
+        """Run server-side search from the first page."""
         self._search_debounce.stop()
-        if not self._search_text:
-            self._load_buildings()
-            return
-
-        self._clear_cards()
-        self._spinner.show_loading(tr("page.buildings.loading") or "جاري البحث...")
-
-        search_text = self._search_text
-
-        def _do_search():
-            return self.building_controller.search_buildings(search_text)
-
-        self._search_worker = ApiWorker(_do_search)
-        self._search_worker.finished.connect(self._on_search_results)
-        self._search_worker.error.connect(self._on_search_error)
-        self._search_worker.start()
-
+        self._current_page = 1
+        self._load_buildings()
     def _on_search_results(self, result):
         """Display search results in card grid."""
         self._spinner.hide_loading()
@@ -2824,15 +2931,14 @@ class BuildingsListPage(QWidget):
         self._next_btn.setEnabled(self._current_page < self._total_pages)
 
     def _go_to_page(self, page):
-        """Navigate to a specific page."""
-        if 1 <= page <= self._total_pages:
+        """Navigate to a specific server-side page."""
+        if 1 <= page <= self._total_pages and page != self._current_page:
             self._current_page = page
-            self._populate_table_from_buildings()
+            self._load_buildings()
 
     def _on_page_changed(self, page):
         """Handle page change."""
-        self._current_page = page
-        self._populate_table_from_buildings()
+        self._go_to_page(page)
 
     def _show_on_map(self, building: Building):
         """

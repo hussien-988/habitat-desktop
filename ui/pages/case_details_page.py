@@ -248,6 +248,7 @@ class _CaseDetailsHeader(QWidget):
     cancel_clicked = pyqtSignal()
     resume_obstructed_clicked = pyqtSignal()
     revert_to_draft_clicked = pyqtSignal()
+    view_linked_claims_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -419,6 +420,33 @@ class _CaseDetailsHeader(QWidget):
         """)
         self._revert_btn.clicked.connect(self.revert_to_draft_clicked.emit)
         row1.addWidget(self._revert_btn)
+        # View linked claims button (finalized surveys only)
+        self._linked_claims_btn = QPushButton(tr("page.case_details.view_linked_claims"))
+        self._linked_claims_btn.setFixedSize(ScreenScale.w(190), ScreenScale.h(38))
+        self._linked_claims_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._linked_claims_btn.setVisible(False)
+        self._linked_claims_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
+        self._linked_claims_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #3890DF, stop:1 #5BA8F0
+                );
+                color: white; border: none;
+                border-radius: 12px; padding: 0 18px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #2A7BC9, stop:1 #4A98E0
+                );
+            }
+            QPushButton:pressed {
+                background: #1E6CB5;
+            }
+        """)
+        self._linked_claims_btn.clicked.connect(self.view_linked_claims_clicked.emit)
+        row1.addWidget(self._linked_claims_btn)
 
         outer.addLayout(row1)
         outer.addSpacing(8)
@@ -437,7 +465,7 @@ class _CaseDetailsHeader(QWidget):
         self._accent_line = _AccentLine()
         outer.addWidget(self._accent_line)
 
-    def set_info(self, ref_number, badges, is_draft, can_resume_obstructed=False, can_revert=False):
+    def set_info(self, ref_number, badges, is_draft, can_resume_obstructed=False, can_revert=False,can_view_linked_claims=False):
         self._ref_label.setText(ref_number or tr("page.case_details.title"))
         self._ref_label.setLayoutDirection(Qt.LeftToRight)
         self._ref_label.setAlignment(
@@ -450,6 +478,7 @@ class _CaseDetailsHeader(QWidget):
         self._cancel_btn.setVisible(is_draft)
         self._resume_obstructed_btn.setVisible(can_resume_obstructed)
         self._revert_btn.setVisible(can_revert)
+        self._linked_claims_btn.setVisible(can_view_linked_claims)
 
         # Clear old badges
         while self._badges_layout.count():
@@ -475,6 +504,7 @@ class _CaseDetailsHeader(QWidget):
         self._cancel_btn.setText(tr("page.case_details.cancel_survey"))
         self._resume_obstructed_btn.setText(tr("page.case_details.resume_obstructed"))
         self._revert_btn.setText(tr("page.case_details.revert_to_draft"))
+        self._linked_claims_btn.setText(tr("page.case_details.view_linked_claims"))
         self._ref_label.setAlignment(
             Qt.AlignRight | Qt.AlignVCenter
             if get_layout_direction() == Qt.RightToLeft
@@ -494,6 +524,7 @@ class CaseDetailsPage(QWidget):
     cancel_requested = pyqtSignal(str, str)  # survey_id, reason
     resume_obstructed_requested = pyqtSignal(str)  # survey_id
     revert_requested = pyqtSignal(str, str)  # survey_id, reason
+    view_linked_claims_requested = pyqtSignal(str)  # reference_code
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -527,6 +558,7 @@ class CaseDetailsPage(QWidget):
         self._header.cancel_clicked.connect(self._on_cancel_clicked)
         self._header.resume_obstructed_clicked.connect(self._on_resume_obstructed_clicked)
         self._header.revert_to_draft_clicked.connect(self._on_revert_to_draft_clicked)
+        self._header.view_linked_claims_clicked.connect(self._on_view_linked_claims_clicked)
         main_layout.addWidget(self._header)
         main_layout.addSpacing(16)
 
@@ -647,9 +679,8 @@ class CaseDetailsPage(QWidget):
         title_box.addWidget(title_lbl)
         title_box.addWidget(sub_lbl)
 
-        h_layout.addWidget(icon_label)
-        h_layout.addLayout(title_box)
-        h_layout.addStretch()
+        h_layout.addWidget(icon_label, 0, Qt.AlignTop)
+        h_layout.addLayout(title_box, 1)
         layout.addWidget(header)
 
     # -- Field helpers --
@@ -804,9 +835,10 @@ class CaseDetailsPage(QWidget):
         ref = ctx.reference_number or ctx.get_data("survey_id") or ""
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
         status_lower = str(status).lower()
-        is_draft = status_lower in ("draft", "1", "")
-        is_obstructed = status_lower in ("obstructed", "4")
-        is_finalized = not is_draft and not is_obstructed
+        is_cancelled = status_lower in ("cancelled", "8")
+        is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
+        is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
+        is_finalized = (not is_cancelled) and (not is_draft) and (not is_obstructed)
 
         can_manage = self._user_role in ("admin", "data_manager")
         can_resume_obstructed = is_obstructed and can_manage
@@ -814,7 +846,7 @@ class CaseDetailsPage(QWidget):
 
         badges = []
 
-        self._header.set_info(ref, badges, is_draft, can_resume_obstructed, can_revert)
+        self._header.set_info(ref, badges, is_draft, can_resume_obstructed, can_revert ,can_revert)
 
     # -- Survey Info Card --
 
@@ -841,9 +873,13 @@ class CaseDetailsPage(QWidget):
 
         status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
         status_lower = str(status).lower()
-        is_draft = status_lower in ("draft", "1", "")
-        is_obstructed = status_lower in ("obstructed", "4")
-        if is_obstructed:
+        is_cancelled = status_lower in ("cancelled", "8")
+        is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
+        is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
+        if is_cancelled:
+            status_display = tr("mapping.survey_status.cancelled")
+            s_bg, s_fg, s_br = "#FEF2F2", "#DC2626", "#FECACA"
+        elif is_obstructed:
             status_display = tr("page.case_details.status_obstructed")
             s_bg, s_fg, s_br = "#FFFBEB", "#B45309", "#FCD34D"
         elif is_draft:
@@ -1351,6 +1387,23 @@ class CaseDetailsPage(QWidget):
             self.resume_obstructed_requested.emit(survey_id)
         else:
             logger.warning("No survey_id in context for resume obstructed")
+    def _on_view_linked_claims_clicked(self):
+        reference_code = ""
+        if self._context:
+            reference_code = (
+                getattr(self._context, "reference_number", "")
+                or self._context.get_data("reference_number")
+                or self._context.get_data("referenceCode")
+                or self._context.get_data("reference_code")
+                or ""
+            ).strip()
+
+        if not reference_code:
+            logger.warning("No reference code in context for linked claims navigation")
+            return
+
+        logger.info(f"View linked claims requested for survey reference: {reference_code}")
+        self.view_linked_claims_requested.emit(reference_code)
 
     def _on_revert_to_draft_clicked(self):
         survey_id = None

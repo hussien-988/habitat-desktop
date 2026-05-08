@@ -85,7 +85,7 @@ class RelationsTableModel(BaseTableModel):
         elif field_name == 'relation_type':
             return item.relation_type_display_ar if self._is_arabic else item.relation_type_display
         elif field_name == 'share':
-            return f"{item.ownership_percentage:.1f}%" if item.ownership_share > 0 else "-"
+            return f"{int(item.ownership_share)} {tr('unit.shares')}" if item.ownership_share > 0 else "-"
         elif field_name == 'status':
             statuses_ar = {"pending": tr("page.relations.status_pending"), "verified": tr("page.relations.status_verified"), "rejected": tr("page.relations.status_rejected")}
             return statuses_ar.get(item.verification_status, item.verification_status) if self._is_arabic else item.verification_status_display

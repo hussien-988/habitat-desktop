@@ -80,9 +80,13 @@ class HouseholdStep(BaseStep):
         three_col.setContentsMargins(0, 0, 0, 0)
 
         # ═══ COL 1: Building/Unit summary sidebar ═══
+        # Minimum width keeps the long building reference codes/addresses
+        # readable without overflowing or truncating; allow it to grow up
+        # to a sensible cap on wider screens to stay responsive.
         self.household_building_frame = make_step_card()
-        self.household_building_frame.setFixedWidth(ScreenScale.w(290))
-        self.household_building_frame.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.household_building_frame.setMinimumWidth(ScreenScale.w(340))
+        self.household_building_frame.setMaximumWidth(ScreenScale.w(380))
+        self.household_building_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         card_layout = QVBoxLayout(self.household_building_frame)
         card_layout.setContentsMargins(16, 16, 16, 16)
@@ -113,7 +117,8 @@ class HouseholdStep(BaseStep):
 
         self.household_building_address = QLabel(tr("wizard.unit.address_label"))
         self.household_building_address.setAlignment(Qt.AlignCenter)
-        self.household_building_address.setWordWrap(False)
+        self.household_building_address.setWordWrap(True)
+        self.household_building_address.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.household_building_address.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
         self.household_building_address.setStyleSheet("""
             QLabel { border: none; background-color: transparent; color: #667281; }
@@ -243,21 +248,11 @@ class HouseholdStep(BaseStep):
         date_row = QHBoxLayout()
         date_row.setSpacing(6)
 
-        self.hh_start_day = make_editable_date_combo(
-            items=[(str(d), d) for d in range(1, 32)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
-        )
-        self.hh_start_month = make_editable_date_combo(
-            items=[(str(m), m) for m in range(1, 13)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
-        )
         self.hh_start_year = make_editable_date_combo(
             items=[(str(y), y) for y in range(QDate.currentDate().year(), 1939, -1)],
             max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
         )
-        date_row.addWidget(self.hh_start_day, 1)
-        date_row.addWidget(self.hh_start_month, 1)
-        date_row.addWidget(self.hh_start_year, 2)
+        date_row.addWidget(self.hh_start_year, 1)
         start_date_col.addLayout(date_row)
         family_info_layout.addLayout(start_date_col)
         family_info_layout.addSpacing(8)
@@ -716,8 +711,6 @@ class HouseholdStep(BaseStep):
 
         # Refresh placeholders for editable date combos after language change
         for _combo, _ph_key in (
-            (self.hh_start_day,   "wizard.person_dialog.day_placeholder"),
-            (self.hh_start_month, "wizard.person_dialog.month_placeholder"),
             (self.hh_start_year,  "wizard.person_dialog.year_placeholder"),
         ):
             _le = _combo.lineEdit()
@@ -741,16 +734,16 @@ class HouseholdStep(BaseStep):
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: gender sum <= householdSize
+        # Validate: gender sum must equal householdSize (backend rule)
         gender_sum = self.hh_male_count.value() + self.hh_female_count.value()
-        if gender_sum > total_entered:
-            result.add_error(tr("wizard.household.gender_exceeds_total"))
+        if gender_sum != total_entered:
+            result.add_error(tr("wizard.household.gender_must_equal_total"))
             return result
 
-        # Validate: age sum <= householdSize
+        # Validate: age sum must equal householdSize (backend rule)
         age_sum = self.hh_adult_count.value() + self.hh_child_count.value() + self.hh_elderly_count.value()
-        if age_sum > total_entered:
-            result.add_error(tr("wizard.household.age_exceeds_total"))
+        if age_sum != total_entered:
+            result.add_error(tr("wizard.household.age_must_equal_total"))
             return result
 
         # Validate: disabled count must not exceed total members
@@ -759,15 +752,7 @@ class HouseholdStep(BaseStep):
             return result
 
         _y = read_int_from_combo(self.hh_start_year)
-        _m = read_int_from_combo(self.hh_start_month)
-        _d = read_int_from_combo(self.hh_start_day)
-        occupancy_start_date = None
-        if _y and _m and _d:
-            occupancy_start_date = f"{_y:04d}-{_m:02d}-{_d:02d}"
-        elif _y and _m:
-            occupancy_start_date = f"{_y:04d}-{_m:02d}-01"
-        elif _y:
-            occupancy_start_date = f"{_y:04d}-01-01"
+        occupancy_start_date = f"{_y:04d}-01-01" if _y else None
 
         household = {
             "household_id": str(uuid.uuid4()),
@@ -802,9 +787,11 @@ class HouseholdStep(BaseStep):
                         logger.info(f"Household {existing_household_id} updated via API")
                         saved = True
                     except Exception as e:
+                        from services.error_mapper import map_exception
                         logger.error(f"Failed to update household via API: {e}")
-                        Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
-                        result.add_error(tr("wizard.household.update_failed"))
+                        msg = map_exception(e)
+                        Toast.show_toast(self, msg, Toast.ERROR)
+                        result.add_error(msg)
                         return result
                 else:
                     logger.info(f"Household unchanged ({existing_household_id}), skipping")
@@ -820,9 +807,11 @@ class HouseholdStep(BaseStep):
                     self.context.update_data("household_id", household_id)
                     saved = True
                 except Exception as e:
+                    from services.error_mapper import map_exception
                     logger.error(f"Failed to create household via API: {e}")
-                    Toast.show_toast(self, tr("wizard.household.load_failed"), Toast.ERROR)
-                    result.add_error(tr("wizard.household.save_failed"))
+                    msg = map_exception(e)
+                    Toast.show_toast(self, msg, Toast.ERROR)
+                    result.add_error(msg)
                     return result
         finally:
             self._spinner.hide_loading()
@@ -864,9 +853,8 @@ class HouseholdStep(BaseStep):
                      self.hh_elderly_count, self.hh_disabled_count]:
             spin.setValue(0)
         self.hh_occupancy_nature.setCurrentIndex(0)
-        for _combo in (self.hh_start_day, self.hh_start_month, self.hh_start_year):
-            _combo.setCurrentIndex(-1)
-            _combo.clearEditText()
+        self.hh_start_year.setCurrentIndex(-1)
+        self.hh_start_year.clearEditText()
         self.hh_notes.clear()
 
     def populate_data(self):
@@ -876,6 +864,7 @@ class HouseholdStep(BaseStep):
             from utils.helpers import build_hierarchical_address
             address = build_hierarchical_address(self.context.building)
             self.household_building_address.setText(address)
+            self.household_building_address.setToolTip(address)
 
             # Update building stats - same as unit_selection_step
             building = self.context.building
@@ -943,24 +932,12 @@ class HouseholdStep(BaseStep):
             saved_date = household.get('occupancy_start_date')
             if saved_date:
                 _parts = str(saved_date)[:10].split('-')
-                if len(_parts) >= 1 and _parts[0].isdigit():
+                if _parts and _parts[0].isdigit():
                     _idx = self.hh_start_year.findData(int(_parts[0]))
                     if _idx >= 0:
                         self.hh_start_year.setCurrentIndex(_idx)
                     else:
                         self.hh_start_year.setCurrentText(_parts[0])
-                if len(_parts) >= 2 and _parts[1].isdigit():
-                    _idx = self.hh_start_month.findData(int(_parts[1]))
-                    if _idx >= 0:
-                        self.hh_start_month.setCurrentIndex(_idx)
-                    else:
-                        self.hh_start_month.setCurrentText(_parts[1].lstrip('0') or '0')
-                if len(_parts) >= 3 and _parts[2].isdigit():
-                    _idx = self.hh_start_day.findData(int(_parts[2]))
-                    if _idx >= 0:
-                        self.hh_start_day.setCurrentIndex(_idx)
-                    else:
-                        self.hh_start_day.setCurrentText(_parts[2].lstrip('0') or '0')
 
             self.hh_total_members.setValue(int(household.get("size") or 0))
             self.hh_male_count.setValue(int(household.get("male_count") or 0))

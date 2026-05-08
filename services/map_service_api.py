@@ -608,6 +608,8 @@ class MapServiceAPI:
                     (data.get("numberOfApartments", 0) or 0) + (data.get("numberOfShops", 0) or 0)
                 ),
                 number_of_floors=data.get("numberOfFloors", 0),
+                location_description=data.get("locationDescription") or data.get("location_description"),
+                general_description=data.get("generalDescription") or data.get("general_description"),
                 is_locked=data.get("isLocked", False),
                 is_assigned=data.get("isAssigned", False),
             )
@@ -716,6 +718,8 @@ class MapServiceAPI:
         community_code = data.get("communityCode", "")
         neighborhood_code = data.get("neighborhoodCode", "")
         building_number = data.get("buildingNumber", "")
+        location_description=data.get("locationDescription") or data.get("location_description"),
+        general_description=data.get("generalDescription") or data.get("general_description"),
 
         # Fallback: extract codes from building_id (17 digits: GG-DD-SS-CCC-NNN-BBBBB)
         if not gov_code and len(building_id) == 17 and building_id.isdigit():

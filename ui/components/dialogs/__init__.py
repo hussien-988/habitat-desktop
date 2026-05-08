@@ -8,7 +8,6 @@ from .message_dialog import MessageDialog
 from .password_dialog import PasswordDialog
 from .language_dialog import LanguageDialog
 from .logout_dialog import LogoutDialog
-from .security_dialog import SecurityDialog
 
 __all__ = [
     'BaseDialog',
@@ -17,5 +16,4 @@ __all__ = [
     'PasswordDialog',
     'LanguageDialog',
     'LogoutDialog',
-    'SecurityDialog',
 ]

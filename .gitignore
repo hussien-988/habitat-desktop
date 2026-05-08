@@ -57,3 +57,5 @@ Thumbs.db
 users.txt
 data/vocab_cache.json
 data/settings.json
+data/web_cache/
+data/web_storage/

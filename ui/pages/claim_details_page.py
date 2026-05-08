@@ -975,8 +975,8 @@ class ClaimDetailsPage(QWidget):
 
             if self._is_editing:
                 self._claim_type_combo = QComboBox()
-                self._claim_type_combo.setFixedHeight(ScreenScale.h(36))
-                self._claim_type_combo.setMinimumWidth(ScreenScale.w(160))
+                self._claim_type_combo.setFixedHeight(ScreenScale.h(42))
+                self._claim_type_combo.setMinimumWidth(ScreenScale.w(180))
                 self._claim_type_combo.setStyleSheet(StyleManager.combo_box())
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
@@ -1008,8 +1008,10 @@ class ClaimDetailsPage(QWidget):
             type_row.addStretch()
             type_widget = QWidget()
             type_widget.setStyleSheet("background: transparent; border: none;")
+            type_widget.setMinimumHeight(ScreenScale.h(48))
             type_widget.setLayout(type_row)
             self._relation_content.addWidget(type_widget)
+            self._relation_content.addSpacing(ScreenScale.h(4))
 
             # Ownership share row — only for ownership claim type
             is_ownership_type = (current_type in (1, "1", "ownership"))
@@ -1051,15 +1053,14 @@ class ClaimDetailsPage(QWidget):
                         self._ownership_share_input.setText(_saved_share_text)
                     elif raw_share is not None:
                         try:
-                            self._ownership_share_input.setText(str(round(float(raw_share) * 2400)))
+                            self._ownership_share_input.setText(str(int(raw_share)))
                         except (ValueError, TypeError):
                             pass
                     self._ownership_share_input.setEnabled(True)
                     share_row.addWidget(self._ownership_share_input)
                 else:
                     if raw_share is not None and raw_share > 0:
-                        shares = round(float(raw_share) * 2400)
-                        display = f"{shares} {tr('unit.shares')}"
+                        display = f"{int(raw_share)} {tr('unit.shares')}"
                     else:
                         display = "-"
                     share_value = QLabel(display)
@@ -1485,7 +1486,7 @@ class ClaimDetailsPage(QWidget):
         self._original_claim_type = self._claim_data.get("claimType")
         raw_share = self._claim_data.get("ownershipShare")
         try:
-            self._original_ownership_share = round(float(raw_share) * 2400) if raw_share is not None else None
+            self._original_ownership_share = int(raw_share) if raw_share is not None else None
         except (ValueError, TypeError):
             self._original_ownership_share = None
         self._pending_uploads = []
@@ -1669,7 +1670,7 @@ class ClaimDetailsPage(QWidget):
             update_data["relationType"] = new_type
 
         if share_changed and new_share_val is not None:
-            update_data["ownershipShare"] = new_share_val / 2400.0
+            update_data["ownershipShare"] = new_share_val
 
         if self._pending_uploads:
             new_evidence = []

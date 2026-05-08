@@ -30,28 +30,37 @@ class Building:
     building_id: str = ""  # 17-digit numeric ID (NO dashes): 01010010010000001
     building_id_formatted: str = ""  # Display format (WITH dashes): 01-01-01-001-001-00001
 
-    # Administrative hierarchy
-    governorate_code: str = "01"
-    governorate_name: str = "Aleppo"
-    governorate_name_ar: str = "حلب"
+    # Administrative hierarchy (raw codes — kept for legacy/local building_id construction)
+    governorate_code: str = ""
+    governorate_name: str = ""
+    governorate_name_ar: str = ""
 
-    district_code: str = "01"
-    district_name: str = "Aleppo City"
-    district_name_ar: str = "مدينة حلب"
+    district_code: str = ""
+    district_name: str = ""
+    district_name_ar: str = ""
 
-    subdistrict_code: str = "01"
-    subdistrict_name: str = "Aleppo Center"
-    subdistrict_name_ar: str = "حلب المركز"
+    subdistrict_code: str = ""
+    subdistrict_name: str = ""
+    subdistrict_name_ar: str = ""
 
-    community_code: str = "001"
-    community_name: str = "Downtown"
-    community_name_ar: str = "وسط المدينة"
+    community_code: str = ""
+    community_name: str = ""
+    community_name_ar: str = ""
 
-    neighborhood_code: str = "001"
-    neighborhood_name: str = "Al-Jamiliyah"
-    neighborhood_name_ar: str = "الجميلية"
+    neighborhood_code: str = ""
+    neighborhood_name: str = ""
+    neighborhood_name_ar: str = ""
 
-    building_number: str = "00001"
+    # OCHA P-Codes (added 2026-05). Server returns them on every admin/building DTO.
+    # Preferred for filters/writes; raw codes still accepted for backward compatibility.
+    governorate_pcode: str = ""        # e.g. "SY02"
+    district_pcode: str = ""           # e.g. "SY0200"
+    subdistrict_pcode: str = ""        # e.g. "SY020000"
+    community_pcode: str = ""          # e.g. "C1007"
+    community_external_pcode: Optional[str] = None  # raw OCHA value, may be None
+    neighborhood_pcode: str = ""       # e.g. "N0001"
+
+    building_number: str = ""
 
     # Building attributes
     # building_type: 1=Residential, 2=Commercial, 3=MixedUse, 4=Industrial (or string for legacy)
@@ -197,6 +206,12 @@ class Building:
             "neighborhood_code": self.neighborhood_code,
             "neighborhood_name": self.neighborhood_name,
             "neighborhood_name_ar": self.neighborhood_name_ar,
+            "governorate_pcode": self.governorate_pcode,
+            "district_pcode": self.district_pcode,
+            "subdistrict_pcode": self.subdistrict_pcode,
+            "community_pcode": self.community_pcode,
+            "community_external_pcode": self.community_external_pcode,
+            "neighborhood_pcode": self.neighborhood_pcode,
             "building_number": self.building_number,
             "building_type": self.building_type,
             "building_status": self.building_status,
@@ -230,6 +245,12 @@ class Building:
         field_mapping = {
             "id": "building_uuid",  # API uses "id" for UUID
             "buildingCode": "building_id",  # API uses "buildingCode" for formatted ID
+            "governoratePCode": "governorate_pcode",
+            "districtPCode": "district_pcode",
+            "subDistrictPCode": "subdistrict_pcode",
+            "communityPCode": "community_pcode",
+            "neighborhoodPCode": "neighborhood_pcode",
+            "externalPCode": "community_external_pcode",
         }
 
         # Apply field name mapping

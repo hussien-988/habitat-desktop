@@ -406,8 +406,7 @@ class ClaimDetailDialog(QDialog):
             claim_type_text = claim_type_raw or no_data
 
         if self._ownership_share is not None:
-            shares_val = round(float(self._ownership_share) * 2400) if self._ownership_share <= 1.0 else int(self._ownership_share)
-            share_text = f"{shares_val} {tr('unit.shares')}"
+            share_text = f"{int(self._ownership_share)} {tr('unit.shares')}"
         else:
             share_text = no_data
 

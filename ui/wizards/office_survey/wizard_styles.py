@@ -46,8 +46,11 @@ STEP_CONTAINER_STYLE = """
 """
 
 # -- Form inputs (enhanced) --
-FORM_FIELD_STYLE = """
-    QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, QSpinBox, QTextEdit {
+def _form_field_style() -> str:
+    from app.config import Config
+    down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+    return f"""
+    QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, QSpinBox, QTextEdit {{
         border: 1.5px solid #D0D7E2;
         border-radius: 10px;
         padding: 8px 14px;
@@ -56,29 +59,37 @@ FORM_FIELD_STYLE = """
         font-size: 10pt;
         min-height: 30px;
         outline: none;
-    }
-    QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTextEdit:focus {
+    }}
+    QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QTextEdit:focus {{
         border: 1.5px solid #3890DF;
         background-color: #FAFCFF;
-    }
-    QLineEdit:disabled, QComboBox:disabled, QDateEdit:disabled {
+    }}
+    QLineEdit:disabled, QComboBox:disabled, QDateEdit:disabled {{
         background-color: #F1F5F9;
         color: #94A3B8;
         border-color: #E2E8F0;
-    }
-    QComboBox::drop-down {
+    }}
+    QComboBox::drop-down {{
         border: none;
         width: 24px;
-    }
-    QComboBox QAbstractItemView {
+    }}
+    QComboBox::down-arrow {{
+        image: url({down_img});
+        width: 12px;
+        height: 12px;
+    }}
+    QComboBox QAbstractItemView {{
         border: 1px solid #D0D7E2;
         border-radius: 4px;
         background-color: #FFFFFF;
         selection-background-color: #EBF5FF;
         selection-color: #2C3E50;
         outline: none;
-    }
-"""
+    }}
+    """
+
+
+FORM_FIELD_STYLE = _form_field_style()
 
 # -- Read-only fields --
 READONLY_FIELD_STYLE = """
@@ -674,14 +685,18 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "") -> Q
 
 
 def read_int_from_combo(combo: QComboBox):
-    """Read integer value from an editable date combo (selected item OR typed text)."""
-    val = combo.currentData()
-    if val is not None:
-        return val
+    """Read integer value from an editable date combo.
+
+    Prefers the typed text when it differs from the selected item's data,
+    so manual edits aren't ignored just because a value was previously selected.
+    """
     text = combo.currentText().strip()
-    if text.isdigit():
+    if text and text.isdigit():
         try:
             return int(text)
         except ValueError:
-            return None
+            pass
+    val = combo.currentData()
+    if val is not None:
+        return val
     return None

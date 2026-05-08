@@ -35,6 +35,9 @@ class PropertyUnit:
     apartment_status: str = "occupied"  # occupied, vacant, unknown
     property_description: str = ""
 
+    # Room count
+    number_of_rooms: int = 0
+
     # Area (optional, approximate)
     area_sqm: Optional[float] = None
 
@@ -122,6 +125,7 @@ class PropertyUnit:
             "apartment_number": self.apartment_number,
             "apartment_status": self.apartment_status,
             "property_description": self.property_description,
+            "number_of_rooms": self.number_of_rooms,
             "area_sqm": self.area_sqm,
             "legacy_stdm_id": self.legacy_stdm_id,
             "legacy_stdm_party_id": self.legacy_stdm_party_id,

@@ -534,11 +534,11 @@ class OccupancyClaimsStep(BaseStep):
 
         # ── Relation + docs: only rendered when there is actual content ──
         rel_data = person.get('relation_data', {}) or {}
-        rel_type = rel_data.get('rel_type') or person.get('relationship_type') or person.get('person_role')
+        rel_type = rel_data.get('rel_type')
         rel_display = get_relation_type_display(rel_type) if rel_type else ''
         share = rel_data.get('ownership_share')
         if rel_display and share:
-            rel_display = f"{rel_display} · {share}٪"
+            rel_display = f"{rel_display} · {int(share)} {tr('unit.shares')}"
         has_docs = bool(rel_data.get('has_documents') or person.get('_relation_uploaded_files'))
 
         if rel_display or has_docs:
@@ -605,13 +605,15 @@ class OccupancyClaimsStep(BaseStep):
         relations = []
         for person in self.context.persons:
             rel_data = person.get('relation_data', {})
-            rel_type = rel_data.get('rel_type') or person.get('relationship_type') or person.get('person_role')
+            # rel_type is a RelationType enum (Owner/Tenant/Heir/...). Do NOT
+            # fall back to person_role/relationship_type: those are
+            # RelationshipToHead (head/spouse/child) and the enum codes
+            # collide (head=1 == Owner=1).
+            rel_type = rel_data.get('rel_type')
 
             logger.info(
                 f"Collecting relation for person {person.get('first_name', '?')}: "
                 f"rel_data.rel_type={rel_data.get('rel_type')!r}, "
-                f"relationship_type={person.get('relationship_type')!r}, "
-                f"person_role={person.get('person_role')!r}, "
                 f"resolved={rel_type!r} (type={type(rel_type).__name__}), "
                 f"is_owner={_is_owner_relation(rel_type)}"
             )
@@ -837,11 +839,7 @@ class OccupancyClaimsStep(BaseStep):
         claims = []
         for person in self.context.persons:
             rel_data = person.get('relation_data', {})
-            role_key = (
-                rel_data.get('rel_type')
-                or person.get('person_role')
-                or person.get('relationship_type')
-            )
+            role_key = rel_data.get('rel_type')
             if not role_key:
                 continue
             full_name = " ".join(filter(None, [
@@ -926,10 +924,13 @@ class OccupancyClaimsStep(BaseStep):
 
             person_id = person['person_id']
             rel_data = person.get('relation_data', {})
-            rel_type = rel_data.get('rel_type') or person.get('person_role') or person.get('relationship_type')
+            # Only RelationType (Tab 3) is valid here — never person_role/
+            # relationship_type (RelationshipToHead) which would silently
+            # create an Owner relation due to enum collision.
+            rel_type = rel_data.get('rel_type')
 
             if not rel_type:
-                logger.warning(f"Skipping auto-relink for person {person_id}: no relation type")
+                logger.info(f"Skipping auto-relink for person {person_id}: no property relation set")
                 continue
 
             relation_data = {

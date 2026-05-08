@@ -211,16 +211,25 @@ def is_duplicate_nid_error(exc: Exception) -> bool:
 
 
 def build_duplicate_person_message(response_data: dict) -> str:
-    """Build Arabic warning message from 409 duplicate national ID response."""
-    msg = "يوجد شخص مسجّل مسبقاً بنفس الرقم الوطني."
-    conflict = (response_data or {}).get("conflictData", {})
-    if conflict:
-        first = conflict.get("firstNameArabic", "")
-        father = conflict.get("fatherNameArabic", "")
-        family = conflict.get("familyNameArabic", "")
-        full_name = " ".join(part for part in [first, father, family] if part)
-        if full_name:
-            msg += f"\nالاسم: {full_name}"
+    """Build warning message from 409 duplicate response.
+
+    Uses the backend's localized message verbatim. Appends the conflicting
+    person's full name from conflictData when present (the backend doesn't
+    inline it in the message).
+    """
+    rd = response_data or {}
+    msg = (rd.get("message") or "").strip()
+    if not msg:
+        msg = (rd.get("detail") or "").strip()
+    if not msg:
+        msg = tr("error.api.conflict")
+    conflict = rd.get("conflictData", {}) or {}
+    first = conflict.get("firstNameArabic", "")
+    father = conflict.get("fatherNameArabic", "")
+    family = conflict.get("familyNameArabic", "")
+    full_name = " ".join(part for part in [first, father, family] if part)
+    if full_name:
+        msg += f"\n{full_name}"
     return msg
 
 

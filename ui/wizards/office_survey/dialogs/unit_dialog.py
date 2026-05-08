@@ -68,18 +68,18 @@ class UnitDialog(QDialog):
             self._api_service.set_access_token(auth_token)
             self.unit_controller.set_auth_token(auth_token)
 
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setLayoutDirection(get_layout_direction())
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setModal(True)
 
-        # Dynamic side-panel sizing
         parent_rect = parent.window().geometry() if parent else None
         if parent_rect:
-            panel_w = min(560, parent_rect.width() - 40)
-            panel_h = min(660, parent_rect.height() - 20)
+            panel_w = min(640, max(520, parent_rect.width() - 100))
+            panel_h = min(540, max(460, parent_rect.height() - 140))
         else:
-            panel_w = 560
-            panel_h = 660
+            panel_w = 620
+            panel_h = 520
         self.setFixedSize(panel_w, panel_h)
 
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -90,30 +90,17 @@ class UnitDialog(QDialog):
         if unit_data:
             self._load_unit_data(unit_data)
 
-    def _do_slide_in(self):
-        """Position as side panel with slide-in animation."""
+    def _center_on_parent(self):
+        """Position dialog centered over parent window."""
         parent = self.parent()
         if not parent:
             return
         try:
-            from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QPoint
             parent_rect = parent.window().geometry()
-            is_rtl = get_layout_direction() == Qt.RightToLeft
-            pw = self.width()
             parent_global = parent.window().mapToGlobal(parent.window().rect().topLeft())
-            if is_rtl:
-                target_x = parent_global.x() + 10
-            else:
-                target_x = parent_global.x() + parent_rect.width() - pw - 10
+            target_x = parent_global.x() + (parent_rect.width() - self.width()) // 2
             target_y = parent_global.y() + (parent_rect.height() - self.height()) // 2
-            start_x = target_x + ((-pw) if is_rtl else pw)
-            self.move(start_x, target_y)
-            self._slide_anim = QPropertyAnimation(self, b"pos", self)
-            self._slide_anim.setDuration(250)
-            self._slide_anim.setStartValue(QPoint(start_x, target_y))
-            self._slide_anim.setEndValue(QPoint(target_x, target_y))
-            self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
-            self._slide_anim.start()
+            self.move(target_x, target_y)
         except Exception:
             pass
 
@@ -125,7 +112,7 @@ class UnitDialog(QDialog):
         self.setLayoutDirection(get_layout_direction())
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(0)
 
         content_frame = QFrame()
@@ -133,11 +120,8 @@ class UnitDialog(QDialog):
         content_frame.setStyleSheet("""
             QFrame#ContentFrame {
                 background-color: #FFFFFF;
-                border-top-left-radius: 20px;
-                border-top-right-radius: 20px;
-                border-bottom-left-radius: 0px;
-                border-bottom-right-radius: 0px;
-                border-top: 1px solid rgba(56, 144, 223, 0.20);
+                border-radius: 20px;
+                border: 1px solid rgba(56, 144, 223, 0.20);
             }
             QFrame#ContentFrame QLabel,
             QFrame#ContentFrame QRadioButton {
@@ -146,9 +130,9 @@ class UnitDialog(QDialog):
         """)
 
         shadow = QGraphicsDropShadowEffect(content_frame)
-        shadow.setBlurRadius(60)
-        shadow.setOffset(0, -6)
-        shadow.setColor(QColor(0, 0, 0, 100))
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 70))
         content_frame.setGraphicsEffect(shadow)
 
         main_layout.addWidget(content_frame)
@@ -169,6 +153,7 @@ class UnitDialog(QDialog):
                 border-top-right-radius: 20px;
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
+                border: none;
             }
         """)
         hdr_layout = QHBoxLayout(header_bar)
@@ -241,8 +226,8 @@ class UnitDialog(QDialog):
         content_inner = QWidget()
         content_inner.setStyleSheet("background-color: #FFFFFF;")
         layout = QVBoxLayout(content_inner)
-        layout.setSpacing(8)
-        layout.setContentsMargins(20, 12, 20, 14)
+        layout.setSpacing(14)
+        layout.setContentsMargins(24, 16, 24, 18)
 
         scroll.setWidget(content_inner)
         frame_layout.addWidget(scroll, 1)
@@ -277,7 +262,7 @@ class UnitDialog(QDialog):
 
         self.unit_type_combo = RtlCombo()
         self.unit_type_combo.setStyleSheet(self._combo_style())
-        self.unit_type_combo.setFixedHeight(ScreenScale.h(40))
+        self.unit_type_combo.setFixedHeight(ScreenScale.h(48))
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_type_options():
             self.unit_type_combo.addItem(label, code)
@@ -285,7 +270,7 @@ class UnitDialog(QDialog):
 
         self.unit_status_combo = RtlCombo()
         self.unit_status_combo.setStyleSheet(self._combo_style())
-        self.unit_status_combo.setFixedHeight(ScreenScale.h(40))
+        self.unit_status_combo.setFixedHeight(ScreenScale.h(48))
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
         for code, label in get_unit_status_options():
             self.unit_status_combo.addItem(label, code)
@@ -299,6 +284,7 @@ class UnitDialog(QDialog):
 
         self.rooms_spin = QSpinBox()
         self.rooms_spin.setRange(0, 20)
+        self.rooms_spin.setSpecialValueText("-")
         self.rooms_spin.setValue(0)
         self.rooms_spin.setAlignment(Qt.AlignRight)
         self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
@@ -307,7 +293,7 @@ class UnitDialog(QDialog):
         row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
 
         self.area_input = QLineEdit()
-        self.area_input.setFixedHeight(ScreenScale.h(40))
+        self.area_input.setFixedHeight(ScreenScale.h(48))
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
 
@@ -327,13 +313,13 @@ class UnitDialog(QDialog):
 
         # Description
         self.description_edit = QTextEdit()
-        self.description_edit.setMinimumHeight(ScreenScale.h(110))
-        self.description_edit.setMaximumHeight(ScreenScale.h(110))
+        self.description_edit.setMinimumHeight(ScreenScale.h(70))
+        self.description_edit.setMaximumHeight(ScreenScale.h(80))
         self.description_edit.setPlaceholderText(tr("wizard.unit_dialog.description_placeholder"))
         self.description_edit.setStyleSheet(FORM_FIELD_STYLE)
         layout.addLayout(self._create_field_container(tr("wizard.unit_dialog.description"), self.description_edit))
 
-        layout.addStretch(1)
+        layout.addStretch(0)
 
         # Buttons
         buttons_layout = QHBoxLayout()
@@ -354,9 +340,8 @@ class UnitDialog(QDialog):
         """Create a spinbox widget with icon arrows (same as buildings_page)."""
         from ui.components.icon import Icon
 
-        # Container frame - يرث RTL من التطبيق (مطابق لـ buildings_page)
         container = QFrame()
-        container.setFixedHeight(ScreenScale.h(40))
+        container.setFixedHeight(ScreenScale.h(48))
         container.setStyleSheet("""
             QFrame {
                 border: 1.5px solid #D0D7E2;
@@ -369,30 +354,23 @@ class UnitDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Spinbox (no border since container has border)
         spinbox.setStyleSheet("""
             QSpinBox {
-                padding: 8px 14px;
+                padding: 4px 14px;
                 border: none;
                 background: transparent;
                 font-size: 10pt;
                 color: #2C3E50;
-                min-height: 30px;
                 selection-background-color: transparent;
                 selection-color: #2C3E50;
             }
-            QSpinBox:focus {
-                border: none;
-                outline: 0;
-            }
-            QSpinBox::up-button, QSpinBox::down-button {
-                width: 0px;
-                border: none;
-            }
+            QSpinBox:focus { border: none; outline: 0; }
+            QSpinBox::up-button, QSpinBox::down-button { width: 0px; border: none; }
         """)
+        spinbox.setFixedHeight(ScreenScale.h(46))
+        spinbox.setAlignment(Qt.AlignVCenter | Qt.AlignRight)
         layout.addWidget(spinbox, 1)
 
-        # Arrow column (RIGHT side) with left border separator
         arrow_container = QFrame()
         arrow_container.setFixedWidth(ScreenScale.w(30))
         arrow_container.setStyleSheet("""
@@ -400,38 +378,34 @@ class UnitDialog(QDialog):
                 border: none;
                 border-left: 1.5px solid #D0D7E2;
                 background: transparent;
-                border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;
             }
         """)
         arrow_layout = QVBoxLayout(arrow_container)
         arrow_layout.setContentsMargins(0, 0, 0, 0)
         arrow_layout.setSpacing(0)
 
-        # Up arrow icon (^.png)
         up_label = QLabel()
-        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
+        up_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(23))
         up_label.setAlignment(Qt.AlignCenter)
         up_pixmap = Icon.load_pixmap("^", size=10)
         if up_pixmap and not up_pixmap.isNull():
             up_label.setPixmap(up_pixmap)
         else:
             up_label.setText("^")
-            up_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+            up_label.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: bold; background: transparent;")
         up_label.setCursor(Qt.PointingHandCursor)
         up_label.mousePressEvent = lambda _: spinbox.stepUp()
         arrow_layout.addWidget(up_label)
 
-        # Down arrow icon (v.png)
         down_label = QLabel()
-        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(22))
+        down_label.setFixedSize(ScreenScale.w(30), ScreenScale.h(23))
         down_label.setAlignment(Qt.AlignCenter)
         down_pixmap = Icon.load_pixmap("v", size=10)
         if down_pixmap and not down_pixmap.isNull():
             down_label.setPixmap(down_pixmap)
         else:
             down_label.setText("v")
-            down_label.setStyleSheet("color: #9CA3AF; font-size: 10px; font-weight: bold; background: transparent;")
+            down_label.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: bold; background: transparent;")
         down_label.setCursor(Qt.PointingHandCursor)
         down_label.mousePressEvent = lambda _: spinbox.stepDown()
         arrow_layout.addWidget(down_label)
@@ -456,8 +430,8 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        label.setStyleSheet("color: #64748B; background: transparent; border: none;")
+        label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        label.setStyleSheet("color: #1E293B; background: transparent; border: none;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -481,8 +455,8 @@ class UnitDialog(QDialog):
         container.setSpacing(4)
 
         label = QLabel(label_text)
-        label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        label.setStyleSheet("color: #64748B; background: transparent; border: none;")
+        label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        label.setStyleSheet("color: #1E293B; background: transparent; border: none;")
 
         container.addWidget(label)
         container.addWidget(widget)
@@ -572,6 +546,10 @@ class UnitDialog(QDialog):
 
         if self.unit_number_spin.value() == 0:
             self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.enter_number_warning"))
+            return False
+
+        if self.rooms_spin.value() < 1:
+            self._show_styled_message(tr("common.warning"), tr("wizard.unit_dialog.rooms_min_warning"))
             return False
 
         area_text = self.area_input.text().strip()
@@ -758,7 +736,7 @@ class UnitDialog(QDialog):
     # ── Overlay for floating appearance ──
 
     def showEvent(self, event):
-        """Show dark overlay and slide-in animation."""
+        """Show dark overlay and center dialog over parent."""
         super().showEvent(event)
         if self.parent():
             top_window = self.parent().window()
@@ -768,8 +746,8 @@ class UnitDialog(QDialog):
             self._overlay.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             self._overlay.show()
             self._overlay.raise_()
-            self.raise_()  # Keep dialog above overlay
-        self._do_slide_in()
+            self.raise_()
+        self._center_on_parent()
 
     def _cleanup_overlay(self):
         """Remove the dark overlay."""
