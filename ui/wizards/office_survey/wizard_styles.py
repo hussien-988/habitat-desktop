@@ -472,16 +472,22 @@ BADGE_RED = "background-color: #FEE2E2; color: #991B1B; border-radius: 12px; pad
 BADGE_GRAY = "background-color: #F1F5F9; color: #475569; border-radius: 12px; padding: 3px 12px; border: none;"
 
 
-def make_step_card(object_name: str = "StepCard") -> QFrame:
-    """Create a white rounded card frame with drop shadow and directional blue accent border."""
+def make_step_card(object_name: str = "StepCard", with_shadow: bool = True) -> QFrame:
+    """Create a white rounded card frame.
+
+    The drop shadow is opt-out: cards that host a QWebEngineView (e.g. the
+    map preview) must pass with_shadow=False, since Qt buffers the card
+    offscreen and applies a Gaussian blur every frame, throttling WebEngine.
+    """
     card = QFrame()
     card.setObjectName(object_name)
     card.setStyleSheet(get_step_card_style(object_name))
-    shadow = QGraphicsDropShadowEffect()
-    shadow.setBlurRadius(24)
-    shadow.setOffset(0, 4)
-    shadow.setColor(QColor(0, 0, 0, 18))
-    card.setGraphicsEffect(shadow)
+    if with_shadow:
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 18))
+        card.setGraphicsEffect(shadow)
     return card
 
 
@@ -660,11 +666,16 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "") -> Q
     """
     Editable QComboBox for a single date part (day / month / year).
     Supports both dropdown selection AND direct numeric keyboard input.
-    Numbers only; LTR regardless of app language (digits are LTR).
+
+    The combo follows the app layout direction so the dropdown arrow flips
+    to the correct side on language switch (left in RTL, right in LTR).
+    The inner QLineEdit is centered so digits read correctly either way.
     """
     from app.config import Config
+    from services.translation_manager import get_layout_direction
+
     combo = QComboBox()
-    combo.setLayoutDirection(Qt.LeftToRight)
+    combo.setLayoutDirection(get_layout_direction())
     combo.setEditable(True)
     combo.setInsertPolicy(QComboBox.NoInsert)
     for label, data in items:

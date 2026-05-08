@@ -3673,5 +3673,8 @@ AR_TRANSLATIONS = {
     "wizard.step1.confirm_clear_all": "هل تريد إلغاء كل المباني المختارة؟",
     "page.import_packages.search_placeholder": "ابحث باسم الحزمة...",
     "page.import_packages.filter_all_statuses": "كل الحالات",
+    "page.import_packages.status_filter_label": "تصفية حسب الحالة",
+    "page.import_packages.filter_results_all": "{count} حزمة",
+    "page.import_packages.filter_results_filtered": "عرض {shown} من {total}",
 
 }

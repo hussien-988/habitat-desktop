@@ -60,3 +60,13 @@ def get_shared_map_profile():
         _PROFILE = None
 
     return _PROFILE
+
+
+def prewarm_shared_map_profile():
+    """Eagerly initialize the shared map profile during app startup.
+
+    Pays the os.makedirs + cache-path setup cost once during the idle
+    moment after the main window appears, so the first user-triggered
+    map open does not pay it on the UI thread.
+    """
+    return get_shared_map_profile()

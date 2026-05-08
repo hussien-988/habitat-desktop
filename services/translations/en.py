@@ -3670,5 +3670,7 @@ EN_TRANSLATIONS = {
     "wizard.step1.confirm_clear_all": "Clear all selected buildings?",
     "page.import_packages.search_placeholder": "Search by package name...",
     "page.import_packages.filter_all_statuses": "All statuses",
-
+    "page.import_packages.status_filter_label": "Filter by status",
+    "page.import_packages.filter_results_all": "{count} packages",
+    "page.import_packages.filter_results_filtered": "Showing {shown} of {total}",
 }

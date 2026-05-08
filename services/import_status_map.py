@@ -22,6 +22,22 @@ class PkgStatus:
     FAILED = 10
     PARTIALLY_COMPLETED = 11
     CANCELLED = 12
+# Ordered list used by UI filters when all import package statuses must be shown.
+# Keep this as the single source of truth for "all statuses" UI filters.
+ALL_STATUSES = (
+    PkgStatus.PENDING,
+    PkgStatus.VALIDATING,
+    PkgStatus.STAGING,
+    PkgStatus.VALIDATION_FAILED,
+    PkgStatus.QUARANTINED,
+    PkgStatus.REVIEWING_CONFLICTS,
+    PkgStatus.READY_TO_COMMIT,
+    PkgStatus.COMMITTING,
+    PkgStatus.COMPLETED,
+    PkgStatus.FAILED,
+    PkgStatus.PARTIALLY_COMPLETED,
+    PkgStatus.CANCELLED,
+)
 
 
 # Status groups
@@ -192,6 +208,14 @@ def action_label_key(code: int) -> str:
 def status_label_key(code: int) -> str:
     """Return translation key for a status label."""
     return _STATUS_LABEL_KEY.get(code, "import_status.unknown")
+
+def status_filter_options():
+    """Return all statuses as (code, translation_key) pairs for package filters.
+
+    The UI translates the returned keys with tr(...), so language switching
+    stays correct without hardcoded Arabic/English labels.
+    """
+    return [(code, status_label_key(code)) for code in ALL_STATUSES]
 
 
 def is_history_status(code: int) -> bool:

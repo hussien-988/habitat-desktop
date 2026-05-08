@@ -562,7 +562,9 @@ class CaseDetailsPage(QWidget):
         main_layout.addWidget(self._header)
         main_layout.addSpacing(16)
 
-        # Watermark scroll area
+        # Watermark scroll area — vertical scroll is enabled but only kicks in
+        # when content (e.g. very large persons list) overflows; otherwise the
+        # 3x2 grid fits the window without any scroll bars.
         self._scroll = _WatermarkScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
@@ -576,75 +578,48 @@ class CaseDetailsPage(QWidget):
         self._scroll_content = QWidget()
         self._scroll_content.setLayoutDirection(get_layout_direction())
         self._scroll_content.setStyleSheet("background: transparent;")
-        self._scroll_layout = QVBoxLayout(self._scroll_content)
-        self._scroll_layout.setContentsMargins(0, 0, 0, 40)
-        self._scroll_layout.setSpacing(16)
 
-        # Card 1: Survey Info (full width)
-        self._survey_card = _GlowingCard()
-        self._survey_card_layout = QVBoxLayout(self._survey_card)
-        self._survey_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._survey_card_layout.setSpacing(12)
-        self._survey_content = QVBoxLayout()
-        self._survey_content.setSpacing(12)
-        self._survey_card_layout.addLayout(self._survey_content)
-        self._scroll_layout.addWidget(self._survey_card)
+        # 3 columns x 2 rows grid: 6 cards fit naturally without scroll.
+        # Bottom margin keeps the lower row from kissing the window edge.
+        grid = QGridLayout(self._scroll_content)
+        grid.setContentsMargins(0, 0, 0, ScreenScale.h(20))
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(16)
+        for c in range(3):
+            grid.setColumnStretch(c, 1)
+        self._scroll_layout = grid
 
-        # Row: Building | Applicant (side-by-side)
-        top_row = QHBoxLayout()
-        top_row.setSpacing(16)
+        def _make_card():
+            card = _GlowingCard()
+            card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+            outer = QVBoxLayout(card)
+            outer.setContentsMargins(20, 20, 20, 20)
+            outer.setSpacing(12)
+            content = QVBoxLayout()
+            content.setSpacing(12)
+            outer.addLayout(content)
+            return card, outer, content
 
-        self._building_card = _GlowingCard()
-        self._building_card_layout = QVBoxLayout(self._building_card)
-        self._building_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._building_card_layout.setSpacing(12)
-        self._building_content = QVBoxLayout()
-        self._building_content.setSpacing(12)
-        self._building_card_layout.addLayout(self._building_content)
-        top_row.addWidget(self._building_card, 1)
+        # Row 0: Survey Info | Building | Unit  (case + property)
+        self._survey_card,    self._survey_card_layout,    self._survey_content    = _make_card()
+        self._building_card,  self._building_card_layout,  self._building_content  = _make_card()
+        self._unit_card,      self._unit_card_layout,      self._unit_content      = _make_card()
+        grid.addWidget(self._survey_card,   0, 0)
+        grid.addWidget(self._building_card, 0, 1)
+        grid.addWidget(self._unit_card,     0, 2)
 
-        self._applicant_card = _GlowingCard()
-        self._applicant_card_layout = QVBoxLayout(self._applicant_card)
-        self._applicant_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._applicant_card_layout.setSpacing(12)
-        self._applicant_content = QVBoxLayout()
-        self._applicant_content.setSpacing(12)
-        self._applicant_card_layout.addLayout(self._applicant_content)
-        top_row.addWidget(self._applicant_card, 1)
-
-        self._scroll_layout.addLayout(top_row)
-
-        # Unit card (full width)
-        self._unit_card = _GlowingCard()
-        self._unit_card_layout = QVBoxLayout(self._unit_card)
-        self._unit_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._unit_card_layout.setSpacing(12)
-        self._unit_content = QVBoxLayout()
-        self._unit_content.setSpacing(12)
-        self._unit_card_layout.addLayout(self._unit_content)
-        self._scroll_layout.addWidget(self._unit_card)
-
-        # Household card (full width)
-        self._household_card = _GlowingCard()
-        self._household_card_layout = QVBoxLayout(self._household_card)
-        self._household_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._household_card_layout.setSpacing(12)
-        self._household_content = QVBoxLayout()
-        self._household_content.setSpacing(12)
-        self._household_card_layout.addLayout(self._household_content)
-        self._scroll_layout.addWidget(self._household_card)
-
-        # Persons card (full width)
-        self._persons_card = _GlowingCard()
-        self._persons_card_layout = QVBoxLayout(self._persons_card)
-        self._persons_card_layout.setContentsMargins(20, 20, 20, 20)
-        self._persons_card_layout.setSpacing(12)
-        self._persons_content = QVBoxLayout()
+        # Row 1: Applicant | Household | Persons  (people)
+        self._applicant_card, self._applicant_card_layout, self._applicant_content = _make_card()
+        self._household_card, self._household_card_layout, self._household_content = _make_card()
+        self._persons_card,   self._persons_card_layout,   self._persons_content   = _make_card()
         self._persons_content.setSpacing(10)
-        self._persons_card_layout.addLayout(self._persons_content)
-        self._scroll_layout.addWidget(self._persons_card)
+        grid.addWidget(self._applicant_card, 1, 0)
+        grid.addWidget(self._household_card, 1, 1)
+        grid.addWidget(self._persons_card,   1, 2)
 
-        self._scroll_layout.addStretch()
+        # Equal vertical stretch — both rows share available height.
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
 
         self._scroll.setWidget(self._scroll_content)
         main_layout.addWidget(self._scroll, 1)
@@ -652,35 +627,57 @@ class CaseDetailsPage(QWidget):
     # -- Section header helper --
 
     def _add_section_header(self, layout, icon_name, title, subtitle):
+        """Card section header: icon next to (title above subtitle), RTL-aware.
+
+        The header is locked to its natural height — without this, in a
+        QGridLayout where rows must share height, sparser cards would
+        stretch the header and balloon the gap between title and subtitle.
+        """
+        direction = get_layout_direction()
+        is_rtl = direction == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
         header = QWidget()
         header.setStyleSheet("background: transparent; border: none;")
+        header.setLayoutDirection(direction)
+        header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setSpacing(10)
+        h_layout.setSpacing(ScreenScale.w(10))
 
         icon_label = QLabel()
-        icon_label.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet(
-            "QLabel { background-color: #ffffff; border: 1px solid #DBEAFE; border-radius: 7px; }"
+            "QLabel { background-color: #EBF5FF; border: 1px solid #DBEAFE; border-radius: 7px; }"
         )
         icon_pixmap = Icon.load_pixmap(icon_name, size=14)
         if icon_pixmap and not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
 
         title_box = QVBoxLayout()
-        title_box.setSpacing(2)
+        title_box.setContentsMargins(0, 0, 0, 0)
+        title_box.setSpacing(1)
+
         title_lbl = QLabel(title)
+        title_lbl.setLayoutDirection(direction)
+        title_lbl.setAlignment(text_align)
         title_lbl.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        sub_lbl = QLabel(subtitle)
-        sub_lbl.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        sub_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
         title_box.addWidget(title_lbl)
-        title_box.addWidget(sub_lbl)
 
-        h_layout.addWidget(icon_label, 0, Qt.AlignTop)
+        if subtitle:
+            sub_lbl = QLabel(subtitle)
+            sub_lbl.setLayoutDirection(direction)
+            sub_lbl.setAlignment(text_align)
+            sub_lbl.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
+            sub_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+            sub_lbl.setWordWrap(True)
+            title_box.addWidget(sub_lbl)
+
+        h_layout.addWidget(icon_label, 0, Qt.AlignVCenter)
         h_layout.addLayout(title_box, 1)
+        h_layout.addStretch(0)
         layout.addWidget(header)
 
     # -- Field helpers --
@@ -860,9 +857,6 @@ class CaseDetailsPage(QWidget):
             tr("page.case_details.section_survey_sub")
         )
 
-        grid = QGridLayout()
-        grid.setSpacing(16)
-
         ref = ctx.reference_number or ctx.get_data("survey_id") or "-"
         created = ""
         if ctx.created_at:
@@ -876,6 +870,7 @@ class CaseDetailsPage(QWidget):
         is_cancelled = status_lower in ("cancelled", "8")
         is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
         is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
+        is_finalized = (not is_cancelled) and (not is_draft) and (not is_obstructed)
         if is_cancelled:
             status_display = tr("mapping.survey_status.cancelled")
             s_bg, s_fg, s_br = "#FEF2F2", "#DC2626", "#FECACA"
@@ -897,14 +892,91 @@ class CaseDetailsPage(QWidget):
             case_display = tr("page.case_details.case_open")
             c_bg, c_fg, c_br = "#ECFDF5", "#059669", "#A7F3D0"
 
-        grid.addWidget(self._create_field_pair(tr("page.case_details.ref_number"), ref), 0, 0)
-        grid.addWidget(self._create_field_pair(tr("wizard.review.survey_date"), created or "-"), 0, 1)
-        grid.addWidget(
-            self._build_status_pill(tr("wizard.review.case_status"), status_display, s_bg, s_fg, s_br), 0, 2)
-        grid.addWidget(
-            self._build_status_pill(tr("page.case_details.case_status"), case_display, c_bg, c_fg, c_br), 0, 3)
+        # Compact vertical layout: rows of "label: value" / "label: pill".
+        self._survey_content.addLayout(
+            self._make_label_value_row(tr("page.case_details.ref_number"), ref)
+        )
+        self._survey_content.addLayout(
+            self._make_label_value_row(tr("wizard.review.survey_date"), created or "-")
+        )
 
-        self._survey_content.addLayout(grid)
+        # Hide the survey-status row entirely for finalized surveys (the
+        # case status pill below is enough; the draft/in-progress flag is
+        # meaningless once the case is closed).
+        if not is_finalized:
+            self._survey_content.addLayout(
+                self._make_label_pill_row(
+                    tr("wizard.review.case_status"),
+                    status_display, s_bg, s_fg, s_br,
+                )
+            )
+
+        self._survey_content.addLayout(
+            self._make_label_pill_row(
+                tr("page.case_details.case_status"),
+                case_display, c_bg, c_fg, c_br,
+            )
+        )
+
+    def _make_label_value_row(self, label_text: str, value_text: str):
+        """Compact horizontal label : value row (RTL-aware)."""
+        direction = get_layout_direction()
+        is_rtl = direction == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(ScreenScale.w(8))
+
+        lbl = QLabel(f"{label_text}:")
+        lbl.setLayoutDirection(direction)
+        lbl.setAlignment(text_align)
+        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        lbl.setMinimumWidth(ScreenScale.w(110))
+
+        val = QLabel(str(value_text) if value_text else "-")
+        val.setLayoutDirection(direction)
+        val.setAlignment(text_align)
+        val.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
+        val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        val.setWordWrap(True)
+
+        row.addWidget(lbl, 0)
+        row.addWidget(val, 1)
+        return row
+
+    def _make_label_pill_row(self, label_text, pill_text, bg, fg, border):
+        """Compact horizontal label : compact-pill row."""
+        direction = get_layout_direction()
+        is_rtl = direction == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(ScreenScale.w(8))
+
+        lbl = QLabel(f"{label_text}:")
+        lbl.setLayoutDirection(direction)
+        lbl.setAlignment(text_align)
+        lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        lbl.setMinimumWidth(ScreenScale.w(110))
+
+        pill = QLabel(pill_text)
+        pill.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        pill.setAlignment(Qt.AlignCenter)
+        pill.setFixedHeight(ScreenScale.h(22))
+        pill.setStyleSheet(
+            f"QLabel {{ background-color: {bg}; color: {fg}; "
+            f"border: 1px solid {border}; border-radius: 11px; padding: 0 12px; }}"
+        )
+        pill.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+
+        row.addWidget(lbl, 0)
+        row.addWidget(pill, 0)
+        row.addStretch(1)
+        return row
 
     def _build_status_pill(self, label_text, value_text, bg, fg, border):
         wrap = QFrame()
@@ -1046,23 +1118,29 @@ class CaseDetailsPage(QWidget):
 
         self._unit_content.addLayout(grid)
 
-        # Claims section
-        claims = ctx.claims or []
-        if claims:
-            self._unit_content.addWidget(self._create_divider())
+        # Claims section — hidden entirely for finalized surveys (the case
+        # is already closed; the active-claim registration UI is irrelevant
+        # there and only adds noise).
+        status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
+        status_lower = str(status).lower()
+        is_draft_or_open = status_lower in ("draft", "1", "", "obstructed", "4")
+        if is_draft_or_open:
+            claims = ctx.claims or []
+            if claims:
+                self._unit_content.addWidget(self._create_divider())
 
-            claims_header = QLabel(tr("wizard.review.claim_card_title"))
-            claims_header.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-            claims_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-            self._unit_content.addWidget(claims_header)
+                claims_header = QLabel(tr("wizard.review.claim_card_title"))
+                claims_header.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+                claims_header.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+                self._unit_content.addWidget(claims_header)
 
-            for i, claim in enumerate(claims):
-                self._add_claim_mini_card(claim)
-        elif not claims:
-            self._unit_content.addWidget(self._create_divider())
-            self._unit_content.addWidget(
-                self._create_empty_state(tr("page.case_details.no_claims"))
-            )
+                for i, claim in enumerate(claims):
+                    self._add_claim_mini_card(claim)
+            else:
+                self._unit_content.addWidget(self._create_divider())
+                self._unit_content.addWidget(
+                    self._create_empty_state(tr("page.case_details.no_claims"))
+                )
 
     def _add_claim_mini_card(self, claim):
         card = QFrame()
@@ -1121,7 +1199,6 @@ class CaseDetailsPage(QWidget):
 
         total_size = hh.get('size', 0)
 
-        # Get main occupant name from first person
         main_occupant_name = "-"
         if ctx.persons:
             p = ctx.persons[0]
@@ -1129,67 +1206,27 @@ class CaseDetailsPage(QWidget):
             if not main_occupant_name:
                 main_occupant_name = p.get('full_name', p.get('name', '-'))
 
-        # Summary row: occupant info + total count
-        summary_container = QWidget()
-        summary_container.setLayoutDirection(get_layout_direction())
-        summary_container.setStyleSheet("background: transparent; border: none;")
-        summary_layout = QHBoxLayout(summary_container)
-        summary_layout.setContentsMargins(0, 0, 0, 0)
-        summary_layout.setSpacing(0)
-
-        occupant_block = QVBoxLayout()
-        occupant_block.setSpacing(4)
-        occupant_title = self._create_section_label(tr("wizard.review.main_occupant_info"))
-        occupant_val = QLabel(main_occupant_name)
-        occupant_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        occupant_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        occupant_block.addWidget(occupant_title)
-        occupant_block.addWidget(occupant_val)
-
-        count_block = QVBoxLayout()
-        count_block.setSpacing(4)
-        count_title = self._create_section_label(tr("wizard.household.family_size"))
-        count_title.setAlignment(Qt.AlignCenter)
-        count_val = QLabel(str(total_size))
-        count_val.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        count_val.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        count_val.setAlignment(Qt.AlignCenter)
-        count_block.addWidget(count_title)
-        count_block.addWidget(count_val)
-
-        summary_layout.addLayout(occupant_block)
-        summary_layout.addStretch()
-        summary_layout.addLayout(count_block)
-        summary_layout.addStretch()
-
-        self._household_content.addWidget(summary_container)
-
-        # Demographics breakdown (gender + age side-by-side cards)
-        gender_items = [
-            (tr("wizard.household.males"), hh.get('male_count', 0)),
-            (tr("wizard.household.females"), hh.get('female_count', 0)),
+        # Compact label : value rows (no wide demographic cards).
+        rows = [
+            (tr("wizard.review.main_occupant_info"), main_occupant_name),
+            (tr("wizard.household.family_size"),     str(total_size)),
+            (tr("wizard.household.males"),           str(hh.get('male_count', 0))),
+            (tr("wizard.household.females"),         str(hh.get('female_count', 0))),
+            (tr("wizard.household.adults"),          str(hh.get('adult_count', 0))),
+            (tr("wizard.household.children"),        str(hh.get('child_count', 0))),
+            (tr("wizard.household.elderly"),         str(hh.get('elderly_count', 0))),
+            (tr("wizard.household.disabled"),        str(hh.get('disabled_count', 0))),
         ]
-
-        age_items = [
-            (tr("wizard.household.adults"), hh.get('adult_count', 0)),
-            (tr("wizard.household.children"), hh.get('child_count', 0)),
-            (tr("wizard.household.elderly"), hh.get('elderly_count', 0)),
-            (tr("wizard.household.disabled"), hh.get('disabled_count', 0)),
-        ]
-
-        cards_container = QWidget()
-        cards_container.setLayoutDirection(get_layout_direction())
-        cards_container.setStyleSheet("background: transparent; border: none;")
-        cards_layout = QHBoxLayout(cards_container)
-        cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(20)
-
-        cards_layout.addWidget(self._create_demographic_card(gender_items))
-        cards_layout.addWidget(self._create_demographic_card(age_items))
-
-        self._household_content.addWidget(cards_container)
+        for label_text, value_text in rows:
+            self._household_content.addLayout(
+                self._make_label_value_row(label_text, value_text)
+            )
 
     # -- Persons Card --
+
+    # Threshold above which the persons grid would overflow the cell — when
+    # exceeded the page-level scroll bar handles the overflow gracefully.
+    _PERSONS_OVERFLOW_THRESHOLD = 8
 
     def _populate_persons_card(self):
         self._clear_layout(self._persons_content)
@@ -1208,67 +1245,82 @@ class CaseDetailsPage(QWidget):
             )
             return
 
-        for person in persons:
-            self._add_person_mini_card(person)
+        # 2-column responsive grid of compact person mini-cards.
+        cols = 2
+        grid = QGridLayout()
+        grid.setContentsMargins(0, ScreenScale.h(4), 0, 0)
+        grid.setHorizontalSpacing(ScreenScale.w(10))
+        grid.setVerticalSpacing(ScreenScale.h(10))
+        for c in range(cols):
+            grid.setColumnStretch(c, 1)
 
-    def _add_person_mini_card(self, person):
+        for i, person in enumerate(persons):
+            r, c = divmod(i, cols)
+            grid.addWidget(self._build_person_chip(person), r, c)
+
+        self._persons_content.addLayout(grid)
+
+    def _build_person_chip(self, person: dict) -> QFrame:
+        """Compact best-practice person chip: name + role + national ID."""
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
         card = QFrame()
+        card.setLayoutDirection(get_layout_direction())
         card.setStyleSheet(f"""
             QFrame {{
-                background-color: {Colors.BACKGROUND};
-                border: 1px solid {Colors.BORDER_DEFAULT};
-                border-radius: 8px;
+                background-color: #FFFFFF;
+                border: 1px solid #E2EAF2;
+                border-radius: 10px;
+            }}
+            QFrame:hover {{
+                border-color: #BFD6F0;
             }}
         """)
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        card_layout.setSpacing(10)
 
-        # Person icon
-        icon_label = QLabel()
-        icon_label.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet(
-            "QLabel { background-color: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 16px; }"
+        v = QVBoxLayout(card)
+        v.setContentsMargins(
+            ScreenScale.w(12), ScreenScale.h(8),
+            ScreenScale.w(12), ScreenScale.h(8),
         )
-        icon_pixmap = Icon.load_pixmap("user", size=14)
-        if icon_pixmap and not icon_pixmap.isNull():
-            icon_label.setPixmap(icon_pixmap)
-        card_layout.addWidget(icon_label)
+        v.setSpacing(ScreenScale.h(4))
 
-        # Name and NID
-        info_box = QVBoxLayout()
-        info_box.setSpacing(2)
+        # Top row: name (stretch) + role badge (compact)
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(ScreenScale.w(8))
 
-        name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
-        if not name:
-            name = person.get("full_name") or person.get("fullName") or person.get("name", "-")
-        name_label = QLabel(str(name))
-        name_label.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
-        info_box.addWidget(name_label)
+        full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
+        if not full_name:
+            full_name = person.get('full_name') or person.get('fullName') or person.get('name', '-')
 
-        nid = person.get("national_id") or person.get("nationalId") or ""
-        if nid:
-            nid_label = QLabel(str(nid))
-            nid_label.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
-            nid_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            nid_label.setLayoutDirection(Qt.LeftToRight)
-            info_box.addWidget(nid_label)
+        name_lbl = QLabel(str(full_name))
+        name_lbl.setLayoutDirection(get_layout_direction())
+        name_lbl.setAlignment(text_align)
+        name_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        name_lbl.setWordWrap(True)
+        top.addWidget(name_lbl, 1)
 
-        card_layout.addLayout(info_box)
-        card_layout.addStretch()
-
-        # Role text
-        role_key = person.get('person_role') or person.get('relationship_type') or person.get("relation_type") or ""
+        role_key = person.get('person_role') or person.get('relationship_type') or person.get('relation_type')
         if role_key:
             role_text = get_relationship_to_head_display(role_key) or str(role_key)
-            role_lbl = QLabel(role_text)
-            role_lbl.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
-            role_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            card_layout.addWidget(role_lbl)
+            role_badge = self._create_badge(role_text, "#EFF6FF", "#1D4ED8")
+            top.addWidget(role_badge, 0, Qt.AlignVCenter)
 
-        self._persons_content.addWidget(card)
+        v.addLayout(top)
+
+        # National ID row (always LTR — it's a number).
+        nid = person.get('national_id') or person.get('nationalId') or ''
+        if nid:
+            nid_lbl = QLabel(str(nid))
+            nid_lbl.setLayoutDirection(Qt.LeftToRight)
+            nid_lbl.setAlignment((Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute)
+            nid_lbl.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
+            nid_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            v.addWidget(nid_lbl)
+
+        return card
 
     # -- Applicant Card --
 

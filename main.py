@@ -494,6 +494,12 @@ def main():
             except Exception as e:
                 logger.warning(f"Vocabularies initialization failed: {e}")
 
+            try:
+                from services.web_profile import prewarm_shared_map_profile
+                prewarm_shared_map_profile()
+            except Exception as e:
+                logger.debug(f"Map profile prewarm skipped: {e}")
+
         from PyQt5.QtCore import QTimer  # type: ignore
         QTimer.singleShot(0, _init_deferred)
 

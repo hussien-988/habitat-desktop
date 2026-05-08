@@ -433,7 +433,10 @@ class OccupancyClaimsStep(BaseStep):
         def _labeled_cell(label_text: str, value_widget: QWidget) -> QWidget:
             wrap = QWidget()
             wrap.setLayoutDirection(card.layoutDirection())
-            wrap.setStyleSheet("background: transparent;")
+            # border:none is REQUIRED — once a stylesheet is applied to a
+            # QWidget, Qt's QStyleSheetStyle draws a default frame unless
+            # explicitly suppressed.
+            wrap.setStyleSheet("background: transparent; border: none;")
             vl = QVBoxLayout(wrap)
             vl.setContentsMargins(0, 0, 0, 0)
             vl.setSpacing(3)
@@ -500,7 +503,7 @@ class OccupancyClaimsStep(BaseStep):
         role_badge.setAlignment(Qt.AlignCenter)
         role_holder = QWidget()
         role_holder.setLayoutDirection(card.layoutDirection())
-        role_holder.setStyleSheet("background: transparent;")
+        role_holder.setStyleSheet("background: transparent; border: none;")
         rh = QHBoxLayout(role_holder)
         rh.setContentsMargins(0, 0, 0, 0)
         rh.setSpacing(0)
