@@ -177,7 +177,11 @@ class ImportStep6Report(QWidget):
         ])
         self._breakdown_table.setLayoutDirection(get_layout_direction())
         self._breakdown_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._breakdown_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        # The breakdown table is a read-only summary; row selection has no
+        # action attached and was producing white-on-white text plus a stray
+        # focus border, so disable selection and the focus rect entirely.
+        self._breakdown_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._breakdown_table.setFocusPolicy(Qt.NoFocus)
         self._breakdown_table.verticalHeader().setVisible(False)
         self._breakdown_table.setAlternatingRowColors(True)
 
@@ -193,6 +197,7 @@ class ImportStep6Report(QWidget):
                 border: 1px solid #E1E8ED;
                 border-radius: 8px;
                 gridline-color: #F4F6F8;
+                outline: none;
             }
             QTableWidget::item {
                 padding: 8px 12px;
@@ -206,7 +211,7 @@ class ImportStep6Report(QWidget):
                 border-bottom: 2px solid #E1E8ED;
                 font-weight: 600;
             }
-        """)
+        """ + StyleManager.scrollbar())
         self._breakdown_table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         # Let the table expand vertically to fill the card — no fixed
@@ -286,8 +291,13 @@ class ImportStep6Report(QWidget):
 
     def _create_card(self) -> QFrame:
         card = QFrame()
+        # Scope the border to the card itself via objectName, otherwise the
+        # `QFrame {...}` rule cascades onto every descendant QLabel/QFrame
+        # (QLabel inherits QFrame in Qt5) and paints stray rectangles around
+        # the section titles.
+        card.setObjectName("importReportCard")
         card.setStyleSheet("""
-            QFrame {
+            QFrame#importReportCard {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;

@@ -496,7 +496,6 @@ class FieldWorkPreparationStep1(QWidget):
         self.i18n = i18n
         self.page = parent  # Store reference to parent page
         self._selected_building_ids = set()
-        self._confirmed_building_ids = set()
         self._selected_buildings = {}  # {building_id: building_object}
         self._showing_selected_view = False
         # Server-side pagination state for building results
@@ -786,7 +785,7 @@ class FieldWorkPreparationStep1(QWidget):
         self._sel_bar_view_btn.clicked.connect(self._on_view_selected_clicked)
         sel_bar_layout.addWidget(self._sel_bar_view_btn)
 
-        self._sel_bar_clear_btn = QPushButton(tr("wizard.step1.clear_all") or "إلغاء الكل")
+        self._sel_bar_clear_btn = QPushButton(tr("wizard.step1.clear_all"))
         self._sel_bar_clear_btn.setFixedHeight(ScreenScale.h(32))
         self._sel_bar_clear_btn.setCursor(Qt.PointingHandCursor)
         self._sel_bar_clear_btn.setStyleSheet("""
@@ -1150,19 +1149,17 @@ class FieldWorkPreparationStep1(QWidget):
         """Handle selection state change from suggestion cards."""
         if state == Qt.Checked:
             self._selected_building_ids.add(building.building_id)
-            self._confirmed_building_ids.add(building.building_id)
             self._selected_buildings[building.building_id] = building
         else:
             self._selected_building_ids.discard(building.building_id)
-            self._confirmed_building_ids.discard(building.building_id)
             self._selected_buildings.pop(building.building_id, None)
 
         self._update_selection_count()
         self._update_selected_card_visibility()
 
     def _update_selection_count(self):
-        """Update selection count and button state (based on confirmed buildings)."""
-        count = len(self._confirmed_building_ids)
+        """Update selection count and Next button state."""
+        count = len(self._selected_building_ids)
         # Enable/disable next button via parent page
         if self.page and hasattr(self.page, 'enable_next_button'):
             self.page.enable_next_button(count > 0)
@@ -1183,18 +1180,35 @@ class FieldWorkPreparationStep1(QWidget):
                 label = tr('wizard.step1.selected_items') or "تم اختيار"
                 unit = tr('wizard.step1.building_unit') or "مبنى"
                 self._sel_bar_count_label.setText(f"{label}: {count} {unit}")
-                self._sel_bar_view_btn.setText(
-                    tr('wizard.step1.show_selected_only')
-                    if self._showing_selected_view
-                    else (tr('wizard.step1.view_selected') or "عرض المختارة")
-                )
+                if self._showing_selected_view:
+                    self._sel_bar_view_btn.setText(tr('wizard.step1.show_selected_only'))
+                else:
+                    self._sel_bar_view_btn.setText(
+                        tr('wizard.step1.view_selected_with_count', count=count)
+                    )
 
     def _on_view_selected_clicked(self):
         """Toggle between selected view and search results."""
         if self._showing_selected_view:
-            self._set_suggestions_visible(True)
-            if any(getattr(self, attr, None) for attr in ('community_combo', 'neighborhood_combo')):
+            # Returning to search/filter view. Only reload from API when at least
+            # one filter or search term is actually active — avoid wasted requests.
+            filters = self.get_filters()
+            search_text = self.building_search.text().strip() if hasattr(self, 'building_search') else ''
+            has_active_filter = bool(
+                filters.get('community')
+                or filters.get('neighborhood')
+                or filters.get('assignment_status') is not None
+                or search_text
+            )
+            if has_active_filter:
+                self._set_suggestions_visible(True)
                 self._load_buildings_from_api()
+            else:
+                # No filter active — show empty hint, don't ping the API
+                self._showing_selected_view = False
+                self._clear_suggestion_cards()
+                self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                self._results_stack.setCurrentIndex(0)
         else:
             self._show_selected_buildings_view()
         self._update_selected_card_visibility()
@@ -1220,7 +1234,6 @@ class FieldWorkPreparationStep1(QWidget):
     def clear_all_selections(self):
         """Clear all selections (used by parent page on refresh)."""
         self._selected_building_ids.clear()
-        self._confirmed_building_ids.clear()
         self._selected_buildings.clear()
         self._clear_suggestion_cards()
         self._set_suggestions_visible(False)
@@ -1230,7 +1243,6 @@ class FieldWorkPreparationStep1(QWidget):
     def _remove_building_selection(self, building_id):
         """Remove building from selection and update UI."""
         self._selected_building_ids.discard(building_id)
-        self._confirmed_building_ids.discard(building_id)
         self._selected_buildings.pop(building_id, None)
 
         # Remove card from view
@@ -1584,7 +1596,7 @@ class FieldWorkPreparationStep1(QWidget):
         Auth token is auto-discovered by the dialog from the parent.
         """
         try:
-            from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog
+            from ui.components.building_map_dialog_v2 import show_multiselect_map_dialog_with_changes
             from services.map_perf_logger import (
                 MapPerfTrace, snapshot_active_timers, snapshot_running_threads,
                 count_web_engine_views,
@@ -1605,7 +1617,7 @@ class FieldWorkPreparationStep1(QWidget):
             if neighborhood_code:
                 center_lat, center_lon = self._get_neighborhood_center(neighborhood_code)
 
-            selected_buildings = show_multiselect_map_dialog(
+            change_result = show_multiselect_map_dialog_with_changes(
                 db=self.building_controller.db,
                 parent=self,
                 center_lat=center_lat,
@@ -1615,58 +1627,67 @@ class FieldWorkPreparationStep1(QWidget):
                 perf_trace=perf_trace,
             )
 
-            # User cancelled or no buildings selected
-            logger.info(f"Received from polygon map dialog: {type(selected_buildings)}")
-            logger.info(f"   Buildings count: {len(selected_buildings) if selected_buildings else 0}")
-
-            if not selected_buildings:
-                logger.info("No buildings selected from polygon")
+            if not change_result:
+                logger.info("Map closed without changes")
                 return
 
-            # Log received buildings for debugging
-            logger.info(f"Received {len(selected_buildings)} buildings from polygon")
-            for i, bldg in enumerate(selected_buildings[:3]):
-                logger.info(f"   Building {i+1}: ID={bldg.building_id}")
+            removed_ids = change_result.removed_ids or set()
+            added_buildings = change_result.added or []
 
-            # Add selected buildings to current selection (multi-select)
+            # Apply removals (state-only; visuals refreshed once below)
+            for bid in removed_ids:
+                self._selected_building_ids.discard(bid)
+                self._selected_buildings.pop(bid, None)
+
+            # Apply additions; skip any that snuck in as already-selected
             added_count = 0
-            for building in selected_buildings:
-                # Skip if already selected
+            for building in added_buildings:
                 if building.building_id in self._selected_building_ids:
                     continue
-
-                # Check if building exists in suggestion cards
-                found_in_suggestions = False
-                for card in self._suggestion_cards:
-                    if card.building.building_id == building.building_id:
-                        card.is_selected = True
-                        card.selection_changed.emit(card.building, True)
-                        found_in_suggestions = True
-                        break
-
-                # Only add directly if NOT in suggestions (avoid double-add)
-                if not found_in_suggestions:
-                    self._selected_building_ids.add(building.building_id)
-                    self._confirmed_building_ids.add(building.building_id)
-                    self._selected_buildings[building.building_id] = building
-
+                self._selected_building_ids.add(building.building_id)
+                self._selected_buildings[building.building_id] = building
                 added_count += 1
 
-            showing_search_results = (
-                self._results_stack.currentIndex() == 1 and not self._showing_selected_view
-            )
+            removed_count = len(removed_ids)
+
+            # Sync visible card states (replaces previous double-emit pattern)
+            if self._results_stack.currentIndex() == 1 and not self._showing_selected_view:
+                self._sync_visible_card_selection_state()
+            elif self._showing_selected_view:
+                # Currently displaying selected-grid; rebuild it to reflect changes
+                if self._selected_buildings:
+                    self._show_selected_buildings_view()
+                else:
+                    self._clear_suggestion_cards()
+                    self._showing_selected_view = False
+                    self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                    self._results_stack.setCurrentIndex(0)
 
             self._update_selection_count()
             self._update_selected_card_visibility()
 
-            if showing_search_results:
-                for card in self._suggestion_cards:
-                    if hasattr(card, 'is_selected'):
-                        card.is_selected = card.building.building_id in self._selected_building_ids
-            elif self._selected_building_ids:
-                self._show_selected_buildings_view()
+            # Consolidated feedback toast — only when something actually changed
+            if added_count and removed_count:
+                Toast.show_toast(
+                    self,
+                    tr("wizard.step1.map_delta_summary",
+                       added=added_count, removed=removed_count),
+                    Toast.SUCCESS,
+                )
+            elif added_count:
+                Toast.show_toast(
+                    self,
+                    tr("wizard.step1.map_added_summary", count=added_count),
+                    Toast.SUCCESS,
+                )
+            elif removed_count:
+                Toast.show_toast(
+                    self,
+                    tr("wizard.step1.map_removed_summary", count=removed_count),
+                    Toast.INFO,
+                )
 
-            logger.info(f"Added {added_count} buildings from map to selection")
+            logger.info(f"Map result applied: +{added_count} / -{removed_count}")
 
         except Exception as e:
             logger.error(f"Error opening map selector: {e}", exc_info=True)
@@ -1710,17 +1731,21 @@ class FieldWorkPreparationStep1(QWidget):
         return list(self._selected_building_ids)
 
     def get_selected_buildings(self):
-        """Get list of confirmed (selected) building objects."""
+        """Get list of selected building objects."""
         return [
             b for bid, b in self._selected_buildings.items()
-            if bid in self._confirmed_building_ids
+            if bid in self._selected_building_ids
         ]
 
     def eventFilter(self, obj, event):
         """Event filter for dismissing suggestions on outside click."""
         from PyQt5.QtCore import QEvent, QRect
 
-        if event.type() == QEvent.MouseButtonPress and self._results_stack.currentIndex() == 1:
+        # Only run dismiss logic in actual search-results view, not in the selected
+        # buildings grid (both share results_stack index 1, so check the flag too).
+        if (event.type() == QEvent.MouseButtonPress
+                and self._results_stack.currentIndex() == 1
+                and not self._showing_selected_view):
             # Check if click is inside suggestions area or search bar
             click_pos = event.globalPos()
             inside = False
@@ -1736,6 +1761,13 @@ class FieldWorkPreparationStep1(QWidget):
                 self.neighborhood_combo.view(),
                 self.assignment_status_combo,
                 self.assignment_status_combo.view(),
+                # Sticky selection bar + its buttons must NOT count as "outside" clicks,
+                # otherwise pressing "View Selected" or "Clear All" would dismiss the
+                # results before the button handler runs (causing a double-toggle).
+                getattr(self, "_sel_bar", None),
+                getattr(self, "_sel_bar_view_btn", None),
+                getattr(self, "_sel_bar_clear_btn", None),
+                getattr(self, "_pagination_container", None),
             ]
             for widget in safe_widgets:
                 if widget is None:
@@ -1829,6 +1861,9 @@ class FieldWorkPreparationStep1(QWidget):
         self._search_label.setText(tr("wizard.step1.building_code_label"))
         self.building_search.setPlaceholderText(tr("wizard.step1.search_building_code"))
         self._map_link_btn.setText(tr("wizard.step1.search_on_map"))
+
+        # Selection bar - Clear All button
+        self._sel_bar_clear_btn.setText(tr("wizard.step1.clear_all"))
 
         # Empty state
         if self._results_stack.currentIndex() == 0:

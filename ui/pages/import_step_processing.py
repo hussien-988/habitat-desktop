@@ -105,6 +105,12 @@ class ImportStepProcessing(QWidget):
         self._last_heartbeat_ok: Optional[bool] = None
         self._last_heartbeat_latency_ms: int = -1
         self._backend_updated_at_str: str = ""
+        # Tracks the most recent failure so we can show an amber "recovering"
+        # state for a short window after a successful poll, instead of jumping
+        # straight from red back to green.
+        self._last_failure_at: Optional[QDateTime] = None
+        # Cached so update_language can re-render the conflict count label.
+        self._last_conflict_count: int = 0
 
         self._setup_ui()
 
@@ -294,24 +300,44 @@ class ImportStepProcessing(QWidget):
 
     def set_conflict_count(self, count: int):
         """Called by the wizard when it detects conflicts for this package."""
+        self._last_conflict_count = int(count or 0)
         self._conflict_label.setText(
-            tr("wizard.import.processing.conflicts_summary").format(count=int(count or 0))
+            tr("wizard.import.processing.conflicts_summary").format(count=self._last_conflict_count)
         )
         if count and self._current_status == PkgStatus.REVIEWING_CONFLICTS:
             self._conflict_box.setVisible(True)
 
     def set_heartbeat(self, success: bool, latency_ms: int, backend_updated_at: str = ""):
         """Called by the wizard on every poll response."""
-        self._last_heartbeat_at = QDateTime.currentDateTime()
+        now = QDateTime.currentDateTime()
+        self._last_heartbeat_at = now
         self._last_heartbeat_ok = bool(success)
         self._last_heartbeat_latency_ms = int(latency_ms if latency_ms is not None else -1)
         self._backend_updated_at_str = backend_updated_at or ""
+        if not success:
+            self._last_failure_at = now
+        elif self._last_failure_at is not None:
+            # Forget the failure once 30s of clean polls have passed —
+            # the indicator returns to plain green afterwards.
+            if self._last_failure_at.secsTo(now) > 30:
+                self._last_failure_at = None
         self._refresh_live_lines()
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
         if self._current_status is not None:
             self.set_status(self._current_status)
+        # Re-translate the conflict-resolution box widgets — they are built
+        # once in _setup_ui and _apply_sub_state doesn't touch them on
+        # language change.
+        if hasattr(self, "_conflict_label"):
+            self._conflict_label.setText(
+                tr("wizard.import.processing.conflicts_summary").format(
+                    count=self._last_conflict_count
+                )
+            )
+        if hasattr(self, "_resolve_btn"):
+            self._resolve_btn.setText(tr("wizard.import.processing.resolve_conflicts_btn"))
 
     # -- Internal helpers ----------------------------------------------------
 
@@ -391,9 +417,11 @@ class ImportStepProcessing(QWidget):
             self._state_title.setText(tr("wizard.import.processing.quarantined_title"))
             self._state_detail.setText(tr("wizard.import.processing.quarantined_detail"))
         elif sub_state == _SUB_STATE_REVIEWING_CONFLICTS:
-            self._state_icon.setText("⚡")
+            # No icon for the conflicts state — leave the slot blank rather than
+            # show an attention-grabbing emoji over the title.
+            self._state_icon.setText("")
             self._state_icon.setStyleSheet(
-                "color: #6D28D9; background: transparent; border: none;"
+                "background: transparent; border: none;"
             )
             self._state_title.setText(tr("wizard.import.processing.conflicts_title"))
             self._state_detail.setText(tr("wizard.import.processing.conflicts_detail"))
@@ -444,12 +472,27 @@ class ImportStepProcessing(QWidget):
         seconds_ago = max(0, int(self._last_heartbeat_at.secsTo(QDateTime.currentDateTime())))
         if self._last_heartbeat_ok:
             slow = self._last_heartbeat_latency_ms >= 0 and self._last_heartbeat_latency_ms > 3000
-            color = "#F59E0B" if slow else "#10B981"
-            self._heartbeat_label.setText(
-                "● " + tr("wizard.import.processing.last_response_seconds_ago").format(
-                    seconds=seconds_ago
-                )
+            # If we recovered from a recent failure (< 30s), show amber +
+            # "recovering" instead of jumping straight back to green.
+            now = QDateTime.currentDateTime()
+            recovering = (
+                self._last_failure_at is not None
+                and self._last_failure_at.secsTo(now) <= 30
             )
+            if recovering:
+                color = "#F59E0B"
+                self._heartbeat_label.setText(
+                    "● " + tr("wizard.import.processing.last_response_recovering").format(
+                        seconds=seconds_ago
+                    )
+                )
+            else:
+                color = "#F59E0B" if slow else "#10B981"
+                self._heartbeat_label.setText(
+                    "● " + tr("wizard.import.processing.last_response_seconds_ago").format(
+                        seconds=seconds_ago
+                    )
+                )
             self._heartbeat_label.setStyleSheet(
                 f"color: {color}; background: transparent; border: none;"
             )

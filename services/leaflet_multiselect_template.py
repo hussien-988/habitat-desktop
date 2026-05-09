@@ -18,6 +18,10 @@ MULTISELECT_JS_TEMPLATE = """
         var selectedBuildings = new Map();
         var selectedLayersGroup = L.featureGroup().addTo(map);
 
+        // Track pre-selected buildings the user has EXPLICITLY deselected on the map.
+        // Distinguishes "user clicked to remove" from "never rendered in viewport".
+        window.explicitlyRemovedPreSelected = new Set();
+
         // Visual styles for selected buildings (light transparent blue)
         var SELECTED_STYLE = {
             color: '#1976D2',
@@ -73,6 +77,11 @@ MULTISELECT_JS_TEMPLATE = """
         function selectBuildingMulti(buildingId, layer, feature) {
             if (selectedBuildings.has(buildingId)) return;
 
+            // If user re-selects a pre-selected they earlier removed, clear the flag
+            if (window.explicitlyRemovedPreSelected) {
+                window.explicitlyRemovedPreSelected.delete(buildingId);
+            }
+
             selectedBuildings.set(buildingId, {layer: layer, feature: feature});
 
             var geomType = feature.geometry.type;
@@ -105,10 +114,23 @@ MULTISELECT_JS_TEMPLATE = """
                 selection.layer.setIcon(selection.originalIcon);
             }
             selectedBuildings.delete(buildingId);
+
+            // If this was a pre-selected building, mark it as user-removed
+            if (window.alreadySelectedIds && window.alreadySelectedIds.has(buildingId)
+                && window.explicitlyRemovedPreSelected) {
+                window.explicitlyRemovedPreSelected.add(buildingId);
+            }
         }
 
-        // Clear all selections
+        // Clear all selections (including pre-selected ones — treat as explicit removal)
         function clearAllSelections() {
+            if (window.alreadySelectedIds && window.explicitlyRemovedPreSelected) {
+                selectedBuildings.forEach(function(_, buildingId) {
+                    if (window.alreadySelectedIds.has(buildingId)) {
+                        window.explicitlyRemovedPreSelected.add(buildingId);
+                    }
+                });
+            }
             selectedLayersGroup.clearLayers();
             selectedBuildings.clear();
             updateMultiSelectCounter();
@@ -144,11 +166,18 @@ MULTISELECT_JS_TEMPLATE = """
             });
         }
 
-        // Send selected buildings list to Python via bridge
+        // Send selected buildings list to Python via bridge.
+        // Payload format: {"selected": [...ids...], "explicitlyRemovedPreSelected": [...ids...]}
+        // explicitlyRemovedPreSelected = pre-selected items the user clicked to remove,
+        // distinct from pre-selected items that were never rendered (and thus untouched).
         function sendMultiSelectedBuildingsToPython() {
-            var buildingIds = Array.from(selectedBuildings.keys());
+            var payload = {
+                selected: Array.from(selectedBuildings.keys()),
+                explicitlyRemovedPreSelected: window.explicitlyRemovedPreSelected
+                    ? Array.from(window.explicitlyRemovedPreSelected) : []
+            };
             withBridge(function(b) {
-                if (b.onBuildingsSelected) b.onBuildingsSelected(JSON.stringify(buildingIds));
+                if (b.onBuildingsSelected) b.onBuildingsSelected(JSON.stringify(payload));
             });
         }
 
@@ -182,6 +211,19 @@ MULTISELECT_JS_TEMPLATE = """
 
             // Unbind any popup to prevent it from showing
             layer.unbindPopup();
+
+            // Pre-selected buildings (came from caller) start in "selected" state so the
+            // user sees what is already chosen. Clicking them deselects normally.
+            if (window.alreadySelectedIds && window.alreadySelectedIds.has(buildingId)
+                && !selectedBuildings.has(buildingId)) {
+                selectBuildingMulti(buildingId, layer, layer.feature);
+                if (layer.bindTooltip) {
+                    try {
+                        layer.bindTooltip('\u0645\u062e\u062a\u0627\u0631 \u0645\u0633\u0628\u0642\u0627\u064b \u2014 \u0627\u0636\u063a\u0637 \u0644\u0644\u0625\u0644\u063a\u0627\u0621',
+                            {direction: 'top', sticky: true, opacity: 0.9});
+                    } catch (e) {}
+                }
+            }
 
             // Click handler \u2014 every building is selectable regardless of is_assigned/is_locked
             layer.on('click', function(e) {
@@ -230,6 +272,13 @@ MULTISELECT_JS_TEMPLATE = """
                 attachMultiselectHandler(layer);
             });
             console.log('Multi-select handlers attached to clustered markers');
+        }
+
+        // After initial pre-selection sweep, sync counter and notify Python so the
+        // dialog's confirm-button enable check sees the starting selection count.
+        if (selectedBuildings.size > 0) {
+            updateMultiSelectCounter();
+            sendMultiSelectedBuildingsToPython();
         }
 
         console.log('Multi-Select Mode initialized');
