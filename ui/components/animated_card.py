@@ -15,6 +15,7 @@ from PyQt5.QtGui import (
 
 from PyQt5.QtCore import QRectF, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt5.QtWidgets import QGraphicsOpacityEffect
+from PyQt5 import sip
 
 from services.translation_manager import get_layout_direction
 from ui.design_system import ScreenScale
@@ -540,6 +541,8 @@ def animate_card_entrance(cards: list, parent=None):
         anim.setEasingCurve(QEasingCurve.OutCubic)
 
         def _restore(c=card):
+            if sip.isdeleted(c):
+                return
             s = QGraphicsDropShadowEffect(c)
             s.setBlurRadius(20)
             s.setOffset(0, 4)
@@ -547,7 +550,13 @@ def animate_card_entrance(cards: list, parent=None):
             c.setGraphicsEffect(s)
 
         anim.finished.connect(_restore)
-        QTimer.singleShot(i * 40, anim.start)
+
+        def _start(a=anim, c=card):
+            if sip.isdeleted(c) or sip.isdeleted(a):
+                return
+            a.start()
+
+        QTimer.singleShot(i * 40, _start)
 
         card._entrance_anim = anim
         card._entrance_effect = opacity_eff
