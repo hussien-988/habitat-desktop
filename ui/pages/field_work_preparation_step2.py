@@ -66,20 +66,6 @@ class _ResearcherCard(AnimatedCard):
         apply_label_alignment(name_label)
         top_row.addWidget(name_label)
 
-        # Availability badge
-        is_available = self.researcher_data.get('is_available', True)
-        avail_text = tr("wizard.step2.available") if is_available else tr("wizard.step2.unavailable")
-        avail_color = "#10B981" if is_available else "#EF4444"
-        avail_bg = "#ECFDF5" if is_available else "#FEF2F2"
-
-        avail_badge = QLabel(avail_text)
-        avail_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-        avail_badge.setStyleSheet(
-            f"color: {avail_color}; background-color: {avail_bg}; "
-            "padding: 2px 10px; border-radius: 9px;"
-        )
-        top_row.addWidget(avail_badge)
-
         # Team badge
         team = self.researcher_data.get('team_name')
         if team:
@@ -102,14 +88,14 @@ class _ResearcherCard(AnimatedCard):
         username = self.researcher_data.get('username', '')
         if username:
             user_label = QLabel(f"@{username}")
-            user_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            user_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
             user_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
             apply_label_alignment(user_label)
             bottom_row.addWidget(user_label)
 
         active = self.researcher_data.get('active_assignments', 0)
         count_label = QLabel(f"{tr('wizard.step2.col_active_tasks')}: {active}")
-        count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
         count_label.setStyleSheet(f"color: {Colors.PAGE_SUBTITLE}; background: transparent;")
         apply_label_alignment(count_label)
         bottom_row.addWidget(count_label)
@@ -328,7 +314,7 @@ class FieldWorkPreparationStep2(QWidget):
         # Search bar
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(ScreenScale.h(42))
+        search_bar.setMinimumHeight(ScreenScale.h(38))
         search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -339,12 +325,12 @@ class FieldWorkPreparationStep2(QWidget):
         search_bar.setLayoutDirection(Qt.LeftToRight)
 
         sb = QHBoxLayout(search_bar)
-        sb.setContentsMargins(14, 8, 14, 8)
-        sb.setSpacing(8)
+        sb.setContentsMargins(10, 4, 10, 4)
+        sb.setSpacing(6)
 
         search_icon_btn = QToolButton()
         search_icon_btn.setCursor(Qt.PointingHandCursor)
-        search_icon_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
+        search_icon_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -373,9 +359,9 @@ class FieldWorkPreparationStep2(QWidget):
                 background: transparent;
                 font-family: 'IBM Plex Sans Arabic';
                 font-size: 10pt;
-                padding: 0px 6px;
-                min-height: 28px;
-                color: #2C3E50;
+                padding: 2px 4px;
+                min-height: 24px;
+                color: #1F2937;
             }
         """)
         self.researcher_search.textChanged.connect(self._filter_and_update)
@@ -396,9 +382,9 @@ class FieldWorkPreparationStep2(QWidget):
             QToolButton {{
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 border-radius: 6px;
-                padding: 4px 10px;
+                padding: 5px 10px;
                 font-size: 9pt;
-                color: #637381;
+                color: #4B5563;
                 background: #F8F9FA;
             }}
             QToolButton:hover {{
@@ -446,8 +432,8 @@ class FieldWorkPreparationStep2(QWidget):
 
         # Footer with count
         self.count_label = QLabel(tr("wizard.step2.result_count", count=0))
-        self.count_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self.count_label.setStyleSheet("color: #637381; background: transparent;")
+        self.count_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self.count_label.setStyleSheet("color: #4B5563; background: transparent;")
         cards_layout.addWidget(self.count_label)
 
         # Card state

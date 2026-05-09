@@ -543,13 +543,13 @@ class ButtonDimensions:
 
     # Footer Card
     FOOTER_WIDTH = 1512
-    FOOTER_HEIGHT = 58
+    FOOTER_HEIGHT = 52
     FOOTER_PADDING_H = 130
     FOOTER_PADDING_V = 8
 
     # Footer Navigation Buttons
     NAV_BUTTON_WIDTH = 252
-    NAV_BUTTON_HEIGHT = 42
+    NAV_BUTTON_HEIGHT = 36
     NAV_BUTTON_GAP = 748
     NAV_BUTTON_BORDER_RADIUS = 8
     NAV_BUTTON_FONT_SIZE = 12

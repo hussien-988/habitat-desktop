@@ -135,9 +135,6 @@ class FieldWorkPreparationStep3(QWidget):
             or self.researcher.get('display_name')
             or self.researcher.get('id', '')
         )
-        available = self.researcher.get('available', True)
-        avail_text = tr("wizard.step3.available") if available else tr("wizard.step3.unavailable")
-        avail_color = "#10B981" if available else "#EF4444"
         assignment_date = date.today().strftime("%Y-%m-%d")
 
         self._info_row_labels = []
@@ -145,7 +142,7 @@ class FieldWorkPreparationStep3(QWidget):
         self._avail_badge = None
 
         for label_text, value_text, value_color in [
-            (tr("wizard.step3.field_researcher"), f"{researcher_name}  \u2014  {avail_text}", avail_color if not available else Colors.PAGE_TITLE),
+            (tr("wizard.step3.field_researcher"), researcher_name, Colors.PAGE_TITLE),
             (tr("wizard.step3.building_count"), str(len(self.buildings)), Colors.PRIMARY_BLUE),
             (tr("wizard.step3.assignment_date"), assignment_date, Colors.PAGE_TITLE),
         ]:
@@ -154,29 +151,16 @@ class FieldWorkPreparationStep3(QWidget):
 
             lbl = QLabel(label_text)
             lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
+            lbl.setStyleSheet("color: #4B5563; background: transparent; border: none;")
             lbl.setFixedWidth(ScreenScale.w(160))
             row.addWidget(lbl)
             self._info_row_labels.append(lbl)
 
             val = QLabel(value_text)
-            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
             val.setStyleSheet(f"color: {value_color}; background: transparent; border: none;")
             row.addWidget(val)
             self._info_row_values.append(val)
-
-            if label_text == tr("wizard.step3.field_researcher"):
-                badge = QLabel(avail_text)
-                badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-                badge.setStyleSheet(f"""
-                    color: {avail_color};
-                    background-color: {'#ECFDF5' if available else '#FEF2F2'};
-                    padding: 2px 10px;
-                    border-radius: 10px;
-                    border: none;
-                """)
-                row.addWidget(badge)
-                self._avail_badge = badge
 
             row.addStretch()
             info_layout.addLayout(row)
@@ -313,8 +297,8 @@ class FieldWorkPreparationStep3(QWidget):
         # Property units — show all units (read-only)
         if units:
             units_label = QLabel(tr("wizard.step3.units_label"))
-            units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
+            units_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            units_label.setStyleSheet("color: #4B5563; background: transparent; border: none;")
             body_layout.addWidget(units_label)
             self._units_labels[building_id] = units_label
 
@@ -370,7 +354,7 @@ class FieldWorkPreparationStep3(QWidget):
         status_row.setSpacing(6)
         if has_survey:
             status_badge = QLabel(tr("wizard.step3.survey_done"))
-            status_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            status_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             status_badge.setStyleSheet("""
                 color: #10B981;
                 background-color: #ECFDF5;
@@ -379,7 +363,7 @@ class FieldWorkPreparationStep3(QWidget):
             """)
         else:
             status_badge = QLabel(tr("wizard.step3.survey_not_done"))
-            status_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            status_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             status_badge.setStyleSheet("""
                 color: #F59E0B;
                 background-color: #FFFBEB;
@@ -410,13 +394,13 @@ class FieldWorkPreparationStep3(QWidget):
             col.setAlignment(Qt.AlignCenter)
 
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            lbl.setStyleSheet("color: #9CA3AF;")
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet("color: #4B5563;")
             lbl.setAlignment(Qt.AlignCenter)
             col.addWidget(lbl)
 
             val = QLabel(value_text)
-            val.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             val.setStyleSheet(f"color: {Colors.PAGE_TITLE};")
             val.setAlignment(Qt.AlignCenter)
             col.addWidget(val)
@@ -426,16 +410,16 @@ class FieldWorkPreparationStep3(QWidget):
             if i < len(data_points) - 1:
                 sep = QFrame()
                 sep.setFixedWidth(1)
-                sep.setFixedHeight(ScreenScale.h(28))
-                sep.setStyleSheet("background-color: #F0F0F0; border: none;")
+                sep.setFixedHeight(ScreenScale.h(34))
+                sep.setStyleSheet("background-color: #E5E7EB; border: none;")
                 grid.addWidget(sep)
 
         card_layout.addLayout(grid)
 
         if description:
             desc = QLabel(description)
-            desc.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            desc.setStyleSheet("color: #637381;")
+            desc.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+            desc.setStyleSheet("color: #4B5563;")
             desc.setWordWrap(True)
             card_layout.addWidget(desc)
 
@@ -517,18 +501,14 @@ class FieldWorkPreparationStep3(QWidget):
             self._info_row_labels[1].setText(tr("wizard.step3.building_count"))
             self._info_row_labels[2].setText(tr("wizard.step3.assignment_date"))
 
-        # Update researcher availability text in value and badge
+        # Update researcher name on language change
         if hasattr(self, '_info_row_values') and self._info_row_values:
-            available = self.researcher.get('available', True)
-            avail_text = tr("wizard.step3.available") if available else tr("wizard.step3.unavailable")
             researcher_name = (
                 self.researcher.get('name')
                 or self.researcher.get('display_name')
                 or self.researcher.get('id', '')
             )
-            self._info_row_values[0].setText(f"{researcher_name}  \u2014  {avail_text}")
-            if hasattr(self, '_avail_badge') and self._avail_badge:
-                self._avail_badge.setText(avail_text)
+            self._info_row_values[0].setText(researcher_name)
 
         # Update buildings card title
         if hasattr(self, '_buildings_title_label'):

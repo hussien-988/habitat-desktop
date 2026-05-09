@@ -39,6 +39,7 @@ from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
     FORM_FIELD_STYLE, make_editable_date_combo, read_int_from_combo,
+    validate_date_combo_text,
 )
 from utils.logger import get_logger
 
@@ -630,14 +631,17 @@ class PersonDialog(QDialog):
         self.birth_day_combo = make_editable_date_combo(
             items=[(str(d), d) for d in range(1, 32)],
             max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
+            editable=False,
         )
         self.birth_month_combo = make_editable_date_combo(
             items=[(str(m), m) for m in range(1, 13)],
             max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
+            editable=False,
         )
         self.birth_year_combo = make_editable_date_combo(
             items=[(str(y), y) for y in range(_dt.now().year, 1919, -1)],
             max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
+            editable=False,
         )
 
         birth_layout.addWidget(self.birth_day_combo, 1)
@@ -929,21 +933,19 @@ class PersonDialog(QDialog):
         self.start_day = RtlCombo()
         self.start_day.addItem(tr("wizard.person_dialog.day"), None)
         for d in range(1, 32):
-            self.start_day.addItem(str(d), d)
+            self.start_day.addItem(f"{d:02d}", d)
         self.start_day.setStyleSheet(input_style)
 
         self.start_month = RtlCombo()
         self.start_month.addItem(tr("wizard.person_dialog.month"), None)
-        _date_locale = QLocale(QLocale.Arabic if get_language() == "ar" else QLocale.English)
         for m in range(1, 13):
-            self.start_month.addItem(_date_locale.monthName(m, QLocale.ShortFormat), m)
+            self.start_month.addItem(f"{m:02d}", m)
         self.start_month.setStyleSheet(input_style)
 
-        self.start_year = RtlCombo()
-        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
-        for y in range(QDate.currentDate().year(), 1939, -1):
-            self.start_year.addItem(str(y), y)
-        self.start_year.setStyleSheet(input_style)
+        self.start_year = make_editable_date_combo(
+            items=[(str(y), y) for y in range(QDate.currentDate().year(), 1939, -1)],
+            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
 
         date_layout.addWidget(self.start_day, 1)
         date_layout.addWidget(self.start_month, 2)
@@ -2527,7 +2529,7 @@ class PersonDialog(QDialog):
 
     def _build_start_date_iso(self) -> str:
         """Build ISO date string from the 3 dropdown combos (year/month/day)."""
-        y = self.start_year.currentData()
+        y = read_int_from_combo(self.start_year)
         m = self.start_month.currentData()
         d = self.start_day.currentData()
         if y:
@@ -2863,6 +2865,14 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
+        # Occupancy start year is the only manually-editable date field; enforce 4-digit format
+        if not validate_date_combo_text(self.start_year, 4):
+            from ui.components.toast import Toast
+            Toast.show_toast(self, tr("wizard.person_dialog.invalid_date_format"), Toast.ERROR)
+            if not has_error:
+                self.tab_widget.setCurrentIndex(2)
+            has_error = True
+
         # Ownership share: required when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
         is_owner = self.rel_type_combo.currentData() == 1
@@ -2881,18 +2891,6 @@ class PersonDialog(QDialog):
                     has_error = True
             except ValueError:
                 pass
-
-        # Documents: required for Owner (rel_type=1)
-        if is_owner:
-            if not self.relation_uploaded_files:
-                from ui.error_handler import ErrorHandler as _EH
-                _EH.show_error(
-                    self,
-                    tr("wizard.person_dialog.ownership_docs_required"),
-                    tr("common.error"))
-                if not has_error:
-                    self.tab_widget.setCurrentIndex(2)
-                has_error = True
 
         if has_error:
             return

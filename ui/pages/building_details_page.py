@@ -79,13 +79,15 @@ class BuildingDetailsPage(QWidget):
         self._header.add_stat_pill(self._stat_units)
 
         # Action buttons in dark header
+        # Close (×) button is intentionally hidden — back button covers
+        # the same intent, keeping the header less crowded.
         self._close_btn = QPushButton("×")
         self._close_btn.setFixedSize(ScreenScale.w(40), ButtonDimensions.SAVE_HEIGHT)
         self._close_btn.setCursor(Qt.PointingHandCursor)
         self._close_btn.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
         self._close_btn.setStyleSheet(StyleManager.dark_action_button())
         self._close_btn.clicked.connect(self.back_requested.emit)
-        self._header.add_action_widget(self._close_btn)
+        self._close_btn.hide()
 
         self._lock_btn = QPushButton("")
         self._lock_btn.setFixedHeight(ButtonDimensions.SAVE_HEIGHT)
@@ -477,6 +479,10 @@ class BuildingDetailsPage(QWidget):
         num_label.setFont(create_font(size=FontManager.WIZARD_CARD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
         num_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
         num_label.setAlignment(get_text_alignment())
+        num_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        num_label.setCursor(Qt.IBeamCursor)
         self.info_content.addWidget(num_label)
 
         address = build_hierarchical_address(building_obj=building, unit_obj=None, include_unit=False)

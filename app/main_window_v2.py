@@ -543,6 +543,10 @@ class MainWindow(QMainWindow):
         self.pages[Pages.SURVEY_DETAILS].view_linked_claims_requested.connect(
             self._on_view_linked_claims_requested
         )
+        # Return to survey details from claims page when navigation originated there
+        self.pages[Pages.CLAIMS].back_to_survey_requested.connect(
+            self._on_claims_back_to_survey
+        )
 
         # Claim Details page signals
         self.pages[Pages.CLAIM_DETAILS].back_requested.connect(
@@ -1697,14 +1701,26 @@ class MainWindow(QMainWindow):
         worker.error.connect(_on_err)
         self._case_survey_worker = worker
         worker.start()
-    def _on_view_linked_claims_requested(self, reference_code: str):
+    def _on_view_linked_claims_requested(self, reference_code: str, survey_id: str = ""):
         reference_code = (reference_code or "").strip()
         if not reference_code:
             logger.warning("Cannot navigate to linked claims without reference code")
             return
 
         logger.info(f"Navigating to linked claims for survey reference: {reference_code}")
-        self.navigate_to(Pages.CLAIMS, {"reference_code": reference_code})
+        self.navigate_to(Pages.CLAIMS, {
+            "reference_code": reference_code,
+            "from_survey_id": (survey_id or "").strip(),
+        })
+
+    def _on_claims_back_to_survey(self, survey_id: str):
+        """Return from CompletedClaimsPage back to CaseDetailsPage for the
+        originating survey (used when navigation came from 'view linked claims')."""
+        survey_id = (survey_id or "").strip()
+        if not survey_id:
+            self.navigate_to(Pages.SURVEYS)
+            return
+        self._fetch_survey_for_case(survey_id)
 
     def _on_case_details_back(self):
         """Navigate back from CaseDetailsPage (survey details).

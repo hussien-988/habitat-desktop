@@ -26,7 +26,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
     make_step_card, make_icon_header, make_divider, make_sub_section_header,
-    make_editable_date_combo, read_int_from_combo,
+    make_editable_date_combo, read_int_from_combo, validate_date_combo_text,
 )
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
@@ -235,14 +235,17 @@ class ApplicantInfoStep(BaseStep):
         self.birth_day_combo = make_editable_date_combo(
             items=[(str(d), d) for d in range(1, 32)],
             max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
+            editable=False,
         )
         self.birth_month_combo = make_editable_date_combo(
             items=[(str(m), m) for m in range(1, 13)],
             max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
+            editable=False,
         )
         self.birth_year_combo = make_editable_date_combo(
             items=[(str(y), y) for y in range(2010, 1919, -1)],
             max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
+            editable=False,
         )
         birth_layout.addWidget(self.birth_day_combo, 1)
         birth_layout.addWidget(self.birth_month_combo, 1)

@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
 )
 from PyQt5.QtCore import (
-    QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtSignal, pyqtProperty, QTimer,
+    QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtSignal, pyqtProperty, QTimer, QSize,
 )
 from PyQt5.QtGui import (
     QFont, QColor, QCursor, QLinearGradient, QPainter, QPainterPath, QPen,
@@ -351,6 +351,7 @@ class CompletedClaimsPage(QWidget):
 
     claim_selected = pyqtSignal(str)
     add_claim_clicked = pyqtSignal()
+    back_to_survey_requested = pyqtSignal(str)  # survey_id
 
     def __init__(self, db=None, i18n=None, parent=None):
         super().__init__(parent)
@@ -368,6 +369,7 @@ class CompletedClaimsPage(QWidget):
         self._total_count = 0
         self._page_size = 20
         self._search_mode = False
+        self._return_survey_id = ""  # Set when navigation came from a survey details page
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -420,27 +422,35 @@ class CompletedClaimsPage(QWidget):
         self._search.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
         self._search.setStyleSheet("""
             QLineEdit {
-                background: rgba(10, 22, 40, 140);
-                color: white;
-                border: 1px solid rgba(56, 144, 223, 35);
+                background: rgba(255, 255, 255, 230);
+                color: #1F2937;
+                border: 1px solid rgba(56, 144, 223, 60);
                 border-radius: 8px;
                 padding: 0 12px 0 34px;
             }
             QLineEdit:focus {
-                border: 1.5px solid rgba(56, 144, 223, 140);
-                background: rgba(10, 22, 40, 180);
+                border: 1.5px solid rgba(56, 144, 223, 180);
+                background: rgba(255, 255, 255, 250);
             }
             QLineEdit::placeholder {
-                color: rgba(139, 172, 200, 130);
+                color: rgba(75, 85, 99, 160);
             }
         """)
         search_icon = Icon.load_pixmap("search", 16)
         if search_icon and not search_icon.isNull():
-            icon_label = QLabel(self._search)
-            icon_label.setPixmap(search_icon)
-            icon_label.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
-            icon_label.move(10, 9)
-            icon_label.setStyleSheet("background: transparent; border: none;")
+            from PyQt5.QtGui import QIcon
+            icon_btn = QPushButton(self._search)
+            icon_btn.setIcon(QIcon(search_icon))
+            icon_btn.setIconSize(QSize(ScreenScale.w(16), ScreenScale.h(16)))
+            icon_btn.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+            icon_btn.move(7, 6)
+            icon_btn.setCursor(Qt.PointingHandCursor)
+            icon_btn.setToolTip(tr("common.search") if tr("common.search") != "common.search" else "Search")
+            icon_btn.setStyleSheet(
+                "QPushButton { background: transparent; border: none; padding: 0; }"
+                "QPushButton:hover { background: rgba(120, 190, 255, 40); border-radius: 4px; }"
+            )
+            icon_btn.clicked.connect(self._on_search_triggered)
         self._search.returnPressed.connect(self._on_search_triggered)
         self._search.textChanged.connect(self._on_search_changed)
         self._search.textChanged.connect(self._on_search_text_changed)
@@ -600,6 +610,21 @@ class CompletedClaimsPage(QWidget):
     def _exit_search_mode(self):
         if not self._search_mode:
             return
+
+        # If this search-mode session was opened by navigation from a survey
+        # details page, the back button should return to that survey details
+        # page rather than just clearing the filter and staying here.
+        if self._return_survey_id:
+            survey_id = self._return_survey_id
+            self._return_survey_id = ""
+            self._search_mode = False
+            self._search_bar.exit_search_mode()
+            self._search.blockSignals(True)
+            self._search.clear()
+            self._search.blockSignals(False)
+            self.back_to_survey_requested.emit(survey_id)
+            return
+
         self._search_mode = False
         self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
@@ -626,6 +651,10 @@ class CompletedClaimsPage(QWidget):
         if isinstance(data, dict):
             reference_code = (data.get("reference_code") or "").strip()
             if reference_code:
+                # Track origin survey so the search-bar back button can return
+                # to the survey details page instead of just exiting search mode.
+                self._return_survey_id = (data.get("from_survey_id") or "").strip()
+
                 self._search.blockSignals(True)
                 self._search.setText(reference_code)
                 self._search.blockSignals(False)
@@ -634,6 +663,9 @@ class CompletedClaimsPage(QWidget):
                 self._enter_search_mode()
                 self._load_claims()
                 return
+
+        # Fresh entry (not from survey details) — clear any pending return target.
+        self._return_survey_id = ""
 
         now = int(time.time() * 1000)
         if now - self._last_refresh_ms < 5000 and self.claims_data:
