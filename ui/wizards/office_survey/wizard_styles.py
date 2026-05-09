@@ -662,16 +662,18 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
 
 # ── Shared date-combo helpers (DRY: used by applicant_info, person_dialog, household) ──
 
-def make_editable_date_combo(items, max_digits: int, placeholder: str = "") -> QComboBox:
+def make_editable_date_combo(items, max_digits: int, placeholder: str = "", editable: bool = True) -> QComboBox:
     """
-    Editable QComboBox for a single date part (day / month / year).
-    Supports both dropdown selection AND direct numeric keyboard input.
+    QComboBox for a single date part (day / month / year).
 
-    The combo follows the app layout direction so the dropdown arrow flips
-    to the correct side on language switch (left in RTL, right in LTR).
-    The inner QLineEdit is centered so digits read correctly either way.
+    - Items are displayed zero-padded to `max_digits` (e.g. "01"-"12" for month).
+    - When editable=True, accepts manual numeric input with strict format
+      normalization: pads single-digit month/day on focus-out, clears
+      incomplete year (max_digits=4) entries.
+    - When editable=False, behaves as a dropdown-only combo (no manual entry).
     """
     from app.config import Config
+    from PyQt5.QtCore import QObject, QEvent
     from services.translation_manager import get_layout_direction
 
     combo = QComboBox()
@@ -679,13 +681,50 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "") -> Q
     combo.setEditable(True)
     combo.setInsertPolicy(QComboBox.NoInsert)
     for label, data in items:
-        combo.addItem(label, data)
+        if isinstance(data, int) and label.isdigit():
+            display = f"{data:0{max_digits}d}"
+        else:
+            display = label
+        combo.addItem(display, data)
     line_edit = combo.lineEdit()
     if line_edit is not None:
-        line_edit.setValidator(_QRegExpValidator(_QtRegExp(rf"\d{{0,{max_digits}}}")))
         line_edit.setAlignment(Qt.AlignCenter)
         if placeholder:
             line_edit.setPlaceholderText(placeholder)
+
+        if editable:
+            line_edit.setValidator(_QRegExpValidator(_QtRegExp(rf"\d{{0,{max_digits}}}")))
+
+            def _normalize_on_finish():
+                text = line_edit.text().strip()
+                if not text:
+                    return
+                if not text.isdigit():
+                    line_edit.clear()
+                    return
+                if max_digits == 4 and len(text) != 4:
+                    line_edit.clear()
+                    return
+                if max_digits == 2 and len(text) == 1:
+                    line_edit.setText(text.zfill(2))
+
+            line_edit.editingFinished.connect(_normalize_on_finish)
+        else:
+            line_edit.setReadOnly(True)
+
+            class _ClickToOpen(QObject):
+                def __init__(self, target_combo):
+                    super().__init__(target_combo)
+                    self._combo = target_combo
+
+                def eventFilter(self, obj, event):
+                    if event.type() == QEvent.MouseButtonPress:
+                        self._combo.showPopup()
+                        return True
+                    return False
+
+            line_edit.installEventFilter(_ClickToOpen(combo))
+
     combo.setCurrentIndex(-1)
     combo.clearEditText()
     _down = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
@@ -711,3 +750,14 @@ def read_int_from_combo(combo: QComboBox):
     if val is not None:
         return val
     return None
+
+
+def validate_date_combo_text(combo: QComboBox, expected_digits: int) -> bool:
+    """Return True if the combo's text is empty OR a numeric string of exactly `expected_digits`.
+
+    Used at save-time to reject incomplete manual date entries.
+    """
+    text = combo.currentText().strip()
+    if not text:
+        return True
+    return text.isdigit() and len(text) == expected_digits

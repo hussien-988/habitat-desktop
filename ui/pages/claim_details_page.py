@@ -975,7 +975,7 @@ class ClaimDetailsPage(QWidget):
 
             if self._is_editing:
                 self._claim_type_combo = QComboBox()
-                self._claim_type_combo.setFixedHeight(ScreenScale.h(42))
+                self._claim_type_combo.setMinimumHeight(ScreenScale.h(44))
                 self._claim_type_combo.setMinimumWidth(ScreenScale.w(180))
                 self._claim_type_combo.setStyleSheet(StyleManager.combo_box())
                 _CLAIM_TYPE_OPTIONS = [
@@ -1008,7 +1008,7 @@ class ClaimDetailsPage(QWidget):
             type_row.addStretch()
             type_widget = QWidget()
             type_widget.setStyleSheet("background: transparent; border: none;")
-            type_widget.setMinimumHeight(ScreenScale.h(48))
+            type_widget.setMinimumHeight(ScreenScale.h(52))
             type_widget.setLayout(type_row)
             self._relation_content.addWidget(type_widget)
             self._relation_content.addSpacing(ScreenScale.h(4))
@@ -1032,7 +1032,7 @@ class ClaimDetailsPage(QWidget):
                 if self._is_editing:
                     from PyQt5.QtGui import QIntValidator
                     self._ownership_share_input = QLineEdit()
-                    self._ownership_share_input.setFixedHeight(ScreenScale.h(36))
+                    self._ownership_share_input.setMinimumHeight(ScreenScale.h(40))
                     self._ownership_share_input.setMinimumWidth(ScreenScale.w(160))
                     self._ownership_share_input.setPlaceholderText("0 - 2400")
                     self._ownership_share_input.setValidator(QIntValidator(0, 2400, self._ownership_share_input))
@@ -1071,6 +1071,7 @@ class ClaimDetailsPage(QWidget):
                 share_row.addStretch()
                 share_widget = QWidget()
                 share_widget.setStyleSheet("background: transparent; border: none;")
+                share_widget.setMinimumHeight(ScreenScale.h(48))
                 share_widget.setLayout(share_row)
                 self._relation_content.addWidget(share_widget)
 
@@ -1152,7 +1153,6 @@ class ClaimDetailsPage(QWidget):
             claim = self._claim_data
             case_status = claim.get("caseStatus") or claim.get("status", 1)
             status_label = _get_case_status_label(case_status)
-            has_conflict = claim.get("hasConflict") or claim.get("hasConflicts", False)
             evidence_count = claim.get("evidenceCount") or len(self._evidences)
 
             # Status banner
@@ -1183,13 +1183,11 @@ class ClaimDetailsPage(QWidget):
             stats_grid = QGridLayout()
             stats_grid.setSpacing(16)
             stats_grid.setContentsMargins(0, 4, 0, 0)
-            for c in range(3):
+            for c in range(2):
                 stats_grid.setColumnStretch(c, 1)
 
             stats_grid.addWidget(self._create_field_pair(tr("page.claim_details.status"), status_label), 0, 0)
-            conflict_text = tr("page.claim_details.yes") if has_conflict else tr("page.claim_details.no_conflict")
-            stats_grid.addWidget(self._create_field_pair(tr("page.claim_details.conflict"), conflict_text), 0, 1)
-            stats_grid.addWidget(self._create_field_pair(tr("page.claim_details.documents_count"), str(evidence_count)), 0, 2)
+            stats_grid.addWidget(self._create_field_pair(tr("page.claim_details.documents_count"), str(evidence_count)), 0, 1)
 
             stats_widget = QWidget()
             stats_widget.setStyleSheet("background: transparent; border: none;")

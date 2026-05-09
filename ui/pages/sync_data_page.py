@@ -297,14 +297,14 @@ class _AssignmentCard(AnimatedCard):
 
         if transferred_count:
             chip_transferred = QLabel(f"{tr('page.sync.status_synced')}: {transferred_count}")
-            chip_transferred.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            chip_transferred.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             chip_transferred.setStyleSheet(StyleManager.status_badge('#10B981', '#ECFDF5'))
             self._chip_transferred = chip_transferred
             row3.addWidget(chip_transferred)
 
         if pending_count:
             chip_pending = QLabel(f"{tr('page.sync.status_pending')}: {pending_count}")
-            chip_pending.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            chip_pending.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             chip_pending.setStyleSheet(StyleManager.status_badge('#9CA3AF', '#F3F4F6'))
             self._chip_pending = chip_pending
             row3.addWidget(chip_pending)
@@ -438,7 +438,7 @@ class SyncDataPage(QWidget):
 
         # Collector filter combo in header (dark style)
         self._collector_combo = QComboBox()
-        self._collector_combo.setFixedHeight(ScreenScale.h(34))
+        self._collector_combo.setMinimumHeight(ScreenScale.h(38))
         self._collector_combo.setFixedWidth(ScreenScale.w(220))
         self._collector_combo.setEditable(True)
         self._collector_combo.lineEdit().setReadOnly(True)
@@ -913,13 +913,13 @@ class SyncDataPage(QWidget):
                 row.setSpacing(12)
 
                 lbl = QLabel(label_text)
-                lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-                lbl.setStyleSheet("color: #637381; background: transparent; border: none;")
+                lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+                lbl.setStyleSheet("color: #4B5563; background: transparent; border: none;")
                 lbl.setFixedWidth(ScreenScale.w(120))
                 row.addWidget(lbl)
 
                 val = QLabel(value_text)
-                val.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+                val.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
                 val.setStyleSheet(f"color: {value_color}; background: transparent; border: none;")
                 row.addWidget(val)
 
@@ -930,8 +930,8 @@ class SyncDataPage(QWidget):
 
             if units:
                 units_label = QLabel(tr("page.sync.property_units"))
-                units_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-                units_label.setStyleSheet("color: #637381; background: transparent; border: none;")
+                units_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+                units_label.setStyleSheet("color: #4B5563; background: transparent; border: none;")
                 body_layout.addWidget(units_label)
 
                 for u in units:
@@ -1049,13 +1049,13 @@ class SyncDataPage(QWidget):
             col.setAlignment(Qt.AlignCenter)
 
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            lbl.setStyleSheet("color: #9CA3AF;")
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet("color: #4B5563;")
             lbl.setAlignment(Qt.AlignCenter)
             col.addWidget(lbl)
 
             val = QLabel(value_text)
-            val.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+            val.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
             val.setStyleSheet("color: #212B36;")
             val.setAlignment(Qt.AlignCenter)
             col.addWidget(val)
@@ -1065,8 +1065,8 @@ class SyncDataPage(QWidget):
             if i < len(data_points) - 1:
                 sep = QFrame()
                 sep.setFixedWidth(1)
-                sep.setFixedHeight(ScreenScale.h(28))
-                sep.setStyleSheet("background-color: #F0F0F0; border: none;")
+                sep.setFixedHeight(ScreenScale.h(34))
+                sep.setStyleSheet("background-color: #E5E7EB; border: none;")
                 grid.addWidget(sep)
 
         card_layout.addLayout(grid)
@@ -1077,8 +1077,8 @@ class SyncDataPage(QWidget):
 
             if description:
                 desc = QLabel(description)
-                desc.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-                desc.setStyleSheet("color: #637381;")
+                desc.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+                desc.setStyleSheet("color: #4B5563;")
                 desc.setWordWrap(True)
                 bottom.addWidget(desc)
 
@@ -1088,7 +1088,7 @@ class SyncDataPage(QWidget):
             survey_color = "#10B981" if has_survey else "#9CA3AF"
             survey_bg = "#ECFDF5" if has_survey else "#F3F4F6"
             survey_badge = QLabel(survey_text)
-            survey_badge.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
+            survey_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
             survey_badge.setStyleSheet(StyleManager.status_badge(survey_color, survey_bg))
             bottom.addWidget(survey_badge)
 

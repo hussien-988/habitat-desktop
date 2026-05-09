@@ -251,7 +251,8 @@ def get_survey_status_display(status_key) -> str:
     return _vocab_label("SurveyStatus", status_key, {})
 
 def get_survey_type_display(type_key) -> str:
-    return _vocab_label("SurveyType", type_key, {})
+    label = _vocab_label("SurveyType", type_key, {})
+    return label.replace("استطلاع", "مسح") if label else label
 
 def get_survey_type_options():
     return _vocab_options("SurveyType")

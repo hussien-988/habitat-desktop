@@ -657,7 +657,7 @@ class FieldWorkPreparationStep1(QWidget):
 
         search_bar = QFrame()
         search_bar.setObjectName("searchBar")
-        search_bar.setFixedHeight(ScreenScale.h(42))
+        search_bar.setMinimumHeight(ScreenScale.h(38))
         search_bar.setStyleSheet(f"""
             QFrame#searchBar {{
                 background-color: {Colors.SEARCH_BAR_BG};
@@ -668,13 +668,13 @@ class FieldWorkPreparationStep1(QWidget):
         search_bar.setLayoutDirection(Qt.LeftToRight)
 
         sb = QHBoxLayout(search_bar)
-        sb.setContentsMargins(14, 8, 14, 8)
-        sb.setSpacing(8)
+        sb.setContentsMargins(10, 4, 10, 4)
+        sb.setSpacing(6)
 
         # Search icon button
         search_icon_btn = QToolButton()
         search_icon_btn.setCursor(Qt.PointingHandCursor)
-        search_icon_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
+        search_icon_btn.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
         search_icon_btn.setStyleSheet("""
             QToolButton {
                 border: none;
@@ -704,9 +704,9 @@ class FieldWorkPreparationStep1(QWidget):
                 background: transparent;
                 font-family: 'IBM Plex Sans Arabic';
                 font-size: 10pt;
-                padding: 0px 6px;
-                min-height: 28px;
-                color: #2C3E50;
+                padding: 2px 4px;
+                min-height: 24px;
+                color: #1F2937;
             }
         """)
         self.building_search.textChanged.connect(self._on_search_text_changed)
@@ -723,7 +723,7 @@ class FieldWorkPreparationStep1(QWidget):
                 color: {Colors.PRIMARY_BLUE};
                 font-family: 'IBM Plex Sans Arabic';
                 font-weight: 600;
-                font-size: 7pt;
+                font-size: 9pt;
                 text-decoration: underline;
                 padding: 0;
                 margin-top: 1px;
@@ -995,7 +995,7 @@ class FieldWorkPreparationStep1(QWidget):
 
     def _style_combo(self, combo: QComboBox):
         """Apply consistent styling to combo boxes (full-field clickable)."""
-        combo.setFixedHeight(ScreenScale.h(42))
+        combo.setMinimumHeight(ScreenScale.h(38))
 
         down_icon_path = self._get_down_icon_path()
 
@@ -1012,11 +1012,11 @@ class FieldWorkPreparationStep1(QWidget):
             QComboBox {{
                 border: 1px solid {Colors.SEARCH_BAR_BORDER};
                 border-radius: 8px;
-                padding: 8px 35px 8px 14px;
+                padding: 6px 35px 6px 14px;
                 background-color: {Colors.SEARCH_BAR_BG};
-                color: #374151;
+                color: #1F2937;
                 font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
+                font-size: 10pt;
             }}
             QComboBox::drop-down {{
                 border: none;
@@ -1030,10 +1030,10 @@ class FieldWorkPreparationStep1(QWidget):
                 border: 1px solid {Colors.BORDER_DEFAULT};
                 background-color: white;
                 selection-background-color: #EFF6FF;
-                selection-color: #374151;
-                color: #374151;
+                selection-color: #1F2937;
+                color: #1F2937;
                 font-family: 'IBM Plex Sans Arabic';
-                font-size: 9pt;
+                font-size: 10pt;
                 outline: none;
             }}
             QComboBox QAbstractItemView::item {{

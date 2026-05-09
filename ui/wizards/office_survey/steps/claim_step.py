@@ -21,7 +21,6 @@ from PyQt5.QtGui import (
     QColor, QPainter, QLinearGradient, QPen, QPainterPath,
 )
 
-from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from services.translation_manager import tr, get_layout_direction
@@ -507,34 +506,6 @@ class ClaimStep(BaseStep):
         card_layout.addLayout(grid)
         card_layout.addSpacing(8)
 
-        # Notes section
-        notes_label = QLabel(tr("wizard.claim.review_notes"))
-        notes_label.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-        notes_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
-        card_layout.addWidget(notes_label)
-        card._notes_label = notes_label
-
-        claim_notes = CenteredTextEdit()
-        claim_notes.setPlaceholderText(tr("wizard.claim.additional_notes_placeholder"))
-        claim_notes.setPlaceholderStyleSheet(
-            "color: #9CA3AF; background: transparent; font-size: 16px; font-weight: 400;"
-        )
-        claim_notes.setReadOnly(True)
-        claim_notes.setMinimumHeight(ScreenScale.h(100))
-        claim_notes.setMaximumHeight(ScreenScale.h(120))
-        claim_notes.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {READONLY_BG};
-                border: 1px solid #D0D7E2;
-                border-radius: 10px;
-                padding: 8px;
-                color: #2C3E50;
-                font-size: 14px;
-            }}
-        """)
-        card_layout.addWidget(claim_notes)
-        card_layout.addSpacing(8)
-
         # Evidence status pill
         claim_eval_label = QLabel(tr("wizard.claim.evidence_available"))
         claim_eval_label.setAlignment(Qt.AlignCenter)
@@ -550,7 +521,6 @@ class ClaimStep(BaseStep):
         card.case_category_field = case_category_field
         card.claim_source_field = claim_source_field
         card.claim_survey_date = claim_survey_date
-        card.claim_notes = claim_notes
         card.claim_eval_label = claim_eval_label
 
         if claim_data:
@@ -637,10 +607,6 @@ class ClaimStep(BaseStep):
             except Exception as e:
                 logger.warning(f"Failed to parse survey date: {e}")
                 card.claim_survey_date.setText(str(survey_date_str))
-
-        notes = claim_data.get('notes', '')
-        if notes:
-            card.claim_notes.setText(notes)
 
         has_evidence = claim_data.get('hasEvidence', False)
         if has_evidence:
@@ -893,10 +859,6 @@ class ClaimStep(BaseStep):
             survey_date = claim.get('survey_date') or today_str
             card.claim_survey_date.setText(str(survey_date)[:10])
 
-            notes = claim.get('notes', '')
-            if notes:
-                card.claim_notes.setText(notes)
-
             card._claim_raw_data = {'from_context': True, 'claim_preview': claim}
 
         # Fill first card
@@ -932,7 +894,6 @@ class ClaimStep(BaseStep):
             first_card.claim_type_field.clear()
             first_card.claim_survey_date.clear()
             first_card.claim_source_field.clear()
-            first_card.claim_notes.clear()
             first_card.claim_eval_label.clear()
         self.scroll_area.show()
         self.empty_state_widget.hide()
@@ -985,7 +946,7 @@ class ClaimStep(BaseStep):
                 # it empty so downstream readers know it's unset.
                 "case_status": raw.get('claimStatus') or raw.get('caseStatus') or "",
                 "survey_date": card.claim_survey_date.text().strip() or None,
-                "notes": card.claim_notes.toPlainText().strip(),
+                "notes": "",
                 "status": "draft",
                 "person_name": card.claim_person_search.text().strip(),
                 "unit_display_id": card.claim_unit_search.text().strip(),
@@ -1012,14 +973,9 @@ class ClaimStep(BaseStep):
             # Retranslate field labels
             for tr_key, lbl in getattr(card, '_field_labels', {}).items():
                 lbl.setText(tr(tr_key))
-            # Retranslate notes label
-            notes_lbl = getattr(card, '_notes_label', None)
-            if notes_lbl:
-                notes_lbl.setText(tr("wizard.claim.review_notes"))
             # Update placeholder texts
             card.claim_person_search.setPlaceholderText(tr("wizard.claim.person_name_placeholder"))
             card.claim_unit_search.setPlaceholderText(tr("wizard.claim.unit_number_placeholder"))
-            card.claim_notes.setPlaceholderText(tr("wizard.claim.additional_notes_placeholder"))
             # Retranslate dynamic value fields (evidence pill, case category)
             eval_lbl = card.claim_eval_label
             if eval_lbl.styleSheet() == EVIDENCE_AVAILABLE_STYLE:

@@ -274,7 +274,6 @@ class ImportPackagesPage(QWidget):
                 border: 1px solid #E5E7EB;
                 border-radius: 12px;
             }
-
             QLabel#ImportStatusFilterLabel {
                 color: #475569;
                 background: transparent;
@@ -285,27 +284,6 @@ class ImportPackagesPage(QWidget):
                 background: transparent;
                 border: none;
                 padding: 0 4px;
-            }
-
-            QComboBox {
-                background: white;
-                border: 1px solid #CBD5E1;
-                border-radius: 9px;
-                padding: 0 12px;
-                color: #1E293B;
-            }
-
-            QComboBox:hover {
-        border-color: #94A3B8;
-            }
-
-            QComboBox:focus {
-                border-color: #3890DF;
-            }
-
-            QComboBox::drop-down {
-                border: none;
-                width: 28px;
             }
         """)
 
@@ -321,9 +299,15 @@ class ImportPackagesPage(QWidget):
         apply_label_alignment(self._status_filter_label)
 
         self._status_filter_combo = QComboBox()
-        self._status_filter_combo.setFixedHeight(ScreenScale.h(36))
+        self._status_filter_combo.setMinimumHeight(ScreenScale.h(38))
         self._status_filter_combo.setMinimumWidth(ScreenScale.w(220))
         self._status_filter_combo.setMaximumWidth(ScreenScale.w(280))
+        self._status_filter_combo.setLayoutDirection(get_layout_direction())
+        self._status_filter_combo.setStyleSheet(StyleManager.combo_box())
+        # Style the popup's scrollbar to match the rest of the app.
+        _popup_view = self._status_filter_combo.view()
+        if _popup_view is not None:
+            _popup_view.setStyleSheet(StyleManager.scrollbar())
 
         self._filter_results_label = QLabel("")
         self._filter_results_label.setObjectName("ImportFilterResultsLabel")
@@ -1184,6 +1168,10 @@ class ImportPackagesPage(QWidget):
             apply_label_alignment(self._status_filter_label)
         
         if hasattr(self, "_status_filter_combo"):
+            self._status_filter_combo.setLayoutDirection(get_layout_direction())
+            _popup_view = self._status_filter_combo.view()
+            if _popup_view is not None:
+                _popup_view.setStyleSheet(StyleManager.scrollbar())
             self._populate_status_filter()
 
         # Empty state

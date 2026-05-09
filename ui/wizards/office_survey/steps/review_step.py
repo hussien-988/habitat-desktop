@@ -894,7 +894,8 @@ class ReviewStep(BaseStep):
 
         building_type = building.building_type_display if hasattr(building, 'building_type_display') else "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
-        units_count = str(building.number_of_units) if hasattr(building, 'number_of_units') else "0"
+        raw_units_count = getattr(building, 'number_of_units', None)
+        units_count = str(raw_units_count) if raw_units_count else "-"
 
         stats_grid = QGridLayout()
         stats_grid.setHorizontalSpacing(ScreenScale.w(10))

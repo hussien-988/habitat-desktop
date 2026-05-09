@@ -723,6 +723,9 @@ EN_TRANSLATIONS = {
     "common.save": "Save",
     "common.confirm": "Confirm",
     "common.warning": "Warning",
+    "common.copy": "Copy",
+    "common.copied": "Copied",
+    "common.search": "Search",
 
     # Search
     "search.results": "Search Results",
@@ -3219,6 +3222,7 @@ EN_TRANSLATIONS = {
     "wizard.person_dialog.name_label": "Name:",
     "wizard.person_dialog.nid_already_registered": "National ID already registered",
     "wizard.person_dialog.not_available_offline": "Not available offline",
+    "wizard.person_dialog.invalid_date_format": "Invalid date format: year must be 4 digits, month and day 2 digits",
     "wizard.person_dialog.ownership_docs_required": "Ownership documents required",
     "wizard.person_dialog.person_id_missing": "Person ID not available",
     "wizard.person_dialog.select_docs_to_link": "Select documents to link",

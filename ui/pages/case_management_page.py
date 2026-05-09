@@ -67,18 +67,18 @@ _CASE_STATUS_STYLES = {
 
 _DARK_INPUT_STYLE = """
     QLineEdit {
-        background: rgba(10, 22, 40, 140);
-        color: white;
-        border: 1px solid rgba(56, 144, 223, 35);
+        background: rgba(255, 255, 255, 230);
+        color: #1F2937;
+        border: 1px solid rgba(56, 144, 223, 60);
         border-radius: 8px;
-        padding: 0 12px 0 12px;
+        padding: 0 12px 0 34px;
     }
     QLineEdit:focus {
-        border: 1.5px solid rgba(56, 144, 223, 140);
-        background: rgba(10, 22, 40, 180);
+        border: 1.5px solid rgba(56, 144, 223, 180);
+        background: rgba(255, 255, 255, 250);
     }
     QLineEdit::placeholder {
-        color: rgba(139, 172, 200, 130);
+        color: rgba(75, 85, 99, 160);
     }
 """
 
@@ -572,11 +572,19 @@ class CaseManagementPage(QWidget):
         self._search.setStyleSheet(_DARK_INPUT_STYLE)
         search_icon = Icon.load_pixmap("search", 16)
         if search_icon and not search_icon.isNull():
-            icon_label = QLabel(self._search)
-            icon_label.setPixmap(search_icon)
-            icon_label.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
-            icon_label.move(10, 9)
-            icon_label.setStyleSheet("background: transparent; border: none;")
+            from PyQt5.QtGui import QIcon
+            icon_btn = QPushButton(self._search)
+            icon_btn.setIcon(QIcon(search_icon))
+            icon_btn.setIconSize(QSize(ScreenScale.w(16), ScreenScale.h(16)))
+            icon_btn.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+            icon_btn.move(7, 6)
+            icon_btn.setCursor(Qt.PointingHandCursor)
+            icon_btn.setToolTip(tr("common.search") if tr("common.search") != "common.search" else "Search")
+            icon_btn.setStyleSheet(
+                "QPushButton { background: transparent; border: none; padding: 0; }"
+                "QPushButton:hover { background: rgba(120, 190, 255, 40); border-radius: 4px; }"
+            )
+            icon_btn.clicked.connect(self._on_search_changed)
         self._search.returnPressed.connect(self._on_search_changed)
         # Clearing the field must immediately restore the unfiltered list.
         # Without this, _load_cases keeps using the stale text in the

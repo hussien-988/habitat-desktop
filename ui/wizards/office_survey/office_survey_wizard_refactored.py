@@ -424,13 +424,12 @@ class OfficeSurveyWizard(BaseWizard):
         return survey_id
 
     def _sync_header_save_visibility(self):
-        """Show the header save button only after the survey exists on backend."""
+        """Header save button is hidden by design; footer save button is the primary action."""
         if not hasattr(self, "save_btn"):
             return
 
-        has_survey_id = bool(self.context.get_data("survey_id"))
-        self.save_btn.setVisible(has_survey_id)
-        self.save_btn.setEnabled(has_survey_id)
+        self.save_btn.setVisible(False)
+        self.save_btn.setEnabled(False)
 
     def _handle_header_save(self):
         """Header save button: finalize on last step, save draft on others."""
@@ -856,7 +855,7 @@ class OfficeSurveyWizard(BaseWizard):
             step_tab = NavStyleTab(name)
             step_tab.setFixedSize(ScreenScale.w(ButtonDimensions.STEP_TAB_WIDTH + 20), ScreenScale.h(ButtonDimensions.STEP_TAB_HEIGHT + 3))
 
-            tab_font_size = 7 if num in ("3", "4") else 9
+            tab_font_size = 9 if num in ("3", "4") else 11
             self._step_font_sizes.append(tab_font_size)
             step_tab.set_font(create_font(size=tab_font_size, weight=FontManager.WEIGHT_REGULAR))
 
@@ -948,27 +947,15 @@ class OfficeSurveyWizard(BaseWizard):
         self.btn_next.clicked.connect(self._handle_next)
         layout.addWidget(self.btn_next)
 
-        # Final save/submit butt
-        from PyQt5.QtGui import QIcon
-        import os
-
-        self.btn_final_save = QPushButton(tr("wizard.button.save"))
+        self.btn_final_save = QPushButton(f"{tr('wizard.button.save')}   ❯")
         self.btn_final_save.setCursor(Qt.PointingHandCursor)
         self.btn_final_save.setFixedSize(ButtonDimensions.NAV_BUTTON_WIDTH, ButtonDimensions.NAV_BUTTON_HEIGHT)
         self.btn_final_save.setFont(nav_btn_font)
         self.btn_final_save.setFocusPolicy(Qt.NoFocus)
-
-        save_icon_path = os.path.join("assets", "images", "save.png")
-        if os.path.exists(save_icon_path):
-            self.btn_final_save.setIcon(QIcon(save_icon_path))
-            self.btn_final_save.setIconSize(QSize(16, 16))
-
         self.btn_final_save.setStyleSheet(FOOTER_PRIMARY_STYLE)
         self.btn_final_save.clicked.connect(self._handle_submit)
         self.btn_final_save.hide()
         layout.addWidget(self.btn_final_save)
-
-        layout.addStretch()
 
         wrapper_layout.addWidget(footer)
         return footer_wrapper

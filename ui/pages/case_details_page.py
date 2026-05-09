@@ -301,6 +301,9 @@ class _CaseDetailsHeader(QWidget):
         self._ref_label.setStyleSheet("color: #2A6CB5; background: transparent;")
         self._ref_label.setMinimumWidth(ScreenScale.w(200))
         self._ref_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._ref_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         ref_glow = QGraphicsDropShadowEffect(self._ref_label)
         ref_glow.setBlurRadius(12)
         ref_glow.setOffset(0, 0)
@@ -524,7 +527,7 @@ class CaseDetailsPage(QWidget):
     cancel_requested = pyqtSignal(str, str)  # survey_id, reason
     resume_obstructed_requested = pyqtSignal(str)  # survey_id
     revert_requested = pyqtSignal(str, str)  # survey_id, reason
-    view_linked_claims_requested = pyqtSignal(str)  # reference_code
+    view_linked_claims_requested = pyqtSignal(str, str)  # reference_code, survey_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -682,7 +685,7 @@ class CaseDetailsPage(QWidget):
 
     # -- Field helpers --
 
-    def _create_field_pair(self, label_text, value_text):
+    def _create_field_pair(self, label_text, value_text, copyable: bool = False):
         container = QWidget()
         container.setStyleSheet("background: transparent; border: none;")
         layout = QVBoxLayout(container)
@@ -699,6 +702,11 @@ class CaseDetailsPage(QWidget):
         val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
         val.setAlignment(Qt.AlignCenter)
         val.setWordWrap(True)
+        if copyable:
+            val.setTextInteractionFlags(
+                Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            )
+            val.setCursor(Qt.IBeamCursor)
 
         layout.addWidget(lbl)
         layout.addWidget(val)
@@ -865,61 +873,19 @@ class CaseDetailsPage(QWidget):
             except Exception:
                 created = str(ctx.created_at)
 
-        status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
-        status_lower = str(status).lower()
-        is_cancelled = status_lower in ("cancelled", "8")
-        is_draft = (not is_cancelled) and status_lower in ("draft", "1", "")
-        is_obstructed = (not is_cancelled) and status_lower in ("obstructed", "4")
-        is_finalized = (not is_cancelled) and (not is_draft) and (not is_obstructed)
-        if is_cancelled:
-            status_display = tr("mapping.survey_status.cancelled")
-            s_bg, s_fg, s_br = "#FEF2F2", "#DC2626", "#FECACA"
-        elif is_obstructed:
-            status_display = tr("page.case_details.status_obstructed")
-            s_bg, s_fg, s_br = "#FFFBEB", "#B45309", "#FCD34D"
-        elif is_draft:
-            status_display = tr("page.case_details.status_draft")
-            s_bg, s_fg, s_br = "#FEF3C7", "#92400E", "#FBBF24"
-        else:
-            status_display = tr("page.case_details.status_completed")
-            s_bg, s_fg, s_br = "#D1FAE5", "#065F46", "#6EE7B7"
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        grid.addWidget(self._create_field_pair(
+            tr("page.case_details.ref_number"), ref, copyable=True,
+        ), 0, 0)
+        grid.addWidget(self._create_field_pair(
+            tr("wizard.review.survey_date"), created or "-",
+        ), 0, 1)
+        self._survey_content.addLayout(grid)
 
-        case_status = getattr(ctx, 'case_status', 1)
-        if case_status == 2:
-            case_display = tr("page.case_details.case_closed")
-            c_bg, c_fg, c_br = "#FEF2F2", "#DC2626", "#FECACA"
-        else:
-            case_display = tr("page.case_details.case_open")
-            c_bg, c_fg, c_br = "#ECFDF5", "#059669", "#A7F3D0"
-
-        # Compact vertical layout: rows of "label: value" / "label: pill".
-        self._survey_content.addLayout(
-            self._make_label_value_row(tr("page.case_details.ref_number"), ref)
-        )
-        self._survey_content.addLayout(
-            self._make_label_value_row(tr("wizard.review.survey_date"), created or "-")
-        )
-
-        # Hide the survey-status row entirely for finalized surveys (the
-        # case status pill below is enough; the draft/in-progress flag is
-        # meaningless once the case is closed).
-        if not is_finalized:
-            self._survey_content.addLayout(
-                self._make_label_pill_row(
-                    tr("wizard.review.case_status"),
-                    status_display, s_bg, s_fg, s_br,
-                )
-            )
-
-        self._survey_content.addLayout(
-            self._make_label_pill_row(
-                tr("page.case_details.case_status"),
-                case_display, c_bg, c_fg, c_br,
-            )
-        )
-
-    def _make_label_value_row(self, label_text: str, value_text: str):
-        """Compact horizontal label : value row (RTL-aware)."""
+    def _make_label_value_row(self, label_text: str, value_text: str, copyable: bool = False):
+        """Compact horizontal label : value row (RTL-aware). When `copyable=True`,
+        the value label becomes text-selectable so users can copy with Ctrl+C."""
         direction = get_layout_direction()
         is_rtl = direction == Qt.RightToLeft
         text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
@@ -941,6 +907,11 @@ class CaseDetailsPage(QWidget):
         val.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
         val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
         val.setWordWrap(True)
+        if copyable:
+            val.setTextInteractionFlags(
+                Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            )
+            val.setCursor(Qt.IBeamCursor)
 
         row.addWidget(lbl, 0)
         row.addWidget(val, 1)
@@ -1037,7 +1008,8 @@ class CaseDetailsPage(QWidget):
 
         grid.addWidget(self._create_field_pair(
             tr("wizard.building.code_label"),
-            b.building_id_formatted or b.building_id or "-"
+            b.building_id_formatted or b.building_id or "-",
+            copyable=True,
         ), 0, 0)
 
         gov_name = b.governorate_name_ar if is_ar else b.governorate_name
@@ -1206,7 +1178,6 @@ class CaseDetailsPage(QWidget):
             if not main_occupant_name:
                 main_occupant_name = p.get('full_name', p.get('name', '-'))
 
-        # Compact label : value rows (no wide demographic cards).
         rows = [
             (tr("wizard.review.main_occupant_info"), main_occupant_name),
             (tr("wizard.household.family_size"),     str(total_size)),
@@ -1217,10 +1188,15 @@ class CaseDetailsPage(QWidget):
             (tr("wizard.household.elderly"),         str(hh.get('elderly_count', 0))),
             (tr("wizard.household.disabled"),        str(hh.get('disabled_count', 0))),
         ]
-        for label_text, value_text in rows:
-            self._household_content.addLayout(
-                self._make_label_value_row(label_text, value_text)
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        cols = 2
+        for idx, (label_text, value_text) in enumerate(rows):
+            grid.addWidget(
+                self._create_field_pair(label_text, value_text),
+                idx // cols, idx % cols,
             )
+        self._household_content.addLayout(grid)
 
     # -- Persons Card --
 
@@ -1273,9 +1249,6 @@ class CaseDetailsPage(QWidget):
                 border: 1px solid #E2EAF2;
                 border-radius: 10px;
             }}
-            QFrame:hover {{
-                border-color: #BFD6F0;
-            }}
         """)
 
         v = QVBoxLayout(card)
@@ -1285,40 +1258,65 @@ class CaseDetailsPage(QWidget):
         )
         v.setSpacing(ScreenScale.h(4))
 
-        # Top row: name (stretch) + role badge (compact)
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        top.setSpacing(ScreenScale.w(8))
-
+        # Top row: name field + role badge.
         full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
         if not full_name:
             full_name = person.get('full_name') or person.get('fullName') or person.get('name', '-')
+
+        name_block = QVBoxLayout()
+        name_block.setContentsMargins(0, 0, 0, 0)
+        name_block.setSpacing(2)
+
+        name_caption = QLabel(tr("wizard.applicant.full_name"))
+        name_caption.setLayoutDirection(get_layout_direction())
+        name_caption.setAlignment(text_align)
+        name_caption.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_caption.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        name_block.addWidget(name_caption)
 
         name_lbl = QLabel(str(full_name))
         name_lbl.setLayoutDirection(get_layout_direction())
         name_lbl.setAlignment(text_align)
         name_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+        name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
         name_lbl.setWordWrap(True)
-        top.addWidget(name_lbl, 1)
+        name_block.addWidget(name_lbl)
+
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.setSpacing(ScreenScale.w(8))
+        top.addLayout(name_block, 1)
 
         role_key = person.get('person_role') or person.get('relationship_type') or person.get('relation_type')
         if role_key:
             role_text = get_relationship_to_head_display(role_key) or str(role_key)
             role_badge = self._create_badge(role_text, "#EFF6FF", "#1D4ED8")
-            top.addWidget(role_badge, 0, Qt.AlignVCenter)
+            top.addWidget(role_badge, 0, Qt.AlignTop)
 
         v.addLayout(top)
 
-        # National ID row (always LTR — it's a number).
+        # National ID row with explicit label so the value has context.
         nid = person.get('national_id') or person.get('nationalId') or ''
         if nid:
-            nid_lbl = QLabel(str(nid))
-            nid_lbl.setLayoutDirection(Qt.LeftToRight)
-            nid_lbl.setAlignment((Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute)
-            nid_lbl.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
-            nid_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            v.addWidget(nid_lbl)
+            nid_row = QHBoxLayout()
+            nid_row.setContentsMargins(0, 0, 0, 0)
+            nid_row.setSpacing(ScreenScale.w(6))
+
+            nid_label = QLabel(f"{tr('wizard.applicant.national_id')}:")
+            nid_label.setLayoutDirection(get_layout_direction())
+            nid_label.setAlignment(text_align)
+            nid_label.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_SEMIBOLD))
+            nid_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+
+            nid_value = QLabel(str(nid))
+            nid_value.setLayoutDirection(Qt.LeftToRight)
+            nid_value.setAlignment((Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter)
+            nid_value.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
+            nid_value.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+
+            nid_row.addWidget(nid_label, 0)
+            nid_row.addWidget(nid_value, 1)
+            v.addLayout(nid_row)
 
         return card
 
@@ -1454,8 +1452,16 @@ class CaseDetailsPage(QWidget):
             logger.warning("No reference code in context for linked claims navigation")
             return
 
+        survey_id = ""
+        if self._context:
+            survey_id = (
+                self._context.get_data("survey_id")
+                or getattr(self._context, "wizard_id", "")
+                or ""
+            )
+
         logger.info(f"View linked claims requested for survey reference: {reference_code}")
-        self.view_linked_claims_requested.emit(reference_code)
+        self.view_linked_claims_requested.emit(reference_code, str(survey_id or ""))
 
     def _on_revert_to_draft_clicked(self):
         survey_id = None

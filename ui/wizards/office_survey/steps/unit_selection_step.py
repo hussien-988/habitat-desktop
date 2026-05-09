@@ -385,6 +385,23 @@ class UnitSelectionStep(BaseStep):
             else:
                 logger.warning(f"Filtered out unit {u.unit_id} - belongs to building {u_building}, not {building_uuid}")
 
+        # If a unit is already attached to this survey (resumed draft or earlier
+        # selection), restrict the displayed list to just that unit to prevent
+        # silently switching the survey's unit association.
+        if self.context.unit:
+            saved_uuid = getattr(self.context.unit, 'unit_uuid', None)
+            saved_id = getattr(self.context.unit, 'unit_id', None)
+            matched = [
+                u for u in units
+                if (saved_uuid and getattr(u, 'unit_uuid', None) == saved_uuid)
+                or (saved_id and getattr(u, 'unit_id', None) == saved_id)
+            ]
+            if matched:
+                units = matched
+            else:
+                units = [self.context.unit]
+            logger.info(f"Survey already has a unit attached; restricting view to selected unit only.")
+
         logger.info(f"Showing {len(units)} units (of {len(all_units)} returned by API) for building {building_uuid}")
 
         has_units = len(units) > 0
