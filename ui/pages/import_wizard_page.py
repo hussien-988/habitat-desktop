@@ -482,9 +482,29 @@ class ImportWizardPage(QWidget):
         self._clear_banner_action()
         self._apply_banner_severity("warning")
         self._error_title.setText(tr("wizard.import.timeout_decision_title"))
-        self._error_message.setText(
-            tr("wizard.import.timeout_decision_body").format(seconds=seconds)
-        )
+
+        # If we know the current package status, surface it inline so the user
+        # understands what the backend is still doing instead of seeing a
+        # generic "no progress" message.
+        status_text = ""
+        last_status = getattr(self, "_poll_last_status", None)
+        if last_status is not None:
+            try:
+                from services.import_status_map import status_label_key
+                status_text = tr(status_label_key(last_status))
+            except Exception:
+                status_text = ""
+
+        if status_text:
+            self._error_message.setText(
+                tr("wizard.import.timeout_decision_body_with_status").format(
+                    seconds=seconds, status=status_text
+                )
+            )
+        else:
+            self._error_message.setText(
+                tr("wizard.import.timeout_decision_body").format(seconds=seconds)
+            )
         self._error_trace.clear()
         self._error_trace.setVisible(False)
 

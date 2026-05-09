@@ -142,6 +142,7 @@ class LeafletHTMLGenerator:
         streets_json: str = None,  # JSON array of streets for map overlay
         max_selection: Optional[int] = None,  # None=unlimited; 1=single-select replace mode
         show_building_labels: bool = False,  # Whether to show building_id labels on the map
+        already_selected_ids: Optional[list] = None,  # Pre-selected building IDs (multi-select)
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -288,6 +289,7 @@ class LeafletHTMLGenerator:
         local_assets_url=local_assets_url,
         max_selection=max_selection,
         show_building_labels=show_building_labels,
+        already_selected_ids=already_selected_ids,
     )}
 </body>
 </html>
@@ -807,6 +809,7 @@ class LeafletHTMLGenerator:
         local_assets_url: str = '',
         max_selection: Optional[int] = None,
         show_building_labels: bool = False,
+        already_selected_ids: Optional[list] = None,
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -925,6 +928,9 @@ class LeafletHTMLGenerator:
 
         _max_selection_js = 'null' if max_selection is None else str(int(max_selection))
         _show_building_labels_js = 'true' if show_building_labels else 'false'
+        # JSON array of pre-selected building IDs; consumed by multiselect template to
+        # auto-mark them as selected when their markers render in the viewport.
+        _already_selected_ids_js = json.dumps(list(already_selected_ids or []))
         return f'''
     <script>
         // [PERF] First line of the main map-init script.
@@ -932,6 +938,9 @@ class LeafletHTMLGenerator:
 
         // [UNIFIED-DIALOG] Max selection count: null=unlimited, 1=single-select replace mode.
         window.maxSelection = {_max_selection_js};
+        // Pre-selected building IDs (multi-select). Multiselect template auto-marks these
+        // as selected when each marker is added to the map by viewport loading.
+        window.alreadySelectedIds = new Set({_already_selected_ids_js});
         var showBuildingLabels = {_show_building_labels_js};
 
         L.Icon.Default.imagePath = '{local_assets_url}/images/';

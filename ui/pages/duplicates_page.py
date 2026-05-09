@@ -235,6 +235,9 @@ class _DuplicateCard(AnimatedCard):
         score_label.setStyleSheet(
             f"color: {score_color}; background: transparent; border: none;"
         )
+        # Match the row's layout direction so the badge sits on the correct
+        # side in both LTR and RTL (otherwise it stays glued to the LTR end).
+        apply_label_alignment(score_label)
         row2.addWidget(score_label)
 
         layout.addLayout(row2)
@@ -426,8 +429,11 @@ class _ConflictWorker(QThread):
                 import_package_id=self.import_package_id,
             )
             if self.import_package_id:
-                items = result.get("items", []) if isinstance(result, dict) else []
-                summary = DuplicateService.compute_local_summary(items)
+                # No per-package summary endpoint exists, and computing the
+                # summary client-side would conflict with the "backend is the
+                # only source" rule. Skip the summary entirely in import context;
+                # the page hides summary cards in this mode.
+                summary = {}
             else:
                 # Summary endpoint failure must NOT corrupt the conflicts view —
                 # we still emit the conflicts list with an empty summary if it
@@ -731,6 +737,13 @@ class DuplicatesPage(QWidget):
             else:
                 self._banner_msg.setText(tr("page.duplicates.banner_import_context_no_name"))
             self._import_banner.setVisible(True)
+            # No per-package summary endpoint on the backend, so hide the
+            # summary cards AND header stat pill entirely in this mode rather
+            # than computing them on the client. Both would otherwise show 0.
+            if hasattr(self, "_summary_container"):
+                self._summary_container.setVisible(False)
+            if hasattr(self, "_stat_pending"):
+                self._stat_pending.setVisible(False)
             self._current_page = 1
             self._load_conflicts()
         else:
@@ -742,6 +755,10 @@ class DuplicatesPage(QWidget):
         self._import_package_id = None
         self._import_package_name = ""
         self._import_banner.setVisible(False)
+        if hasattr(self, "_summary_container"):
+            self._summary_container.setVisible(True)
+        if hasattr(self, "_stat_pending"):
+            self._stat_pending.setVisible(True)
         if had_context:
             self._banner_msg.setText(tr("page.duplicates.import_banner_msg"))
             self._current_page = 1
@@ -1014,6 +1031,11 @@ class DuplicatesPage(QWidget):
         self._clear_cards()
         self._cards_container.setVisible(False)
         self._pagination_footer.setVisible(False)
+
+        # Wipe summary card counts so the user doesn't see stale numbers
+        # next to the error state. They'll repopulate on the next successful load.
+        for card in getattr(self, "_summary_cards", []):
+            card.update_count(0)
 
         # Render the error inside the page so the user understands why the
         # list is empty (instead of showing fake "no conflicts" empty state).

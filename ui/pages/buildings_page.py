@@ -3024,6 +3024,7 @@ class BuildingsListPage(QWidget):
 
     def update_language(self, is_arabic: bool):
         """Update language."""
+        self._header.set_title(tr("page.buildings.title"))
         self._load_buildings()
 
 

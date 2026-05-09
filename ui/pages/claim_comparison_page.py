@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QGraphicsDropShadowEffect, QTextEdit,
     QGridLayout,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QColor, QIcon, QCursor
 
 from repositories.database import Database
@@ -1659,7 +1659,6 @@ class ClaimComparisonPage(QWidget):
                 Toast.show_toast(self, tr("page.comparison.record_id_not_found"), Toast.WARNING)
                 return
 
-        self.action_btn.setEnabled(False)
         from ui.pages.duplicates_page import _ResolutionWorker
         self._resolution_worker = _ResolutionWorker(
             self.duplicate_service, resolution_type,
@@ -1672,7 +1671,6 @@ class ClaimComparisonPage(QWidget):
 
     def _on_resolution_done(self, success: bool):
         self._spinner.hide_loading()
-        self.action_btn.setEnabled(True)
         if success:
             self._justification_edit.clear()
             Toast.show_toast(self, tr("page.comparison.action_success"), Toast.SUCCESS)
@@ -1693,13 +1691,15 @@ class ClaimComparisonPage(QWidget):
                         dup_page.refresh()
             except Exception as e:
                 logger.warning(f"Could not pre-refresh duplicates list: {e}")
-            self.back_requested.emit()
+            # Defer navigation by ~250ms so the refresh worker can hand its
+            # result to the duplicates page before it becomes visible —
+            # otherwise the user briefly sees the old (now-resolved) row.
+            QTimer.singleShot(250, self.back_requested.emit)
         else:
             Toast.show_toast(self, tr("page.comparison.action_failed"), Toast.WARNING)
 
     def _on_resolution_err(self, error_msg: str):
         self._spinner.hide_loading()
-        self.action_btn.setEnabled(True)
         Toast.show_toast(self, f"{tr('page.comparison.action_failed')}: {error_msg}", Toast.ERROR)
 
     # ────────────────────────────────────────────

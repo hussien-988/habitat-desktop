@@ -554,6 +554,7 @@ class BuildingMapDialog(BaseMapDialog):
                     boundaries_geojson=None,
                     boundary_level='neighbourhoods',
                     max_selection=getattr(self, '_max_selection', None),
+                    already_selected_ids=list(getattr(self, '_already_selected_ids', set()) or []),
                     show_building_labels=self._is_view_only,
                     skip_fit_bounds=self._is_view_only,
                 )
@@ -1231,6 +1232,7 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         self._perf_trace = perf_trace
         self._multi_selected_buildings: List[Building] = []
         self._already_selected_ids = set(already_selected_ids or [])
+        self._removed_pre_selected_ids: set = set()
         # [UNIFIED-DIALOG] None = unlimited (Field Work), 1 = single-select replace mode (Claims).
         self._max_selection = max_selection
 
@@ -1279,39 +1281,56 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
                 logger.warning(f"Could not wire FieldAssignmentMapProvider to viewport loader: {e}")
 
     def _on_buildings_multiselected(self, building_ids_json: str):
-        """Override: process batch building IDs from multiselect JS."""
+        """Override: process batch building IDs from multiselect JS.
+
+        Payload format (new): {"selected": [...], "explicitlyRemovedPreSelected": [...]}
+        Legacy format (list of ids) is also accepted for backward compatibility.
+
+        - selected: full current JS selection (pre-selected still active + newly added)
+        - explicitlyRemovedPreSelected: pre-selected items the user clicked to remove
+          (distinct from pre-selected items that were never rendered in viewport)
+        """
         import json as _json
         try:
-            new_ids = set(_json.loads(building_ids_json))
+            parsed = _json.loads(building_ids_json)
         except Exception:
             return
 
-        current_ids = {b.building_id for b in self._multi_selected_buildings}
-        added = new_ids - current_ids
-        removed = current_ids - new_ids
+        if isinstance(parsed, list):
+            full_selection_ids = set(parsed)
+            explicitly_removed = set()
+        elif isinstance(parsed, dict):
+            full_selection_ids = set(parsed.get('selected', []))
+            explicitly_removed = set(parsed.get('explicitlyRemovedPreSelected', []))
+        else:
+            return
 
-        # Remove deselected
+        self._removed_pre_selected_ids = explicitly_removed & self._already_selected_ids
+
+        # Net new selections (in JS list but not originally pre-selected)
+        new_added_ids = full_selection_ids - self._already_selected_ids
+
+        current_ids = {b.building_id for b in self._multi_selected_buildings}
+        added = new_added_ids - current_ids
+        removed = current_ids - new_added_ids
+
         if removed:
             self._multi_selected_buildings = [
                 b for b in self._multi_selected_buildings if b.building_id not in removed
             ]
 
-        # Add newly selected
         for bid in added:
-            # Check if already selected in step1
-            if bid in self._already_selected_ids:
-                if self.web_view:
-                    self.web_view.page().runJavaScript(
-                        "showMapToast('\u0647\u0630\u0627 \u0627\u0644\u0645\u0628\u0646\u0649 \u0645\u062e\u062a\u0627\u0631 \u0645\u0633\u0628\u0642\u0627\u064b');"
-                    )
-                continue
-
             matching = self._find_building_in_cache(bid)
             if matching:
                 self._multi_selected_buildings.append(matching)
 
-        self.confirm_btn.setEnabled(len(self._multi_selected_buildings) > 0)
-        logger.info(f"Multi-select: {len(self._multi_selected_buildings)} buildings selected")
+        # Confirm enabled if any change happened (additions OR removals of pre-selected)
+        has_changes = bool(self._multi_selected_buildings) or bool(self._removed_pre_selected_ids)
+        self.confirm_btn.setEnabled(has_changes)
+        logger.info(
+            f"Multi-select: {len(self._multi_selected_buildings)} new, "
+            f"{len(self._removed_pre_selected_ids)} removed pre-selected"
+        )
 
         # [UNIFIED-DIALOG] In single-select mode, show the chosen building's ID in the
         # counter label. Building ID stays in Latin digits regardless of UI language;
@@ -1366,8 +1385,29 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         pass
 
     def get_selected_buildings(self) -> List[Building]:
-        """Get all selected buildings."""
+        """Get newly added buildings (excludes pre-selected)."""
         return list(self._multi_selected_buildings)
+
+    def get_removed_pre_selected_ids(self) -> set:
+        """Get IDs of pre-selected buildings the user deselected on the map."""
+        return set(self._removed_pre_selected_ids)
+
+
+class MapSelectionResult:
+    """Result of a multi-select map dialog session.
+
+    added: new Building objects to add to caller's selection
+    removed_ids: pre-selected building IDs the user deselected on the map
+    """
+
+    __slots__ = ("added", "removed_ids")
+
+    def __init__(self, added: List[Building], removed_ids: set):
+        self.added = added
+        self.removed_ids = removed_ids
+
+    def __bool__(self):
+        return bool(self.added) or bool(self.removed_ids)
 
 
 def show_multiselect_map_dialog(
@@ -1404,6 +1444,44 @@ def show_multiselect_map_dialog(
         selected = dialog.get_selected_buildings()
         if selected:
             return selected
+
+    return None
+
+
+def show_multiselect_map_dialog_with_changes(
+    db: Database,
+    auth_token: Optional[str] = None,
+    parent=None,
+    center_lat: Optional[float] = None,
+    center_lon: Optional[float] = None,
+    initial_zoom: Optional[int] = None,
+    already_selected_ids: Optional[list] = None,
+    max_selection: Optional[int] = None,
+    perf_trace=None,
+) -> Optional[MapSelectionResult]:
+    """Show the multi-select map dialog and return both additions and removals.
+
+    Use this variant when the caller needs to apply removals of pre-selected
+    buildings (e.g. Field Work Step 1 lets the user deselect on the map too).
+
+    Returns MapSelectionResult on confirm, or None if cancelled.
+    """
+    dialog = MultiSelectBuildingMapDialog(
+        db, auth_token, parent,
+        center_lat=center_lat,
+        center_lon=center_lon,
+        initial_zoom=initial_zoom,
+        already_selected_ids=already_selected_ids,
+        max_selection=max_selection,
+        perf_trace=perf_trace,
+    )
+    result = dialog.exec_()
+
+    if result == dialog.Accepted:
+        added = dialog.get_selected_buildings()
+        removed = dialog.get_removed_pre_selected_ids()
+        if added or removed:
+            return MapSelectionResult(added=added, removed_ids=removed)
 
     return None
 
