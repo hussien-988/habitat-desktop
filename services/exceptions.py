@@ -64,21 +64,6 @@ _CTX_FALLBACK_KEY = {
     CTX_NETWORK: "api.error.network",
 }
 
-# Domain-message substring matchers — when the technical message contains
-# one of these keywords (case-insensitive), the user sees the mapped
-# translation key instead of a generic HTTP-status message. Earlier entries
-# win on first match.
-_DOMAIN_MATCHERS: List[tuple] = [
-    (("cannot find .uhc", "uhc file", "filenotfoundexception", "uploadedfilepath"),
-        "import.error.missing_package_file"),
-    # Re-uploading a package: backend has flagged a previous import for the
-    # same content. Status code can vary across deployments (409 vs 400 vs
-    # custom), so match on the message text to keep behavior stable.
-    (("already imported", "package already", "duplicate package", "existing package id"),
-        "import.error.duplicate_package"),
-]
-
-
 def _looks_like_stack(text: Optional[str]) -> bool:
     """Heuristic: does this string look like a .NET or Python stack trace?"""
     if not text:
@@ -115,12 +100,16 @@ class ApiException(Exception):
     """Raised for every non-2xx backend response.
 
     Attributes:
-      status_code     : HTTP status code (e.g. 400, 500)
-      message         : technical message (safe for logs, NEVER for UI)
-      response_data   : raw backend JSON (dict)
-      context         : operation label set by the controller (see CTX_*)
-      endpoint        : HTTP path of the failing request (when available)
-      method          : HTTP method of the failing request (when available)
+      status_code        : HTTP status code (e.g. 400, 500)
+      message            : technical message (safe for logs, NEVER for UI)
+      response_data      : raw backend JSON (dict)
+      context            : operation label set by the controller (see CTX_*)
+      endpoint           : HTTP path of the failing request (when available)
+      method             : HTTP method of the failing request (when available)
+      localized_response : True if the request sent Accept-Language; False for
+                           the map endpoints that pass skip_accept_language=True
+                           (their error bodies are in English and must NOT be
+                           shown raw to an Arabic user).
 
     Derived (parsed on demand):
       title           : response_data["title"]
@@ -136,6 +125,7 @@ class ApiException(Exception):
         context: str = CTX_GENERIC,
         endpoint: str = "",
         method: str = "",
+        localized_response: bool = True,
     ):
         super().__init__(message)
         self.message = message
@@ -144,6 +134,7 @@ class ApiException(Exception):
         self.context = context or CTX_GENERIC
         self.endpoint = endpoint
         self.method = method
+        self.localized_response = localized_response
 
     # ----- Parsed properties -------------------------------------------------
 
@@ -171,35 +162,33 @@ class ApiException(Exception):
         """Return a safe, translated user-facing message.
 
         Resolution order:
-          1. Domain-specific match against the technical message
+          1. Backend response_data["message"] | ["detail"] — raw, only when
+             the request was localized (Accept-Language sent). The map
+             endpoints pass skip_accept_language=True; their error bodies
+             are in English and skip this step.
           2. HTTP 400/422 with field_errors → validation headline +
-             bulleted list of the field messages (so the user sees e.g.
-             "سبب إعادة التعيين مطلوب لسجل التدقيق")
-          3. HTTP status code → generic api.error.* key
-          4. Operation context fallback (e.g. import.error.stage_failed)
-          5. api.error.generic
+             bulleted list of the backend's per-field messages.
+          3. HTTP status code → generic api.error.* key.
+          4. Operation context fallback (e.g. import.error.stage_failed).
+          5. api.error.generic.
         """
         ctx = context or self.context or CTX_GENERIC
-        # Lazy import keeps this module importable from places that run
-        # before the translation manager is initialised.
         from services.translation_manager import tr
 
-        domain_key = self._match_domain_message()
-        if domain_key:
-            return tr(domain_key)
+        if getattr(self, "localized_response", True):
+            rd = self.response_data or {}
+            backend_msg = rd.get("message") or rd.get("detail")
+            if backend_msg and isinstance(backend_msg, str) and backend_msg.strip():
+                return backend_msg.strip()
 
-        # For validation failures, surface the backend's per-field messages
-        # to the user — they're safe (no stack traces) and often explain
-        # exactly what to fix ("Reason is required", "Email is invalid", ...).
         if self.status_code in (400, 422) and self.field_errors:
             headline_key = (
                 "api.error.validation" if self.status_code == 400
                 else "api.error.unprocessable"
             )
-            headline = tr(headline_key)
             fields_text = self.field_error_summary(max_lines=6)
             if fields_text:
-                return f"{headline}\n{fields_text}"
+                return f"{tr(headline_key)}\n{fields_text}"
 
         status_key = _status_code_to_key(self.status_code or 0)
         msg = tr(status_key)
@@ -212,16 +201,6 @@ class ApiException(Exception):
             return msg
 
         return tr("api.error.generic")
-
-    def _match_domain_message(self) -> Optional[str]:
-        needle = (self.technical_message or "").lower()
-        if not needle:
-            return None
-        for keywords, key in _DOMAIN_MATCHERS:
-            for kw in keywords:
-                if kw in needle:
-                    return key
-        return None
 
     # ----- Developer helpers -------------------------------------------------
 

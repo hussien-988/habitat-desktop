@@ -43,6 +43,7 @@ from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from ui.wizards.office_survey.steps.occupancy_claims_step import _is_owner_relation
 from services.display_mappings import (
     get_relation_type_display, get_relationship_to_head_display,
@@ -729,7 +730,6 @@ class ReviewStep(BaseStep):
                 auth_token = getattr(main_window.current_user, '_api_token', None)
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
-            Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR)
 
         building = self.context.building
         if building:
@@ -1218,8 +1218,8 @@ class ReviewStep(BaseStep):
                             self._api_service.update_relation(survey_id, relation_id, updated_data)
                             logger.info(f"Relation {relation_id} updated via API")
                         except Exception as e:
-                            logger.warning(f"Failed to update relation {relation_id}: {e}")
-                            Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR)
+                            log_exception(e, logger, context="relation.update")
+                            Toast.show_toast(self, humanize_exception(e, context="relation.update"), Toast.ERROR)
                 except Exception as e:
                     from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
                     if is_duplicate_nid_error(e):
@@ -1452,8 +1452,8 @@ class ReviewStep(BaseStep):
                 if name:
                     self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
             except Exception as e:
-                logger.warning(f"Could not save interviewee name: {e}")
-                Toast.show_toast(self, tr("wizard.review.load_failed"), Toast.ERROR)
+                log_exception(e, logger, context="survey.save_draft")
+                Toast.show_toast(self, humanize_exception(e, context="survey.save_draft"), Toast.ERROR)
 
             # Step 1: process-claims if not already done
             if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):

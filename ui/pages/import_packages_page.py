@@ -23,6 +23,7 @@ from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
 from services.vocab_service import get_label as vocab_get_label
 from services.translation_manager import tr, get_layout_direction, apply_label_alignment
+from services.exceptions import humanize_exception, log_exception
 from services.import_status_map import (
     status_meta, is_history_status, queue_sort_priority,
     HISTORY as _HISTORY_STATUSES,
@@ -1066,7 +1067,8 @@ class ImportPackagesPage(QWidget):
             else:
                 ErrorHandler.show_error(self, result.message_ar or tr("page.import_packages.cancel_failed"))
         except Exception as e:
-            ErrorHandler.show_error(self, tr("page.import_packages.cancel_failed_detail", error=str(e)))
+            log_exception(e, logger, context="import.cancel")
+            ErrorHandler.show_error(self, humanize_exception(e, context="import.cancel"))
         finally:
             self._spinner.hide_loading()
 
@@ -1080,7 +1082,8 @@ class ImportPackagesPage(QWidget):
             else:
                 ErrorHandler.show_error(self, result.message_ar or tr("page.import_packages.quarantine_failed"))
         except Exception as e:
-            ErrorHandler.show_error(self, tr("page.import_packages.quarantine_failed_detail", error=str(e)))
+            log_exception(e, logger, context="import.quarantine")
+            ErrorHandler.show_error(self, humanize_exception(e, context="import.quarantine"))
         finally:
             self._spinner.hide_loading()
 
@@ -1121,7 +1124,8 @@ class ImportPackagesPage(QWidget):
                     result.message_ar or tr("page.import_packages.reset_failed"),
                 )
         except Exception as e:
-            ErrorHandler.show_error(self, str(e))
+            log_exception(e, logger, context="import.reset_commit")
+            ErrorHandler.show_error(self, humanize_exception(e, context="import.reset_commit"))
         finally:
             self._spinner.hide_loading()
 

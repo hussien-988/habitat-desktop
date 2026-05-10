@@ -35,4 +35,4 @@ class ApiWorker(QThread):
             self.error.emit(humanize_exception(e))
         except Exception as e:
             logger.warning(f"ApiWorker error: {e}")
-            self.error.emit(str(e))
+            self.error.emit(humanize_exception(e))

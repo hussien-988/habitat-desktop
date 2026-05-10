@@ -8,73 +8,14 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _get_api_response_message(error: ApiException) -> str:
-    """Extract the API's localized message from response_data, if available."""
-    rd = error.response_data or {}
-    detail = rd.get("detail", "")
-    if detail:
-        logger.debug(f"API error detail (dev): {detail}")
-    msg = rd.get("message", "")
-    return msg if isinstance(msg, str) else ""
-
-
 def map_api_error(error: ApiException) -> str:
     """Map API exception to a user-friendly translated message.
 
-    Prefers the API's localized 'message' when available,
-    falling back to status-code-based tr() mapping.
+    Thin delegate around ApiException.humanize() — kept for backward
+    compatibility with existing imports. The single source of truth for
+    backend-message-vs-translation resolution lives in services/exceptions.py.
     """
-    status = error.status_code
-    api_msg = _get_api_response_message(error)
-
-    if status == 400:
-        details = _extract_validation_details(error.response_data)
-        if details:
-            logger.warning(f"API validation error (400): {details}")
-            if api_msg:
-                return f"{api_msg.strip()}\n{details}"
-            return tr("error.api.validation", details=details)
-        if api_msg:
-            logger.warning(f"API error (400): {api_msg}")
-            return api_msg
-        logger.warning(f"API error (400): {error}")
-        return tr("error.api.validation", details=str(error))
-
-    # For all other status codes: prefer API localized message
-    if api_msg:
-        logger.warning(f"API error ({status}): {api_msg}")
-        return api_msg
-
-    # Fallback to status-code-based tr() mapping
-    if status == 401:
-        logger.warning(f"API unauthorized (401): {error}")
-        return tr("error.api.unauthorized")
-
-    if status == 403:
-        logger.warning(f"API forbidden (403): {error}")
-        return tr("error.api.forbidden")
-
-    if status == 404:
-        logger.warning(f"API not found (404): {error}")
-        return tr("error.api.not_found")
-
-    if status == 409:
-        logger.warning(f"API conflict (409): {error}")
-        return tr("error.api.conflict")
-
-    if status and status >= 500:
-        logger.error(f"API server error ({status}): {error}")
-        validation_details = _extract_validation_from_500(error)
-        if validation_details:
-            return tr("error.api.validation", details=validation_details)
-        return tr("error.api.server")
-
-    if status:
-        logger.warning(f"API error ({status}): {error}")
-        return tr("error.api.unknown")
-
-    logger.warning(f"API error (no status): {error}")
-    return tr("error.api.connection")
+    return error.humanize()
 
 
 def map_network_error(error: NetworkException) -> str:
@@ -89,48 +30,29 @@ def map_network_error(error: NetworkException) -> str:
 
 
 def map_exception(error: Exception, context: str = None) -> str:
-    """Map any exception to a user-friendly translated message."""
-    if isinstance(error, ApiException):
-        if not error.context and context:
-            error.context = context
-        return map_api_error(error)
+    """Map any exception to a user-friendly translated message.
 
-    if isinstance(error, NetworkException):
-        return map_network_error(error)
-
+    Delegates to humanize_exception (services/exceptions.py) so backend
+    `message`/`detail` wins for localized requests, validation field errors
+    are surfaced for 400/422, and the existing translation fallbacks apply
+    otherwise. Kept as a thin wrapper for callers that still import this name.
+    """
     if isinstance(error, ValidationException):
+        # Local frontend validation — keep specialized handling.
         if error.errors:
             details = "\n".join(f"- {e}" for e in error.errors)
             logger.warning(f"Validation error: {error.errors}")
             return tr("error.api.validation", details=details)
         return tr("error.api.unknown")
 
-    logger.warning(f"Unexpected error: {error}")
-    return tr("error.api.unknown")
+    if isinstance(error, ApiException) and context and not error.context:
+        try:
+            error.context = context
+        except Exception:
+            pass
 
-
-def _extract_validation_from_500(error: ApiException) -> str:
-    """Extract validation details from 500 errors caused by backend FluentValidation leaks."""
-    import re
-    error_text = str(error)
-    response_data = getattr(error, 'response_data', {}) or {}
-
-    details = _extract_validation_details(response_data)
-    if details:
-        return details
-
-    pattern = r'--\s*(\w+):\s*(.+?)(?:\s*Severity:|$)'
-    matches = re.findall(pattern, error_text)
-    if matches:
-        return "\n".join(f"- {field}: {msg.strip()}" for field, msg in matches)
-
-    if 'ValidationException' in error_text and 'Validation failed' in error_text:
-        start = error_text.find('Validation failed:')
-        if start >= 0:
-            msg = error_text[start:start + 200].split('\n')[0]
-            return msg
-
-    return ""
+    from services.exceptions import humanize_exception
+    return humanize_exception(error, context=context or "generic")
 
 
 def sanitize_user_message(msg: str) -> str:

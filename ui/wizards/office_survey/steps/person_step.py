@@ -34,6 +34,7 @@ from ui.design_system import Colors, ScreenScale
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
@@ -499,8 +500,8 @@ class PersonStep(BaseStep):
                 logger.info("No persons found from API (or empty list)")
 
         except Exception as e:
-            logger.error(f"Failed to fetch persons from API: {e}")
-            Toast.show_toast(self, tr("wizard.person.load_failed"), Toast.ERROR)
+            log_exception(e, logger, context="person.fetch")
+            Toast.show_toast(self, humanize_exception(e, context="person.fetch"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 

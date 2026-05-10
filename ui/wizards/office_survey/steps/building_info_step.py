@@ -29,6 +29,7 @@ from services.display_mappings import get_building_type_display, get_building_st
 from services.translation_manager import tr, get_layout_direction
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
+from services.exceptions import humanize_exception, log_exception
 from utils.logger import get_logger
 from ui.components.building_location_map_preview import BuildingLocationMapPreview
 
@@ -578,8 +579,8 @@ class BuildingInfoStep(BaseStep):
             self.context.update_data("survey_building_uuid", building_uuid)
             logger.info(f"Survey created successfully, survey_id: {survey_id}")
         except Exception as e:
-            logger.error(f"Survey creation failed: {e}")
-            result.add_error(tr("wizard.building_info.survey_creation_failed"))
+            log_exception(e, logger, context="office_survey.create")
+            result.add_error(humanize_exception(e, context="office_survey.create"))
 
         return result
 

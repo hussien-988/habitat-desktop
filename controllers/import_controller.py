@@ -36,26 +36,8 @@ logger = get_logger(__name__)
 
 
 def _fail_from_exception(exc: BaseException, context: str) -> OperationResult:
-    """Build a failed OperationResult from any exception.
-
-    Shared helper that attaches the normalized exception to the result
-    (as `.error`) and fills message_ar with the humanized text. Every
-    controller method uses this — no method builds its own Arabic string.
-    """
-    # Always pin the exception to the operation context the caller passed —
-    # otherwise the default CTX_GENERIC set in ApiException.__init__ wins and
-    # logs end up saying "context=generic" even when we know the caller.
-    try:
-        setattr(exc, "context", context)
-    except Exception:
-        pass
-    log_exception(exc, logger, context=context)
-    user_msg = humanize_exception(exc, context=context)
-    return OperationResult.fail(
-        message=str(exc),
-        message_ar=user_msg,
-        error=exc if isinstance(exc, (ApiException, NetworkException)) else None,
-    )
+    """Backwards-compatible wrapper around BaseController.fail_from_exception."""
+    return BaseController.fail_from_exception(exc, context, log=logger)
 
 
 def _is_stage_already_advanced(exc: ApiException) -> bool:

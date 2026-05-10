@@ -124,10 +124,12 @@ class SurveyController:
                     futures['persons'] = executor.submit(api.get_persons_for_household, survey_id, hh_id)
                 if claim_id:
                     futures['claim'] = executor.submit(api.get_claim_by_id, claim_id)
-                # Always fetch contact person via the survey-scoped endpoint.
-                # The detail response can return contactPersonId=null for draft
-                # surveys, and contact persons aren't always household members.
-                futures['contact_person'] = executor.submit(api.get_contact_person, survey_id)
+                # Skip the survey-scoped contact-person fetch when the detail
+                # response says no contact person is set — that endpoint returns
+                # 404 in that case and just clutters the log without changing
+                # behavior (survey_contact_person_dto stays None either way).
+                if contact_person_id:
+                    futures['contact_person'] = executor.submit(api.get_contact_person, survey_id)
 
             # Collect results with individual error handling
             if 'building' in futures:
@@ -273,6 +275,7 @@ class SurveyController:
                 "data": {
                     "survey_id": detail.get("id", ""),
                     "survey_building_uuid": building_id or "",
+                    "survey_property_unit_id": unit_id or "",
                     "household_id": hh_id,
                     "contact_person_id": resolved_cp_id,
                 },

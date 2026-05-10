@@ -452,7 +452,7 @@ class _ConflictWorker(QThread):
             )
         except Exception as e:
             logger.error(f"Conflict load unexpected: {e}")
-            self.error.emit(str(e), "")
+            self.error.emit(humanize_exception(e, context=CTX_LOAD_CONFLICTS), "")
 
 
 class _ResolutionWorker(QThread):
@@ -488,7 +488,7 @@ class _ResolutionWorker(QThread):
             self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
         except Exception as e:
             logger.error(f"Resolution unexpected error: {e}")
-            self.error.emit(str(e))
+            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
 
 
 # _EmptyStateConflicts removed — using EmptyStateAnimated from animated_card.py

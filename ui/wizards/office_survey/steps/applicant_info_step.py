@@ -926,26 +926,10 @@ class ApplicantInfoStep(BaseStep):
                         from services.error_mapper import map_exception
                         Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
                 self.context.update_data("uploaded_id_photos", list(already_uploaded))
-
-            # 7. Cache contact person locally
-            self._save_contact_person_locally(survey_id)
         finally:
             self._spinner.hide_loading()
 
         return result
-
-    def _save_contact_person_locally(self, survey_id: str):
-        """Cache contact person data locally for draft resume."""
-        try:
-            from repositories.survey_repository import SurveyRepository
-            repo = SurveyRepository(self.context.db)
-            cp_id = self.context.get_data("contact_person_id")
-            if cp_id and self.context.applicant:
-                repo.save_contact_person_cache(survey_id, cp_id, self.context.applicant)
-                logger.debug(f"Contact person cached locally for survey {survey_id}")
-        except Exception as e:
-            logger.warning(f"Failed to cache contact person locally: {e}")
-            Toast.show_toast(self, tr("wizard.applicant.load_failed"), Toast.ERROR)
 
     def collect_data(self) -> dict:
         fn  = self.first_name.text().strip()
@@ -966,6 +950,11 @@ class ApplicantInfoStep(BaseStep):
             full_mobile = f"09{raw}"
         else:
             full_mobile = ""
+        existing = self.context.applicant or {}
+        # Prefer the live UI list, but fall back to whatever applicant already
+        # has — guards against an async ID-photo download finishing after this
+        # call (which would leave self.uploaded_files empty momentarily).
+        photo_paths = list(self.uploaded_files) or list(existing.get("id_photo_paths", []))
         data = {
             "first_name_ar":  fn,
             "father_name_ar": fat,
@@ -976,14 +965,18 @@ class ApplicantInfoStep(BaseStep):
             "nationality":    self.nationality.currentData(),
             "national_id":    self.national_id.text().strip(),
 
-        
-            "phone":          full_mobile,      
+
+            "phone":          full_mobile,
             "landline":       ("0" + self.landline_digits.text().strip()) if self.landline_digits.text().strip() else "",
 
             "in_person":      self.in_person_check.isChecked(),
-            "id_photo_paths": list(self.uploaded_files),
+            "id_photo_paths": photo_paths,
             "full_name": " ".join(p for p in [fn, fat, ln] if p),
         }
+        # Carry server-side evidence metadata across so populate_data can still
+        # trigger a re-download if local temp files are gone next session.
+        if existing.get("id_photo_evidences"):
+            data["id_photo_evidences"] = existing["id_photo_evidences"]
 
         self.context.applicant = data
         return data
@@ -1153,6 +1146,12 @@ class ApplicantInfoStep(BaseStep):
                 self.uploaded_files = downloaded
                 self.context.update_data("uploaded_id_photos", list(set(downloaded)))
                 self._update_upload_thumbnails("id_upload", downloaded)
+                # Persist into applicant so a subsequent collect_data() that
+                # rebuilds the dict (or a navigation back to this step) can
+                # still find the downloaded paths instead of re-fetching.
+                if self.context.applicant is None:
+                    self.context.applicant = {}
+                self.context.applicant["id_photo_paths"] = list(downloaded)
                 logger.info(f"Downloaded {len(downloaded)} ID photos from server")
 
         def _on_error(msg):

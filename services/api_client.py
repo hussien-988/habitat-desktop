@@ -464,6 +464,7 @@ class TRRCMSApiClient:
                     response_data=response_data,
                     endpoint=endpoint,
                     method=method,
+                    localized_response=not skip_accept_language,
                 )
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 last_error = e

@@ -13,6 +13,7 @@ from controllers.building_controller import BuildingController
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction, apply_label_alignment
+from services.exceptions import humanize_exception, log_exception
 from ui.components.animated_card import AnimatedCard
 from ui.components.empty_state import EmptyState
 from ui.components.icon import Icon
@@ -1119,8 +1120,8 @@ class FieldWorkPreparationStep1(QWidget):
             )
 
         except Exception as e:
-            logger.error(f"Error loading filter data from API: {e}", exc_info=True)
-            Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
+            log_exception(e, logger, context="building.list_for_assignment")
+            Toast.show_toast(self, humanize_exception(e, context="building.list_for_assignment"), Toast.ERROR)
 
     def _on_community_changed(self, index):
         """Cascade: update neighborhoods based on selected community."""
@@ -1419,9 +1420,9 @@ class FieldWorkPreparationStep1(QWidget):
             self._update_pagination_controls()
 
         except Exception as e:
-            logger.error(f"Failed to process buildings response: {e}", exc_info=True)
+            log_exception(e, logger, context="building.list_for_assignment")
             self._clear_suggestion_cards()
-            Toast.show_toast(self, tr("wizard.step1.buildings_load_failed"), Toast.ERROR)
+            Toast.show_toast(self, humanize_exception(e, context="building.list_for_assignment"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 

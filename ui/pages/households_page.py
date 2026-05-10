@@ -27,6 +27,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from services.exceptions import humanize_exception, log_exception
 from ui.design_system import ScreenScale
 
 logger = get_logger(__name__)
@@ -676,8 +677,8 @@ class HouseholdsPage(QWidget):
                 Toast.show_toast(self, tr("household_deleted"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
-                logger.error(f"Failed to delete household: {e}")
-                Toast.show_toast(self, f"{tr('page.households.err_delete_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="household.delete")
+                Toast.show_toast(self, humanize_exception(e, context="household.delete"), Toast.ERROR)
 
     def refresh(self, data=None):
         """Refresh the households list."""
@@ -754,8 +755,8 @@ class HouseholdsPage(QWidget):
                 Toast.show_toast(self, tr("household_added"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
-                logger.error(f"Failed to create household: {e}")
-                Toast.show_toast(self, f"{tr('page.households.err_add_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="household.create")
+                Toast.show_toast(self, humanize_exception(e, context="household.create"), Toast.ERROR)
 
     def _edit_household(self, household: Household):
         """Edit existing household."""
@@ -776,8 +777,8 @@ class HouseholdsPage(QWidget):
                 Toast.show_toast(self, tr("household_updated"), Toast.SUCCESS)
                 self._load_households()
             except Exception as e:
-                logger.error(f"Failed to update household: {e}")
-                Toast.show_toast(self, f"{tr('page.households.err_update_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="household.update")
+                Toast.show_toast(self, humanize_exception(e, context="household.update"), Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update language."""
