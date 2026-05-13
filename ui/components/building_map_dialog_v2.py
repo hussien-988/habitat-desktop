@@ -14,7 +14,7 @@ from ui.components.base_map_dialog import BaseMapDialog, _perf  # [PERF] diagnos
 from services.leaflet_html_generator import generate_leaflet_html
 from services.geojson_converter import GeoJSONConverter
 from utils.logger import get_logger
-from services.translation_manager import tr
+from services.translation_manager import tr, get_language
 
 logger = get_logger(__name__)
 
@@ -373,6 +373,8 @@ class BuildingMapDialog(BaseMapDialog):
         self._map_data_provider = self.__dict__.get('_map_data_provider', None)
         self._enable_multiselect_in_map = self.__dict__.get('_enable_multiselect_in_map', False)
         self._initial_zoom = self.__dict__.get('_initial_zoom', None)
+        self._show_assignment_legend = self.__dict__.get('_show_assignment_legend', False)
+        self._initial_assignment_filter = self.__dict__.get('_initial_assignment_filter', None)
 
         # Unified default provider: all map dialog entry points share the same
         # FieldAssignmentMapProvider singleton viewport_loader cache.
@@ -490,6 +492,13 @@ class BuildingMapDialog(BaseMapDialog):
             QTimer.singleShot(0, self._prefetch_buildings_early)
             QTimer.singleShot(50, self._start_map_load)
 
+    def _build_legend_labels(self) -> dict:
+        return {
+            "title": tr("map.legend.title"),
+            "assigned": tr("map.legend.assigned"),
+            "not_assigned": tr("map.legend.not_assigned"),
+        }
+
     def _start_map_load(self):
         """Show map immediately with tiles, then load buildings in background."""
         from services.tile_server_manager import get_tile_server_url
@@ -557,6 +566,10 @@ class BuildingMapDialog(BaseMapDialog):
                     already_selected_ids=list(getattr(self, '_already_selected_ids', set()) or []),
                     show_building_labels=self._is_view_only,
                     skip_fit_bounds=self._is_view_only,
+                    show_assignment_legend=self._show_assignment_legend,
+                    legend_labels=self._build_legend_labels() if self._show_assignment_legend else None,
+                    legend_direction=("rtl" if get_language() == "ar" else "ltr"),
+                    initial_assignment_filter=self._initial_assignment_filter,
                 )
                 if cache_key is not None and html:
                     _cache_view_only_html(cache_key, html)
@@ -1227,7 +1240,8 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
                  initial_zoom: Optional[int] = None,
                  already_selected_ids: Optional[list] = None,
                  max_selection: Optional[int] = None,
-                 perf_trace=None):
+                 perf_trace=None,
+                 initial_assignment_filter: Optional[str] = None):
         # Stash trace before super().__init__ so the parent ctor sees it via __dict__.get
         self._perf_trace = perf_trace
         self._multi_selected_buildings: List[Building] = []
@@ -1241,6 +1255,8 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
         self._initial_center_lon = center_lon
         self._initial_zoom = initial_zoom
         self._enable_multiselect_in_map = True
+        self._show_assignment_legend = True
+        self._initial_assignment_filter = initial_assignment_filter
 
         # FieldAssignmentMapProvider gives hasActiveAssignment + isLocked
         try:
@@ -1458,6 +1474,7 @@ def show_multiselect_map_dialog_with_changes(
     already_selected_ids: Optional[list] = None,
     max_selection: Optional[int] = None,
     perf_trace=None,
+    initial_assignment_filter: Optional[str] = None,
 ) -> Optional[MapSelectionResult]:
     """Show the multi-select map dialog and return both additions and removals.
 
@@ -1474,6 +1491,7 @@ def show_multiselect_map_dialog_with_changes(
         already_selected_ids=already_selected_ids,
         max_selection=max_selection,
         perf_trace=perf_trace,
+        initial_assignment_filter=initial_assignment_filter,
     )
     result = dialog.exec_()
 

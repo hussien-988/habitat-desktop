@@ -505,6 +505,11 @@ class FieldWorkPreparationStep1(QWidget):
         self._total_count = 0
         self._total_pages = 1
         self._current_page_buildings = []
+        # Monotonic id for in-flight buildings requests. Each call to
+        # _load_buildings_from_api increments this; stale responses (whose id
+        # does not match the latest) are ignored so the UI only ever renders
+        # the most recent filter/search/pagination state.
+        self._buildings_request_id = 0
 
         # Cache for filter data (from API)
         self._all_communities = []  # [(code, name_ar, name_en), ...]
@@ -616,14 +621,15 @@ class FieldWorkPreparationStep1(QWidget):
         filters_layout = QHBoxLayout()
         filters_layout.setSpacing(16)
 
-        # Filter 1: Community
-        filter1_container, self._filter1_label = self._create_filter_field(tr("filter.step1.community"))
+        # Filter 1: Community — hidden by product decision (only neighborhood
+        # + assignment status are surfaced). The combo is kept in memory so
+        # the cascade in _on_community_changed and any external readers
+        # (filter dicts) stay valid; it just isn't added to the layout.
         self.community_combo = QComboBox()
         self.community_combo.setPlaceholderText(tr("filter.step1.select_community"))
-        self._style_combo(self.community_combo)
         self.community_combo.currentIndexChanged.connect(self._on_community_changed)
-        filter1_container.layout().addWidget(self.community_combo)
-        filters_layout.addWidget(filter1_container, 1)
+        self.community_combo.hide()
+        self._filter1_label = None
 
         # Filter 2: Neighborhood -- cascading from community
         filter2_container, self._filter2_label = self._create_filter_field(tr("filter.step1.neighborhood"))
@@ -1048,13 +1054,35 @@ class FieldWorkPreparationStep1(QWidget):
                 background-color: #EFF6FF;
                 color: #1d4ed8;
             }}
-            QScrollBar:vertical {{
-                width: 0px;
+            QComboBox QAbstractItemView QScrollBar:vertical {{
+                border: none;
+                background: transparent;
+                width: 6px;
+                margin: 0;
             }}
-            QScrollBar:horizontal {{
+            QComboBox QAbstractItemView QScrollBar::handle:vertical {{
+                background: #CBD5E1;
+                border-radius: 3px;
+                min-height: 24px;
+            }}
+            QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {{
+                background: #94A3B8;
+            }}
+            QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+            QComboBox QAbstractItemView QScrollBar::sub-line:vertical {{
+                height: 0;
+            }}
+            QComboBox QAbstractItemView QScrollBar:horizontal {{
                 height: 0px;
             }}
         """)
+        # Ensure long lists actually need scrolling (default is 10).
+        combo.setMaxVisibleItems(10)
+        # Switch dropdown to a real listview so the scrollbar policy/style
+        # is honored consistently across platforms.
+        from PyQt5.QtWidgets import QListView
+        combo.setView(QListView())
+        combo.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
     def _load_filter_data(self):
         """Load communities and neighborhoods from API."""
@@ -1149,11 +1177,9 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_checkbox_changed(self, building, state):
         """Handle selection state change from suggestion cards."""
         if state == Qt.Checked:
-            self._selected_building_ids.add(building.building_id)
-            self._selected_buildings[building.building_id] = building
+            self._add_to_selection(building)
         else:
-            self._selected_building_ids.discard(building.building_id)
-            self._selected_buildings.pop(building.building_id, None)
+            self._remove_from_selection(building.building_id)
 
         self._update_selection_count()
         self._update_selected_card_visibility()
@@ -1232,6 +1258,34 @@ class FieldWorkPreparationStep1(QWidget):
 
             building_id = getattr(card.building, "building_id", None)
             card.is_selected = building_id in self._selected_building_ids
+
+    # -- Selection state helpers (single source of truth) ----------------------
+    #
+    # `_selected_building_ids` (set) and `_selected_buildings` (dict) MUST stay
+    # in sync. Always mutate them through these two methods — never touch
+    # either container directly from a call site. Visual sync is delegated to
+    # `_sync_visible_card_selection_state` so we never have inline `for card`
+    # loops scattered across handlers.
+
+    def _add_to_selection(self, building) -> bool:
+        """Add a building to the selection. Returns True if newly added."""
+        if building is None:
+            return False
+        bid = getattr(building, "building_id", None)
+        if not bid or bid in self._selected_building_ids:
+            return False
+        self._selected_building_ids.add(bid)
+        self._selected_buildings[bid] = building
+        return True
+
+    def _remove_from_selection(self, building_id) -> bool:
+        """Remove a building id from the selection. Returns True if removed."""
+        if not building_id or building_id not in self._selected_building_ids:
+            return False
+        self._selected_building_ids.discard(building_id)
+        self._selected_buildings.pop(building_id, None)
+        return True
+
     def clear_all_selections(self):
         """Clear all selections (used by parent page on refresh)."""
         self._selected_building_ids.clear()
@@ -1242,11 +1296,14 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _remove_building_selection(self, building_id):
-        """Remove building from selection and update UI."""
-        self._selected_building_ids.discard(building_id)
-        self._selected_buildings.pop(building_id, None)
+        """Remove building from selection and update UI.
 
-        # Remove card from view
+        Single-write state mutation via `_remove_from_selection`; visual sync
+        is delegated to either `_show_selected_buildings_view` (in selected
+        view) or `_sync_visible_card_selection_state` (in search view).
+        """
+        self._remove_from_selection(building_id)
+
         if self._showing_selected_view:
             if self._selected_buildings:
                 self._show_selected_buildings_view()
@@ -1256,11 +1313,7 @@ class FieldWorkPreparationStep1(QWidget):
                 self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
                 self._results_stack.setCurrentIndex(0)
         else:
-            # Uncheck card in search results
-            for card in self._suggestion_cards:
-                if card.building.building_id == building_id:
-                    card.is_selected = False
-                    break
+            self._sync_visible_card_selection_state()
 
         self._update_selection_count()
         self._update_selected_card_visibility()
@@ -1342,8 +1395,23 @@ class FieldWorkPreparationStep1(QWidget):
         self._update_selected_card_visibility()
 
     def _load_buildings_from_api(self):
-        """Load one server-side page using current filters and search text."""
+        """Load one server-side page using current filters and search text.
+
+        Concurrency: each call bumps `_buildings_request_id`. Late responses
+        from earlier filter/search/page changes carry a stale id and are
+        dropped in `_on_buildings_loaded` / `_on_buildings_load_error` so the
+        UI never renders the wrong result of a rapid sequence (e.g. user
+        types → presses search → changes neighborhood before the first
+        response arrives).
+        """
         self._spinner.show_loading(tr("page.field_step1.searching_buildings"))
+
+        # Disable pagination buttons while a request is in flight so the user
+        # can't queue another page change on top of the current one.
+        if hasattr(self, "_prev_page_btn"):
+            self._prev_page_btn.setEnabled(False)
+        if hasattr(self, "_next_page_btn"):
+            self._next_page_btn.setEnabled(False)
 
         filters = self.get_filters()
 
@@ -1362,6 +1430,12 @@ class FieldWorkPreparationStep1(QWidget):
         neigh_code = filters.get('neighborhood') or None
         comm_pcode = self._comm_pcode_by_code.get(comm_code) if comm_code else None
         neigh_pcode = self._neigh_pcode_by_code.get(neigh_code) if neigh_code else None
+
+        # Bump request id and bind it to the worker's callbacks so a stale
+        # response can be detected and dropped.
+        self._buildings_request_id += 1
+        request_id = self._buildings_request_id
+
         self._buildings_worker = ApiWorker(
             api.get_buildings_for_assignment,
             community_code=None if comm_pcode else comm_code,
@@ -1373,12 +1447,26 @@ class FieldWorkPreparationStep1(QWidget):
             page=self._current_page,
             page_size=self._page_size
         )
-        self._buildings_worker.finished.connect(self._on_buildings_loaded)
-        self._buildings_worker.error.connect(self._on_buildings_load_error)
+        self._buildings_worker.finished.connect(
+            lambda response, rid=request_id: self._on_buildings_loaded(response, rid)
+        )
+        self._buildings_worker.error.connect(
+            lambda msg, rid=request_id: self._on_buildings_load_error(msg, rid)
+        )
         self._buildings_worker.start()
 
-    def _on_buildings_loaded(self, response):
-        """Handle API response for server-side building search/filter page."""
+    def _on_buildings_loaded(self, response, request_id=None):
+        """Handle API response for server-side building search/filter page.
+
+        Drops responses whose `request_id` does not match the latest dispatched
+        request — prevents a slow earlier query from overwriting a fresher one.
+        """
+        if request_id is not None and request_id != self._buildings_request_id:
+            logger.info(
+                "Dropping stale buildings response (rid=%s, latest=%s)",
+                request_id, self._buildings_request_id,
+            )
+            return
         try:
             items = response.get("items", [])
             buildings = [self._api_dto_to_building(item) for item in items]
@@ -1426,8 +1514,19 @@ class FieldWorkPreparationStep1(QWidget):
         finally:
             self._spinner.hide_loading()
 
-    def _on_buildings_load_error(self, error_msg):
-        """Handle API error for building search."""
+    def _on_buildings_load_error(self, error_msg, request_id=None):
+        """Handle API error for building search.
+
+        Stale errors (from a request the user has already moved past) are
+        suppressed so the toast doesn't surprise the user with a problem
+        from a query they no longer care about.
+        """
+        if request_id is not None and request_id != self._buildings_request_id:
+            logger.info(
+                "Dropping stale buildings error (rid=%s, latest=%s)",
+                request_id, self._buildings_request_id,
+            )
+            return
         logger.error(f"Failed to load buildings from API: {error_msg}")
         self._current_page_buildings = []
         self._total_count = 0
@@ -1537,51 +1636,70 @@ class FieldWorkPreparationStep1(QWidget):
             stagger_fade_in(self._suggestion_cards, stagger_ms=40, duration=250)
 
     def _on_card_selection_changed(self, building, is_selected):
-        """Handle card selection toggle from _SelectableBuildingCard."""
+        """Handle card selection toggle from _SelectableBuildingCard.
+
+        Mutates state ONLY via `_add_to_selection` / `_remove_from_selection`,
+        then defers all visual card-state updates to
+        `_sync_visible_card_selection_state`. This eliminates the previous
+        pattern of writing state inline and chasing individual cards with
+        manual `for` loops that could drift out of sync.
+        """
         if is_selected:
-            if building.building_id in self._selected_building_ids:
+            newly_added = self._add_to_selection(building)
+            if not newly_added:
+                # Already in the selection — warn the user once and re-sync
+                # the visible card so its checkbox reflects the truth.
                 Toast.show_toast(self, tr("wizard.step1.already_selected"), Toast.WARNING)
-                for card in self._suggestion_cards:
-                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
-                        card.is_selected = True
-                        break
-                return
-            
-            self._on_checkbox_changed(building, Qt.Checked)
-            for card in self._suggestion_cards:
-                if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
-                    card.is_selected = True
-                    break
-        else:
-            self._on_checkbox_changed(building, Qt.Unchecked)
-            if self._showing_selected_view:
-                for card in self._suggestion_cards[:]:
-                    if card.building.building_id == building.building_id:
-                        self._suggestions_layout.removeWidget(card)
-                        self._suggestion_cards.remove(card)
-                        card.deleteLater()
-                        break
-                if not self._suggestion_cards:
-                    self._showing_selected_view = False
-                    self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
-                    self._results_stack.setCurrentIndex(0)
+            self._sync_visible_card_selection_state()
+            self._update_selection_count()
+            self._update_selected_card_visibility()
+            return
+
+        # Removal path
+        self._remove_from_selection(building.building_id)
+
+        if self._showing_selected_view:
+            # In "view selected" mode the unchecked card no longer belongs in
+            # the visible list. Rebuilding the whole grid keeps the 2-column
+            # layout tidy and avoids any orphaned row containers.
+            if self._selected_buildings:
+                self._show_selected_buildings_view()
             else:
-                for card in self._suggestion_cards:
-                    if hasattr(card, 'is_selected') and card.building.building_id == building.building_id:
-                        card.is_selected = False
-                        break
-        self._sync_visible_card_selection_state()
+                self._clear_suggestion_cards()
+                self._showing_selected_view = False
+                self.empty_label.set_title(tr("wizard.step1.select_filters_hint"))
+                self._results_stack.setCurrentIndex(0)
+        else:
+            self._sync_visible_card_selection_state()
+
+        self._update_selection_count()
+        self._update_selected_card_visibility()
     def _on_filter_changed(self):
-        """Reload first server-side page when any filter changes."""
+        """Reload first server-side page when any filter changes.
+
+        Always exits view-selected mode explicitly — if the user was reviewing
+        their picks and changed a filter, the expected behaviour is to see
+        fresh search results (not a stale 'selected only' view with hidden
+        pagination and a misleading toggle button).
+        """
+        self._showing_selected_view = False
         self._current_page = 1
         self._clear_suggestion_cards()
         self._set_suggestions_visible(True)
         self._load_buildings_from_api()
+        # Refresh the bottom selection bar so the toggle button shows the
+        # correct label ("View Selected (n)") instead of the reverse-mode text.
+        self._update_selected_card_visibility()
 
     def _on_search(self):
-        """Handle search icon click - show suggestions with filtered results."""
+        """Handle search icon click - show suggestions with filtered results.
+
+        Same view-selected reset rule as `_on_filter_changed` — searching is a
+        new query intent, so we always land on a real results view.
+        """
         search_text = self.building_search.text().strip()
         logger.debug(f"Searching for: {search_text}")
+        self._showing_selected_view = False
         self._current_page = 1
         self._load_buildings_from_api()
 
@@ -1618,6 +1736,10 @@ class FieldWorkPreparationStep1(QWidget):
             if neighborhood_code:
                 center_lat, center_lon = self._get_neighborhood_center(neighborhood_code)
 
+            # Honor the page's assignment-status combo on the map view.
+            # Values: None (all) / "true" (assigned) / "false" (not assigned).
+            assignment_filter = filters.get('assignment_status')
+
             change_result = show_multiselect_map_dialog_with_changes(
                 db=self.building_controller.db,
                 parent=self,
@@ -1626,6 +1748,7 @@ class FieldWorkPreparationStep1(QWidget):
                 initial_zoom=17 if neighborhood_code else None,
                 already_selected_ids=list(self._selected_building_ids),
                 perf_trace=perf_trace,
+                initial_assignment_filter=assignment_filter,
             )
 
             if not change_result:
@@ -1636,20 +1759,16 @@ class FieldWorkPreparationStep1(QWidget):
             added_buildings = change_result.added or []
 
             # Apply removals (state-only; visuals refreshed once below)
+            removed_count = 0
             for bid in removed_ids:
-                self._selected_building_ids.discard(bid)
-                self._selected_buildings.pop(bid, None)
+                if self._remove_from_selection(bid):
+                    removed_count += 1
 
-            # Apply additions; skip any that snuck in as already-selected
+            # Apply additions; helper rejects duplicates automatically.
             added_count = 0
             for building in added_buildings:
-                if building.building_id in self._selected_building_ids:
-                    continue
-                self._selected_building_ids.add(building.building_id)
-                self._selected_buildings[building.building_id] = building
-                added_count += 1
-
-            removed_count = len(removed_ids)
+                if self._add_to_selection(building):
+                    added_count += 1
 
             # Sync visible card states (replaces previous double-emit pattern)
             if self._results_stack.currentIndex() == 1 and not self._showing_selected_view:
@@ -1807,16 +1926,19 @@ class FieldWorkPreparationStep1(QWidget):
     def _on_search_enter(self):
         """Handle Enter key press in search field -- execute search immediately."""
         self._search_debounce_timer.stop()
+        self._showing_selected_view = False
         self._current_page = 1
         self._load_buildings_from_api()
         self._set_suggestions_visible(True)
+        self._update_selected_card_visibility()
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""
         self.setLayoutDirection(get_layout_direction())
 
-        # Filter labels
-        self._filter1_label.setText(tr("filter.step1.community"))
+        # Filter labels (community filter is hidden — guarded)
+        if self._filter1_label is not None:
+            self._filter1_label.setText(tr("filter.step1.community"))
         self._filter2_label.setText(tr("filter.step1.neighborhood"))
         self._filter3_label.setText(tr("filter.step1.assignment_status"))
 

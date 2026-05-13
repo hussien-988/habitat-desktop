@@ -8,7 +8,7 @@ sync pulse overlay, status change notifications, and unassign.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QScrollArea, QComboBox,
-    QPushButton, QStackedWidget
+    QPushButton, QStackedWidget, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
@@ -29,39 +29,88 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def _get_status_config():
-    return {
-        'not_transferred': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
-        'pending': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
-        '0': (tr("page.sync.status_pending"), '#9CA3AF', '#F3F4F6'),
-        'transferring': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
-        'in_progress': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
-        '1': (tr("page.sync.status_syncing"), '#3890DF', '#EBF5FF'),
-        'transferred': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
-        'completed': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
-        '2': (tr("page.sync.status_synced"), '#10B981', '#ECFDF5'),
-        'failed': (tr("page.sync.status_failed"), '#EF4444', '#FEF2F2'),
-        '3': (tr("page.sync.status_failed"), '#EF4444', '#FEF2F2'),
-        '4': (tr("page.sync.status_retrying"), '#F59E0B', '#FFFBEB'),
-        'retry': (tr("page.sync.status_retrying"), '#F59E0B', '#FFFBEB'),
-        '5': (tr("page.sync.status_cancelled"), '#6B7280', '#F9FAFB'),
-        'cancelled': (tr("page.sync.status_cancelled"), '#6B7280', '#F9FAFB'),
-    }
+STATUS_PENDING = 1
+STATUS_IN_PROGRESS = 2
+STATUS_TRANSFERRED = 3
+STATUS_FAILED = 4
+STATUS_CANCELLED = 5
+STATUS_PARTIAL_TRANSFER = 6
+STATUS_SYNCHRONIZED = 7
 
-_SYNCING_STATUSES = {'transferring', 'in_progress', '1'}
-_PENDING_STATUSES = {'not_transferred', 'pending', '0'}
-_COMPLETED_STATUSES = {'transferred', 'completed', '2'}
-_CANCELLED_STATUSES = {'cancelled', '5'}
-
-# Status string -> strip color mapping
-_STATUS_STRIP_COLOR = {
-    'not_transferred': '#9CA3AF', 'pending': '#9CA3AF', '0': '#9CA3AF',
-    'transferring': '#3890DF', 'in_progress': '#3890DF', '1': '#3890DF',
-    'transferred': '#10B981', 'completed': '#10B981', '2': '#10B981',
-    'failed': '#EF4444', '3': '#EF4444',
-    '4': '#F59E0B', 'retry': '#F59E0B',
-    '5': '#6B7280', 'cancelled': '#6B7280',
+_STATUS_PALETTE = {
+    STATUS_PENDING:         ("#92400E", "#FEF3C7", "#FDE68A"),
+    STATUS_IN_PROGRESS:     ("#1E40AF", "#DBEAFE", "#93C5FD"),
+    STATUS_TRANSFERRED:     ("#0F766E", "#CCFBF1", "#5EEAD4"),
+    STATUS_FAILED:          ("#B91C1C", "#FEE2E2", "#FCA5A5"),
+    STATUS_CANCELLED:       ("#475569", "#E2E8F0", "#CBD5E1"),
+    STATUS_PARTIAL_TRANSFER:("#C2410C", "#FFEDD5", "#FDBA74"),
+    STATUS_SYNCHRONIZED:    ("#15803D", "#DCFCE7", "#86EFAC"),
 }
+
+_NAME_TO_CODE = {
+    "pending": STATUS_PENDING,
+    "inprogress": STATUS_IN_PROGRESS,
+    "transferred": STATUS_TRANSFERRED,
+    "failed": STATUS_FAILED,
+    "cancelled": STATUS_CANCELLED,
+    "partialtransfer": STATUS_PARTIAL_TRANSFER,
+    "synchronized": STATUS_SYNCHRONIZED,
+}
+
+_PENDING_STATUS_CODES = {STATUS_PENDING}
+_IN_FLIGHT_STATUS_CODES = {STATUS_IN_PROGRESS}
+_DONE_STATUS_CODES = {STATUS_TRANSFERRED, STATUS_SYNCHRONIZED}
+_FAILED_STATUS_CODES = {STATUS_FAILED}
+_CANCELLED_STATUS_CODES = {STATUS_CANCELLED}
+
+
+def _resolve_status_code(assignment: dict) -> int:
+    if not isinstance(assignment, dict):
+        return STATUS_PENDING
+    raw = assignment.get("transferStatus")
+    if raw is None:
+        raw = assignment.get("transfer_status")
+    if raw is None:
+        raw = assignment.get("transferStatusName")
+    if isinstance(raw, int) and 1 <= raw <= 7:
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.isdigit():
+            n = int(s)
+            return n if 1 <= n <= 7 else STATUS_PENDING
+        key = s.lower().replace(" ", "").replace("_", "")
+        return _NAME_TO_CODE.get(key, STATUS_PENDING)
+    return STATUS_PENDING
+
+
+def _resolve_status_label(code: int, assignment: dict = None) -> str:
+    from services.vocab_service import get_label as vocab_get_label
+    label = vocab_get_label("transfer_status", code)
+    if label and label != str(code):
+        return label
+    if isinstance(assignment, dict):
+        name = assignment.get("transferStatusName")
+        if name:
+            return str(name)
+    return str(code)
+
+
+def _resolve_status_colors(code: int) -> tuple:
+    return _STATUS_PALETTE.get(code, _STATUS_PALETTE[STATUS_PENDING])
+
+
+def _build_pill_stylesheet(text_color: str, bg: str, border: str) -> str:
+    return f"""
+        QLabel {{
+            background-color: {bg};
+            color: {text_color};
+            border: 1px solid {border};
+            border-radius: 9999px;
+            padding: 4px 14px;
+            font-weight: 600;
+        }}
+    """
 
 def _get_unit_type_ar():
     return {
@@ -137,8 +186,8 @@ class _AssignmentCard(AnimatedCard):
 
     def __init__(self, assignment: dict, parent=None):
         self._assignment = assignment
-        self._status_str = self._resolve_status(assignment)
-        strip_color = _STATUS_STRIP_COLOR.get(self._status_str, '#9CA3AF')
+        self._status_code = _resolve_status_code(assignment)
+        text_color, _, _ = _resolve_status_colors(self._status_code)
 
         self._status_badge = None
         self._meta_lbl = None
@@ -151,22 +200,16 @@ class _AssignmentCard(AnimatedCard):
             border_radius=12,
             show_chevron=True,
             show_strip=False,
-            status_color=strip_color,
+            status_color=text_color,
             strip_width=5,
             clickable=True,
         )
 
         self._assignment_id = self._resolve_id(assignment)
 
-    @staticmethod
-    def _resolve_status(assignment: dict) -> str:
-        status = (
-            assignment.get("transferStatusName")
-            or assignment.get("transferStatus")
-            or assignment.get("transfer_status")
-            or "not_transferred"
-        )
-        return str(status).lower().replace(" ", "_")
+    @property
+    def _status_str(self) -> str:
+        return str(self._status_code)
 
     @staticmethod
     def _resolve_id(assignment: dict) -> str:
@@ -179,7 +222,7 @@ class _AssignmentCard(AnimatedCard):
 
     def _build_content(self, layout: QVBoxLayout):
         a = self._assignment
-        status_str = self._status_str
+        status_code = self._status_code
 
         # -- Row 1: building info + status badge --
         row1 = QHBoxLayout()
@@ -218,37 +261,8 @@ class _AssignmentCard(AnimatedCard):
 
         row1.addStretch()
 
-        # Status badge
         status_badge = QLabel()
-        is_completed = status_str in _COMPLETED_STATUSES
-        if is_completed:
-            sync_date = (
-                a.get("transferDate")
-                or a.get("transfer_date")
-                or a.get("assignedDate")
-                or a.get("created_at")
-                or ""
-            )
-            date_str = str(sync_date)[:10] if sync_date else ""
-            status_badge.setText(date_str)
-            status_badge.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=QFont.Normal))
-            status_badge.setStyleSheet(
-                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-            )
-        else:
-            label, color, bg = _get_status_config().get(
-                status_str, _get_status_config()['not_transferred']
-            )
-            status_badge.setText(label)
-            status_badge.setFont(create_font(
-                size=FontManager.SIZE_CAPTION,
-                weight=FontManager.WEIGHT_SEMIBOLD
-            ))
-            status_badge.setAlignment(Qt.AlignCenter)
-            status_badge.setFixedHeight(ScreenScale.h(22))
-            status_badge.setMinimumWidth(ScreenScale.w(80))
-            status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
-
+        self._apply_status_badge(status_badge, status_code, a)
         self._status_badge = status_badge
         row1.addWidget(status_badge)
         layout.addLayout(row1)
@@ -296,66 +310,53 @@ class _AssignmentCard(AnimatedCard):
         pending_count = a.get("pendingCount") or a.get("notTransferredCount") or 0
 
         if transferred_count:
-            chip_transferred = QLabel(f"{tr('page.sync.status_synced')}: {transferred_count}")
+            chip_label = _resolve_status_label(STATUS_SYNCHRONIZED, a)
+            t_color, t_bg, t_border = _resolve_status_colors(STATUS_SYNCHRONIZED)
+            chip_transferred = QLabel(f"{chip_label}: {transferred_count}")
             chip_transferred.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            chip_transferred.setStyleSheet(StyleManager.status_badge('#10B981', '#ECFDF5'))
+            chip_transferred.setStyleSheet(_build_pill_stylesheet(t_color, t_bg, t_border))
             self._chip_transferred = chip_transferred
             row3.addWidget(chip_transferred)
 
         if pending_count:
-            chip_pending = QLabel(f"{tr('page.sync.status_pending')}: {pending_count}")
+            pchip_label = _resolve_status_label(STATUS_PENDING, a)
+            p_color, p_bg, p_border = _resolve_status_colors(STATUS_PENDING)
+            chip_pending = QLabel(f"{pchip_label}: {pending_count}")
             chip_pending.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            chip_pending.setStyleSheet(StyleManager.status_badge('#9CA3AF', '#F3F4F6'))
+            chip_pending.setStyleSheet(_build_pill_stylesheet(p_color, p_bg, p_border))
             self._chip_pending = chip_pending
             row3.addWidget(chip_pending)
 
         row3.addStretch()
         layout.addLayout(row3)
 
-    def update_status(self, assignment: dict, new_status: str):
-        """Update the status badge and strip color in-place."""
-        self._status_str = new_status
-        self._assignment = assignment
+    def _apply_status_badge(self, badge: QLabel, code: int, assignment: dict):
+        text_color, bg, border = _resolve_status_colors(code)
+        badge.setText(_resolve_status_label(code, assignment))
+        badge.setFont(create_font(
+            size=FontManager.SIZE_CAPTION,
+            weight=FontManager.WEIGHT_SEMIBOLD,
+        ))
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setMinimumHeight(ScreenScale.h(22))
+        badge.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        badge.setStyleSheet(_build_pill_stylesheet(text_color, bg, border))
+        badge.adjustSize()
 
-        strip_color = _STATUS_STRIP_COLOR.get(new_status, '#9CA3AF')
-        self.set_status_color(strip_color)
+    def update_status(self, assignment: dict, new_status=None):
+        self._assignment = assignment
+        self._status_code = _resolve_status_code(assignment)
+
+        text_color, _, _ = _resolve_status_colors(self._status_code)
+        self.set_status_color(text_color)
 
         if not self._status_badge:
             return
-
-        is_completed = new_status in _COMPLETED_STATUSES
-        if is_completed:
-            sync_date = (
-                assignment.get("transferDate")
-                or assignment.get("transfer_date")
-                or assignment.get("assignedDate")
-                or ""
-            )
-            date_str = str(sync_date)[:10] if sync_date else ""
-            self._status_badge.setText(date_str)
-            self._status_badge.setFixedHeight(ScreenScale.h(16777215))
-            self._status_badge.setMinimumWidth(0)
-            self._status_badge.setFont(create_font(size=FontManager.SIZE_CAPTION, weight=QFont.Normal))
-            self._status_badge.setStyleSheet(
-                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-            )
-        else:
-            label, color, bg = _get_status_config().get(
-                new_status, _get_status_config()['not_transferred']
-            )
-            self._status_badge.setText(label)
-            self._status_badge.setFont(create_font(
-                size=FontManager.SIZE_CAPTION,
-                weight=FontManager.WEIGHT_SEMIBOLD
-            ))
-            self._status_badge.setAlignment(Qt.AlignCenter)
-            self._status_badge.setFixedHeight(ScreenScale.h(22))
-            self._status_badge.setMinimumWidth(ScreenScale.w(80))
-            self._status_badge.setStyleSheet(StyleManager.status_badge(color, bg))
+        self._apply_status_badge(self._status_badge, self._status_code, assignment)
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
-        self.update_status(self._assignment, self._status_str)
+        self.update_status(self._assignment)
         a = self._assignment
         parts = []
         researcher_name = (
@@ -522,17 +523,16 @@ class SyncDataPage(QWidget):
         self._spinner = LoadingSpinnerOverlay(self)
 
     def _update_stat_pills(self):
-        """Update stat pill counts from current assignment items."""
         pending = syncing = synced = failed = 0
         for item in self._current_items:
-            status = self._normalize_status(item)
-            if status in _PENDING_STATUSES:
+            code = _resolve_status_code(item)
+            if code in _PENDING_STATUS_CODES:
                 pending += 1
-            elif status in _SYNCING_STATUSES:
+            elif code in _IN_FLIGHT_STATUS_CODES:
                 syncing += 1
-            elif status in _COMPLETED_STATUSES:
+            elif code in _DONE_STATUS_CODES:
                 synced += 1
-            elif status in {'failed', '3'}:
+            elif code in _FAILED_STATUS_CODES:
                 failed += 1
         self._stat_pending.set_count(pending)
         self._stat_syncing.set_count(syncing)
@@ -630,7 +630,7 @@ class SyncDataPage(QWidget):
 
             for assignment in items:
                 aid = self._get_assignment_id(assignment)
-                status_str = self._normalize_status(assignment)
+                code = _resolve_status_code(assignment)
 
                 card = _AssignmentCard(assignment)
                 card.clicked.connect(
@@ -641,9 +641,9 @@ class SyncDataPage(QWidget):
                 )
                 self._card_widgets.append(card)
                 self._card_map[aid] = card
-                self._previous_statuses[aid] = status_str
+                self._previous_statuses[aid] = code
 
-                if status_str in _SYNCING_STATUSES:
+                if code in _IN_FLIGHT_STATUS_CODES:
                     self._add_sync_overlay(aid)
 
             self._update_stat_pills()
@@ -733,27 +733,25 @@ class SyncDataPage(QWidget):
 
         for assignment in items:
             aid = self._get_assignment_id(assignment)
-            new_status = self._normalize_status(assignment)
+            new_code = _resolve_status_code(assignment)
             new_ids.add(aid)
 
-            old_status = self._previous_statuses.get(aid)
+            old_code = self._previous_statuses.get(aid)
 
             if aid not in self._card_map:
                 needs_full_rebuild = True
                 break
 
-            # Status changed
-            if old_status is not None and old_status != new_status:
-                self._on_status_changed(assignment, old_status, new_status)
-                self._update_card_status(aid, assignment, new_status)
+            if old_code is not None and old_code != new_code:
+                self._on_status_changed(assignment, old_code, new_code)
+                self._update_card_status(aid, assignment, new_code)
 
-                # Overlay management
-                if new_status in _SYNCING_STATUSES and aid not in self._sync_overlays:
+                if new_code in _IN_FLIGHT_STATUS_CODES and aid not in self._sync_overlays:
                     self._add_sync_overlay(aid)
-                elif new_status not in _SYNCING_STATUSES and aid in self._sync_overlays:
+                elif new_code not in _IN_FLIGHT_STATUS_CODES and aid in self._sync_overlays:
                     self._remove_sync_overlay(aid)
 
-            self._previous_statuses[aid] = new_status
+            self._previous_statuses[aid] = new_code
 
         # Check for removed assignments
         old_ids = set(self._card_map.keys())
@@ -764,22 +762,19 @@ class SyncDataPage(QWidget):
             self._current_items = items
             self._load_assignments()
 
-    def _on_status_changed(self, assignment: dict, old_status: str, new_status: str):
-        """Notify navbar badge when an assignment's transfer status changes."""
+    def _on_status_changed(self, assignment: dict, old_code, new_code):
         self._pending_notifications += 1
         self.sync_notification.emit(self._pending_notifications)
 
     def clear_notifications(self):
-        """Clear pending notifications (called when page becomes visible)."""
         self._pending_notifications = 0
         self.sync_notification.emit(0)
 
-    def _update_card_status(self, aid: str, assignment: dict, new_status: str):
-        """Update the card's status badge and strip color in-place."""
+    def _update_card_status(self, aid: str, assignment: dict, new_code=None):
         card = self._card_map.get(aid)
         if not card:
             return
-        card.update_status(assignment, new_status)
+        card.update_status(assignment)
 
     # -- Sync Pulse Overlay --
 
@@ -938,9 +933,9 @@ class SyncDataPage(QWidget):
                     unit_card = self._create_unit_card(u)
                     body_layout.addWidget(unit_card)
 
-            # Unassign button (only for pending status)
-            status_str = self._normalize_status(assignment)
-            if status_str in _PENDING_STATUSES:
+            # Action button: unassign (Pending) OR reset-to-pending (any other status)
+            assignment_code = _resolve_status_code(assignment)
+            if assignment_code in _PENDING_STATUS_CODES:
                 btn_row = QHBoxLayout()
                 btn_row.addStretch()
 
@@ -964,6 +959,32 @@ class SyncDataPage(QWidget):
                     lambda _, aid=assignment_id: self._unassign_building(aid)
                 )
                 btn_row.addWidget(unassign_btn)
+                btn_row.addStretch()
+                body_layout.addLayout(btn_row)
+            else:
+                btn_row = QHBoxLayout()
+                btn_row.addStretch()
+
+                reset_btn = QPushButton(tr("page.sync.reset_to_pending"))
+                reset_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+                reset_btn.setCursor(Qt.PointingHandCursor)
+                reset_btn.setFixedHeight(ScreenScale.h(36))
+                reset_btn.setStyleSheet("""
+                    QPushButton {
+                        color: #3890DF;
+                        background-color: #EBF5FF;
+                        border: 1px solid #BFDBFE;
+                        border-radius: 8px;
+                        padding: 8px 20px;
+                    }
+                    QPushButton:hover {
+                        background-color: #DBEAFE;
+                    }
+                """)
+                reset_btn.clicked.connect(
+                    lambda _, aid=assignment_id: self._reset_assignment_to_pending(aid)
+                )
+                btn_row.addWidget(reset_btn)
                 btn_row.addStretch()
                 body_layout.addLayout(btn_row)
 
@@ -1164,6 +1185,53 @@ class SyncDataPage(QWidget):
         logger.warning(f"Failed to unassign: {error_msg}")
         Toast.show_toast(self.window(), f"{tr('page.sync.unassign_failed')}: {error_msg}", Toast.ERROR)
 
+    # -- Reset to Pending --
+
+    def _reset_assignment_to_pending(self, assignment_id: str):
+        from ui.error_handler import ErrorHandler
+
+        if not ErrorHandler.confirm(
+            self,
+            tr("page.sync.confirm_reset_message"),
+            tr("page.sync.confirm_reset_title"),
+        ):
+            return
+
+        from services.api_client import get_api_client
+        api = get_api_client()
+        self._reset_worker = ApiWorker(
+            api.reset_assignment_to_pending, assignment_id
+        )
+        self._reset_worker.finished.connect(
+            lambda resp: self._on_reset_success(resp)
+        )
+        self._reset_worker.error.connect(
+            lambda msg: self._on_reset_error(msg)
+        )
+        self._reset_worker.start()
+
+    def _on_reset_success(self, response):
+        from ui.components.toast import Toast
+
+        Toast.show_toast(self.window(), tr("page.sync.reset_success"), Toast.SUCCESS)
+
+        try:
+            from services.building_cache_service import BuildingCacheService
+            BuildingCacheService.get_instance().invalidate_cache()
+        except Exception:
+            pass
+
+        self._load_assignments()
+
+    def _on_reset_error(self, error_msg):
+        from ui.components.toast import Toast
+        logger.warning(f"Failed to reset assignment: {error_msg}")
+        Toast.show_toast(
+            self.window(),
+            f"{tr('page.sync.reset_failed')}: {error_msg}",
+            Toast.ERROR,
+        )
+
     # -- Card management --
 
     def _clear_cards(self):
@@ -1218,16 +1286,6 @@ class SyncDataPage(QWidget):
             or assignment.get("assignment_id")
             or ""
         )
-
-    @staticmethod
-    def _normalize_status(assignment: dict) -> str:
-        status = (
-            assignment.get("transferStatusName")
-            or assignment.get("transferStatus")
-            or assignment.get("transfer_status")
-            or "not_transferred"
-        )
-        return str(status).lower().replace(" ", "_")
 
     def refresh(self, data=None):
         self._load_collectors()

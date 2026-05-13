@@ -15,6 +15,7 @@ from PyQt5.QtCore import pyqtSignal
 
 from controllers.base_controller import BaseController, OperationResult
 from services.api_client import get_api_client
+from services.translation_manager import tr
 from services.exceptions import (
     ApiException,
     NetworkException,
@@ -29,6 +30,8 @@ from services.exceptions import (
     CTX_RESET_COMMIT,
     CTX_CANCEL,
     CTX_QUARANTINE,
+    CTX_UNCANCEL,
+    CTX_QUARANTINE_REPORT,
 )
 from utils.logger import get_logger
 
@@ -58,6 +61,7 @@ class ImportController(BaseController):
     package_staged = pyqtSignal(str)
     package_committed = pyqtSignal(str)
     package_cancelled = pyqtSignal(str)
+    package_restored = pyqtSignal(str, int)  # package_id, new_status
 
     def __init__(self, db=None, parent=None):
         super().__init__(parent)
@@ -100,7 +104,7 @@ class ImportController(BaseController):
                 flush=True,
             )
             self.package_uploaded.emit(pkg_id)
-            return OperationResult.ok(data=result, message_ar="تم رفع الملف بنجاح")
+            return OperationResult.ok(data=result, message_ar=tr("import.success.uploaded"))
         except ApiException as e:
             # Upload has some legacy-specific domain messages (duplicate upload).
             # Keep that for users while the unified humanize layer takes over
@@ -110,7 +114,7 @@ class ImportController(BaseController):
                 log_exception(e, logger, context=context)
                 return OperationResult.fail(
                     message=str(e),
-                    message_ar="هذه الحزمة مرفوعة مسبقاً ولا يمكن رفعها مرة أخرى",
+                    message_ar=tr("import.error.duplicate_package"),
                     error=e,
                 )
             return _fail_from_exception(e, context)
@@ -223,7 +227,7 @@ class ImportController(BaseController):
                 f"[import-flow] api POST /stage/{package_id} OK latency={latency}ms"
             )
             self.package_staged.emit(package_id)
-            return OperationResult.ok(data=result, message_ar="تم تدريج الحزمة بنجاح")
+            return OperationResult.ok(data=result, message_ar=tr("import.success.staged"))
         except ApiException as e:
             latency = int((time.monotonic() - t) * 1000)
             if e.status_code == 409 and _is_stage_already_advanced(e):
@@ -234,7 +238,7 @@ class ImportController(BaseController):
                 self.package_staged.emit(package_id)
                 return OperationResult.ok(
                     data={"alreadyAdvanced": True},
-                    message_ar="الحزمة قيد المعالجة فعلياً على الخادم",
+                    message_ar=tr("import.success.stage_already_advanced"),
                 )
             trace = getattr(e, "trace_id", "") or ""
             logger.warning(
@@ -307,7 +311,7 @@ class ImportController(BaseController):
             logger.info(
                 f"[import-flow] api POST /detect-duplicates/{package_id} OK latency={latency}ms"
             )
-            return OperationResult.ok(data=data, message_ar="تم كشف التكرارات")
+            return OperationResult.ok(data=data, message_ar=tr("import.success.duplicates_detected"))
         except (ApiException, NetworkException) as e:
             latency = int((time.monotonic() - t) * 1000)
             trace = getattr(e, "trace_id", "") or ""
@@ -354,7 +358,7 @@ class ImportController(BaseController):
             data = self._with_retry(lambda: api.approve_import_package(package_id))
             latency = int((time.monotonic() - t) * 1000)
             logger.info(f"[import-flow] api POST /approve/{package_id} OK latency={latency}ms")
-            return OperationResult.ok(data=data, message_ar="تمت الموافقة على الحزمة")
+            return OperationResult.ok(data=data, message_ar=tr("import.success.approved"))
         except (ApiException, NetworkException) as e:
             latency = int((time.monotonic() - t) * 1000)
             trace = getattr(e, "trace_id", "") or ""
@@ -375,7 +379,7 @@ class ImportController(BaseController):
             latency = int((time.monotonic() - t) * 1000)
             logger.info(f"[import-flow] api POST /commit/{package_id} OK latency={latency}ms")
             self.package_committed.emit(package_id)
-            return OperationResult.ok(data=result, message_ar="تم إدخال البيانات في الإنتاج")
+            return OperationResult.ok(data=result, message_ar=tr("import.success.committed"))
         except (ApiException, NetworkException) as e:
             latency = int((time.monotonic() - t) * 1000)
             trace = getattr(e, "trace_id", "") or ""
@@ -428,7 +432,7 @@ class ImportController(BaseController):
             api = get_api_client()
             return OperationResult.ok(
                 data=self._with_retry(lambda: api.reset_commit(package_id, reason=reason)),
-                message_ar="تم إعادة تعيين حالة الإدخال",
+                message_ar=tr("import.success.reset"),
             )
         except (ApiException, NetworkException) as e:
             return _fail_from_exception(e, CTX_RESET_COMMIT)
@@ -447,7 +451,7 @@ class ImportController(BaseController):
             latency = int((time.monotonic() - t) * 1000)
             logger.info(f"[import-flow] api POST /cancel/{package_id} OK latency={latency}ms")
             self.package_cancelled.emit(package_id)
-            return OperationResult.ok(data=result, message_ar="تم إلغاء الحزمة")
+            return OperationResult.ok(data=result, message_ar=tr("import.success.cancelled"))
         except (ApiException, NetworkException) as e:
             latency = int((time.monotonic() - t) * 1000)
             trace = getattr(e, "trace_id", "") or ""
@@ -459,14 +463,56 @@ class ImportController(BaseController):
         except Exception as e:
             return _fail_from_exception(e, CTX_CANCEL)
 
-    def quarantine_package(self, package_id: str) -> OperationResult[Dict]:
+    def quarantine_package(self, package_id: str, reason: str = "") -> OperationResult[Dict]:
         try:
             api = get_api_client()
             return OperationResult.ok(
-                data=api.quarantine_import_package(package_id),
-                message_ar="تم حجر الحزمة",
+                data=api.quarantine_import_package(package_id, reason=reason),
+                message_ar=tr("import.success.quarantined"),
             )
         except (ApiException, NetworkException) as e:
             return _fail_from_exception(e, CTX_QUARANTINE)
         except Exception as e:
             return _fail_from_exception(e, CTX_QUARANTINE)
+
+    def uncancel_package(
+        self, package_id: str, reason: str = ""
+    ) -> OperationResult[Dict]:
+        """Restore a Cancelled package; UI should route by returned status."""
+        t = time.monotonic()
+        logger.info(f"[import-flow] api POST /uncancel/{package_id} started reason={reason!r}")
+        try:
+            api = get_api_client()
+            result = api.uncancel_import_package(package_id, reason or None)
+            latency = int((time.monotonic() - t) * 1000)
+            new_status = 0
+            if isinstance(result, dict):
+                new_status = int(result.get("status") or 0)
+            logger.info(
+                f"[import-flow] api POST /uncancel/{package_id} OK "
+                f"latency={latency}ms new_status={new_status}"
+            )
+            self.package_restored.emit(package_id, new_status)
+            return OperationResult.ok(
+                data=result, message_ar=tr("import.success.restored")
+            )
+        except (ApiException, NetworkException) as e:
+            latency = int((time.monotonic() - t) * 1000)
+            trace = getattr(e, "trace_id", "") or ""
+            logger.warning(
+                f"[import-flow] api POST /uncancel/{package_id} FAILED "
+                f"type={type(e).__name__} latency={latency}ms trace={trace}"
+            )
+            return _fail_from_exception(e, CTX_UNCANCEL)
+        except Exception as e:
+            return _fail_from_exception(e, CTX_UNCANCEL)
+
+    def get_quarantine_report(self, package_id: str) -> OperationResult[Dict]:
+        """Fetch the structured quarantine report for a package."""
+        try:
+            api = get_api_client()
+            return OperationResult.ok(data=api.get_quarantine_report(package_id))
+        except (ApiException, NetworkException) as e:
+            return _fail_from_exception(e, CTX_QUARANTINE_REPORT)
+        except Exception as e:
+            return _fail_from_exception(e, CTX_QUARANTINE_REPORT)

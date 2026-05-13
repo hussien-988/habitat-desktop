@@ -320,6 +320,31 @@ class AssignmentService:
         logger.info(f"Reset transfer for retry: {assignment_id}")
         return True
 
+    def reset_assignment_to_pending(
+        self, assignment_id: str, reason: Optional[str] = None
+    ) -> dict:
+        """Force assignment back to Pending via API and refresh local cache."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        response = api.reset_assignment_to_pending(assignment_id, reason)
+
+        self.db.execute(
+            """
+            UPDATE building_assignments
+            SET transfer_status = 'not_transferred',
+                transfer_error = NULL,
+                updated_at = ?
+            WHERE assignment_id = ?
+            """,
+            (datetime.now().isoformat(), assignment_id),
+        )
+        logger.info(
+            "Assignment %s reset to Pending (previous=%s)",
+            assignment_id,
+            response.get("previousStatus") if isinstance(response, dict) else None,
+        )
+        return response
+
     def get_field_teams(self) -> List[Dict[str, str]]:
         """Get list of field researchers via API."""
         try:

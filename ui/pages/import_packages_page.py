@@ -26,7 +26,7 @@ from services.translation_manager import tr, get_layout_direction, apply_label_a
 from services.exceptions import humanize_exception, log_exception
 from services.import_status_map import (
     status_meta, is_history_status, queue_sort_priority,
-    HISTORY as _HISTORY_STATUSES,
+    HISTORY as _HISTORY_STATUSES, PkgStatus,
 )
 from app.config import Config
 from utils.logger import get_logger
@@ -59,6 +59,8 @@ _NAV_BTN_STYLE = """
 class _PackageCard(AnimatedCard):
     """Import package card showing name, status, dates, record counts."""
 
+    menu_requested = pyqtSignal()
+
     # Derived from services/import_status_map.status_meta()
     @classmethod
     def _badge_style(cls, status_code):
@@ -68,9 +70,13 @@ class _PackageCard(AnimatedCard):
     def __init__(self, pkg_data: dict, parent=None):
         self._data = pkg_data
         self._is_selected = False
+        self.menu_btn = None
         status_code = pkg_data.get("status_code", 1)
         color = _STATUS_COLORS.get(status_code, "#6B7280")
         super().__init__(parent, card_height=110, status_color=color)
+
+    def _on_menu_btn_clicked(self):
+        self.menu_requested.emit()
 
     def set_selected(self, selected: bool):
         """Toggle the card's selected look.
@@ -125,6 +131,18 @@ class _PackageCard(AnimatedCard):
             f"padding: 0 10px; }}"
         )
         row1.addWidget(badge)
+
+        self.menu_btn = QPushButton("⋮")
+        self.menu_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        self.menu_btn.setCursor(Qt.PointingHandCursor)
+        self.menu_btn.setFocusPolicy(Qt.NoFocus)
+        self.menu_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: 1px solid transparent;"
+            " border-radius: 6px; color: #4B5563; font-size: 14pt; font-weight: bold; }"
+            "QPushButton:hover { background: #F3F4F6; border-color: #E5E7EB; }"
+        )
+        self.menu_btn.clicked.connect(self._on_menu_btn_clicked)
+        row1.addWidget(self.menu_btn)
         layout.addLayout(row1)
 
         # Row 2: Date + record counts
@@ -736,6 +754,9 @@ class ImportPackagesPage(QWidget):
             card_data = self._pkg_to_card_data(pkg)
             card = _PackageCard(card_data)
             card.clicked.connect(lambda p=pkg, c=card: self._on_card_clicked(p, c))
+            card.menu_requested.connect(
+                lambda p=pkg, c=card: self._show_card_context_menu(p, str(p.get("id") or ""), c)
+            )
             self._cards_layout.insertWidget(
                 self._cards_layout.count() - 1, card
             )
@@ -956,7 +977,7 @@ class ImportPackagesPage(QWidget):
             self._start_btn.setText(tr("page.import_packages.start_processing"))
             self._start_btn.setToolTip("")
 
-    def _show_card_context_menu(self, pkg, pkg_id):
+    def _show_card_context_menu(self, pkg, pkg_id, card=None):
         status = pkg.get("status", 0)
         if isinstance(status, str) and status.isdigit():
             status = int(status)
@@ -987,24 +1008,40 @@ class ImportPackagesPage(QWidget):
         menu.addAction(view_action)
 
         # Cancel (only if not already cancelled/completed)
-        if status not in (9, 12):
+        if status not in (PkgStatus.COMPLETED, PkgStatus.CANCELLED):
             cancel_action = QAction(tr("action.cancel"), self)
             cancel_action.triggered.connect(lambda: self._cancel_package(pkg_id))
             menu.addAction(cancel_action)
 
         # Quarantine (only if not completed/cancelled/quarantined)
-        if status not in (5, 9, 12):
+        if status not in (PkgStatus.QUARANTINED, PkgStatus.COMPLETED, PkgStatus.CANCELLED):
             quarantine_action = QAction(tr("action.quarantine"), self)
             quarantine_action.triggered.connect(lambda: self._quarantine_package(pkg_id))
             menu.addAction(quarantine_action)
 
-        # Reset commit (admin only, only for stuck committing status=8)
-        if self._user_role == "admin" and status == 8:
+        # Restore (only for cancelled packages)
+        if status == PkgStatus.CANCELLED:
+            restore_action = QAction(tr("action.restore"), self)
+            restore_action.triggered.connect(lambda: self._uncancel_package(pkg_id))
+            menu.addAction(restore_action)
+
+        # View quarantine report (only for quarantined packages)
+        if status == PkgStatus.QUARANTINED:
+            report_action = QAction(tr("action.view_quarantine_report"), self)
+            report_action.triggered.connect(lambda: self._show_quarantine_report(pkg_id))
+            menu.addAction(report_action)
+
+        # Reset commit (admin only, only for stuck committing status)
+        if self._user_role == "admin" and status == PkgStatus.COMMITTING:
             reset_action = QAction(tr("page.import_packages.reset_commit"), self)
             reset_action.triggered.connect(lambda: self._reset_commit(pkg_id))
             menu.addAction(reset_action)
 
-        menu.exec_(QCursor.pos())
+        if card is not None and getattr(card, "menu_btn", None) is not None:
+            btn = card.menu_btn
+            menu.exec_(btn.mapToGlobal(btn.rect().bottomLeft()))
+        else:
+            menu.exec_(QCursor.pos())
 
     def _on_view_package(self, pkg_id):
         self._spinner.show_loading()
@@ -1023,7 +1060,7 @@ class ImportPackagesPage(QWidget):
             self,
             tr("page.import_packages.upload_package"),
             "",
-            "UHC Files (*.uhc);;All Files (*)",
+            tr("import.upload.file_filter"),
         )
         if not file_path:
             return
@@ -1084,6 +1121,56 @@ class ImportPackagesPage(QWidget):
         except Exception as e:
             log_exception(e, logger, context="import.quarantine")
             ErrorHandler.show_error(self, humanize_exception(e, context="import.quarantine"))
+        finally:
+            self._spinner.hide_loading()
+
+    def _uncancel_package(self, package_id):
+        """Restore a Cancelled package. Backend decides the resume status."""
+        if not ErrorHandler.confirm(
+            self,
+            tr("import.restore.confirm_body"),
+            tr("import.restore.confirm_title"),
+        ):
+            return
+
+        self._spinner.show_loading(tr("import.restore.restoring"))
+        try:
+            result = self.import_controller.uncancel_package(package_id)
+            if result.success:
+                ErrorHandler.show_success(
+                    self, result.message_ar or tr("import.success.restored")
+                )
+                self._load_packages()
+            else:
+                ErrorHandler.show_error(
+                    self, result.message_ar or tr("import.error.uncancel_failed")
+                )
+        except Exception as e:
+            log_exception(e, logger, context="import.uncancel")
+            ErrorHandler.show_error(self, humanize_exception(e, context="import.uncancel"))
+        finally:
+            self._spinner.hide_loading()
+
+    def _show_quarantine_report(self, package_id):
+        """Fetch and display the quarantine report dialog for a package."""
+        self._spinner.show_loading()
+        try:
+            result = self.import_controller.get_quarantine_report(package_id)
+            if not result.success or not result.data:
+                ErrorHandler.show_error(
+                    self,
+                    result.message_ar or tr("import.error.quarantine_report_failed"),
+                )
+                return
+            from ui.components.dialogs.quarantine_report_dialog import (
+                QuarantineReportDialog,
+            )
+            QuarantineReportDialog.show_for(result.data, parent=self.window())
+        except Exception as e:
+            log_exception(e, logger, context="import.quarantine_report")
+            ErrorHandler.show_error(
+                self, humanize_exception(e, context="import.quarantine_report")
+            )
         finally:
             self._spinner.hide_loading()
 

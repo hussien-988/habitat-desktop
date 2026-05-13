@@ -17,7 +17,15 @@ class StatPill(QWidget):
         self._count = 0
         self._label_text = label
         self.setFixedHeight(ScreenScale.h(28))
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # Don't use WA_TranslucentBackground on a child widget — it triggers
+        # an offscreen compositing path that flickers when the parent has a
+        # frequently-repainting paintEvent (e.g. DarkHeaderZone's 200ms timer
+        # for the constellation animation). WA_NoSystemBackground stops Qt
+        # from filling the widget with the system bg, so the rounded shape
+        # we draw in paintEvent sits stably on top of whatever the parent
+        # last painted underneath.
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAutoFillBackground(False)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)

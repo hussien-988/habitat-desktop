@@ -314,7 +314,6 @@ class Navbar(QFrame):
     filter_applied = pyqtSignal(dict)
     logout_requested = pyqtSignal()
     language_change_requested = pyqtSignal()
-    sync_requested = pyqtSignal()
     password_change_requested = pyqtSignal()
     import_requested = pyqtSignal()
 
@@ -579,21 +578,6 @@ class Navbar(QFrame):
         content_lay.addWidget(self._create_pill_separator())
         content_lay.addSpacing(6)
 
-        # Sync button
-        self._pill_sync_btn = QPushButton()
-        self._pill_sync_btn.setStyleSheet(_BTN_STYLE)
-        self._pill_sync_btn.setFixedHeight(ScreenScale.h(28))
-        self._pill_sync_btn.setFont(_btn_font)
-        self._pill_sync_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self._pill_sync_btn.setFocusPolicy(Qt.NoFocus)
-        self._pill_sync_btn.clicked.connect(self._on_sync_requested)
-        self._load_pill_icon(self._pill_sync_btn, "fluent", tr("navbar.menu.sync_data"))
-        content_lay.addWidget(self._pill_sync_btn)
-
-        content_lay.addSpacing(4)
-        content_lay.addWidget(self._create_pill_separator())
-        content_lay.addSpacing(4)
-
         # Password change button
         self._pill_pwd_btn = QPushButton()
         self._pill_pwd_btn.setStyleSheet(_BTN_STYLE)
@@ -644,21 +628,6 @@ class Navbar(QFrame):
         content_lay.addWidget(self._pill_logout_btn)
 
         pill_layout.addWidget(self._pill_content)
-
-        # Notification badge on sync button
-        self._pill_sync_badge = QLabel(self._pill_sync_btn)
-        self._pill_sync_badge.setAlignment(Qt.AlignCenter)
-        self._pill_sync_badge.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
-        self._pill_sync_badge.setStyleSheet("""
-            QLabel {
-                background-color: #EF4444;
-                color: white;
-                border-radius: 8px;
-                font-size: 9px;
-                font-weight: bold;
-            }
-        """)
-        self._pill_sync_badge.hide()
 
         return pill
 
@@ -841,10 +810,6 @@ class Navbar(QFrame):
                 self.tab_changed.emit(idx)
                 break
 
-        # Pill button visibility
-        if hasattr(self, '_pill_sync_btn'):
-            self._pill_sync_btn.setVisible(role in {"admin", "data_manager", "field_supervisor"})
-
     # -- Public API --
 
     def set_current_tab(self, index: int):
@@ -877,8 +842,6 @@ class Navbar(QFrame):
         # Update pill button texts
         if hasattr(self, '_pill_trigger'):
             self._pill_trigger.setText("\u25C8  " + tr("navbar.pill.settings"))
-        if hasattr(self, '_pill_sync_btn'):
-            self._load_pill_icon(self._pill_sync_btn, "fluent", tr("navbar.menu.sync_data"))
         if hasattr(self, '_pill_pwd_btn'):
             self._load_pill_icon(self._pill_pwd_btn, "safe", tr("navbar.menu.change_password"))
         if hasattr(self, '_pill_logout_btn'):
@@ -906,18 +869,6 @@ class Navbar(QFrame):
             self.current_tab_index, animate=False
         ))
 
-    def show_sync_notification(self, count: int):
-        if hasattr(self, '_pill_sync_badge'):
-            self._pill_sync_badge.setText(str(count) if count <= 9 else "9+")
-            self._pill_sync_badge.show()
-            self._pill_sync_badge.raise_()
-            btn = self._pill_sync_btn
-            self._pill_sync_badge.move(btn.width() - 10, -2)
-
-    def hide_sync_notification(self):
-        if hasattr(self, '_pill_sync_badge'):
-            self._pill_sync_badge.hide()
-
     # -- Signal Handlers --
 
     def _on_logout_requested(self):
@@ -925,9 +876,6 @@ class Navbar(QFrame):
 
     def _on_language_change_requested(self):
         self.language_change_requested.emit()
-
-    def _on_sync_requested(self):
-        self.sync_requested.emit()
 
     def _on_password_change_requested(self):
         self.password_change_requested.emit()

@@ -43,6 +43,8 @@ CTX_COMMIT = "commit"
 CTX_RESET_COMMIT = "reset_commit"
 CTX_CANCEL = "cancel"
 CTX_QUARANTINE = "quarantine"
+CTX_UNCANCEL = "uncancel"
+CTX_QUARANTINE_REPORT = "quarantine_report"
 CTX_LOAD_CONFLICTS = "load_conflicts"
 CTX_RESOLVE_CONFLICT = "resolve_conflict"
 CTX_LOAD_RECORD = "load_record"
@@ -57,6 +59,8 @@ _CTX_FALLBACK_KEY = {
     CTX_RESET_COMMIT: "import.error.reset_commit_failed",
     CTX_CANCEL: "import.error.cancel_failed",
     CTX_QUARANTINE: "import.error.quarantine_failed",
+    CTX_UNCANCEL: "import.error.uncancel_failed",
+    CTX_QUARANTINE_REPORT: "import.error.quarantine_report_failed",
     CTX_LOAD_CONFLICTS: "duplicates.error.load_conflicts_failed",
     CTX_RESOLVE_CONFLICT: "duplicates.error.resolve_failed",
     CTX_LOAD_RECORD: "comparison.error.record_details_unavailable",

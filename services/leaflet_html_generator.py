@@ -143,6 +143,10 @@ class LeafletHTMLGenerator:
         max_selection: Optional[int] = None,  # None=unlimited; 1=single-select replace mode
         show_building_labels: bool = False,  # Whether to show building_id labels on the map
         already_selected_ids: Optional[list] = None,  # Pre-selected building IDs (multi-select)
+        show_assignment_legend: bool = False,
+        legend_labels: Optional[dict] = None,
+        legend_direction: str = "rtl",
+        initial_assignment_filter: Optional[str] = None,
     ) -> str:
         """
         Generate Leaflet HTML with unified geometry display.
@@ -290,6 +294,10 @@ class LeafletHTMLGenerator:
         max_selection=max_selection,
         show_building_labels=show_building_labels,
         already_selected_ids=already_selected_ids,
+        show_assignment_legend=show_assignment_legend,
+        legend_labels=legend_labels,
+        legend_direction=legend_direction,
+        initial_assignment_filter=initial_assignment_filter,
     )}
 </body>
 </html>
@@ -810,6 +818,10 @@ class LeafletHTMLGenerator:
         max_selection: Optional[int] = None,
         show_building_labels: bool = False,
         already_selected_ids: Optional[list] = None,
+        show_assignment_legend: bool = False,
+        legend_labels: Optional[dict] = None,
+        legend_direction: str = "rtl",
+        initial_assignment_filter: Optional[str] = None,
     ) -> str:
         """Get JavaScript code for map initialization."""
         import json
@@ -1029,6 +1041,33 @@ class LeafletHTMLGenerator:
         // Status colors and labels
         var statusColors = {status_colors_json};
         var statusLabels = {status_labels_json};
+        var assignmentColorMode = {str(show_assignment_legend).lower()};
+        var assignmentFilter = {LeafletHTMLGenerator._safe_js_string(initial_assignment_filter or 'all')};
+        function matchesAssignmentFilter(isAssigned) {{
+            if (assignmentFilter === 'all' || !assignmentFilter) return true;
+            if (assignmentFilter === 'true') return isAssigned === true;
+            if (assignmentFilter === 'false') return isAssigned !== true;
+            return true;
+        }}
+        function applyAssignmentFilterToLayer(layer) {{
+            try {{
+                if (!layer || !layer.feature) return;
+                var props = layer.feature.properties || {{}};
+                var match = matchesAssignmentFilter(props.is_assigned === true);
+                if (typeof layer.getElement === 'function') {{
+                    var el = layer.getElement();
+                    if (el) el.style.display = match ? '' : 'none';
+                }}
+                if (typeof layer.setStyle === 'function' && layer.feature.geometry &&
+                    layer.feature.geometry.type !== 'Point') {{
+                    layer.setStyle({{ opacity: match ? 1 : 0, fillOpacity: match ? 0.6 : 0 }});
+                    if (typeof layer.options !== 'undefined') {{
+                        layer.options.interactive = match;
+                    }}
+                }}
+            }} catch (e) {{ /* best-effort filter */ }}
+        }}
+        window.applyAssignmentFilterToLayer = applyAssignmentFilterToLayer;
 
         var statusMapping = {{
             1: 'intact', 2: 'minor_damage', 3: 'major_damage',
@@ -1137,11 +1176,14 @@ class LeafletHTMLGenerator:
                 var props = feature.properties || {{}};
 
                 var status = getStatusKey(props.status || 1);
-                var color = statusColors[status] || '#0072BC';
-
-                // [VISUAL] Pre-assigned buildings are distinguished by color only.
-                if (props.is_assigned === true) {{
-                    color = '#F59E0B';
+                var color;
+                if (assignmentColorMode) {{
+                    color = (props.is_assigned === true) ? '#F59E0B' : '#10B981';
+                }} else {{
+                    color = statusColors[status] || '#0072BC';
+                    if (props.is_assigned === true) {{
+                        color = '#F59E0B';
+                    }}
                 }}
 
                 var innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
@@ -1219,6 +1261,10 @@ class LeafletHTMLGenerator:
         markers.addLayers(_initialMarkerList);
         map.addLayer(markers);
 
+        if (assignmentFilter && assignmentFilter !== 'all') {{
+            _initialMarkerList.forEach(applyAssignmentFilterToLayer);
+        }}
+
         // Add existing polygons layer (displayed in blue)
         {LeafletHTMLGenerator._get_existing_polygons_js(existing_polygons_geojson) if existing_polygons_geojson else '// No existing polygons'}
 
@@ -1248,7 +1294,7 @@ class LeafletHTMLGenerator:
             }}
         }}
 
-        {LeafletHTMLGenerator._get_status_legend_js() if (show_legend and not enable_multiselect) else ''}
+        {LeafletHTMLGenerator._get_assignment_legend_js(legend_labels or {}, legend_direction) if show_assignment_legend else (LeafletHTMLGenerator._get_status_legend_js() if (show_legend and not enable_multiselect) else '')}
 
         {LeafletHTMLGenerator._get_layer_control_js() if show_layer_control else ''}
 
@@ -2039,29 +2085,33 @@ class LeafletHTMLGenerator:
         return MULTISELECT_JS_TEMPLATE
 
     @staticmethod
-    def _get_assignment_legend_js() -> str:
-        """Get JavaScript for the color legend control on the assignment map."""
-        return """
-        // Color legend for field assignment map
-        var legend = L.control({position: 'bottomright'});
-        legend.onAdd = function(map) {
+    def _get_assignment_legend_js(labels: dict, direction: str = "rtl") -> str:
+        fallback = {
+            "title": "دليل الألوان",
+            "assigned": "معيّن",
+            "not_assigned": "غير معيّن",
+        }
+        resolved = {k: (labels.get(k) or fallback[k]) for k in fallback}
+        safe = {k: LeafletHTMLGenerator._safe_js_string(v) for k, v in resolved.items()}
+        return f"""
+        var legend = L.control({{position: 'bottomright'}});
+        legend.onAdd = function(map) {{
             var div = L.DomUtil.create('div', 'map-legend');
             div.style.cssText = 'background:white;padding:10px 14px;border-radius:10px;' +
-                'box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;direction:rtl;line-height:2;' +
-                'border:1px solid rgba(0,0,0,0.08);';
-            var dot = 'display:inline-block;width:12px;height:12px;border-radius:50%;margin-left:6px;vertical-align:middle;';
+                'box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;direction:{direction};line-height:1.9;' +
+                'border:1px solid rgba(0,0,0,0.08);min-width:150px;';
+            var dot = 'display:inline-block;width:12px;height:12px;border-radius:50%;' +
+                'margin-inline-end:8px;vertical-align:middle;flex-shrink:0;';
+            var rowBase = 'display:flex;align-items:center;white-space:nowrap;';
+            var title = {safe['title']};
+            var labelAssigned = {safe['assigned']};
+            var labelNotAssigned = {safe['not_assigned']};
             div.innerHTML =
-                '<div style="font-weight:bold;margin-bottom:2px;font-size:13px;">\\u062f\\u0644\\u064a\\u0644 \\u0627\\u0644\\u0623\\u0644\\u0648\\u0627\\u0646</div>' +
-                '<div><span style="' + dot + 'background:#28a745;"></span> \\u0633\\u0644\\u064a\\u0645</div>' +
-                '<div><span style="' + dot + 'background:#ffc107;"></span> \\u0645\\u062a\\u0636\\u0631\\u0631 \\u062c\\u0632\\u0626\\u064a\\u0627\\u064b</div>' +
-                '<div><span style="' + dot + 'background:#dc3545;"></span> \\u0645\\u062a\\u0636\\u0631\\u0631 / \\u0645\\u062f\\u0645\\u0631</div>' +
-                '<div style="border-top:1px solid #eee;margin:4px 0;"></div>' +
-                '<div><span style="' + dot + 'background:#F59E0B;"></span> \\u0645\\u0639\\u064a\\u0651\\u0646 \\u0645\\u0633\\u0628\\u0642\\u0627\\u064b</div>' +
-                '<div><span style="' + dot + 'background:#9CA3AF;"></span> \\u0645\\u0642\\u0641\\u0644</div>' +
-                '<div style="border-top:1px solid #eee;margin:4px 0;"></div>' +
-                '<div><span style="' + dot + 'background:#1976D2;border:2px solid #64B5F6;width:10px;height:10px;"></span> \\u0645\\u062d\\u062f\\u062f \\u062d\\u0627\\u0644\\u064a\\u0627\\u064b</div>';
+                '<div style="font-weight:bold;margin-bottom:4px;font-size:13px;color:#1F2937;">' + title + '</div>' +
+                '<div style="' + rowBase + '"><span style="' + dot + 'background:#F59E0B;"></span><span>' + labelAssigned + '</span></div>' +
+                '<div style="' + rowBase + '"><span style="' + dot + 'background:#10B981;"></span><span>' + labelNotAssigned + '</span></div>';
             return div;
-        };
+        }};
         legend.addTo(map);
         """
 

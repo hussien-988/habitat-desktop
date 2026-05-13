@@ -61,8 +61,12 @@ class ImportStep5Commit(QWidget):
 
         # Commit confirmation card
         card = QFrame()
+        # Scope the border to the card itself via objectName; otherwise the
+        # `QFrame {...}` rule cascades onto every descendant QLabel (QLabel
+        # inherits QFrame in Qt5) and paints stray rectangles around titles.
+        card.setObjectName("importCommitCard")
         card.setStyleSheet("""
-            QFrame {
+            QFrame#importCommitCard {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
@@ -335,6 +339,10 @@ class ImportStep5Commit(QWidget):
         # Card title and warning text
         self._step_title_label.setText(tr("wizard.import.step5.title"))
         self._warning_text_label.setText(tr("wizard.import.step5.irreversible_warning"))
+
+        # If a commit is currently in progress, re-translate the status line.
+        if self._status_label.isVisible():
+            self._status_label.setText(tr("wizard.import.step5.committing"))
 
         # Total label
         total = self._data.get("totalCount", 0) if self._data else 0

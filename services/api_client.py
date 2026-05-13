@@ -1146,6 +1146,28 @@ class TRRCMSApiClient:
         logger.info(f"Assignment {assignment_id} unassigned")
         return result
 
+    def reset_assignment_to_pending(
+        self,
+        assignment_id: str,
+        reason: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Force an assignment back to Pending regardless of its current status."""
+        if not assignment_id:
+            raise ValueError("assignment_id is required")
+        # Backend requires a non-empty body; always send the reason field.
+        payload = {"reason": reason or ""}
+        result = self._request(
+            "POST",
+            f"/v1/BuildingAssignments/{assignment_id}/reset-to-pending",
+            json_data=payload,
+        )
+        logger.info(
+            "Assignment %s reset to Pending (previous=%s)",
+            assignment_id,
+            result.get("previousStatus") if isinstance(result, dict) else None,
+        )
+        return result
+
     def get_assignment_statistics(self) -> Dict[str, Any]:
         """Get assignment statistics."""
         return self._request("GET", "/v1/BuildingAssignments/statistics")
@@ -3295,13 +3317,39 @@ class TRRCMSApiClient:
         )
 
     def quarantine_import_package(self, package_id: str, reason: str = "") -> Dict[str, Any]:
-        """Quarantine a suspicious import package."""
+        """Quarantine a suspicious import package. Reason is sent verbatim."""
         logger.info(f"Quarantining import package: {package_id}")
         body = {
             "importPackageId": package_id,
-            "reason": reason or "حجر يدوي",
+            "reason": reason,
         }
         return self._request("POST", f"/v1/import/packages/{package_id}/quarantine", json_data=body)
+
+    def uncancel_import_package(
+        self, package_id: str, reason: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Restore a Cancelled import package to its pre-cancellation status.
+
+        Returns the full ImportPackageDto; caller should route the user based
+        on the `status` field (backend decides where to resume).
+        """
+        if not package_id:
+            raise ValueError("package_id is required")
+        # Backend uses [FromBody] — always send a body even when reason is empty.
+        payload = {"reason": (reason or "")[:1000]}
+        logger.info(f"Uncancelling import package: {package_id}")
+        return self._request(
+            "POST", f"/v1/import/packages/{package_id}/uncancel",
+            json_data=payload,
+        )
+
+    def get_quarantine_report(self, package_id: str) -> Dict[str, Any]:
+        """Get a structured report explaining why a package is quarantined."""
+        if not package_id:
+            raise ValueError("package_id is required")
+        return self._request(
+            "GET", f"/v1/import/packages/{package_id}/quarantine-report"
+        )
 
     def get_conflicts(
         self,
