@@ -2210,6 +2210,7 @@ AR_TRANSLATIONS = {
 
     # action.restore (uncancel a cancelled import package)
     "action.restore": "استرجاع",
+    "action.restore_package": "استرجاع الحزمة",
     "action.view_quarantine_report": "عرض سبب العزل",
 
     # restore confirmation
@@ -2221,36 +2222,8 @@ AR_TRANSLATIONS = {
     "quarantine_dialog.title": "تقرير سبب العزل",
     "quarantine_dialog.package_number": "رقم الحزمة",
     "quarantine_dialog.file_name": "اسم الملف",
-    "quarantine_dialog.category_label": "فئة المشكلة",
     "quarantine_dialog.reason_label": "السبب",
-    "quarantine_dialog.action_label": "الإجراء المطلوب",
-    "quarantine_dialog.checks_label": "نتائج الفحوصات",
-    "quarantine_dialog.check_checksum": "تجزئة الملف (Checksum)",
-    "quarantine_dialog.check_signature": "التوقيع الرقمي",
-    "quarantine_dialog.check_vocabulary": "توافق المفردات",
-    "quarantine_dialog.check_schema": "توافق البنية",
-    "quarantine_dialog.schema_version": "إصدار البنية",
-    "quarantine_dialog.vocab_issues": "تفاصيل تعارض المفردات",
-    "quarantine_dialog.error_log": "سجل الأخطاء التقني",
-    "quarantine_dialog.show_details": "عرض التفاصيل التقنية",
-    "quarantine_dialog.hide_details": "إخفاء التفاصيل التقنية",
     "quarantine_dialog.close": "إغلاق",
-    "quarantine_dialog.check_ok": "صحيح",
-    "quarantine_dialog.check_fail": "غير صحيح",
-
-    # quarantine category labels + actions
-    "quarantine_dialog.cat.checksum": "تلف في الملف أثناء النقل",
-    "quarantine_dialog.cat.checksum_action": "أعد تصدير الحزمة من اللوحة ورفعها مرة أخرى.",
-    "quarantine_dialog.cat.signature": "التوقيع الرقمي غير صالح أو تم العبث بالملف",
-    "quarantine_dialog.cat.signature_action": "أعد التصدير من اللوحة الأصلية التي أنشأت الحزمة.",
-    "quarantine_dialog.cat.vocab": "إصدار مفردات اللوحة قديم",
-    "quarantine_dialog.cat.vocab_action": "حدّث المفردات على اللوحة ثم أعد تصدير الحزمة.",
-    "quarantine_dialog.cat.schema": "إصدار بنية الحزمة غير متوافق",
-    "quarantine_dialog.cat.schema_action": "حدّث تطبيق اللوحة إلى أحدث إصدار ثم أعد التصدير.",
-    "quarantine_dialog.cat.manual": "تم العزل يدوياً من المسؤول",
-    "quarantine_dialog.cat.manual_action": "تواصل مع مسؤول النظام لمعرفة سبب العزل.",
-    "quarantine_dialog.cat.unknown": "فئة غير معروفة",
-    "quarantine_dialog.cat.unknown_action": "تواصل مع الدعم الفني.",
 
     # component.claim_list_card
     "component.claim_list_card.unspecified": "غير محدد",

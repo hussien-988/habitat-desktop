@@ -2210,6 +2210,7 @@ EN_TRANSLATIONS = {
 
     # action.restore (uncancel a cancelled import package)
     "action.restore": "Restore",
+    "action.restore_package": "Restore Package",
     "action.view_quarantine_report": "View Quarantine Reason",
 
     "import.restore.confirm_title": "Confirm Restore",
@@ -2219,35 +2220,8 @@ EN_TRANSLATIONS = {
     "quarantine_dialog.title": "Quarantine Report",
     "quarantine_dialog.package_number": "Package Number",
     "quarantine_dialog.file_name": "File Name",
-    "quarantine_dialog.category_label": "Issue Category",
     "quarantine_dialog.reason_label": "Reason",
-    "quarantine_dialog.action_label": "Required Action",
-    "quarantine_dialog.checks_label": "Integrity Checks",
-    "quarantine_dialog.check_checksum": "File Checksum",
-    "quarantine_dialog.check_signature": "Digital Signature",
-    "quarantine_dialog.check_vocabulary": "Vocabulary Compatibility",
-    "quarantine_dialog.check_schema": "Schema Compatibility",
-    "quarantine_dialog.schema_version": "Schema Version",
-    "quarantine_dialog.vocab_issues": "Vocabulary Mismatch Details",
-    "quarantine_dialog.error_log": "Technical Error Log",
-    "quarantine_dialog.show_details": "Show Technical Details",
-    "quarantine_dialog.hide_details": "Hide Technical Details",
     "quarantine_dialog.close": "Close",
-    "quarantine_dialog.check_ok": "OK",
-    "quarantine_dialog.check_fail": "Failed",
-
-    "quarantine_dialog.cat.checksum": "File corruption during transfer",
-    "quarantine_dialog.cat.checksum_action": "Re-export the package from the tablet and re-upload.",
-    "quarantine_dialog.cat.signature": "Digital signature invalid or file was tampered with",
-    "quarantine_dialog.cat.signature_action": "Re-export from the original tablet that created the package.",
-    "quarantine_dialog.cat.vocab": "Tablet vocabulary is out of date",
-    "quarantine_dialog.cat.vocab_action": "Update vocabulary on the tablet, then re-export.",
-    "quarantine_dialog.cat.schema": "Package schema version is incompatible",
-    "quarantine_dialog.cat.schema_action": "Update the tablet app to the latest version, then re-export.",
-    "quarantine_dialog.cat.manual": "Manually quarantined by an administrator",
-    "quarantine_dialog.cat.manual_action": "Contact the system administrator for details.",
-    "quarantine_dialog.cat.unknown": "Unknown category",
-    "quarantine_dialog.cat.unknown_action": "Contact technical support.",
 
     # component.claim_list_card
     "component.claim_list_card.unspecified": "Unspecified",

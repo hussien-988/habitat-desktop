@@ -372,6 +372,9 @@ class MainWindow(QMainWindow):
         self.pages[Pages.DUPLICATES].return_to_import.connect(
             self._on_duplicates_return_to_import
         )
+        self.pages[Pages.DUPLICATES].package_status_changed.connect(
+            self._on_package_status_changed_after_approve
+        )
 
         # Import Packages list page
         from ui.pages.import_packages_page import ImportPackagesPage
@@ -1264,6 +1267,17 @@ class MainWindow(QMainWindow):
             dup_page.refresh()
         self.navbar.set_current_tab(4)
         self.stack.setCurrentWidget(dup_page)
+
+    def _on_package_status_changed_after_approve(self, package_id: str):
+        pkg_page = self.pages.get(Pages.IMPORT_PACKAGES)
+        if pkg_page is None:
+            return
+        loader = getattr(pkg_page, "_load_packages", None) or getattr(pkg_page, "refresh", None)
+        if callable(loader):
+            try:
+                loader()
+            except Exception as e:
+                logger.warning(f"Post-approve packages refresh failed: {e}")
 
     def _on_duplicates_return_to_import(self):
         """Return from duplicates page to the import wizard.
