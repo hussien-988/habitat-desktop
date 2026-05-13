@@ -161,3 +161,31 @@ class BaseController(QObject):
             error_msg = str(e)
             self._emit_error(operation, error_msg)
             return OperationResult.fail(message=error_msg)
+
+    @staticmethod
+    def fail_from_exception(
+        exc: BaseException,
+        context: str,
+        log: Optional[Any] = None,
+    ) -> "OperationResult":
+        """Build a failed OperationResult from any exception.
+
+        Pins the operation context onto the exception, logs technical detail
+        through `log` (or the base_controller logger if not provided), and
+        uses humanize_exception() to produce the user-facing message. Backend
+        message wins when present and the response was localized.
+        """
+        from services.exceptions import (
+            ApiException, NetworkException, humanize_exception, log_exception,
+        )
+        try:
+            setattr(exc, "context", context)
+        except Exception:
+            pass
+        log_exception(exc, log or logger, context=context)
+        user_msg = humanize_exception(exc, context=context)
+        return OperationResult.fail(
+            message=str(exc),
+            message_ar=user_msg,
+            error=exc if isinstance(exc, (ApiException, NetworkException)) else None,
+        )

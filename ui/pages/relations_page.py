@@ -30,6 +30,7 @@ from ui.error_handler import ErrorHandler
 from utils.i18n import I18n
 from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
+from services.exceptions import humanize_exception, log_exception
 from ui.design_system import Colors, ScreenScale
 
 logger = get_logger(__name__)
@@ -1148,8 +1149,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, tr("page.relations.relation_deleted"), Toast.SUCCESS)
                 self._load_relations()
             except Exception as e:
-                logger.error(f"Failed to delete relation: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_delete_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="relation.delete")
+                Toast.show_toast(self, humanize_exception(e, context="relation.delete"), Toast.ERROR)
 
     def refresh(self, data=None):
         """Refresh the relations list."""
@@ -1228,8 +1229,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, tr("page.relations.relation_added"), Toast.SUCCESS)
                 self._load_relations()
             except Exception as e:
-                logger.error(f"Failed to create relation: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_add_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="relation.create")
+                Toast.show_toast(self, humanize_exception(e, context="relation.create"), Toast.ERROR)
 
     def _edit_relation(self, relation: PersonUnitRelation):
         """Edit existing relation."""
@@ -1244,8 +1245,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, tr("page.relations.relation_updated"), Toast.SUCCESS)
                 self._load_relations()
             except Exception as e:
-                logger.error(f"Failed to update relation: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_update_failed')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="relation.update")
+                Toast.show_toast(self, humanize_exception(e, context="relation.update"), Toast.ERROR)
 
     def _on_relation_selected(self, index):
         """Handle relation selection to update evidence panel."""
@@ -1336,8 +1337,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, self.i18n.t("evidence_added"), Toast.SUCCESS)
                 self._load_evidence()
             except Exception as e:
-                logger.error(f"Failed to create evidence: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_add_evidence')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="evidence.create")
+                Toast.show_toast(self, humanize_exception(e, context="evidence.create"), Toast.ERROR)
 
     def _on_evidence_double_click(self, index):
         """Handle double-click to edit evidence."""
@@ -1358,8 +1359,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, self.i18n.t("evidence_updated"), Toast.SUCCESS)
                 self._load_evidence()
             except Exception as e:
-                logger.error(f"Failed to update evidence: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_update_evidence')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="evidence.update")
+                Toast.show_toast(self, humanize_exception(e, context="evidence.update"), Toast.ERROR)
 
     def _show_evidence_context_menu(self, pos):
         """Show context menu for evidence table actions."""
@@ -1410,8 +1411,8 @@ class RelationsPage(QWidget):
                 Toast.show_toast(self, self.i18n.t("evidence_deleted"), Toast.SUCCESS)
                 self._load_evidence()
             except Exception as e:
-                logger.error(f"Failed to delete evidence: {e}")
-                Toast.show_toast(self, f"{tr('page.relations.err_delete_evidence')}: {str(e)}", Toast.ERROR)
+                log_exception(e, logger, context="evidence.delete")
+                Toast.show_toast(self, humanize_exception(e, context="evidence.delete"), Toast.ERROR)
 
     def _verify_evidence(self, index, status: str):
         """Update verification status of evidence."""
@@ -1425,8 +1426,8 @@ class RelationsPage(QWidget):
             Toast.show_toast(self, f"{tr('page.relations.evidence_status_updated')}: {status_text}", Toast.SUCCESS)
             self._load_evidence()
         except Exception as e:
-            logger.error(f"Failed to verify evidence: {e}")
-            Toast.show_toast(self, f"{tr('page.relations.err_verify_evidence')}: {str(e)}", Toast.ERROR)
+            log_exception(e, logger, context="evidence.verify")
+            Toast.show_toast(self, humanize_exception(e, context="evidence.verify"), Toast.ERROR)
 
     def update_language(self, is_arabic: bool):
         """Update language."""

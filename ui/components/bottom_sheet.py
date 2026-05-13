@@ -243,9 +243,9 @@ class BottomSheet(QWidget):
         self._title_lbl.setText(title)
 
         if not submit_text:
-            submit_text = "\u0625\u0631\u0633\u0627\u0644"
+            submit_text = tr("button.submit")
         if not cancel_text:
-            cancel_text = "\u0625\u0644\u063A\u0627\u0621"
+            cancel_text = tr("button.cancel")
 
         for field_id, field_label, field_type in fields:
             row = QVBoxLayout()
@@ -456,9 +456,9 @@ class BottomSheet(QWidget):
 
         if not no_buttons:
             if not submit_text:
-                submit_text = "\u0625\u0631\u0633\u0627\u0644"
+                submit_text = tr("button.submit")
             if not cancel_text:
-                cancel_text = "\u0625\u0644\u063A\u0627\u0621"
+                cancel_text = tr("button.cancel")
 
             cancel_btn = self._make_button(cancel_text, "secondary")
             cancel_btn.clicked.connect(self._on_cancel)

@@ -98,7 +98,9 @@ def _translate_display(entity_type: str, field: str, value: str) -> str:
             "Inheritance": "wizard.import.step4.claim_inheritance",
             "Other": "wizard.import.step4.claim_other",
         }
-        key = _claim_type_keys.get(value)
+        # Backend sometimes appends the "Claim" suffix (e.g. "OwnershipClaim").
+        normalized = value[:-5] if value.endswith("Claim") else value
+        key = _claim_type_keys.get(normalized)
         return tr(key) if key else value
 
     if entity_type == "claims" and field == "displayInfo":
@@ -183,10 +185,10 @@ class ImportStep4Review(QWidget):
         summary_layout.setContentsMargins(24, 20, 24, 20)
         summary_layout.setSpacing(12)
 
-        title = QLabel(tr("wizard.import.step4.title"))
-        title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #212B36; background: transparent;")
-        summary_layout.addWidget(title)
+        self._summary_title = QLabel(tr("wizard.import.step4.title"))
+        self._summary_title.setFont(create_font(size=14, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._summary_title.setStyleSheet("color: #212B36; background: transparent;")
+        summary_layout.addWidget(self._summary_title)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -201,10 +203,12 @@ class ImportStep4Review(QWidget):
 
         # Count badges — stacked vertically in the narrow card.
         self._count_labels = {}
+        self._count_name_labels = {}
         entity_sections = _get_entity_sections()
         for key, ar_name, color, bg in entity_sections:
-            badge, count_label = self._create_count_badge(ar_name, "0", color, bg)
+            badge, count_label, name_label = self._create_count_badge(ar_name, "0", color, bg)
             self._count_labels[key] = count_label
+            self._count_name_labels[key] = name_label
             summary_layout.addWidget(badge)
         summary_layout.addStretch()
 
@@ -217,10 +221,10 @@ class ImportStep4Review(QWidget):
         table_layout.setContentsMargins(24, 20, 24, 20)
         table_layout.setSpacing(12)
 
-        table_title = QLabel(tr("wizard.import.step4.entity_details"))
-        table_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        table_title.setStyleSheet("color: #212B36; background: transparent;")
-        table_layout.addWidget(table_title)
+        self._table_title = QLabel(tr("wizard.import.step4.entity_details"))
+        self._table_title.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._table_title.setStyleSheet("color: #212B36; background: transparent;")
+        table_layout.addWidget(self._table_title)
 
         # Empty state label
         self._empty_label = EmptyState(
@@ -289,14 +293,23 @@ class ImportStep4Review(QWidget):
         self._table.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         header.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
 
+        # Identifier column supports click-to-copy when the raw value is a
+        # searchable key (national ID, building number, unit identifier,
+        # survey reference, evidence file name).
+        self._table.cellClicked.connect(self._on_cell_clicked)
+
         table_layout.addWidget(self._table, 1)
 
         outer_layout.addWidget(table_card, 2)
 
     def _create_card(self) -> QFrame:
         card = QFrame()
+        # Scope the border to the card itself via objectName; otherwise the
+        # `QFrame {...}` rule cascades onto every descendant QLabel (QLabel
+        # inherits QFrame in Qt5) and paints stray rectangles around titles.
+        card.setObjectName("importReviewCard")
         card.setStyleSheet("""
-            QFrame {
+            QFrame#importReviewCard {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 #F7FAFF, stop:1 #F0F5FF);
                 border-radius: 16px;
@@ -313,7 +326,7 @@ class ImportStep4Review(QWidget):
 
     def _create_count_badge(self, label_text: str, count_text: str,
                             color: str, bg: str):
-        """Create a summary count badge. Returns (container, count_label)."""
+        """Create a summary count badge. Returns (container, count_label, name_label)."""
         container = QFrame()
         container.setFixedHeight(ScreenScale.h(50))
         container.setMinimumWidth(ScreenScale.w(130))
@@ -344,7 +357,7 @@ class ImportStep4Review(QWidget):
         name_label.setStyleSheet("color: #637381;")
         c_layout.addWidget(name_label)
 
-        return container, count_label
+        return container, count_label, name_label
 
     # -- Loading overlay -------------------------------------------------------
 
@@ -449,6 +462,11 @@ class ImportStep4Review(QWidget):
             if key in self._count_labels:
                 self._count_labels[key].setText(str(count))
 
+        # Build per-package lookups so relations and claims can show readable
+        # cross-referenced labels (person/unit, survey reference) instead of
+        # bare GUIDs or untranslated enum names.
+        self._build_lookups()
+
         # Flatten all entities for the table
         all_rows = []
 
@@ -470,13 +488,16 @@ class ImportStep4Review(QWidget):
 
         self._table.setRowCount(len(all_rows))
         for row_idx, (type_key, type_name, entity) in enumerate(all_rows):
-            identifier = entity.get("identifier", "")
+            raw_identifier = entity.get("identifier", "")
             display_info = entity.get("displayInfo", "")
             validation_status = entity.get("validationStatus", "Pending")
             is_approved = entity.get("isApprovedForCommit", False)
 
-            # Translate to Arabic
-            identifier = _translate_display(type_key, "identifier", str(identifier))
+            # Build the user-facing identifier and decide whether it is a
+            # useful search key (eligible for click-to-copy).
+            identifier, copy_value = self._resolve_identifier(
+                type_key, str(raw_identifier), entity
+            )
             display_info = _translate_display(type_key, "displayInfo", str(display_info))
 
             # Type column
@@ -484,9 +505,15 @@ class ImportStep4Review(QWidget):
             type_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(row_idx, 0, type_item)
 
-            # Identifier column
+            # Identifier column — stash the copy value in UserRole so
+            # _on_cell_clicked can read it back without re-parsing the cell.
             id_item = QTableWidgetItem(str(identifier))
             id_item.setTextAlignment(get_text_alignment() | Qt.AlignVCenter)
+            if copy_value:
+                id_item.setData(Qt.UserRole, str(copy_value))
+                id_item.setToolTip(
+                    f"{copy_value}\n\n{tr('wizard.import.step4.copy_hint')}"
+                )
             self._table.setItem(row_idx, 1, id_item)
 
             # Display info column
@@ -504,6 +531,196 @@ class ImportStep4Review(QWidget):
             self._table.setCellWidget(row_idx, 4, approved_widget)
 
             self._table.setRowHeight(row_idx, 44)
+
+    # -- Cross-reference lookups + identifier resolution ----------------------
+
+    def _build_lookups(self):
+        """Index persons / units / surveys so we can render readable
+        identifiers for relations and claims.
+
+        Each entity in the response is a wrapper carrying a top-level
+        ``identifier`` (the backend's best-effort display string) plus the
+        full DTO under ``stagingData`` / ``entityData``. We index by every
+        plausible id key because the wrapper may expose ids at the top
+        level or only inside the inner DTO."""
+        d = self._data or {}
+
+        self._persons_by_id = {}
+        self._units_by_id = {}
+        self._units_to_building_id = {}
+        self._surveys_by_building_id = {}
+
+        for p in d.get("persons") or []:
+            inner = self._inner_dto(p)
+            # Prefer displayInfo (full name) over identifier (national ID) so
+            # relation rows show "خالد حسن الحسن / شقة 18" instead of
+            # "64542116439 / شقة 18". Fall back to identifier when displayInfo
+            # is empty (older packages may not carry it).
+            person_label = p.get("displayInfo") or p.get("identifier") or ""
+            for pid in self._collect_ids(p, inner, ("id", "personId")):
+                self._persons_by_id[pid] = person_label
+
+        for u in d.get("propertyUnits") or []:
+            inner = self._inner_dto(u)
+            for uid in self._collect_ids(u, inner, ("id", "propertyUnitId")):
+                self._units_by_id[uid] = u.get("identifier") or ""
+                bid = inner.get("buildingId") or inner.get("building_id")
+                if bid:
+                    self._units_to_building_id[uid] = str(bid)
+
+        for s in d.get("surveys") or []:
+            inner = self._inner_dto(s)
+            ref = (
+                inner.get("referenceCode")
+                or inner.get("reference_code")
+                or s.get("identifier")
+                or ""
+            )
+            bid = inner.get("buildingId") or inner.get("building_id")
+            if bid and ref:
+                self._surveys_by_building_id[str(bid)] = str(ref)
+
+    @staticmethod
+    def _inner_dto(wrapper: dict) -> dict:
+        """Return the inner DTO from a staged-entity wrapper, parsing JSON if
+        the backend serialized it as a string."""
+        payload = wrapper.get("stagingData") or wrapper.get("entityData") or {}
+        if isinstance(payload, str):
+            try:
+                import json
+                payload = json.loads(payload)
+            except (ValueError, TypeError):
+                payload = {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _collect_ids(wrapper: dict, inner: dict, keys: tuple) -> list:
+        ids = []
+        for src in (wrapper, inner):
+            for k in keys:
+                val = src.get(k)
+                if val:
+                    ids.append(str(val))
+        # Also try originalEntityId / stagedEntityId on the wrapper itself.
+        for extra_key in ("originalEntityId", "stagedEntityId", "entityId"):
+            val = wrapper.get(extra_key)
+            if val:
+                ids.append(str(val))
+        return ids
+
+    def _resolve_identifier(self, type_key: str, raw_identifier: str,
+                             entity: dict) -> tuple:
+        """Return (display_text, copy_value).
+
+        copy_value is the searchable identifier to write to clipboard on
+        click — only set when the value is genuinely useful to search for
+        (national ID, building number, unit identifier, survey reference,
+        evidence filename). For composite displays (person/unit, claim type
+        + owner) we leave copy_value empty."""
+        # Relations: replace `{personId} → {propertyUnitId}` with names.
+        if type_key == "personPropertyRelations":
+            person_id, unit_id = self._extract_relation_ids(raw_identifier, entity)
+            person_name = self._persons_by_id.get(person_id, "") if person_id else ""
+            unit_name = self._units_by_id.get(unit_id, "") if unit_id else ""
+            if person_name or unit_name:
+                return (f"{person_name or '-'} / {unit_name or '-'}", "")
+            # Fallback: keep the raw value visible if cross-reference fails.
+            return (raw_identifier, "")
+
+        # Claims: prefer the linked survey reference; fall back to "{type} — {owner}".
+        if type_key == "claims":
+            survey_ref = self._lookup_survey_ref_for_claim(entity)
+            if survey_ref:
+                return (survey_ref, survey_ref)
+            type_translated = _translate_display(type_key, "identifier", raw_identifier)
+            owner_name = self._lookup_claim_owner_name(entity)
+            if owner_name:
+                return (
+                    tr("wizard.import.step4.claim_with_owner").format(
+                        claim_type=type_translated, owner=owner_name
+                    ),
+                    "",
+                )
+            return (type_translated, "")
+
+        # Default path for buildings / persons / units / households / surveys
+        # / evidences: translate via the standard map. The raw identifier is
+        # the searchable key for the first four types; households and
+        # composite displays don't expose a useful search value.
+        translated = _translate_display(type_key, "identifier", raw_identifier)
+        searchable_types = {
+            "buildings", "persons", "propertyUnits", "surveys", "evidences",
+        }
+        copy_value = raw_identifier if type_key in searchable_types else ""
+        return (translated, copy_value)
+
+    def _extract_relation_ids(self, raw_identifier: str, entity: dict) -> tuple:
+        # The backend's identifier for a relation is "{personId} → {propertyUnitId}".
+        if raw_identifier and "→" in raw_identifier:
+            parts = [p.strip() for p in raw_identifier.split("→", 1)]
+            if len(parts) == 2:
+                return parts[0], parts[1]
+        inner = self._inner_dto(entity)
+        person_id = str(
+            entity.get("personId")
+            or inner.get("personId")
+            or inner.get("person_id")
+            or ""
+        )
+        unit_id = str(
+            entity.get("propertyUnitId")
+            or inner.get("propertyUnitId")
+            or inner.get("property_unit_id")
+            or ""
+        )
+        return person_id, unit_id
+
+    def _lookup_survey_ref_for_claim(self, entity: dict) -> str:
+        inner = self._inner_dto(entity)
+        unit_id = str(
+            entity.get("propertyUnitId")
+            or inner.get("propertyUnitId")
+            or inner.get("property_unit_id")
+            or ""
+        )
+        if not unit_id:
+            return ""
+        building_id = self._units_to_building_id.get(unit_id)
+        if not building_id:
+            return ""
+        return self._surveys_by_building_id.get(building_id, "")
+
+    def _lookup_claim_owner_name(self, entity: dict) -> str:
+        inner = self._inner_dto(entity)
+        claimant_id = str(
+            inner.get("primaryClaimantId")
+            or inner.get("primary_claimant_id")
+            or ""
+        )
+        if not claimant_id:
+            return ""
+        return self._persons_by_id.get(claimant_id, "")
+
+    def _on_cell_clicked(self, row: int, col: int):
+        """Copy the identifier to clipboard when the user clicks an
+        identifier cell that carries a searchable value."""
+        if col != 1:
+            return
+        item = self._table.item(row, col)
+        if item is None:
+            return
+        copy_value = item.data(Qt.UserRole)
+        if not copy_value:
+            return
+        from PyQt5.QtWidgets import QApplication
+        QApplication.clipboard().setText(str(copy_value))
+        try:
+            from ui.components.toast import Toast
+            Toast.show_toast(
+                self, tr("wizard.import.step4.copied_to_clipboard"), Toast.SUCCESS
+            )
+        except Exception as exc:
+            logger.warning(f"Toast on copy failed: {exc}")
 
     def _create_status_badge(self, config: dict) -> QWidget:
         """Create a validation status badge widget for table cell."""
@@ -575,6 +792,15 @@ class ImportStep4Review(QWidget):
     def update_language(self, is_arabic: bool):
         """Update all translatable texts after language change."""
         self.setLayoutDirection(get_layout_direction())
+
+        # Card titles
+        self._summary_title.setText(tr("wizard.import.step4.title"))
+        self._table_title.setText(tr("wizard.import.step4.entity_details"))
+
+        # Count badge entity names
+        for key, ar_name, _, _ in _get_entity_sections():
+            if key in self._count_name_labels:
+                self._count_name_labels[key].setText(ar_name)
 
         # Total label
         total = self._data.get("totalCount", 0) if self._data else 0

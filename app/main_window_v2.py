@@ -342,6 +342,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.FIELD_ASSIGNMENT] = FieldWorkPreparationPage(field_bc, self.i18n, self)
         self.stack.addWidget(self.pages[Pages.FIELD_ASSIGNMENT])
         self.pages[Pages.FIELD_ASSIGNMENT].completed.connect(self._on_field_work_completed)
+        self.pages[Pages.FIELD_ASSIGNMENT].sync_log_requested.connect(self._on_sync_requested)
 
         # Case Details page — read-only view of survey/claim
         self.pages[Pages.SURVEY_DETAILS] = CaseDetailsPage(self)
@@ -427,12 +428,9 @@ class MainWindow(QMainWindow):
 
         # Navbar signals
         self.navbar.tab_changed.connect(self._on_tab_changed)
-        # Search/filter removed from navbar — each page has its own filters
         self.navbar.logout_requested.connect(self._handle_logout)
         self.navbar.language_change_requested.connect(self.toggle_language)
-        self.navbar.sync_requested.connect(self._on_sync_requested)
         self.navbar.password_change_requested.connect(self._on_voluntary_password_change)
-        self.pages[Pages.SYNC_DATA].sync_notification.connect(self._on_sync_notification)
         self.navbar.import_requested.connect(self._on_import_requested)
 
         # Import pages signals. The wizard is always entered with a specific
@@ -445,7 +443,7 @@ class MainWindow(QMainWindow):
             self._on_import_completed_silent_refresh
         )
         self.pages[Pages.IMPORT_WIZARD].cancelled.connect(
-            lambda: self.navigate_to(Pages.IMPORT_PACKAGES)
+            self._on_import_wizard_cancelled
         )
         self.pages[Pages.IMPORT_WIZARD].terminal_state_message.connect(
             self._on_import_terminal_state_message
@@ -1200,6 +1198,24 @@ class MainWindow(QMainWindow):
                     pass
                 break
 
+    def _on_import_wizard_cancelled(self):
+        """Return to the packages list AND refetch from backend.
+
+        Connected to ImportWizard.cancelled. Without the refresh, the user
+        sees stale data after resolving conflicts (e.g. package still shows
+        ReviewingConflicts even though backend already moved it forward).
+        Forcing a fresh GET /v1/import/packages keeps the UI 100% backend-driven.
+        """
+        pkg_page = self.pages.get(Pages.IMPORT_PACKAGES)
+        if pkg_page is not None:
+            fn = getattr(pkg_page, "_load_packages", None) or getattr(pkg_page, "refresh", None)
+            if callable(fn):
+                try:
+                    fn()
+                except Exception:
+                    pass
+        self.navigate_to(Pages.IMPORT_PACKAGES)
+
     def _on_import_terminal_state_message(self, severity: str, message_ar: str):
         """Show a Toast on the packages page after a wizard bounce.
 
@@ -1313,18 +1329,14 @@ class MainWindow(QMainWindow):
                 pass
 
     def _on_sync_requested(self):
-        """Handle sync data request from navbar menu."""
-        self.navbar.hide_sync_notification()
+        """Open the sync data page; always refetch on entry."""
         sync_page = self.pages.get(Pages.SYNC_DATA)
-        if sync_page:
-            sync_page.clear_notifications()
+        if sync_page is not None and hasattr(sync_page, "refresh"):
+            try:
+                sync_page.refresh()
+            except Exception as e:
+                logger.warning(f"Sync page refresh failed: {e}")
         self.navigate_to(Pages.SYNC_DATA)
-
-    def _on_sync_notification(self, count: int):
-        if count > 0:
-            self.navbar.show_sync_notification(count)
-        else:
-            self.navbar.hide_sync_notification()
 
     def _on_tab_changed(self, tab_index: int):
         """Handle navbar tab change."""
@@ -1457,9 +1469,7 @@ class MainWindow(QMainWindow):
 
         page = self.pages[page_id]
 
-        # Clear sync notification badge when navigating to sync page
         if page_id == Pages.SYNC_DATA:
-            self.navbar.hide_sync_notification()
             if hasattr(page, 'clear_notifications'):
                 page.clear_notifications()
 

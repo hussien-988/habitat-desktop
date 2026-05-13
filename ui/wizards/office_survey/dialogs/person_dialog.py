@@ -26,6 +26,7 @@ from services.validation_service import ValidationService
 from services.api_client import get_api_client
 from services.translation_manager import tr, get_layout_direction, get_language
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from services.display_mappings import (
     get_relation_type_options, get_relationship_to_head_options,
     get_evidence_type_options,
@@ -1977,8 +1978,8 @@ class PersonDialog(QDialog):
             self._refresh_token()
             evidences = self._api_service.get_survey_evidences(self._survey_id, evidence_type="tenure")
         except Exception as e:
-            logger.warning(f"Could not load existing docs: {e}")
-            Toast.show_toast(self, tr("wizard.person_dialog.failed_load_docs"), Toast.ERROR)
+            log_exception(e, logger, context="evidence.list")
+            Toast.show_toast(self, humanize_exception(e, context="evidence.list"), Toast.ERROR)
             return
 
         if not evidences:

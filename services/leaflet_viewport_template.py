@@ -209,11 +209,18 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     pointToLayer: function(feature, latlng) {
                         var props = feature.properties;
                         var status = getStatusKey(props.status || 1);
-                        var color = statusColors[status] || '#0072BC';
                         var isAssigned = props.is_assigned === true;
+                        var color;
+                        if (typeof assignmentColorMode !== 'undefined' && assignmentColorMode) {
+                            color = isAssigned ? '#F59E0B' : '#10B981';
+                        } else {
+                            color = statusColors[status] || '#0072BC';
+                            if (isAssigned) {
+                                color = '#F59E0B';
+                            }
+                        }
                         var innerSvg;
                         if (isAssigned) {
-                            color = '#F59E0B';
                             innerSvg = '<text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">&#10003;</text>';
                         } else {
                             innerSvg = '<circle cx="12" cy="12" r="4" fill="#fff"/>';
@@ -261,6 +268,11 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 });
 
                 currentMarkersCluster.addLayers(layersBatch);
+
+                if (typeof assignmentFilter !== 'undefined' && assignmentFilter && assignmentFilter !== 'all'
+                    && typeof window.applyAssignmentFilterToLayer === 'function') {
+                    layersBatch.forEach(window.applyAssignmentFilterToLayer);
+                }
 
                 isLoadingViewport = false;
                 var total = currentMarkersCluster.getLayers().length;

@@ -24,6 +24,7 @@ from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 
 from app.config import Config
 from services.api_client import get_api_client
+from services.exceptions import humanize_exception, log_exception
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
 from ui.font_utils import FontManager, create_font
@@ -270,6 +271,13 @@ class OccupancyClaimsStep(BaseStep):
                 ('father_name', 'father_name_ar'),
                 ('mother_name', 'mother_name_ar'),
                 ('last_name',   'last_name_ar'),
+                ('phone',       'phone'),
+                ('email',       'email'),
+                ('landline',    'landline'),
+                ('national_id', 'national_id'),
+                ('birth_date',  'birth_date'),
+                ('gender',      'gender'),
+                ('nationality', 'nationality'),
             ):
                 if not person_data_copy.get(person_key) and a.get(applicant_key):
                     person_data_copy[person_key] = a[applicant_key]
@@ -374,8 +382,8 @@ class OccupancyClaimsStep(BaseStep):
                                                 )
                                                 logger.info(f"Existing evidence {f_entry['evidence_id']} linked to relation {new_rel_id}")
                                             except Exception as le:
-                                                logger.error(f"Failed to link existing evidence: {le}")
-                                                Toast.show_toast(self, tr("wizard.person_dialog.link_existing_doc_failed"), Toast.ERROR)
+                                                log_exception(le, logger, context="evidence.link_existing")
+                                                Toast.show_toast(self, humanize_exception(le, context="evidence.link_existing"), Toast.ERROR)
                                 except Exception as e:
                                     logger.error(f"Failed to create relation for person {person_id}: {e}")
                                     Toast.show_toast(self, map_exception(e), Toast.ERROR)

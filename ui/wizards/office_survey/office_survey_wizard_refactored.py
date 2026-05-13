@@ -11,6 +11,7 @@ from PyQt5.QtCore import pyqtSignal, Qt, QSize, QTimer
 from PyQt5.QtGui import QFont, QColor
 from ui.error_handler import ErrorHandler
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from services.api_worker import ApiWorker
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
@@ -26,7 +27,6 @@ from ui.wizards.office_survey.steps import (
 )
 from ui.wizards.office_survey.steps.claim_step import ClaimStep
 
-from repositories.survey_repository import SurveyRepository
 from repositories.database import Database
 from ui.design_system import PageDimensions, Colors, ButtonDimensions, ScreenScale
 from ui.style_manager import StyleManager
@@ -70,7 +70,6 @@ class OfficeSurveyWizard(BaseWizard):
     def __init__(self, db: Database = None, parent=None):
         """Initialize the wizard."""
         self.db = db or Database()
-        self.survey_repo = SurveyRepository(self.db)
         self.step_labels = []  # For step indicators
         self._finalization_complete = False  # Flag to track successful finalization
         self._edit_mode = False  # True when editing a step from review
@@ -183,11 +182,11 @@ class OfficeSurveyWizard(BaseWizard):
             return False
 
         except Exception as e:
-            logger.error(f"Error submitting survey: {e}", exc_info=True)
+            log_exception(e, logger, context="office_survey.submit")
             ErrorHandler.show_error(
                 self,
-                f"{tr('wizard.error.save_failed')}\n{map_exception(e)}",
-                tr("common.error")
+                humanize_exception(e, context="office_survey.submit"),
+                tr("common.error"),
             )
             return False
 
@@ -670,49 +669,6 @@ class OfficeSurveyWizard(BaseWizard):
         self._cancel_survey_worker.finished.connect(_on_cancelled)
         self._cancel_survey_worker.error.connect(_on_cancel_error)
         self._cancel_survey_worker.start()
-
-    @classmethod
-    def load_from_draft(cls, draft_id: str, parent=None):
-        """
-        Load wizard from a saved draft.
-
-        Args:
-            draft_id: The draft ID to load
-            parent: Parent widget
-
-        Returns:
-            OfficeSurveyWizard instance with restored state
-        """
-        try:
-            # Load draft data
-            survey_repo = SurveyRepository()
-            draft_data = survey_repo.load_draft(draft_id)
-
-            if not draft_data:
-                raise ValueError(f"Draft not found: {draft_id}")
-
-            # Create wizard
-            wizard = cls(parent)
-
-            # Restore context
-            wizard.context = SurveyContext.from_dict(draft_data)
-
-            # Navigate to saved step
-            saved_step = wizard.context.current_step_index
-            wizard.navigator.goto_step(saved_step, skip_validation=True)
-
-            logger.info(f"Draft loaded: {draft_id}")
-
-            return wizard
-
-        except Exception as e:
-            logger.error(f"Error loading draft: {e}", exc_info=True)
-            ErrorHandler.show_error(
-                None,
-                f"{tr('wizard.error.draft_load_failed')}\n{map_exception(e)}",
-                tr("common.error")
-            )
-            return None
 
     def update_language(self, is_arabic: bool):
         """Update all translatable texts when language changes."""

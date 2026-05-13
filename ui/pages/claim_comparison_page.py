@@ -248,15 +248,6 @@ def _get_diff_indicator_style(bg_color="#EBF5FF"):
         }}
     """
 
-_DOC_COLUMN_STYLE = """
-    QFrame {
-        background: #F8FAFC;
-        border-radius: 12px;
-        border: 1px solid #E5E7EB;
-    }
-"""
-
-
 # ─── RecordCard ───────────────────────────────────────────────────────
 class _RecordCard(QFrame):
     """Selectable record card for primary record selection."""
@@ -397,17 +388,32 @@ class ClaimComparisonPage(QWidget):
         self._header.set_title(tr("page.comparison.title"))
         self._header.set_help(Pages.CLAIM_COMPARISON)
 
-        # Action button in header
+        # Action button is built here but placed inside the resolution card
+        # later so it sits next to the reason/option controls. Size adapts to
+        # its label (longer EN text is not clipped).
         self.action_btn = QPushButton(tr("page.comparison.execute"))
         self.action_btn.setCursor(Qt.PointingHandCursor)
         self.action_btn.setFont(create_font(
             size=ButtonDimensions.SAVE_FONT_SIZE,
             weight=FontManager.WEIGHT_SEMIBOLD,
         ))
-        self.action_btn.setFixedSize(ScreenScale.w(100), ButtonDimensions.SAVE_HEIGHT)
-        self.action_btn.setStyleSheet(StyleManager.dark_action_button())
+        self.action_btn.setMinimumWidth(ScreenScale.w(140))
+        self.action_btn.setMinimumHeight(ButtonDimensions.SAVE_HEIGHT)
+        self.action_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.action_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {Colors.PRIMARY_BLUE};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 8px 24px;
+            }}
+            QPushButton:hover {{ background-color: #2D7BC9; }}
+            QPushButton:pressed {{ background-color: #1F66A8; }}
+            QPushButton:disabled {{ background-color: #A0C4E8; color: #E5F0FB; }}
+        """)
         self.action_btn.clicked.connect(self._on_action_clicked)
-        self._header.add_action_widget(self.action_btn)
+        self.action_btn.adjustSize()
 
         # Back button in header
         self._back_btn = QPushButton(tr("action.back"))
@@ -532,82 +538,7 @@ class ClaimComparisonPage(QWidget):
         comp_card_layout.addWidget(self._table_container)
         self._content_layout.addWidget(self._comparison_card)
 
-        # Section 3: Document Comparison
-        doc_title_row = QHBoxLayout()
-        doc_title_row.setSpacing(12)
-        self._doc_title = self._build_section_title(
-            "dec",
-            tr("page.comparison.document_comparison"),
-            tr("page.comparison.doc_section_subtitle"),
-        )
-        doc_title_row.addWidget(self._doc_title, 1)
-
-        self._doc_load_btn = QPushButton(tr("page.comparison.load_comparison"))
-        self._doc_load_btn.setCursor(Qt.PointingHandCursor)
-        self._doc_load_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._doc_load_btn.setFixedHeight(ScreenScale.h(32))
-        self._doc_load_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: #FFFFFF;
-                background: {Colors.PRIMARY_BLUE};
-                border: none;
-                border-radius: 8px;
-                padding: 6px 20px;
-            }}
-            QPushButton:hover {{
-                background: #2D7BC9;
-            }}
-            QPushButton:disabled {{
-                background: #A0C4E8;
-                color: #D0E4F5;
-            }}
-        """)
-        self._doc_load_btn.clicked.connect(self._load_document_comparison)
-        doc_title_row.addWidget(self._doc_load_btn, 0, Qt.AlignBottom)
-
-        doc_title_widget = QWidget()
-        doc_title_widget.setStyleSheet("background: transparent;")
-        doc_title_widget.setLayout(doc_title_row)
-        self._content_layout.addWidget(doc_title_widget)
-
-        self._doc_card = QFrame()
-        self._doc_card.setObjectName("sectionCard")
-        self._doc_card.setStyleSheet(_SECTION_CARD_STYLE)
-        doc_card_layout = QVBoxLayout(self._doc_card)
-        doc_card_layout.setContentsMargins(16, 16, 16, 16)
-        doc_card_layout.setSpacing(12)
-
-        # Doc columns container
-        self._doc_columns_layout = QHBoxLayout()
-        self._doc_columns_layout.setSpacing(0)
-
-        self._doc_first_frame = self._build_doc_column(tr("page.comparison.first_record_docs"))
-        self._doc_columns_layout.addWidget(self._doc_first_frame, 1)
-
-        # Thin vertical separator
-        separator = QFrame()
-        separator.setFixedWidth(1)
-        separator.setStyleSheet("QFrame { background: #E2EAF2; }")
-        self._doc_columns_layout.addWidget(separator)
-
-        self._doc_second_frame = self._build_doc_column(tr("page.comparison.second_record_docs"))
-        self._doc_columns_layout.addWidget(self._doc_second_frame, 1)
-
-        doc_card_layout.addLayout(self._doc_columns_layout)
-
-        # Doc empty state
-        self._doc_empty_label = QLabel(tr("page.comparison.click_load_comparison"))
-        self._doc_empty_label.setAlignment(Qt.AlignCenter)
-        self._doc_empty_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        self._doc_empty_label.setStyleSheet("color: #9CA3AF; background: transparent; padding: 30px;")
-        doc_card_layout.addWidget(self._doc_empty_label)
-
-        self._doc_first_frame.setVisible(False)
-        self._doc_second_frame.setVisible(False)
-
-        self._content_layout.addWidget(self._doc_card)
-
-        # Section 4: Resolution
+        # Section 3: Resolution
         self._resolution_title = self._build_section_title(
             "yelow",
             tr("page.comparison.resolution_action"),
@@ -642,17 +573,13 @@ class ClaimComparisonPage(QWidget):
         options_layout.addStretch()
         res_layout.addLayout(options_layout)
 
-        # Justification — required input. Larger label with red asterisk so
-        # the user immediately sees this is mandatory. The placeholder is
-        # multiline with a concrete example. A hint below clarifies that
-        # the text is persisted in the audit trail and cannot be edited.
         self._justification_label = QLabel()
         self._justification_label.setText(
             f"{tr('page.comparison.justification_required')} "
             f"<span style='color:#DC2626;'>*</span>"
         )
         self._justification_label.setTextFormat(Qt.RichText)
-        self._justification_label.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
+        self._justification_label.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
         self._justification_label.setStyleSheet(
             f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
         )
@@ -675,13 +602,11 @@ class ClaimComparisonPage(QWidget):
         )
         res_layout.addWidget(self._justification_edit)
 
-        self._justification_hint = QLabel(tr("page.comparison.justification_audit_hint"))
-        self._justification_hint.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        self._justification_hint.setStyleSheet(
-            "color: #6B7280; background: transparent; border: none; padding-top: 4px;"
-        )
-        self._justification_hint.setWordWrap(True)
-        res_layout.addWidget(self._justification_hint)
+        action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 6, 0, 0)
+        action_row.addStretch()
+        action_row.addWidget(self.action_btn)
+        res_layout.addLayout(action_row)
 
         self._content_layout.addWidget(self._resolution_card)
 
@@ -737,36 +662,6 @@ class ClaimComparisonPage(QWidget):
 
         return container
 
-    # ────────────────────────────────────────────
-    # Document Column Builder
-    # ────────────────────────────────────────────
-    def _build_doc_column(self, title: str) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet(_DOC_COLUMN_STYLE)
-
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        title_lbl = QLabel(title)
-        title_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        title_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        layout.addWidget(title_lbl)
-        frame._title_label = title_lbl
-
-        count_lbl = QLabel(f"0 {tr('page.comparison.documents')}")
-        count_lbl.setObjectName("doc_count")
-        count_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-        count_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-        layout.addWidget(count_lbl)
-
-        docs_container = QVBoxLayout()
-        docs_container.setSpacing(6)
-        docs_container.setObjectName("docs_list")
-        layout.addLayout(docs_container)
-
-        layout.addStretch()
-        return frame
 
     # ────────────────────────────────────────────
     # Comparison Table Population
@@ -842,14 +737,6 @@ class ClaimComparisonPage(QWidget):
             ]
         else:
             fields = [
-                ("building_code", tr("page.comparison.building_data")),
-                ("address", tr("page.comparison.building_location")),
-                ("residential_units", tr("page.comparison.residential_units")),
-                ("commercial_units", tr("page.comparison.commercial_units")),
-                ("total_units", tr("page.comparison.total_units")),
-                ("building_type", tr("page.comparison.building_type")),
-                ("building_status", tr("page.comparison.building_status")),
-                ("general_description", tr("page.comparison.building_description")),
                 ("unit_status", tr("page.comparison.unit_status")),
                 ("unit_type", tr("page.comparison.unit_type")),
                 ("area_sqm", tr("page.comparison.unit_area")),
@@ -941,284 +828,6 @@ class ClaimComparisonPage(QWidget):
         checked_id = self.claim_radio_group.checkedId()
         for idx, card in enumerate(self._record_cards):
             card.set_selected(idx == checked_id)
-
-    # ────────────────────────────────────────────
-    # Evidence Card Builder
-    # ────────────────────────────────────────────
-    def _build_evidence_card(self, evidence: dict) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background: white;
-                border-radius: 10px;
-                border: 1px solid #E5E7EB;
-            }
-            QFrame:hover {
-                border-color: #93C5FD;
-                background: #F0F9FF;
-            }
-        """)
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
-
-        # File name row
-        name_row = QHBoxLayout()
-        name_row.setSpacing(8)
-
-        file_name = evidence.get("originalFileName", "")
-        mime = evidence.get("mimeType", "")
-        icon_text = self._get_file_icon(mime)
-
-        icon_lbl = QLabel(icon_text)
-        icon_lbl.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
-        icon_lbl.setStyleSheet("background: transparent; border: none;")
-        icon_lbl.setFixedWidth(ScreenScale.w(20))
-        name_row.addWidget(icon_lbl)
-
-        name_lbl = QLabel(file_name or "-")
-        name_lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        name_lbl.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
-        name_lbl.setWordWrap(True)
-        name_row.addWidget(name_lbl, 1)
-
-        # Version badge
-        version = evidence.get("versionNumber", 1)
-        ver_lbl = QLabel(f"v{version}")
-        ver_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_BOLD))
-        ver_lbl.setFixedWidth(ScreenScale.w(28))
-        ver_lbl.setAlignment(Qt.AlignCenter)
-        is_current = evidence.get("isCurrentVersion", True)
-        ver_color = "#10B981" if is_current else "#9CA3AF"
-        ver_lbl.setStyleSheet(
-            f"color: {ver_color}; background: {ver_color}15; "
-            f"border-radius: 4px; padding: 2px; border: none;"
-        )
-        name_row.addWidget(ver_lbl)
-
-        layout.addLayout(name_row)
-
-        # Details row
-        details_parts = []
-        desc = evidence.get("description", "")
-        if desc:
-            details_parts.append(desc)
-        authority = evidence.get("issuingAuthority", "")
-        if authority:
-            details_parts.append(authority)
-        ref = evidence.get("documentReferenceNumber", "")
-        if ref:
-            details_parts.append(f"#{ref}")
-
-        if details_parts:
-            details_lbl = QLabel(" | ".join(details_parts))
-            details_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
-            details_lbl.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
-            details_lbl.setWordWrap(True)
-            layout.addWidget(details_lbl)
-
-        # Date + size row
-        meta_parts = []
-        issued = evidence.get("documentIssuedDate", "")
-        if issued and "T" in str(issued):
-            meta_parts.append(str(issued).split("T")[0])
-        size_bytes = evidence.get("fileSizeBytes", 0)
-        if size_bytes:
-            if size_bytes > 1048576:
-                meta_parts.append(f"{size_bytes / 1048576:.1f} MB")
-            elif size_bytes > 1024:
-                meta_parts.append(f"{size_bytes / 1024:.0f} KB")
-            else:
-                meta_parts.append(f"{size_bytes} B")
-
-        is_expired = evidence.get("isExpired", False)
-        if is_expired:
-            meta_parts.append(tr("page.comparison.expired"))
-
-        if meta_parts:
-            meta_lbl = QLabel(" | ".join(meta_parts))
-            meta_lbl.setFont(create_font(size=7, weight=FontManager.WEIGHT_REGULAR))
-            expired_color = "#EF4444" if is_expired else "#9CA3AF"
-            meta_lbl.setStyleSheet(f"color: {expired_color}; background: transparent; border: none;")
-            layout.addWidget(meta_lbl)
-
-        return card
-
-    @staticmethod
-    def _get_file_icon(mime_type: str) -> str:
-        if not mime_type:
-            return "F"
-        if "pdf" in mime_type:
-            return "PDF"
-        if "image" in mime_type:
-            return "IMG"
-        if "word" in mime_type or "document" in mime_type:
-            return "DOC"
-        if "excel" in mime_type or "spreadsheet" in mime_type:
-            return "XLS"
-        return "F"
-
-    def _populate_doc_column(self, frame: QFrame, evidences: list):
-        layout = frame.layout()
-        docs_layout = None
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item and item.layout() and item.layout().objectName() == "docs_list":
-                docs_layout = item.layout()
-                break
-
-        if not docs_layout:
-            return
-
-        while docs_layout.count():
-            child = docs_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        count_lbl = frame.findChild(QLabel, "doc_count")
-        if count_lbl:
-            count_lbl.setText(
-                f"{len(evidences)} {tr('page.comparison.document_singular')}"
-                if len(evidences) != 0
-                else tr("page.comparison.no_documents")
-            )
-
-        for ev in evidences:
-            ev_card = self._build_evidence_card(ev)
-            docs_layout.addWidget(ev_card)
-
-    # ────────────────────────────────────────────
-    # Document Comparison Fetch
-    # ────────────────────────────────────────────
-    def _load_document_comparison(self):
-        if not self._current_group:
-            return
-
-        conflict_id = self._current_group.get("id", "")
-        if not conflict_id:
-            Toast.show_toast(self, tr("page.comparison.conflict_id_unavailable"), Toast.WARNING)
-            return
-
-        self._doc_load_btn.setEnabled(False)
-
-        entity_ids = [
-            self._current_group.get("firstEntityId", ""),
-            self._current_group.get("secondEntityId", ""),
-        ]
-        is_person = getattr(self, "_current_category", "") == PERSON
-
-        self._doc_comparison_worker = ApiWorker(
-            self._fetch_document_comparison, conflict_id, entity_ids, is_person
-        )
-        self._doc_comparison_worker.finished.connect(self._on_doc_comparison_loaded)
-        self._doc_comparison_worker.error.connect(self._on_doc_comparison_error)
-        self._spinner.show_loading(tr("component.loading.default"))
-        self._doc_comparison_worker.start()
-
-    def _fetch_document_comparison(self, conflict_id, entity_ids, is_person):
-        """Fetch document comparison data (runs in worker thread)."""
-        first_evidences = []
-        second_evidences = []
-
-        try:
-            doc_data = self.duplicate_service.get_document_comparison(conflict_id)
-            logger.info(f"Document comparison response: {str(doc_data)[:500]}")
-
-            if isinstance(doc_data, dict):
-                first_entity = doc_data.get("firstEntity") or doc_data.get("firstRecord") or {}
-                second_entity = doc_data.get("secondEntity") or doc_data.get("secondRecord") or {}
-
-                first_evidences = (
-                    first_entity.get("evidences", [])
-                    or first_entity.get("documents", [])
-                    or first_entity.get("attachments", [])
-                )
-                second_evidences = (
-                    second_entity.get("evidences", [])
-                    or second_entity.get("documents", [])
-                    or second_entity.get("attachments", [])
-                )
-
-                if not first_evidences and not second_evidences:
-                    entities_list = doc_data.get("entities", doc_data.get("records", []))
-                    if isinstance(entities_list, list) and len(entities_list) >= 2:
-                        first_evidences = entities_list[0].get("evidences", entities_list[0].get("documents", []))
-                        second_evidences = entities_list[1].get("evidences", entities_list[1].get("documents", []))
-
-                if not first_evidences and not second_evidences:
-                    root_docs = doc_data.get("evidences", doc_data.get("documents", []))
-                    if isinstance(root_docs, list) and len(root_docs) >= 2:
-                        mid = len(root_docs) // 2
-                        first_evidences = root_docs[:mid]
-                        second_evidences = root_docs[mid:]
-
-            elif isinstance(doc_data, list):
-                if len(doc_data) >= 2 and isinstance(doc_data[0], dict):
-                    if "evidences" in doc_data[0] or "documents" in doc_data[0]:
-                        first_evidences = doc_data[0].get("evidences", doc_data[0].get("documents", []))
-                        second_evidences = doc_data[1].get("evidences", doc_data[1].get("documents", []))
-                    else:
-                        mid = len(doc_data) // 2
-                        first_evidences = doc_data[:mid]
-                        second_evidences = doc_data[mid:]
-
-        except Exception as e:
-            logger.warning(f"Document comparison endpoint failed: {e}")
-
-        if not first_evidences and not second_evidences:
-            if not is_person:
-                try:
-                    from services.api_client import get_api_client
-                    api = get_api_client()
-                    if api:
-                        for idx, eid in enumerate(entity_ids):
-                            if not eid:
-                                continue
-                            try:
-                                unit_dto = api.get_property_unit_by_id(eid)
-                                building_id = ""
-                                if unit_dto:
-                                    building_id = unit_dto.get("buildingId", unit_dto.get("building_id", ""))
-                                if building_id:
-                                    docs = api.get_building_documents(building_id)
-                                    if docs:
-                                        if idx == 0:
-                                            first_evidences = docs
-                                        else:
-                                            second_evidences = docs
-                                        logger.info(f"Fetched {len(docs)} building docs for entity {idx}")
-                            except Exception as be:
-                                logger.warning(f"Failed to fetch building docs for {eid}: {be}")
-                except Exception as e:
-                    logger.warning(f"Building documents fallback failed: {e}")
-
-        return {"first": first_evidences, "second": second_evidences}
-
-    def _on_doc_comparison_loaded(self, result):
-        """Handle document comparison result on main thread."""
-        self._spinner.hide_loading()
-        self._doc_load_btn.setEnabled(True)
-        first_evidences = result.get("first", [])
-        second_evidences = result.get("second", [])
-
-        if not first_evidences and not second_evidences:
-            Toast.show_toast(self, tr("page.comparison.no_linked_documents"), Toast.WARNING)
-            return
-
-        self._doc_empty_label.setVisible(False)
-        self._doc_first_frame.setVisible(True)
-        self._doc_second_frame.setVisible(True)
-
-        self._populate_doc_column(self._doc_first_frame, first_evidences)
-        self._populate_doc_column(self._doc_second_frame, second_evidences)
-
-    def _on_doc_comparison_error(self, error_msg):
-        """Handle document comparison error."""
-        self._spinner.hide_loading()
-        self._doc_load_btn.setEnabled(True)
-        logger.warning(f"Document comparison failed: {error_msg}")
-        Toast.show_toast(self, tr("page.comparison.failed_loading_documents"), Toast.ERROR)
 
     # ────────────────────────────────────────────
     # Layout helpers
@@ -1738,12 +1347,6 @@ class ClaimComparisonPage(QWidget):
         self._resolution_title.setVisible(not self._is_resolved)
         self._resolution_card.setVisible(not self._is_resolved)
         self.action_btn.setVisible(not self._is_resolved)
-
-        # Reset doc comparison
-        self._doc_empty_label.setVisible(True)
-        self._doc_first_frame.setVisible(False)
-        self._doc_second_frame.setVisible(False)
-        self._doc_load_btn.setEnabled(True)
 
         # Reset justification
         self._justification_edit.clear()
@@ -2322,6 +1925,7 @@ class ClaimComparisonPage(QWidget):
         self._header.set_title(tr("page.comparison.title"))
         self._back_btn.setText(tr("action.back"))
         self.action_btn.setText(tr("page.comparison.execute"))
+        self.action_btn.adjustSize()
 
         # Section titles
         self._records_title._title_label.setText(tr("page.comparison.records_section"))
@@ -2330,18 +1934,11 @@ class ClaimComparisonPage(QWidget):
         self._comparison_title._title_label.setText(tr("page.comparison.comparison"))
         self._comparison_title._subtitle_label.setText(tr("page.comparison.comparison_section_subtitle"))
 
-        self._doc_title._title_label.setText(tr("page.comparison.document_comparison"))
-        self._doc_title._subtitle_label.setText(tr("page.comparison.doc_section_subtitle"))
-
         self._resolution_title._title_label.setText(tr("page.comparison.resolution_action"))
         self._resolution_title._subtitle_label.setText(tr("page.comparison.resolution_subtitle"))
 
         # Resolved banner
         self._resolved_label.setText(tr("page.comparison.resolved_status"))
-
-        # Doc load button & empty state
-        self._doc_load_btn.setText(tr("page.comparison.load_comparison"))
-        self._doc_empty_label.setText(tr("page.comparison.click_load_comparison"))
 
         # Resolution radio buttons
         resolution_labels = [
@@ -2352,19 +1949,12 @@ class ClaimComparisonPage(QWidget):
             if idx < len(resolution_labels):
                 btn.setText(resolution_labels[idx])
 
-        # Justification — keep the rich-text label with the red asterisk in
-        # sync with the language change.
+        # Justification label
         self._justification_label.setText(
             f"{tr('page.comparison.justification_required')} "
             f"<span style='color:#DC2626;'>*</span>"
         )
         self._justification_edit.setPlaceholderText(tr("page.comparison.enter_justification"))
-        if hasattr(self, "_justification_hint"):
-            self._justification_hint.setText(tr("page.comparison.justification_audit_hint"))
-
-        # Document column titles
-        self._doc_first_frame._title_label.setText(tr("page.comparison.first_record_docs"))
-        self._doc_second_frame._title_label.setText(tr("page.comparison.second_record_docs"))
 
         # Re-render if data is loaded
         if self._current_group:

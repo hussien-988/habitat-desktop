@@ -428,21 +428,18 @@ class _ConflictWorker(QThread):
                 is_escalated=self.filters.get("is_escalated"),
                 import_package_id=self.import_package_id,
             )
-            if self.import_package_id:
-                # No per-package summary endpoint exists, and computing the
-                # summary client-side would conflict with the "backend is the
-                # only source" rule. Skip the summary entirely in import context;
-                # the page hides summary cards in this mode.
+            # Always fetch the global summary from the backend so the four
+            # summary cards stay populated in every entry path (global view
+            # and import-context view). Backend has no per-package summary
+            # endpoint, so in import-context mode the cards show the
+            # aggregate (all packages) counts. Summary endpoint failure
+            # must NOT corrupt the conflicts view — fall back to an empty
+            # dict and keep the conflicts list intact.
+            try:
+                summary = self.service.get_conflicts_summary()
+            except (ApiException, NetworkException) as se:
+                log_exception(se, logger, context="load_conflicts_summary")
                 summary = {}
-            else:
-                # Summary endpoint failure must NOT corrupt the conflicts view —
-                # we still emit the conflicts list with an empty summary if it
-                # fails, but log the structured error.
-                try:
-                    summary = self.service.get_conflicts_summary()
-                except (ApiException, NetworkException) as se:
-                    log_exception(se, logger, context="load_conflicts_summary")
-                    summary = {}
             self.finished.emit({"conflicts": result, "summary": summary})
         except (ApiException, NetworkException) as e:
             log_exception(e, logger, context=CTX_LOAD_CONFLICTS)
@@ -452,7 +449,7 @@ class _ConflictWorker(QThread):
             )
         except Exception as e:
             logger.error(f"Conflict load unexpected: {e}")
-            self.error.emit(str(e), "")
+            self.error.emit(humanize_exception(e, context=CTX_LOAD_CONFLICTS), "")
 
 
 class _ResolutionWorker(QThread):
@@ -488,7 +485,7 @@ class _ResolutionWorker(QThread):
             self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
         except Exception as e:
             logger.error(f"Resolution unexpected error: {e}")
-            self.error.emit(str(e))
+            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
 
 
 # _EmptyStateConflicts removed — using EmptyStateAnimated from animated_card.py
@@ -737,13 +734,10 @@ class DuplicatesPage(QWidget):
             else:
                 self._banner_msg.setText(tr("page.duplicates.banner_import_context_no_name"))
             self._import_banner.setVisible(True)
-            # No per-package summary endpoint on the backend, so hide the
-            # summary cards AND header stat pill entirely in this mode rather
-            # than computing them on the client. Both would otherwise show 0.
-            if hasattr(self, "_summary_container"):
-                self._summary_container.setVisible(False)
-            if hasattr(self, "_stat_pending"):
-                self._stat_pending.setVisible(False)
+            # Summary cards stay visible — the worker now derives the four
+            # counts client-side from the package's loaded conflicts so the
+            # user keeps the same situational summary they get on the
+            # global view.
             self._current_page = 1
             self._load_conflicts()
         else:
@@ -755,14 +749,83 @@ class DuplicatesPage(QWidget):
         self._import_package_id = None
         self._import_package_name = ""
         self._import_banner.setVisible(False)
-        if hasattr(self, "_summary_container"):
-            self._summary_container.setVisible(True)
-        if hasattr(self, "_stat_pending"):
-            self._stat_pending.setVisible(True)
         if had_context:
             self._banner_msg.setText(tr("page.duplicates.import_banner_msg"))
             self._current_page = 1
             self._load_conflicts()
+
+    def _auto_approve_and_return(self, package_id: str):
+        """Call /approve to transition the package, then return to the wizard.
+
+        Why this lives here (and not only in the wizard): when the last conflict
+        is resolved, the backend status is still ReviewingConflicts until /approve
+        is called. Forcing the transition BEFORE re-entering the wizard means the
+        wizard refetches a fresh ReadyToCommit status and routes straight to the
+        commit step — no momentary "loading / checking status" flash. If the
+        backend rejects /approve (race condition: a new conflict was created),
+        we still return to the wizard so its existing auto-rescue logic can take
+        over and surface what's pending.
+        """
+        from controllers.import_controller import ImportController
+        from services.api_worker import ApiWorker
+
+        logger.info(
+            "All conflicts resolved for package %s — calling /approve before return",
+            package_id,
+        )
+
+        # Guard against double-trigger while the worker is in flight.
+        if getattr(self, "_auto_approve_inflight", False):
+            return
+        self._auto_approve_inflight = True
+
+        controller = ImportController()
+
+        def _on_done(result):
+            self._auto_approve_inflight = False
+            ok = bool(getattr(result, "success", False))
+            if ok:
+                logger.info(
+                    "Auto-approve succeeded for package %s, status advanced",
+                    package_id,
+                )
+                Toast.show_toast(
+                    self,
+                    tr("page.duplicates.all_resolved_approved"),
+                    Toast.SUCCESS,
+                )
+            else:
+                # Backend refused — wizard auto-rescue logic will handle it.
+                msg = getattr(result, "message_ar", "") or getattr(result, "message", "")
+                logger.warning(
+                    "Auto-approve refused for package %s: %s — wizard will retry",
+                    package_id,
+                    msg,
+                )
+                Toast.show_toast(
+                    self,
+                    tr("page.duplicates.all_resolved_returning"),
+                    Toast.SUCCESS,
+                )
+            QTimer.singleShot(400, self.return_to_import.emit)
+
+        def _on_error(_msg):
+            self._auto_approve_inflight = False
+            logger.warning(
+                "Auto-approve worker error for package %s — falling back to wizard rescue",
+                package_id,
+            )
+            Toast.show_toast(
+                self,
+                tr("page.duplicates.all_resolved_returning"),
+                Toast.SUCCESS,
+            )
+            QTimer.singleShot(400, self.return_to_import.emit)
+
+        self._auto_approve_worker = ApiWorker(controller.approve_package, package_id)
+        self._auto_approve_worker.finished.connect(_on_done)
+        self._auto_approve_worker.error.connect(_on_error)
+        self._auto_approve_worker.start()
 
     # -- Summary Cards -----------------------------------------------------
 
@@ -923,13 +986,10 @@ class DuplicatesPage(QWidget):
         self._pagination_footer.setVisible(False)
         self._empty_state.setVisible(False)
 
-        # In import-context mode request a larger page so local aggregation
-        # reflects the full set of conflicts for this package in one call.
-        effective_page_size = 200 if self._import_package_id else self._page_size
         self._worker = _ConflictWorker(
             self.duplicate_service,
             page=self._current_page,
-            page_size=effective_page_size,
+            page_size=self._page_size,
             filters=self._get_active_filters(),
             import_package_id=self._import_package_id,
         )
@@ -1007,17 +1067,7 @@ class DuplicatesPage(QWidget):
             and not self._conflicts
             and int(pending_total or 0) == 0
         ):
-            logger.info(
-                "All conflicts resolved for package %s — auto-returning to import",
-                self._import_package_id,
-            )
-            Toast.show_toast(
-                self,
-                tr("page.duplicates.all_resolved_returning"),
-                Toast.SUCCESS,
-            )
-            # Defer one tick so the toast paints before the page switch.
-            QTimer.singleShot(400, self.return_to_import.emit)
+            self._auto_approve_and_return(self._import_package_id)
 
     def _on_load_error(self, user_message: str, trace_id: str = ""):
         self._loading = False

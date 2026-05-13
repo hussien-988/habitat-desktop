@@ -98,12 +98,10 @@ class SurveyController:
                 for h in (detail.get("households") or [])
             ]
             survey_hh_id = detail.get("householdId")
-            if survey_hh_id and len(all_households) > 1:
+            if survey_hh_id:
                 households = [h for h in all_households if h.get("household_id") == survey_hh_id]
-                if not households:
-                    households = all_households[:1]
             else:
-                households = all_households
+                households = []
             hh_id = households[0].get("household_id", "") if households else ""
 
             # Step 2: Parallel enrichment — building, unit, persons, claim, contact
@@ -124,9 +122,6 @@ class SurveyController:
                     futures['persons'] = executor.submit(api.get_persons_for_household, survey_id, hh_id)
                 if claim_id:
                     futures['claim'] = executor.submit(api.get_claim_by_id, claim_id)
-                # Always fetch contact person via the survey-scoped endpoint.
-                # The detail response can return contactPersonId=null for draft
-                # surveys, and contact persons aren't always household members.
                 futures['contact_person'] = executor.submit(api.get_contact_person, survey_id)
 
             # Collect results with individual error handling
@@ -273,6 +268,7 @@ class SurveyController:
                 "data": {
                     "survey_id": detail.get("id", ""),
                     "survey_building_uuid": building_id or "",
+                    "survey_property_unit_id": unit_id or "",
                     "household_id": hh_id,
                     "contact_person_id": resolved_cp_id,
                 },

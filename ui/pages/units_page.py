@@ -32,6 +32,7 @@ from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.style_manager import StyleManager
 from services.translation_manager import tr, get_layout_direction
+from services.exceptions import humanize_exception, log_exception
 from ui.components.animated_card import AnimatedCard, animate_card_entrance
 from ui.components.empty_state import EmptyState
 from ui.components.dark_header_zone import DarkHeaderZone
@@ -691,8 +692,8 @@ class UnitsPage(QWidget):
                 Toast.show_toast(self, tr("success.unit.updated"), Toast.SUCCESS)
                 self._load_units()
             except Exception as e:
-                logger.error(f"API unit update failed: {e}")
-                Toast.show_toast(self, tr("error.unit.update_failed_with_reason", error=str(e)), Toast.ERROR)
+                log_exception(e, logger, context="unit.update")
+                Toast.show_toast(self, humanize_exception(e, context="unit.update"), Toast.ERROR)
 
     def _delete_unit(self, unit: PropertyUnit):
         unit_label = unit.unit_number or unit.unit_uuid or ""

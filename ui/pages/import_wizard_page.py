@@ -211,6 +211,11 @@ class ImportWizardPage(QWidget):
         # missing .uhc file). Forward navigation is blocked; only cancel
         # package and back-to-list remain enabled until the user recovers.
         self._blocking_error_active = False
+        # Callable that re-renders the currently visible inline banner using
+        # the current language. Set by every _show_*_banner method, cleared
+        # by _hide_error_banner. Used by update_language to keep an active
+        # banner in sync after a runtime language switch.
+        self._active_banner_refresh = None
 
         self._setup_ui()
         self._create_steps()
@@ -417,6 +422,7 @@ class ImportWizardPage(QWidget):
             self._error_trace.clear()
             self._error_trace.setVisible(False)
         self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_error_banner(user_message, trace_id)
 
 
     def _show_warning_banner(self, message: str):
@@ -428,6 +434,7 @@ class ImportWizardPage(QWidget):
         self._error_trace.clear()
         self._error_trace.setVisible(False)
         self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_warning_banner(message)
 
 
     def _show_stuck_banner(self, elapsed_secs: int):
@@ -453,6 +460,7 @@ class ImportWizardPage(QWidget):
 
         self._banner_action_btn.clicked.connect(retry_now)
         self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_stuck_banner(elapsed_secs)
 
 
     def _show_initial_load_failed_banner(self):
@@ -474,6 +482,7 @@ class ImportWizardPage(QWidget):
 
         self._banner_action_btn.clicked.connect(retry_load)
         self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_initial_load_failed_banner()
 
 
     def _show_timeout_decision_banner(self, elapsed_secs: int):
@@ -539,6 +548,7 @@ class ImportWizardPage(QWidget):
         self._banner_secondary_btn.clicked.connect(cancel_now)
 
         self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_timeout_decision_banner(elapsed_secs)
 
 
     def _clear_banner_action(self):
@@ -577,6 +587,7 @@ class ImportWizardPage(QWidget):
         self._clear_banner_action()
         self._error_trace.clear()
         self._error_trace.setVisible(False)
+        self._active_banner_refresh = None
 
     def _show_result_error(self, result, fallback_context: str = "generic"):
         """Render an OperationResult failure in the inline banner + log it.
@@ -796,6 +807,8 @@ class ImportWizardPage(QWidget):
         # remain reachable even during in-flight requests.
         self.btn_back.setEnabled(True)
         self.btn_cancel.setEnabled(enabled)
+        if hasattr(self, 'btn_quarantine'):
+            self.btn_quarantine.setEnabled(enabled)
 
     def _enter_blocking_error_state(self):
         """Halt all wizard operations after a hard error.
@@ -891,17 +904,53 @@ class ImportWizardPage(QWidget):
         self.btn_cancel.setVisible(False)
         layout.addWidget(self.btn_cancel)
 
-        # Spacer between cancel and next
+        layout.addSpacing(ScreenScale.w(12))
+
+        # Quarantine package button (shown on the same steps as cancel)
+        self.btn_quarantine = QPushButton(tr("wizard.import.quarantine_package"))
+        self.btn_quarantine.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
+        self.btn_quarantine.setCursor(Qt.PointingHandCursor)
+        self.btn_quarantine.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
+        self.btn_quarantine.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FFFBF2, stop:1 #FFF4E0);
+                color: #B45309;
+                border: 1px solid rgba(180, 83, 9, 0.30);
+                border-radius: 10px;
+                padding: 8px 32px;
+                font-weight: 600;
+                font-size: 12pt;
+            }
+            QPushButton:hover {
+                background: #FEF3C7;
+                border-color: rgba(180, 83, 9, 0.50);
+            }
+            QPushButton:disabled {
+                color: #C0C8D0;
+                background: #F5F7FA;
+                border-color: #E8ECF0;
+            }
+        """)
+        self.btn_quarantine.clicked.connect(self._on_quarantine_package)
+        self.btn_quarantine.setVisible(False)
+        layout.addWidget(self.btn_quarantine)
+
+        # Spacer between cancel/quarantine and next
         layout.addStretch()
 
-        # Next button
+        # Next button — minimum size keeps short labels (Next / Import Data)
+        # at a consistent footprint while letting long labels grow to fit.
+        from PyQt5.QtWidgets import QSizePolicy
         self.btn_next = QPushButton(tr("action.next_arrow"))
-        self.btn_next.setFixedSize(ScreenScale.w(252), ScreenScale.h(50))
+        self.btn_next.setMinimumSize(ScreenScale.w(252), ScreenScale.h(50))
+        self.btn_next.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.btn_next.setCursor(Qt.PointingHandCursor)
         self.btn_next.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self.btn_next.setStyleSheet(StyleManager.nav_button_primary())
         self.btn_next.clicked.connect(self._on_next)
         self.btn_next.setEnabled(False)
+        self.btn_next.adjustSize()
         layout.addWidget(self.btn_next)
 
         return footer
@@ -2033,6 +2082,15 @@ class ImportWizardPage(QWidget):
         cancel_visible = 0 <= self.current_step <= 2
         self.btn_cancel.setVisible(cancel_visible)
         self.btn_cancel.setEnabled(cancel_visible)
+
+        # Quarantine follows cancel visibility but is hidden for terminal /
+        # already-quarantined statuses since the backend would refuse the call.
+        quarantine_visible = cancel_visible and self._current_package_status not in (
+            _PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED,
+            _PkgStatus.CANCELLED, _PkgStatus.QUARANTINED,
+        )
+        self.btn_quarantine.setVisible(quarantine_visible)
+        self.btn_quarantine.setEnabled(quarantine_visible)
         # Back-to-list is always enabled and visible — it's non-destructive.
         self.btn_back.setEnabled(True)
         # Reset Next visibility; terminal report for non-failed statuses hides it below.
@@ -2070,12 +2128,14 @@ class ImportWizardPage(QWidget):
 
         elif self.current_step == 1:
             # Review staged entities.
-            self.btn_next.setText(tr("wizard.import.btn_approve_and_import"))
+            self.btn_next.setText(tr("wizard.import.btn_commit_data"))
+            self.btn_next.adjustSize()
             self.btn_next.setEnabled(True)
 
         elif self.current_step == 2:
             # Commit confirmation — only enable when server confirms readiness.
-            self.btn_next.setText(tr("wizard.import.btn_approve_and_import"))
+            self.btn_next.setText(tr("wizard.import.btn_commit_data"))
+            self.btn_next.adjustSize()
             can_commit = self._current_package_status == _PkgStatus.READY_TO_COMMIT
             self.btn_next.setEnabled(can_commit)
             if not can_commit:
@@ -2126,6 +2186,56 @@ class ImportWizardPage(QWidget):
             )
         else:
             self.refresh()
+
+    def _on_quarantine_package(self):
+        """Quarantine the current package after collecting a reason."""
+        if not self._current_package_id:
+            return
+
+        if self._current_package_status in (
+            _PkgStatus.COMPLETED, _PkgStatus.PARTIALLY_COMPLETED,
+            _PkgStatus.CANCELLED, _PkgStatus.QUARANTINED,
+        ):
+            self._show_error(tr("api.error.conflict"))
+            return
+
+        reason = _prompt_reason_via_bottom_sheet(
+            self,
+            title=tr("wizard.import.quarantine_reason_title"),
+            field_label=tr("wizard.import.quarantine_reason_prompt"),
+            submit_text=tr("wizard.import.quarantine_package"),
+            cancel_text=tr("action.dismiss"),
+        )
+        if not reason:
+            return
+
+        logger.info(f"Quarantining package {self._current_package_id} — reason={reason!r}")
+        pkg_id = self._current_package_id
+
+        def on_quarantine_done(result):
+            if not result.success:
+                logger.error(f"Quarantine failed: {result.message}")
+                self._set_buttons_enabled(True)
+                self._show_error(result.message_ar or tr("wizard.import.error_quarantine_failed"))
+                return
+
+            self._show_success(tr("wizard.import.success_package_quarantined"))
+            self._stop_status_poll()
+            self._cancel_active_worker()
+            self._teardown_step_widgets()
+            self._current_package_id = None
+            self._current_package_status = 0
+            self._current_package_name = ""
+            self._pipeline_in_flight = False
+            self._hide_loading()
+            self._hide_error_banner()
+            self.cancelled.emit()
+
+        self._run_api(
+            lambda: self.import_controller.quarantine_package(pkg_id, reason=reason),
+            on_quarantine_done,
+            loading_msg=tr("wizard.import.loading_quarantining"),
+        )
 
     def _on_cancel_package(self):
         """Cancel the current import package (async) and reset the wizard."""
@@ -2478,12 +2588,23 @@ class ImportWizardPage(QWidget):
         # Footer buttons
         self.btn_back.setText(tr("wizard.import.back_to_list"))
         self.btn_cancel.setText(tr("wizard.import.cancel_package"))
+        if hasattr(self, 'btn_quarantine'):
+            self.btn_quarantine.setText(tr("wizard.import.quarantine_package"))
+            self.btn_quarantine.adjustSize()
 
         # Next button text depends on current step
         self._update_navigation()
 
         # Loading label
         self._loading_label.setText(tr("status.processing"))
+
+        # If an inline banner is visible, re-render it with the new language
+        # so its title / message / action-button text refresh in place.
+        if self._error_banner.isVisible() and self._active_banner_refresh is not None:
+            try:
+                self._active_banner_refresh()
+            except Exception as exc:
+                logger.warning(f"Banner refresh on language change failed: {exc}")
 
         # Propagate to child steps
         for step_attr in ('step2', 'step_review', 'step_commit', 'step_report'):

@@ -112,6 +112,14 @@ class WizardHeader(QWidget):
         title_row_wrapper.addLayout(title_row)
         title_row_wrapper.addStretch()
 
+        # Slot for optional right-side action widgets (e.g. "Sync Log" button).
+        # Kept separate from the help button so callers can insert/remove
+        # actions without touching help-button placement.
+        self._right_actions_layout = QHBoxLayout()
+        self._right_actions_layout.setContentsMargins(0, 0, 0, 0)
+        self._right_actions_layout.setSpacing(8)
+        title_row_wrapper.addLayout(self._right_actions_layout)
+
         if self._help_page_id:
             from ui.components.help_button import HelpButton
             self._help_btn = HelpButton(self._help_page_id, variant="dark", parent=self)
@@ -218,6 +226,17 @@ class WizardHeader(QWidget):
         from ui.components.help_button import HelpButton
         self._help_btn = HelpButton(page_id, variant="dark", parent=self)
         self._help_btn.show()
+
+    def add_header_action(self, widget):
+        """Insert a widget into the right-side action slot of the header.
+
+        Callers add their own dark-themed buttons (e.g. "Sync Log") here.
+        The widget is rendered next to the help icon, vertically aligned to
+        the top of the title row to match the existing visual rhythm.
+        """
+        if not hasattr(self, "_right_actions_layout") or self._right_actions_layout is None:
+            return
+        self._right_actions_layout.addWidget(widget, 0, Qt.AlignTop)
 
     def get_title_label(self) -> QLabel:
         return self.title_label

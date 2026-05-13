@@ -18,6 +18,7 @@ from ui.components.toast import Toast
 from ui.components.dialogs.modification_reason_dialog import ModificationReasonDialog
 from services.translation_manager import tr, get_layout_direction
 from services.api_worker import ApiWorker
+from services.exceptions import humanize_exception, log_exception
 from app.config import Pages
 from utils.logger import get_logger
 
@@ -591,7 +592,8 @@ class ClaimEditPage(QWidget):
             else:
                 Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
         except Exception as e:
-            Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {e}", Toast.ERROR)
+            log_exception(e, logger, context="claim.evidence")
+            Toast.show_toast(self, humanize_exception(e, context="claim.evidence"), Toast.ERROR)
 
     def _get_tenure_relation_id(self) -> str:
         """Extract relation_id from loaded tenure evidences."""
@@ -621,7 +623,8 @@ class ClaimEditPage(QWidget):
             else:
                 Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {result.message}", Toast.ERROR)
         except Exception as e:
-            Toast.show_toast(self, f"{tr('page.claim_edit.error_prefix')}: {e}", Toast.ERROR)
+            log_exception(e, logger, context="claim.evidence")
+            Toast.show_toast(self, humanize_exception(e, context="claim.evidence"), Toast.ERROR)
         finally:
             self._spinner.hide_loading()
 

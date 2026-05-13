@@ -28,6 +28,7 @@ class FieldWorkPreparationPage(QWidget):
     # Signals (use 'object' to pass Python dicts with complex values)
     completed = pyqtSignal(object)
     cancelled = pyqtSignal()
+    sync_log_requested = pyqtSignal()
 
     def __init__(self, building_controller: BuildingController, i18n: I18n, parent=None):
         """Initialize field work preparation."""
@@ -61,6 +62,13 @@ class FieldWorkPreparationPage(QWidget):
             steps=step_names,
             help_page_id=Pages.FIELD_ASSIGNMENT,
         )
+        # "Sync Log" entry point — placed in the dark header so it travels
+        # with the user across all wizard steps. Sized to its content
+        # (sizeAdjustPolicy + adjustSize) and not fixed-width so the label
+        # never gets clipped after a language switch (Arabic ↔ English
+        # produces very different string widths).
+        self._sync_log_btn = self._build_sync_log_button()
+        self.header.add_header_action(self._sync_log_btn)
         outer_layout.addWidget(self.header)
 
         # Accent line — FULL WIDTH
@@ -359,6 +367,44 @@ class FieldWorkPreparationPage(QWidget):
         self.current_step = 1
         self._update_navigation()
 
+    def _build_sync_log_button(self) -> QPushButton:
+        """Create the dark-themed 'Sync Log' button shown in the wizard header.
+
+        The button is content-sized (no fixed width) so that switching language
+        between Arabic and English never clips the label. Padding gives the
+        label breathing room on both sides regardless of direction (RTL/LTR).
+        """
+        btn = QPushButton()
+        btn.setObjectName("syncLogHeaderBtn")
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setFocusPolicy(Qt.NoFocus)
+        btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        btn.setMinimumHeight(ScreenScale.h(30))
+        btn.setStyleSheet("""
+            QPushButton#syncLogHeaderBtn {
+                background-color: rgba(255, 255, 255, 0.10);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                border-radius: 8px;
+                padding: 4px 14px;
+            }
+            QPushButton#syncLogHeaderBtn:hover {
+                background-color: rgba(255, 255, 255, 0.18);
+                border-color: rgba(255, 255, 255, 0.45);
+            }
+            QPushButton#syncLogHeaderBtn:pressed {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
+        btn.setText(tr("wizard.field_work.open_sync_log"))
+        btn.setLayoutDirection(get_layout_direction())
+        btn.clicked.connect(self.sync_log_requested.emit)
+        # Force re-layout once the text is set so the button fits its label
+        # snugly (no clipped glyphs on the trailing side).
+        btn.adjustSize()
+        return btn
+
     def update_language(self, is_arabic=True):
         """Update all translatable strings when language changes."""
         self.setLayoutDirection(get_layout_direction())
@@ -367,6 +413,12 @@ class FieldWorkPreparationPage(QWidget):
         step_names = [tr(key) for key in self._STEP_KEYS]
         self.header.set_steps(step_names)
         self.btn_back.setText(tr("wizard.field_work.btn_back"))
+        # Sync-log button: refresh both text and direction so RTL/LTR
+        # mirroring + glyph metrics stay consistent.
+        if hasattr(self, "_sync_log_btn") and self._sync_log_btn is not None:
+            self._sync_log_btn.setText(tr("wizard.field_work.open_sync_log"))
+            self._sync_log_btn.setLayoutDirection(get_layout_direction())
+            self._sync_log_btn.adjustSize()
         self._update_navigation()
         if self.step1 and hasattr(self.step1, 'update_language'):
             self.step1.update_language(is_arabic)

@@ -44,6 +44,7 @@ from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_status_display, get_unit_type_display, get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from app.config import Config
 
@@ -387,20 +388,31 @@ class UnitSelectionStep(BaseStep):
 
         # If a unit is already attached to this survey (resumed draft or earlier
         # selection), restrict the displayed list to just that unit to prevent
-        # silently switching the survey's unit association.
-        if self.context.unit:
-            saved_uuid = getattr(self.context.unit, 'unit_uuid', None)
-            saved_id = getattr(self.context.unit, 'unit_id', None)
+        # silently switching the survey's unit association (which would orphan
+        # downstream person/relation links).
+        saved_unit = self.context.unit
+        if not saved_unit:
+            saved_unit_id = self.context.get_data("survey_property_unit_id")
+            if saved_unit_id:
+                from models.unit import PropertyUnit
+                saved_unit = PropertyUnit(unit_uuid=saved_unit_id, unit_id=saved_unit_id)
+                self.context.unit = saved_unit
+
+        if saved_unit:
+            saved_uuid = getattr(saved_unit, 'unit_uuid', None)
+            saved_id = getattr(saved_unit, 'unit_id', None)
             matched = [
                 u for u in units
                 if (saved_uuid and getattr(u, 'unit_uuid', None) == saved_uuid)
                 or (saved_id and getattr(u, 'unit_id', None) == saved_id)
+                or (saved_uuid and getattr(u, 'unit_id', None) == saved_uuid)
+                or (saved_id and getattr(u, 'unit_uuid', None) == saved_id)
             ]
-            if matched:
-                units = matched
-            else:
-                units = [self.context.unit]
-            logger.info(f"Survey already has a unit attached; restricting view to selected unit only.")
+            units = [matched[0]] if matched else [saved_unit]
+            logger.info(
+                f"Survey already has unit attached (uuid={saved_uuid}, id={saved_id}); "
+                f"restricting view to {len(units)} unit(s) (matched_from_api={bool(matched)})."
+            )
 
         logger.info(f"Showing {len(units)} units (of {len(all_units)} returned by API) for building {building_uuid}")
 
@@ -902,8 +914,8 @@ class UnitSelectionStep(BaseStep):
                 self.context.update_data("unit_linked", True)
                 self.context.update_data("linked_unit_uuid", current_unit_id)
             except Exception as e:
-                logger.error(f"API link failed: {e}")
-                result.add_error(tr("wizard.unit.link_failed"))
+                log_exception(e, logger, context="unit.link")
+                result.add_error(humanize_exception(e, context="unit.link"))
                 return result
             finally:
                 self._spinner.hide_loading()

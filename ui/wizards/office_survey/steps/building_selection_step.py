@@ -28,6 +28,7 @@ from models.building import Building
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from ui.components.toast import Toast
 from ui.error_handler import ErrorHandler
 from utils.logger import get_logger
@@ -607,7 +608,6 @@ class BuildingSelectionStep(BaseStep):
                 auth_token = getattr(main_window.current_user, '_api_token', None)
         except Exception as e:
             logger.warning(f"Could not get auth token: {e}")
-            Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
 
         # Suspend the inline preview while the full dialog is open.
         preview = getattr(self, 'map_preview', None)
@@ -1085,7 +1085,6 @@ class BuildingSelectionStep(BaseStep):
                 self.context.cleanup_on_building_change(self._survey_api_service)
             except Exception as e:
                 logger.warning(f"Cleanup failed: {e}")
-                Toast.show_toast(self, tr("wizard.building_selection.load_failed"), Toast.ERROR)
             for key in ("survey_id", "survey_data", "survey_building_uuid"):
                 self.context.update_data(key, None)
 
@@ -1106,8 +1105,8 @@ class BuildingSelectionStep(BaseStep):
             self.context.update_data("survey_building_uuid", building_uuid)
             logger.info(f"Survey created successfully, survey_id: {survey_id}")
         except Exception as e:
-            logger.error(f"Survey creation failed: {e}")
-            result.add_error(tr("wizard.building_info.survey_creation_failed"))
+            log_exception(e, logger, context="office_survey.create")
+            result.add_error(humanize_exception(e, context="office_survey.create"))
         finally:
             self._spinner.hide_loading()
 
