@@ -915,10 +915,10 @@ class BuildingMapDialog(BaseMapDialog):
                                     layer.bringToFront();
                                 }}
 
-                                // Permanent tooltip showing building ID — no popup
-                                var _displayId = layer.feature.properties.building_id_display
-                                    || layer.feature.properties.building_id
-                                    || '{building_id}';
+                                // Permanent tooltip showing only the building number (last 5 digits)
+                                var _rawId = (layer.feature.properties.building_id || '{building_id}' || '').toString();
+                                var _digits = _rawId.replace(/-/g, '');
+                                var _displayId = _digits.length >= 5 ? _digits.slice(-5) : _digits;
                                 layer.unbindTooltip();
                                 layer.bindTooltip(_displayId, {{
                                     permanent: true,

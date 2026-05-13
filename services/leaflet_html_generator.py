@@ -979,6 +979,7 @@ class LeafletHTMLGenerator:
         var tileLayer = L.tileLayer({tile_layer_url_js}, {{
             maxZoom: {effective_max_zoom},
             minZoom: {effective_min_zoom},
+            noWrap: true,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
             keepBuffer: {MapConstants.TILE_KEEP_BUFFER},
             updateWhenZooming: {'true' if MapConstants.TILE_UPDATE_WHEN_ZOOMING else 'false'},
@@ -1193,12 +1194,11 @@ class LeafletHTMLGenerator:
                     showBuildingLabels === true
                 );
 
-                var _idLabel = String(
-                    props.building_id_display ||
-                    props.building_id ||
-                    props.building_number ||
-                    ''
-                ).trim();
+                var _idLabel = String(props.building_number || '').trim();
+                if (!_idLabel) {{
+                    var _rawId = String(props.building_id || '').replace(/-/g, '');
+                    _idLabel = _rawId.length >= 5 ? _rawId.slice(-5) : _rawId;
+                }}
 
                 // When showing permanent labels, embed the label in the icon HTML directly.
                 // Permanent Leaflet tooltips mis-position inside MarkerCluster groups even
@@ -2193,9 +2193,11 @@ def generate_leaflet_preview_html(
         attributionControl: false,
         fadeAnimation: false,
         zoomAnimation: false,
-        markerZoomAnimation: false
+        markerZoomAnimation: false,
+        worldCopyJump: false,
+        minZoom: 6
     }}).setView([{center_lat}, {center_lon}], {zoom});
-    L.tileLayer({safe_tile_url}, {{maxZoom: {max_zoom}}}).addTo(map);
+    L.tileLayer({safe_tile_url}, {{maxZoom: {max_zoom}, noWrap: true}}).addTo(map);
     var label = {safe_label_js};
     var labelHtml = label
       ? '<div style="position:absolute;left:12px;bottom:40px;transform:translateX(-50%);'

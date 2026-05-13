@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QStackedWidget, QShortcut, QApplication,
-    QFrame, QGraphicsDropShadowEffect, QSizeGrip
+    QFrame, QGraphicsDropShadowEffect
 )
 
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QEvent
@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
 
         # Initialize scaling from actual window size (not screen size)
         ScreenScale.initialize_from_size(window_width, window_height)
-        self.setMinimumSize(min(1024, window_width), min(680, window_height))
+        self.setFixedSize(window_width, window_height)
 
         # Center on screen (use screen.x/y to handle multi-monitor and top taskbar)
         x = screen.x() + (screen.width() - window_width) // 2
@@ -260,12 +260,6 @@ class MainWindow(QMainWindow):
                 border-radius: 12px;
             }}
         """)
-
-
-        # مقبض تغيير الحجم (resize) خليّه جوّا الإطار
-        self._size_grip = QSizeGrip(self.window_frame)
-        self._size_grip.setFixedSize(ScreenScale.w(16), ScreenScale.h(16))
-        self._size_grip.setStyleSheet("background: transparent;")
 
 
         # Navbar (hidden initially - shown after login)
@@ -2150,23 +2144,13 @@ class MainWindow(QMainWindow):
         w = min(1512, int(screen.width() * 0.95))
         h = min(982, int(screen.height() * 0.95))
         ScreenScale.initialize_from_size(w, h)
-        self.setMinimumSize(min(1024, w), min(680, h))
+        self.setFixedSize(w, h)
         x = screen.x() + (screen.width() - w) // 2
         y = screen.y() + (screen.height() - h) // 2
-        self.setGeometry(x, y, w, h)
+        self.move(x, y)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-
-    # حرّك مقبض تغيير الحجم
-        if hasattr(self, "_size_grip") and self._size_grip:
-            m = 6
-            self._size_grip.move(
-                self.window_frame.width() - self._size_grip.width() - m,
-                self.window_frame.height() - self._size_grip.height() - m
-        )
-
-    # طبّق قصّ الزوايا بعد أي تغيير بالحجم
         if hasattr(self, "window_frame") and self.window_frame and not self.isMaximized():
             self._apply_round_mask()
 

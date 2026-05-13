@@ -305,13 +305,12 @@ class BuildingLocationMapPreview(QFrame):
         b = self._building
         label = ""
         if b is not None:
-            label = (
-                getattr(b, "building_id_formatted", None)
-                or getattr(b, "building_id_display", None)
-                or getattr(b, "building_id", None)
-                or getattr(b, "building_number", None)
-                or ""
-            )
+            label = getattr(b, "building_number", None) or ""
+            if not label:
+                bid = getattr(b, "building_id", None) or ""
+                bid = str(bid).replace("-", "")
+                if len(bid) >= 5:
+                    label = bid[-5:]
             label = str(label).strip()
 
         return generate_leaflet_preview_html(
