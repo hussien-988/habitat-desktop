@@ -59,8 +59,6 @@ _NAV_BTN_STYLE = """
 class _PackageCard(AnimatedCard):
     """Import package card showing name, status, dates, record counts."""
 
-    menu_requested = pyqtSignal()
-
     # Derived from services/import_status_map.status_meta()
     @classmethod
     def _badge_style(cls, status_code):
@@ -70,13 +68,9 @@ class _PackageCard(AnimatedCard):
     def __init__(self, pkg_data: dict, parent=None):
         self._data = pkg_data
         self._is_selected = False
-        self.menu_btn = None
         status_code = pkg_data.get("status_code", 1)
         color = _STATUS_COLORS.get(status_code, "#6B7280")
         super().__init__(parent, card_height=110, status_color=color)
-
-    def _on_menu_btn_clicked(self):
-        self.menu_requested.emit()
 
     def set_selected(self, selected: bool):
         """Toggle the card's selected look.
@@ -131,18 +125,6 @@ class _PackageCard(AnimatedCard):
             f"padding: 0 10px; }}"
         )
         row1.addWidget(badge)
-
-        self.menu_btn = QPushButton("⋮")
-        self.menu_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
-        self.menu_btn.setCursor(Qt.PointingHandCursor)
-        self.menu_btn.setFocusPolicy(Qt.NoFocus)
-        self.menu_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid transparent;"
-            " border-radius: 6px; color: #4B5563; font-size: 14pt; font-weight: bold; }"
-            "QPushButton:hover { background: #F3F4F6; border-color: #E5E7EB; }"
-        )
-        self.menu_btn.clicked.connect(self._on_menu_btn_clicked)
-        row1.addWidget(self.menu_btn)
         layout.addLayout(row1)
 
         # Row 2: Date + record counts
@@ -438,8 +420,17 @@ class ImportPackagesPage(QWidget):
         return bar
 
     def _on_start_processing(self):
-        """User explicitly asked to start processing the selected package."""
+        """Bottom action button — dispatches by selected package status."""
         if not self._selected_pkg_id:
+            return
+        status_code = 0
+        if self._selected_card is not None:
+            status_code = self._selected_card._data.get("status_code", 0)
+        if status_code == PkgStatus.CANCELLED:
+            self._uncancel_package(self._selected_pkg_id)
+            return
+        if status_code == PkgStatus.QUARANTINED:
+            self._show_quarantine_report(self._selected_pkg_id)
             return
         self._on_view_package(self._selected_pkg_id)
 
@@ -754,9 +745,6 @@ class ImportPackagesPage(QWidget):
             card_data = self._pkg_to_card_data(pkg)
             card = _PackageCard(card_data)
             card.clicked.connect(lambda p=pkg, c=card: self._on_card_clicked(p, c))
-            card.menu_requested.connect(
-                lambda p=pkg, c=card: self._show_card_context_menu(p, str(p.get("id") or ""), c)
-            )
             self._cards_layout.insertWidget(
                 self._cards_layout.count() - 1, card
             )
@@ -951,11 +939,26 @@ class ImportPackagesPage(QWidget):
 
             actionable = is_actionable_status(status_code) if status_code else True
 
-            if status_code and actionable:
+            if status_code == PkgStatus.CANCELLED:
+                self._start_btn.setVisible(True)
+                self._start_btn.setEnabled(True)
+                self._start_btn.setText(tr("action.restore_package"))
+                self._start_btn.setToolTip("")
+                self._start_btn.adjustSize()
+
+            elif status_code == PkgStatus.QUARANTINED:
+                self._start_btn.setVisible(True)
+                self._start_btn.setEnabled(True)
+                self._start_btn.setText(tr("action.view_quarantine_report"))
+                self._start_btn.setToolTip("")
+                self._start_btn.adjustSize()
+
+            elif status_code and actionable:
                 self._start_btn.setVisible(True)
                 self._start_btn.setEnabled(True)
                 self._start_btn.setText(tr(action_label_key(status_code)))
                 self._start_btn.setToolTip("")
+                self._start_btn.adjustSize()
 
             elif status_code:
                 self._start_btn.setVisible(False)
@@ -967,6 +970,7 @@ class ImportPackagesPage(QWidget):
                 self._start_btn.setEnabled(True)
                 self._start_btn.setText(tr("page.import_packages.start_processing"))
                 self._start_btn.setToolTip("")
+                self._start_btn.adjustSize()
 
         else:
             self._selected_label.clear()
@@ -976,72 +980,6 @@ class ImportPackagesPage(QWidget):
             self._start_btn.setEnabled(False)
             self._start_btn.setText(tr("page.import_packages.start_processing"))
             self._start_btn.setToolTip("")
-
-    def _show_card_context_menu(self, pkg, pkg_id, card=None):
-        status = pkg.get("status", 0)
-        if isinstance(status, str) and status.isdigit():
-            status = int(status)
-
-        menu = QMenu(self)
-        menu.setLayoutDirection(get_layout_direction())
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #E1E8ED;
-                border-radius: 8px;
-                padding: 6px;
-            }
-            QMenu::item {
-                padding: 10px 16px;
-                border-radius: 4px;
-                color: #212B36;
-                font-size: 10.5pt;
-            }
-            QMenu::item:selected {
-                background-color: #F0F7FF;
-            }
-        """)
-
-        # View
-        view_action = QAction(tr("action.view"), self)
-        view_action.triggered.connect(lambda: self._on_view_package(pkg_id))
-        menu.addAction(view_action)
-
-        # Cancel (only if not already cancelled/completed)
-        if status not in (PkgStatus.COMPLETED, PkgStatus.CANCELLED):
-            cancel_action = QAction(tr("action.cancel"), self)
-            cancel_action.triggered.connect(lambda: self._cancel_package(pkg_id))
-            menu.addAction(cancel_action)
-
-        # Quarantine (only if not completed/cancelled/quarantined)
-        if status not in (PkgStatus.QUARANTINED, PkgStatus.COMPLETED, PkgStatus.CANCELLED):
-            quarantine_action = QAction(tr("action.quarantine"), self)
-            quarantine_action.triggered.connect(lambda: self._quarantine_package(pkg_id))
-            menu.addAction(quarantine_action)
-
-        # Restore (only for cancelled packages)
-        if status == PkgStatus.CANCELLED:
-            restore_action = QAction(tr("action.restore"), self)
-            restore_action.triggered.connect(lambda: self._uncancel_package(pkg_id))
-            menu.addAction(restore_action)
-
-        # View quarantine report (only for quarantined packages)
-        if status == PkgStatus.QUARANTINED:
-            report_action = QAction(tr("action.view_quarantine_report"), self)
-            report_action.triggered.connect(lambda: self._show_quarantine_report(pkg_id))
-            menu.addAction(report_action)
-
-        # Reset commit (admin only, only for stuck committing status)
-        if self._user_role == "admin" and status == PkgStatus.COMMITTING:
-            reset_action = QAction(tr("page.import_packages.reset_commit"), self)
-            reset_action.triggered.connect(lambda: self._reset_commit(pkg_id))
-            menu.addAction(reset_action)
-
-        if card is not None and getattr(card, "menu_btn", None) is not None:
-            btn = card.menu_btn
-            menu.exec_(btn.mapToGlobal(btn.rect().bottomLeft()))
-        else:
-            menu.exec_(QCursor.pos())
 
     def _on_view_package(self, pkg_id):
         self._spinner.show_loading()
@@ -1222,6 +1160,11 @@ class ImportPackagesPage(QWidget):
         self._current_page = 1
         self._spinner.hide_loading()
         self._load_packages()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_loading", False):
+            QTimer.singleShot(0, self._load_packages)
 
     def configure_for_role(self, role):
         self._user_role = role

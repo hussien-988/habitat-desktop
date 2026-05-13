@@ -500,6 +500,7 @@ class DuplicatesPage(QWidget):
 
     view_comparison_requested = pyqtSignal(object)
     return_to_import = pyqtSignal()
+    package_status_changed = pyqtSignal(str)
 
     def __init__(self, db: Database, i18n: I18n, parent=None):
         super().__init__(parent)
@@ -518,6 +519,10 @@ class DuplicatesPage(QWidget):
         # Import-context mode state
         self._import_package_id = None
         self._import_package_name = ""
+        # Captured from the last conflict resolved on this page so the
+        # auto-approve check can still target a package even when the user
+        # entered Duplicates directly via the navbar (no import context).
+        self._last_resolved_package_id = None
 
         # Shimmer timer for card animation (80ms)
         self._card_shimmer_timer = QTimer(self)
@@ -789,6 +794,7 @@ class DuplicatesPage(QWidget):
                     "Auto-approve succeeded for package %s, status advanced",
                     package_id,
                 )
+                self.package_status_changed.emit(package_id)
                 Toast.show_toast(
                     self,
                     tr("page.duplicates.all_resolved_approved"),
@@ -1056,18 +1062,17 @@ class DuplicatesPage(QWidget):
 
         self._update_pagination()
 
-        # Auto-return to the import wizard when no PENDING conflicts remain
-        # for this package. We rely on the server-side `pendingReviewCount`
-        # from the summary (scoped to importPackageId), NOT total_count —
-        # because total_count includes resolved conflicts and never reaches
-        # zero after resolution. Without this fix, auto-return never fired
-        # and the user had to click "Return to Import" manually.
+        # Auto-approve when no PENDING conflicts remain. Falls back to the
+        # last-resolved package id so the trigger fires even when the user
+        # entered Duplicates via the navbar (no import context).
+        target_pkg_id = self._import_package_id or self._last_resolved_package_id
         if (
-            self._import_package_id
+            target_pkg_id
             and not self._conflicts
             and int(pending_total or 0) == 0
         ):
-            self._auto_approve_and_return(self._import_package_id)
+            self._last_resolved_package_id = None
+            self._auto_approve_and_return(target_pkg_id)
 
     def _on_load_error(self, user_message: str, trace_id: str = ""):
         self._loading = False

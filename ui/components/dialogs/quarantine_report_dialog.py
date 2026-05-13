@@ -1,388 +1,222 @@
 # -*- coding: utf-8 -*-
-"""Quarantine Report Dialog.
-
-Displays a structured diagnosis explaining why an import package is quarantined.
-Backed by GET /api/v1/import/packages/{id}/quarantine-report.
-"""
+"""Quarantine Report Dialog — minimal layout matching the app's dialog system."""
 
 from typing import Dict, Any, Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
-    QScrollArea, QWidget, QSizePolicy
+    QSizePolicy, QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
 )
 
 from services.translation_manager import tr, get_layout_direction
-from ui.design_system import ScreenScale
+from ui.design_system import ScreenScale, Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-# Maps backend QuarantineCategory string → (title_key, action_key, accent_color)
-_CATEGORY_META = {
-    "ChecksumFailure": (
-        "quarantine_dialog.cat.checksum",
-        "quarantine_dialog.cat.checksum_action",
-        "#EF4444",
-    ),
-    "SignatureFailure": (
-        "quarantine_dialog.cat.signature",
-        "quarantine_dialog.cat.signature_action",
-        "#DC2626",
-    ),
-    "VocabularyVersionMismatch": (
-        "quarantine_dialog.cat.vocab",
-        "quarantine_dialog.cat.vocab_action",
-        "#F59E0B",
-    ),
-    "SchemaInvalid": (
-        "quarantine_dialog.cat.schema",
-        "quarantine_dialog.cat.schema_action",
-        "#8B5CF6",
-    ),
-    "ManualQuarantine": (
-        "quarantine_dialog.cat.manual",
-        "quarantine_dialog.cat.manual_action",
-        "#6B7280",
-    ),
-}
-
-
 class QuarantineReportDialog(QDialog):
-    """Modal dialog showing the quarantine report for a single package."""
+    """Compact dialog: title + package number + file name + reason + close."""
 
     def __init__(self, report: Dict[str, Any], parent=None):
         super().__init__(parent)
         self._report = report or {}
-        self._details_visible = False
 
-        self.setWindowTitle(tr("quarantine_dialog.title"))
-        self.setLayoutDirection(get_layout_direction())
+        self.setWindowFlags(
+            Qt.Dialog | Qt.FramelessWindowHint | Qt.CustomizeWindowHint
+            | Qt.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.setModal(True)
-        self.setMinimumSize(ScreenScale.w(560), ScreenScale.h(560))
-        self.setStyleSheet("QDialog { background-color: #F9FAFB; }")
+        self.setLayoutDirection(get_layout_direction())
+
+        self._card = None
+        self._title_lbl = None
+        self._pkg_num_label_lbl = None
+        self._pkg_num_value_lbl = None
+        self._file_name_label_lbl = None
+        self._file_name_value_lbl = None
+        self._reason_label_lbl = None
+        self._reason_value_lbl = None
+        self._close_btn = None
 
         self._setup_ui()
-
-    # ------------------------------------------------------------------ UI
+        self._populate_values()
+        self._center_on_parent()
+        self._animate_in()
 
     def _setup_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(14)
-
-        root.addWidget(self._build_header())
-        root.addWidget(self._build_action_card())
-        root.addWidget(self._build_checks_card())
-
-        self._details_card = self._build_details_card()
-        root.addWidget(self._details_card)
-        self._details_card.setVisible(False)
-
-        root.addStretch()
-        root.addLayout(self._build_footer())
-
-    def _build_header(self) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; }
-            QFrame QLabel { background: transparent; border: none; }
-        """)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 12, 16, 12)
-        lay.setSpacing(4)
-
-        title = QLabel(tr("quarantine_dialog.title"))
-        title.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #111827;")
-        lay.addWidget(title)
-
-        pkg_number = str(self._report.get("packageNumber") or "-")
-        file_name = str(self._report.get("fileName") or "-")
-        lay.addLayout(self._info_row(tr("quarantine_dialog.package_number"), pkg_number))
-        lay.addLayout(self._info_row(tr("quarantine_dialog.file_name"), file_name))
-
-        return card
-
-    def _build_action_card(self) -> QFrame:
-        category = str(self._report.get("quarantineCategory") or "")
-        title_key, action_key, accent = _CATEGORY_META.get(
-            category,
-            ("quarantine_dialog.cat.unknown",
-             "quarantine_dialog.cat.unknown_action",
-             "#6B7280"),
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(
+            ScreenScale.w(24), ScreenScale.h(24),
+            ScreenScale.w(24), ScreenScale.h(24),
         )
+        outer.setSpacing(0)
 
-        card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: #FFFFFF;
-                border: 1px solid {accent}44;
-                border-left: 4px solid {accent};
-                border-radius: 10px;
-            }}
-            QFrame QLabel {{ background: transparent; border: none; }}
-        """)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 12, 16, 12)
-        lay.setSpacing(8)
-
-        cat_label_row = QHBoxLayout()
-        cat_label_row.setSpacing(8)
-        small = QLabel(tr("quarantine_dialog.category_label") + ":")
-        small.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        small.setStyleSheet("color: #6B7280;")
-        cat_label_row.addWidget(small)
-
-        cat_value = QLabel(tr(title_key))
-        cat_value.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        cat_value.setStyleSheet(f"color: {accent};")
-        cat_label_row.addWidget(cat_value)
-        cat_label_row.addStretch()
-        lay.addLayout(cat_label_row)
-
-        action_label = QLabel(tr("quarantine_dialog.action_label") + ":")
-        action_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        action_label.setStyleSheet("color: #6B7280;")
-        lay.addWidget(action_label)
-
-        action_value = QLabel(tr(action_key))
-        action_value.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
-        action_value.setStyleSheet("color: #111827;")
-        action_value.setWordWrap(True)
-        lay.addWidget(action_value)
-
-        reason = self._report.get("quarantineReason")
-        if reason:
-            sep = QFrame()
-            sep.setFixedHeight(1)
-            sep.setStyleSheet("background: #F3F4F6; border: none;")
-            lay.addWidget(sep)
-
-            reason_label = QLabel(tr("quarantine_dialog.reason_label") + ":")
-            reason_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            reason_label.setStyleSheet("color: #6B7280;")
-            lay.addWidget(reason_label)
-
-            reason_value = QLabel(str(reason))
-            reason_value.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            reason_value.setStyleSheet("color: #374151;")
-            reason_value.setWordWrap(True)
-            lay.addWidget(reason_value)
-
-        return card
-
-    def _build_checks_card(self) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; }
-            QFrame QLabel { background: transparent; border: none; }
-        """)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 12, 16, 12)
-        lay.setSpacing(8)
-
-        title = QLabel(tr("quarantine_dialog.checks_label"))
-        title.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        title.setStyleSheet("color: #111827;")
-        lay.addWidget(title)
-
-        for label_key, value_key in (
-            ("quarantine_dialog.check_checksum", "isChecksumValid"),
-            ("quarantine_dialog.check_signature", "isSignatureValid"),
-            ("quarantine_dialog.check_vocabulary", "isVocabularyCompatible"),
-            ("quarantine_dialog.check_schema", "isSchemaValid"),
-        ):
-            lay.addWidget(self._check_row(tr(label_key), self._report.get(value_key)))
-
-        return card
-
-    def _build_details_card(self) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; }
-            QFrame QLabel { background: transparent; border: none; }
-        """)
-        outer = QVBoxLayout(card)
-        outer.setContentsMargins(16, 12, 16, 12)
-        outer.setSpacing(8)
-
-        # Wrap long error log in a scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        scroll.setMaximumHeight(ScreenScale.h(200))
-
-        content = QWidget()
-        content.setStyleSheet("background: transparent;")
-        content_lay = QVBoxLayout(content)
-        content_lay.setContentsMargins(0, 0, 0, 0)
-        content_lay.setSpacing(6)
-
-        schema_version = self._report.get("schemaVersion")
-        if schema_version:
-            content_lay.addLayout(
-                self._info_row(tr("quarantine_dialog.schema_version"), str(schema_version))
-            )
-
-        vocab_issues = self._report.get("vocabularyCompatibilityIssues")
-        if vocab_issues:
-            content_lay.addWidget(
-                self._labeled_block(
-                    tr("quarantine_dialog.vocab_issues"), str(vocab_issues)
-                )
-            )
-
-        error_log = self._report.get("errorLog")
-        if error_log:
-            content_lay.addWidget(
-                self._labeled_block(
-                    tr("quarantine_dialog.error_log"), str(error_log)
-                )
-            )
-
-        content_lay.addStretch()
-        scroll.setWidget(content)
-        outer.addWidget(scroll)
-        return card
-
-    def _build_footer(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(10)
-
-        has_technical = any(
-            self._report.get(k)
-            for k in ("schemaVersion", "vocabularyCompatibilityIssues", "errorLog")
+        self._card = QFrame()
+        self._card.setObjectName("QuarantineCard")
+        self._card.setStyleSheet(
+            "QFrame#QuarantineCard {"
+            " background-color: #FFFFFF;"
+            " border: 1px solid #E1E8ED;"
+            " border-radius: 12px;"
+            "}"
         )
-        if has_technical:
-            self._toggle_btn = QPushButton(tr("quarantine_dialog.show_details"))
-            self._toggle_btn.setCursor(Qt.PointingHandCursor)
-            self._toggle_btn.setFixedHeight(ScreenScale.h(36))
-            self._toggle_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-            self._toggle_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #F3F4F6; color: #374151;
-                    border: 1px solid #E5E7EB; border-radius: 8px;
-                    padding: 0 16px;
-                }
-                QPushButton:hover { background-color: #E5E7EB; }
-            """)
-            self._toggle_btn.clicked.connect(self._toggle_details)
-            row.addWidget(self._toggle_btn)
-        else:
-            self._toggle_btn = None
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(32)
+        shadow.setXOffset(0)
+        shadow.setYOffset(8)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        self._card.setGraphicsEffect(shadow)
+        self._card.setMinimumWidth(ScreenScale.w(420))
+        self._card.setMaximumWidth(ScreenScale.w(640))
+        self._card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
-        row.addStretch()
+        card_layout = QVBoxLayout(self._card)
+        card_layout.setContentsMargins(
+            ScreenScale.w(24), ScreenScale.h(22),
+            ScreenScale.w(24), ScreenScale.h(22),
+        )
+        card_layout.setSpacing(ScreenScale.h(14))
 
-        close_btn = QPushButton(tr("quarantine_dialog.close"))
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setFixedHeight(ScreenScale.h(36))
-        close_btn.setMinimumWidth(ScreenScale.w(100))
-        close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3890DF; color: white;
-                border: none; border-radius: 8px; padding: 0 20px;
-            }
-            QPushButton:hover { background-color: #2A7BC9; }
-        """)
-        close_btn.clicked.connect(self.accept)
-        row.addWidget(close_btn)
-        return row
+        self._title_lbl = QLabel()
+        self._title_lbl.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
+        self._title_lbl.setStyleSheet("color: #111827; background: transparent;")
+        self._title_lbl.setWordWrap(True)
+        card_layout.addWidget(self._title_lbl)
 
-    # ----------------------------------------------------------- helpers
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #F1F5F9; border: none;")
+        card_layout.addWidget(sep)
 
-    def _info_row(self, label: str, value: str) -> QHBoxLayout:
+        self._pkg_num_label_lbl, self._pkg_num_value_lbl = self._build_field_row()
+        card_layout.addLayout(self._row_layout(self._pkg_num_label_lbl, self._pkg_num_value_lbl))
+
+        self._file_name_label_lbl, self._file_name_value_lbl = self._build_field_row()
+        card_layout.addLayout(self._row_layout(self._file_name_label_lbl, self._file_name_value_lbl))
+
+        self._reason_label_lbl = QLabel()
+        self._reason_label_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._reason_label_lbl.setStyleSheet("color: #6B7280; background: transparent;")
+        card_layout.addWidget(self._reason_label_lbl)
+
+        self._reason_value_lbl = QLabel()
+        self._reason_value_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_REGULAR))
+        self._reason_value_lbl.setStyleSheet(
+            "color: #1F2937;"
+            " background: #F8FAFC;"
+            " border: 1px solid #E2E8F0;"
+            " border-radius: 8px;"
+            " padding: 10px 12px;"
+        )
+        self._reason_value_lbl.setWordWrap(True)
+        self._reason_value_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._reason_value_lbl.setMinimumHeight(ScreenScale.h(60))
+        self._reason_value_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        card_layout.addWidget(self._reason_value_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, ScreenScale.h(4), 0, 0)
+        btn_row.addStretch()
+        self._close_btn = QPushButton()
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._close_btn.setMinimumHeight(ScreenScale.h(36))
+        self._close_btn.setMinimumWidth(ScreenScale.w(110))
+        self._close_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self._close_btn.setStyleSheet(
+            "QPushButton {"
+            f" background-color: {Colors.PRIMARY_BLUE};"
+            " color: white;"
+            " border: none;"
+            " border-radius: 8px;"
+            " padding: 0 22px;"
+            "}"
+            "QPushButton:hover { background-color: #2D7BC9; }"
+            "QPushButton:pressed { background-color: #1F66A8; }"
+        )
+        self._close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self._close_btn)
+        card_layout.addLayout(btn_row)
+
+        outer.addWidget(self._card, alignment=Qt.AlignCenter)
+
+    def _build_field_row(self):
+        label_lbl = QLabel()
+        label_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        label_lbl.setStyleSheet("color: #6B7280; background: transparent;")
+        label_lbl.setMinimumWidth(ScreenScale.w(140))
+        label_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+        value_lbl = QLabel()
+        value_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
+        value_lbl.setStyleSheet("color: #111827; background: transparent;")
+        value_lbl.setWordWrap(True)
+        value_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        value_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        return label_lbl, value_lbl
+
+    @staticmethod
+    def _row_layout(label_lbl, value_lbl):
         row = QHBoxLayout()
-        row.setSpacing(8)
-
-        lbl = QLabel(label + ":")
-        lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        lbl.setStyleSheet("color: #6B7280;")
-        lbl.setFixedWidth(ScreenScale.w(140))
-        row.addWidget(lbl)
-
-        val = QLabel(value)
-        val.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        val.setStyleSheet("color: #111827;")
-        val.setWordWrap(True)
-        val.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        row.addWidget(val, 1)
-        return row
-
-    def _check_row(self, label: str, ok: Optional[bool]) -> QWidget:
-        wrap = QWidget()
-        row = QHBoxLayout(wrap)
+        row.setSpacing(ScreenScale.w(12))
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
+        row.addWidget(label_lbl, 0, Qt.AlignTop)
+        row.addWidget(value_lbl, 1)
+        return row
 
-        lbl = QLabel(label)
-        lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        lbl.setStyleSheet("color: #374151;")
-        row.addWidget(lbl)
-        row.addStretch()
+    def _populate_values(self):
+        r = self._report
+        self._title_lbl.setText(tr("quarantine_dialog.title"))
+        self._pkg_num_label_lbl.setText(tr("quarantine_dialog.package_number"))
+        self._pkg_num_value_lbl.setText(str(r.get("packageNumber") or "-"))
+        self._file_name_label_lbl.setText(tr("quarantine_dialog.file_name"))
+        self._file_name_value_lbl.setText(str(r.get("fileName") or "-"))
+        self._reason_label_lbl.setText(tr("quarantine_dialog.reason_label"))
+        self._reason_value_lbl.setText(str(r.get("quarantineReason") or "-"))
+        self._close_btn.setText(tr("quarantine_dialog.close"))
+        self._close_btn.adjustSize()
 
-        is_ok = bool(ok)
-        badge_text = ("✓ " + tr("quarantine_dialog.check_ok")) if is_ok else \
-            ("✗ " + tr("quarantine_dialog.check_fail"))
-        color = "#10B981" if is_ok else "#EF4444"
-        bg = "#ECFDF5" if is_ok else "#FEF2F2"
-        border = "#A7F3D0" if is_ok else "#FECACA"
+    def update_language(self, is_arabic: bool = True):
+        self.setLayoutDirection(get_layout_direction())
+        self._populate_values()
 
-        badge = QLabel(badge_text)
-        badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-        badge.setStyleSheet(f"""
-            color: {color};
-            background-color: {bg};
-            border: 1px solid {border};
-            border-radius: 10px;
-            padding: 2px 10px;
-        """)
-        row.addWidget(badge)
-        return wrap
+    def _center_on_parent(self):
+        parent = self.parent()
+        if not parent:
+            return
+        main_window = parent.window() if hasattr(parent, "window") else parent
+        self.adjustSize()
+        rect = main_window.geometry()
+        cx = rect.x() + (rect.width() - self.width()) // 2
+        cy = rect.y() + (rect.height() - self.height()) // 2
+        self.move(cx, cy)
 
-    def _labeled_block(self, label: str, text: str) -> QWidget:
-        wrap = QWidget()
-        col = QVBoxLayout(wrap)
-        col.setContentsMargins(0, 0, 0, 0)
-        col.setSpacing(3)
+    def _animate_in(self):
+        self._opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(None)
+        self._card.setGraphicsEffect(self._card.graphicsEffect())
+        try:
+            self.setWindowOpacity(0.0)
+            self._anim = QPropertyAnimation(self, b"windowOpacity")
+            self._anim.setDuration(160)
+            self._anim.setStartValue(0.0)
+            self._anim.setEndValue(1.0)
+            self._anim.setEasingCurve(QEasingCurve.OutCubic)
+            self._anim.start()
+        except Exception:
+            pass
 
-        lbl = QLabel(label)
-        lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        lbl.setStyleSheet("color: #6B7280;")
-        col.addWidget(lbl)
-
-        val = QLabel(text)
-        val.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        val.setStyleSheet("""
-            color: #374151;
-            background: #F9FAFB;
-            border: 1px solid #E5E7EB;
-            border-radius: 6px;
-            padding: 6px 8px;
-        """)
-        val.setWordWrap(True)
-        val.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        col.addWidget(val)
-        return wrap
-
-    def _toggle_details(self):
-        self._details_visible = not self._details_visible
-        self._details_card.setVisible(self._details_visible)
-        if self._toggle_btn:
-            self._toggle_btn.setText(
-                tr("quarantine_dialog.hide_details") if self._details_visible
-                else tr("quarantine_dialog.show_details")
-            )
-
-    # ----------------------------------------------------------- API
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._center_on_parent()
 
     @classmethod
     def show_for(cls, report: Dict[str, Any], parent=None) -> None:
-        """Convenience: build, show modally, and clean up."""
         dlg = cls(report, parent=parent)
         dlg.exec_()

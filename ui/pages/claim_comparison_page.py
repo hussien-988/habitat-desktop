@@ -1283,21 +1283,17 @@ class ClaimComparisonPage(QWidget):
         if success:
             self._justification_edit.clear()
             Toast.show_toast(self, tr("page.comparison.action_success"), Toast.SUCCESS)
-            # Tell the duplicates page to force-reload its list right after
-            # we navigate back. This avoids the 200ms refresh race in
-            # main_window.navigate_to and lets the page's
-            # "all-resolved-auto-return" check fire immediately.
             try:
                 from app.config import Pages as _Pages
                 main_win = self.window()
                 if main_win is not None and hasattr(main_win, "pages"):
                     dup_page = main_win.pages.get(_Pages.DUPLICATES)
-                    if dup_page is not None and hasattr(dup_page, "refresh"):
-                        # Synchronous refresh — the worker still runs async,
-                        # but the load_conflicts call kicks off NOW so the
-                        # auto-return logic isn't delayed by the navigation
-                        # timer.
-                        dup_page.refresh()
+                    if dup_page is not None:
+                        pkg_id = getattr(self, "_current_import_package_id", "") or ""
+                        if pkg_id and hasattr(dup_page, "_last_resolved_package_id"):
+                            dup_page._last_resolved_package_id = pkg_id
+                        if hasattr(dup_page, "refresh"):
+                            dup_page.refresh()
             except Exception as e:
                 logger.warning(f"Could not pre-refresh duplicates list: {e}")
             # Defer navigation by ~250ms so the refresh worker can hand its
