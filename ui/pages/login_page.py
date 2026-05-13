@@ -872,13 +872,18 @@ class LoginPage(QWidget):
             self.login_successful.emit(user)
         else:
             logger.warning(f"Login failed: {username} ({'credentials' if is_credential_error else 'network/server'}): {error}")
-            self._show_error(error or tr("page.login.invalid_credentials"))
+            if is_credential_error:
+                self._show_local_error("page.login.invalid_credentials")
+            elif error:
+                self._show_error(error)
+            else:
+                self._show_local_error("page.login.connection_error")
 
     def _on_login_error(self, error_msg: str):
         """Handle login worker exception — reset loading state and show error."""
         self._set_login_loading(False)
         logger.error(f"Login error: {error_msg}")
-        self._show_error(tr("page.login.connection_error"))
+        self._show_local_error("page.login.connection_error")
 
     def _set_login_loading(self, loading: bool):
         """Toggle login button loading state."""
