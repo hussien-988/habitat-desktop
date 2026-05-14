@@ -117,13 +117,16 @@ class FieldWorkPreparationStep3(QWidget):
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(scroll_content)
-        layout.setContentsMargins(0, 24, 0, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(0, ScreenScale.h(24), 0, 0)
+        layout.setSpacing(ScreenScale.h(16))
         info_card = QFrame()
         info_card.setStyleSheet(StyleManager.data_card())
         info_layout = QVBoxLayout(info_card)
-        info_layout.setContentsMargins(24, 20, 24, 20)
-        info_layout.setSpacing(12)
+        info_layout.setContentsMargins(
+            ScreenScale.w(24), ScreenScale.h(20),
+            ScreenScale.w(24), ScreenScale.h(20),
+        )
+        info_layout.setSpacing(ScreenScale.h(12))
 
         self._info_title_label = QLabel(tr("wizard.step3.assignment_info"))
         self._info_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -147,7 +150,7 @@ class FieldWorkPreparationStep3(QWidget):
             (tr("wizard.step3.assignment_date"), assignment_date, Colors.PAGE_TITLE),
         ]:
             row = QHBoxLayout()
-            row.setSpacing(12)
+            row.setSpacing(ScreenScale.w(12))
 
             lbl = QLabel(label_text)
             lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -169,14 +172,17 @@ class FieldWorkPreparationStep3(QWidget):
         buildings_card = QFrame()
         buildings_card.setStyleSheet(StyleManager.data_card())
         buildings_card_layout = QVBoxLayout(buildings_card)
-        buildings_card_layout.setContentsMargins(24, 16, 24, 16)
-        buildings_card_layout.setSpacing(6)
+        buildings_card_layout.setContentsMargins(
+            ScreenScale.w(24), ScreenScale.h(16),
+            ScreenScale.w(24), ScreenScale.h(16),
+        )
+        buildings_card_layout.setSpacing(ScreenScale.h(6))
 
         self._buildings_title_label = QLabel(tr("wizard.step3.buildings_and_units"))
         self._buildings_title_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         self._buildings_title_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         buildings_card_layout.addWidget(self._buildings_title_label)
-        buildings_card_layout.addSpacing(6)
+        buildings_card_layout.addSpacing(ScreenScale.h(6))
 
         for i, building in enumerate(self.buildings):
             building_id = (
@@ -228,8 +234,8 @@ class FieldWorkPreparationStep3(QWidget):
         header.setFixedHeight(ScreenScale.h(52))
 
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(16, 0, 16, 0)
-        header_layout.setSpacing(12)
+        header_layout.setContentsMargins(ScreenScale.w(16), 0, ScreenScale.w(16), 0)
+        header_layout.setSpacing(ScreenScale.w(12))
 
         # Arrow
         arrow = QLabel("\u25B6")
@@ -326,7 +332,6 @@ class FieldWorkPreparationStep3(QWidget):
         unit_code = unit_data.get('unitCode') or unit_data.get('unit_code') or '-'
         floor = unit_data.get('floorNumber')
         floor_str = str(floor) if floor is not None else '-'
-        description = unit_data.get('description') or ''
         person_count = unit_data.get('personCount') or 0
         household_count = unit_data.get('householdCount') or 0
         claim_count = unit_data.get('claimCount') or 0
@@ -346,12 +351,15 @@ class FieldWorkPreparationStep3(QWidget):
         """)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 8, 12, 8)
-        card_layout.setSpacing(6)
+        card_layout.setContentsMargins(
+            ScreenScale.w(12), ScreenScale.h(8),
+            ScreenScale.w(12), ScreenScale.h(8),
+        )
+        card_layout.setSpacing(ScreenScale.h(6))
 
         # Survey status badge row
         status_row = QHBoxLayout()
-        status_row.setSpacing(6)
+        status_row.setSpacing(ScreenScale.w(6))
         if has_survey:
             status_badge = QLabel(tr("wizard.step3.survey_done"))
             status_badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
@@ -389,8 +397,8 @@ class FieldWorkPreparationStep3(QWidget):
 
         for i, (label_text, value_text) in enumerate(data_points):
             col = QVBoxLayout()
-            col.setSpacing(2)
-            col.setContentsMargins(6, 0, 6, 0)
+            col.setSpacing(ScreenScale.h(2))
+            col.setContentsMargins(ScreenScale.w(6), 0, ScreenScale.w(6), 0)
             col.setAlignment(Qt.AlignCenter)
 
             lbl = QLabel(label_text)
@@ -416,13 +424,6 @@ class FieldWorkPreparationStep3(QWidget):
 
         card_layout.addLayout(grid)
 
-        if description:
-            desc = QLabel(description)
-            desc.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            desc.setStyleSheet("color: #4B5563;")
-            desc.setWordWrap(True)
-            card_layout.addWidget(desc)
-
         return card
 
     def _toggle_accordion(self, building_id):
@@ -439,16 +440,15 @@ class FieldWorkPreparationStep3(QWidget):
             arrow.setText("\u25BC" if not is_visible else "\u25B6")
 
     def _format_building_id(self, building_id: str) -> str:
-        """Format building ID with dashes."""
+        """Format building ID with dashes: GG-DD-SS-CCC-NNN-BBBBB."""
         if not building_id:
             return ""
-        if len(building_id) == 17:
-            parts = [
-                building_id[0:2], building_id[2:4], building_id[4:6],
-                building_id[6:8], building_id[8:10], building_id[10:12],
-                building_id[12:14], building_id[14:16], building_id[16:17]
-            ]
-            return "-".join(parts)
+        clean = str(building_id).replace("-", "")
+        if len(clean) == 17:
+            return (
+                f"{clean[0:2]}-{clean[2:4]}-{clean[4:6]}-"
+                f"{clean[6:9]}-{clean[9:12]}-{clean[12:17]}"
+            )
         return building_id
 
     def _create_revisit_reason_card(self) -> QFrame:
@@ -457,8 +457,11 @@ class FieldWorkPreparationStep3(QWidget):
         reason_card = QFrame()
         reason_card.setStyleSheet(StyleManager.data_card())
         reason_layout = QVBoxLayout(reason_card)
-        reason_layout.setContentsMargins(24, 16, 24, 16)
-        reason_layout.setSpacing(8)
+        reason_layout.setContentsMargins(
+            ScreenScale.w(24), ScreenScale.h(16),
+            ScreenScale.w(24), ScreenScale.h(16),
+        )
+        reason_layout.setSpacing(ScreenScale.h(8))
 
         label = QLabel(tr("wizard.step3.revisit_reason_label") + " *")
         label.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))

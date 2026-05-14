@@ -1864,10 +1864,13 @@ class MainWindow(QMainWindow):
                 data["survey_id"] = survey_id
         self.navigate_to(Pages.CLAIM_EDIT, data)
 
-    def _on_completed_claim_selected(self, claim_id: str):
+    def _on_completed_claim_selected(self, claim_id: str, highlight_ref: str = ""):
         """Navigate to claim details page."""
         logger.info(f"Claim selected: {claim_id}")
-        self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
+        self.navigate_to(
+            Pages.CLAIM_DETAILS,
+            {"claim_id": claim_id, "highlight_ref": highlight_ref},
+        )
 
     def _start_new_office_survey(self):
         """Start a new office survey."""

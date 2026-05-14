@@ -122,15 +122,26 @@ class SearchContextBar(QWidget):
         if self._clear_action:
             self._clear_action.setVisible(False)
 
-    def update_count(self, term: str, count: int):
+    def update_count(self, term: str, count: int,
+                     noun_singular: str = None, noun_plural: str = None,
+                     suffix: str = ""):
         """Update the result count display.
 
         Args:
             term: Search term (e.g., "SRV-001")
             count: Number of results
+            noun_singular: Custom singular noun (defaults to "نتيجة")
+            noun_plural: Custom plural noun (defaults to "نتائج")
+            suffix: Optional clarifying text appended after the count
+                    (e.g., "مرتبطة بهذا المسح")
         """
-        plural = "نتيجة" if count == 1 else "نتائج"
-        self._count_label.setText(f'"{term}" — {count} {plural}')
+        sing = noun_singular or "نتيجة"
+        plur = noun_plural or "نتائج"
+        noun = sing if count == 1 else plur
+        text = f'"{term}" — {count} {noun}'
+        if suffix:
+            text = f"{text} {suffix}"
+        self._count_label.setText(text)
 
     def update_language(self):
         """Update all text when language changes."""
