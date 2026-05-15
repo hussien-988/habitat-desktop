@@ -474,6 +474,7 @@ class PersonDialog(QDialog):
         self.first_name.textChanged.connect(lambda: self._clear_field_error(self.first_name, self._first_name_error))
         self.last_name.textChanged.connect(lambda: self._clear_field_error(self.last_name, self._last_name_error))
         self.father_name.textChanged.connect(lambda: self._clear_field_error(self.father_name, self._father_name_error))
+        self.mother_name.textChanged.connect(lambda: self._clear_field_error(self.mother_name, self._mother_name_error))
         self.national_id.textChanged.connect(lambda: self._clear_field_error(self.national_id, self._nid_error))
         self.phone.textChanged.connect(lambda: self._clear_field_error(self.phone, self._mobile_error))
         self.landline_digits.textChanged.connect(lambda: self._clear_field_error(self.landline_digits, self._landline_error))
@@ -617,7 +618,15 @@ class PersonDialog(QDialog):
         self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
         self.mother_name.setValidator(_name_validator)
         self.mother_name.setStyleSheet(self._input_style())
-        grid.addWidget(self.mother_name, row, 1)
+        self._mother_name_error = QLabel("")
+        self._mother_name_error.setStyleSheet(self._error_label_style())
+        self._mother_name_error.setVisible(False)
+        mn_container = QVBoxLayout()
+        mn_container.setSpacing(2)
+        mn_container.setContentsMargins(0, 0, 0, 0)
+        mn_container.addWidget(self.mother_name)
+        mn_container.addWidget(self._mother_name_error)
+        grid.addLayout(mn_container, row, 1)
         row += 1
 
         # Row: Birth Date (col 0) | National ID (col 1)
@@ -737,14 +746,16 @@ class PersonDialog(QDialog):
 
         row = 0
 
-        # Relationship to household head (full width)
-        grid.addWidget(self._label(tr("wizard.person_dialog.person_role"), label_style), row, 0, 1, 2)
+        person_role_label = self._label(tr("wizard.person_dialog.person_role"), label_style)
+        person_role_label.hide()
+        grid.addWidget(person_role_label, row, 0, 1, 2)
         row += 1
         self.person_role = RtlCombo()
         self.person_role.addItem(tr("wizard.person_dialog.select"), None)
         for code, display_name in get_relationship_to_head_options():
             self.person_role.addItem(display_name, code)
         self.person_role.setStyleSheet(self._input_style())
+        self.person_role.hide()
         grid.addWidget(self.person_role, row, 0, 1, 2)
         row += 1
 
@@ -949,8 +960,8 @@ class PersonDialog(QDialog):
         )
 
         date_layout.addWidget(self.start_day, 1)
-        date_layout.addWidget(self.start_month, 2)
-        date_layout.addWidget(self.start_year, 2)
+        date_layout.addWidget(self.start_month, 1)
+        date_layout.addWidget(self.start_year, 1)
         date_container = QWidget()
         date_container.setStyleSheet("background-color: transparent;")
         date_container.setLayout(date_layout)
@@ -1349,10 +1360,14 @@ class PersonDialog(QDialog):
             else:
                 try:
                     self._refresh_token()
-                    self._api_service.delete_evidence(self._survey_id, evidence_id)
+                    self._api_service.delete_identification_document(self._survey_id, evidence_id)
                     logger.info(f"Evidence deleted from server: {evidence_id}")
                 except Exception as e:
-                    logger.error(f"Failed to delete evidence {evidence_id}: {e}")
+                    from services.exceptions import ApiException
+                    if isinstance(e, ApiException) and e.status_code == 404:
+                        logger.info(f"ID evidence {evidence_id} already gone (404 treated as success)")
+                    else:
+                        logger.error(f"Failed to delete evidence {evidence_id}: {e}")
             del self._evidence_ids[norm]
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
@@ -1641,6 +1656,7 @@ class PersonDialog(QDialog):
             (self.first_name, self._first_name_error),
             (self.last_name, self._last_name_error),
             (self.father_name, self._father_name_error),
+            (self.mother_name, self._mother_name_error),
             (self.national_id, self._nid_error),
             (self.phone, self._mobile_error),
             (self.landline_digits, self._landline_error),
@@ -1772,22 +1788,24 @@ class PersonDialog(QDialog):
         father = self.father_name.text().strip()
         mother = self.mother_name.text().strip()
 
+        has_error = False
         if not first:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_first_name"), Toast.ERROR)
-            return
+            self._set_field_error(self.first_name, self._first_name_error, tr("wizard.person_dialog.enter_first_name"))
+            has_error = True
         if not last:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_last_name"), Toast.ERROR)
-            return
+            self._set_field_error(self.last_name, self._last_name_error, tr("wizard.person_dialog.enter_last_name"))
+            has_error = True
         if not father:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_father_name"), Toast.ERROR)
-            return
+            self._set_field_error(self.father_name, self._father_name_error, tr("wizard.person_dialog.enter_father_name"))
+            has_error = True
         if not mother:
-            Toast.show_toast(self, tr("wizard.person_dialog.enter_mother_name"), Toast.ERROR)
-            return
+            self._set_field_error(self.mother_name, self._mother_name_error, tr("wizard.person_dialog.enter_mother_name"))
+            has_error = True
         gender_valid, gender_error = self._validate_gender()
         if not gender_valid:
             self._set_gender_error(tr(gender_error))
-            Toast.show_toast(self, tr(gender_error), Toast.ERROR)
+            has_error = True
+        if has_error:
             return
         nid = self.national_id.text().strip()
         if nid:
@@ -1938,30 +1956,34 @@ class PersonDialog(QDialog):
         if not new_files:
             return
 
-        # Issue date: single file → direct dialog, multiple → ask same or separate
+        # Issue date + reference number: single file → direct dialog,
+        # multiple → ask same or separate
         if len(new_files) == 1:
-            issue_date = self._show_issue_date_dialog(os.path.basename(new_files[0]["path"]))
-            if issue_date is None:
+            meta = self._show_issue_date_dialog(os.path.basename(new_files[0]["path"]))
+            if meta is None:
                 return
-            new_files[0]["issue_date"] = issue_date
+            new_files[0]["issue_date"] = meta.get("issue_date", "")
+            new_files[0]["reference_number"] = meta.get("reference_number", "")
         elif len(new_files) > 1:
             use_same = self._ask_same_or_separate_dates(len(new_files))
             if use_same is None:
                 return
             if use_same:
-                issue_date = self._show_issue_date_dialog()
-                if issue_date is None:
+                meta = self._show_issue_date_dialog()
+                if meta is None:
                     return
                 for f in new_files:
-                    f["issue_date"] = issue_date
+                    f["issue_date"] = meta.get("issue_date", "")
+                    f["reference_number"] = meta.get("reference_number", "")
             else:
                 for f in new_files:
                     fname = os.path.basename(f["path"])
-                    issue_date = self._show_issue_date_dialog(fname)
-                    if issue_date is None:
+                    meta = self._show_issue_date_dialog(fname)
+                    if meta is None:
                         continue
-                    f["issue_date"] = issue_date
-                new_files = [f for f in new_files if f.get("issue_date")]
+                    f["issue_date"] = meta.get("issue_date", "")
+                    f["reference_number"] = meta.get("reference_number", "")
+                new_files = [f for f in new_files if f.get("issue_date") or f.get("reference_number")]
                 if not new_files:
                     return
 
@@ -2238,10 +2260,14 @@ class PersonDialog(QDialog):
             logger.warning(f"Could not compute hash for {file_path}: {e}")
             return ""
 
-    def _show_issue_date_dialog(self, filename: str = None) -> str:
-        """Show a mini popup to enter document issue date. Returns ISO date string or None if cancelled."""
+    def _show_issue_date_dialog(self, filename: str = None):
+        """Show a mini popup to enter document issue date and reference number.
+
+        Returns dict {issue_date, reference_number} or None if cancelled.
+        Empty strings indicate the user confirmed without filling that field.
+        """
         from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                                     QPushButton, QGraphicsDropShadowEffect, QComboBox)
+                                     QPushButton, QGraphicsDropShadowEffect, QComboBox, QLineEdit)
         from PyQt5.QtGui import QColor
         from ui.font_utils import create_font, FontManager
         from datetime import date as _date
@@ -2310,7 +2336,7 @@ class PersonDialog(QDialog):
         lbl_day = QLabel(tr("wizard.person_dialog.day"))
         lbl_day.setStyleSheet(label_style)
         lbl_day.setAlignment(Qt.AlignCenter)
-        labels_row.addWidget(lbl_year, 2)
+        labels_row.addWidget(lbl_year, 1)
         labels_row.addWidget(lbl_month, 1)
         labels_row.addWidget(lbl_day, 1)
         c_layout.addLayout(labels_row)
@@ -2342,10 +2368,31 @@ class PersonDialog(QDialog):
         for d in range(1, 32):
             day_combo.addItem(str(d), d)
 
-        date_row.addWidget(year_combo, 2)
+        date_row.addWidget(year_combo, 1)
         date_row.addWidget(month_combo, 1)
         date_row.addWidget(day_combo, 1)
         c_layout.addLayout(date_row)
+
+        c_layout.addSpacing(8)
+
+        ref_label = QLabel(tr("wizard.person_dialog.document_reference_number"))
+        ref_label.setStyleSheet(label_style)
+        c_layout.addWidget(ref_label)
+
+        ref_input = QLineEdit()
+        ref_input.setPlaceholderText(tr("wizard.person_dialog.document_reference_placeholder"))
+        ref_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 6px 10px;
+                background-color: #F9FAFB;
+                font-size: 13px;
+                min-height: 20px;
+            }
+            QLineEdit:focus { border-color: #3B82F6; }
+        """)
+        c_layout.addWidget(ref_input)
 
         c_layout.addSpacing(4)
 
@@ -2396,12 +2443,16 @@ class PersonDialog(QDialog):
             y = year_combo.currentData()
             m = month_combo.currentData()
             d = day_combo.currentData()
+            ref_value = ref_input.text().strip()
             if y:
                 month = m if m else 1
                 day = d if d else 1
-                return f"{y:04d}-{month:02d}-{day:02d}"
-            return ""
-        return ""
+                return {
+                    "issue_date": f"{y:04d}-{month:02d}-{day:02d}",
+                    "reference_number": ref_value,
+                }
+            return {"issue_date": "", "reference_number": ref_value}
+        return None
 
     def _ask_same_or_separate_dates(self, file_count: int):
         """Ask user: same date for all files or separate? Returns True=same, False=separate, None=cancelled."""
@@ -2824,11 +2875,10 @@ class PersonDialog(QDialog):
             self.tab_widget.setCurrentIndex(0)
             has_error = True
         if not mother:
+            self._set_field_error(self.mother_name, self._mother_name_error, tr("wizard.person_dialog.mother_name_required"))
             if not has_error:
                 self.tab_widget.setCurrentIndex(0)
             has_error = True
-            from ui.components.toast import Toast
-            Toast.show_toast(self, tr("wizard.person_dialog.mother_name_required"), Toast.ERROR)
         gender_valid, gender_error = self._validate_gender()
         if not gender_valid:
             self._set_gender_error(tr(gender_error))
@@ -3089,6 +3139,12 @@ class PersonDialog(QDialog):
             new_id_files = [f for f in self.uploaded_files
                             if os.path.normpath(f) not in self._evidence_ids]
 
+            logger.warning(
+                f"[ID-DOCS FLOW] new_files={len(new_id_files)} "
+                f"pending_replacements={list(self._pending_id_replacements)} "
+                f"survey_id={self._survey_id} person_id={person_id}"
+            )
+
             if self._survey_id and person_id:
                 # Replace: pair new files with pending replacement IDs (PUT)
                 for file_path in list(new_id_files):
@@ -3097,6 +3153,10 @@ class PersonDialog(QDialog):
                     old_evidence_id = self._pending_id_replacements.pop(0)
                     try:
                         doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
+                        logger.warning(
+                            f"[ID-DOCS FLOW] PUT replace: old_id={old_evidence_id} "
+                            f"new_file={os.path.basename(file_path)} doc_type={doc_type}"
+                        )
                         response = self._api_service.update_identification_document(
                             self._survey_id, old_evidence_id, person_id, file_path=file_path,
                             document_type=doc_type)
@@ -3119,10 +3179,14 @@ class PersonDialog(QDialog):
                 # Delete leftover pending IDs that were not replaced
                 for old_id in self._pending_id_replacements:
                     try:
-                        self._api_service.delete_evidence(self._survey_id, old_id)
+                        self._api_service.delete_identification_document(self._survey_id, old_id)
                         logger.info(f"Orphaned ID evidence deleted: {old_id}")
                     except Exception as e:
-                        logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
+                        from services.exceptions import ApiException
+                        if isinstance(e, ApiException) and e.status_code == 404:
+                            logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
+                        else:
+                            logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
                 self._pending_id_replacements.clear()
 
             # Tenure files: new files without evidence_id (exclude existing selected)
@@ -3140,7 +3204,8 @@ class PersonDialog(QDialog):
                         response = self._api_service.update_tenure_evidence(
                             self._survey_id, old_evidence_id, relation_id,
                             file_path=file_entry["path"],
-                            issue_date=file_entry.get("issue_date", ""))
+                            issue_date=file_entry.get("issue_date", ""),
+                            document_reference_number=file_entry.get("reference_number", ""))
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         file_entry["evidence_id"] = new_eid
@@ -3237,7 +3302,8 @@ class PersonDialog(QDialog):
                     relation_id=relation_id,
                     file_path=file_path,
                     issue_date=issue_date,
-                    file_hash=file_hash
+                    file_hash=file_hash,
+                    document_reference_number=file_entry.get("reference_number", ""),
                 )
                 evidence_id = (
                     response.get("id") or response.get("evidenceId") or

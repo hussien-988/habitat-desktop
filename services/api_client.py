@@ -1247,6 +1247,22 @@ class TRRCMSApiClient:
         logger.info(f"Property unit updated: {unit_id}")
         return result
 
+    def update_survey_property_unit(
+        self, survey_id: str, unit_id: str, unit_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Update a property unit scoped to a survey."""
+        if not survey_id or not unit_id:
+            raise ValueError("survey_id and unit_id are required")
+        api_data = self._convert_property_unit_to_api_format(unit_data)
+        api_data["id"] = unit_id
+        result = self._request(
+            "PUT",
+            f"/v1/Surveys/{survey_id}/property-units/{unit_id}",
+            json_data=api_data,
+        )
+        logger.info(f"Property unit {unit_id} updated for survey {survey_id}")
+        return result
+
     def _convert_property_unit_to_api_format(self, unit_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert property unit data to API format (camelCase)."""
         def get_value(snake_key: str, camel_key: str, default=None):
@@ -1463,14 +1479,14 @@ class TRRCMSApiClient:
         logger.info(f"Household {household_id} deleted from API")
         return True
 
-    def get_households_for_unit(self, unit_id: str) -> List[Dict[str, Any]]:
-        """Get all households for a property unit."""
-        if not unit_id:
-            logger.warning("No unit_id provided")
+    def get_households_for_survey(self, survey_id: str) -> List[Dict[str, Any]]:
+        """Get all households linked to a survey."""
+        if not survey_id:
+            logger.warning("No survey_id provided")
             return []
 
         try:
-            result = self._request("GET", f"/v1/Households/unit/{unit_id}")
+            result = self._request("GET", f"/v1/Surveys/{survey_id}/households")
 
             if isinstance(result, list):
                 households = result
@@ -1480,12 +1496,24 @@ class TRRCMSApiClient:
                 logger.warning(f"Unexpected response format: {type(result)}")
                 return []
 
-            logger.info(f"Found {len(households)} households for unit {unit_id}")
+            logger.info(f"Found {len(households)} households for survey {survey_id}")
             return households if isinstance(households, list) else []
 
         except Exception as e:
-            logger.error(f"Failed to fetch households: {e}")
+            logger.error(f"Failed to fetch households for survey {survey_id}: {e}")
             return []
+
+    def get_household_for_survey(self, survey_id: str, household_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single household linked to a survey."""
+        if not survey_id or not household_id:
+            logger.warning("survey_id and household_id are required")
+            return None
+
+        try:
+            return self._request("GET", f"/v1/Surveys/{survey_id}/households/{household_id}")
+        except Exception as e:
+            logger.error(f"Failed to fetch household {household_id} for survey {survey_id}: {e}")
+            return None
 
     def _convert_household_to_api_format(self, household_data: Dict[str, Any], survey_id: Optional[str] = None) -> Dict[str, Any]:
         """Convert household data to API format (camelCase)."""
@@ -1731,7 +1759,8 @@ class TRRCMSApiClient:
         issue_date: str = "",
         file_hash: str = "",
         evidence_type: int = 2,
-        description: str = ""
+        description: str = "",
+        document_reference_number: str = "",
     ) -> Dict[str, Any]:
         """Upload a tenure evidence document."""
         import os
@@ -1764,6 +1793,8 @@ class TRRCMSApiClient:
         if issue_date:
             date_val = f"{issue_date}T00:00:00Z" if 'T' not in issue_date else issue_date
             form_fields["DocumentIssuedDate"] = (None, date_val)
+        if document_reference_number:
+            form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
 
         logger.info(f"[API REQ] POST {endpoint} File: {file_name} ({mime_type})")
 
@@ -1925,7 +1956,7 @@ class TRRCMSApiClient:
     ) -> Dict[str, Any]:
         """Update an existing identification document.
 
-        Endpoint changed in v1.7: /identification-documents/{id} (was /evidence/identification/{id})
+        Endpoint per alignment.md (Apr 10): /evidence/identification/{evidenceId}
         Returns: IdentificationDocumentDto
         """
         import os
@@ -1934,7 +1965,7 @@ class TRRCMSApiClient:
         if not survey_id or not document_id:
             raise ValueError("survey_id and document_id are required")
 
-        endpoint = f"/v1/Surveys/{survey_id}/identification-documents/{document_id}"
+        endpoint = f"/v1/surveys/{survey_id}/evidence/identification/{document_id}"
         url = f"{self.base_url}{endpoint}"
 
         self._ensure_valid_token()
@@ -1964,10 +1995,16 @@ class TRRCMSApiClient:
         if document_reference_number:
             form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
 
-        logger.info(f"[API REQ] PUT {endpoint}")
+        has_file = bool(file_path and os.path.exists(file_path))
+        logger.warning(
+            f"[ID-DOCS PUT] endpoint={endpoint} document_id={document_id} "
+            f"person_id={person_id or '-'} has_file={has_file} "
+            f"file={os.path.basename(file_path) if has_file else '-'} "
+            f"fields={list(form_fields.keys())}"
+        )
 
         try:
-            if file_path and os.path.exists(file_path):
+            if has_file:
                 file_name = os.path.basename(file_path)
                 mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
                 with open(file_path, "rb") as f:
@@ -1981,7 +2018,12 @@ class TRRCMSApiClient:
 
             response.raise_for_status()
             result = response.json() if response.text else {}
-            logger.info(f"Identification document {document_id} updated")
+            response_id = result.get("id") or result.get("Id") if isinstance(result, dict) else None
+            same_id = (str(response_id) == str(document_id)) if response_id else None
+            logger.warning(
+                f"[ID-DOCS PUT] response status={response.status_code} "
+                f"returned_id={response_id} same_as_sent={same_id}"
+            )
             return result
 
         except requests.exceptions.HTTPError as e:
@@ -2076,7 +2118,8 @@ class TRRCMSApiClient:
         issue_date: str = "",
         evidence_type: int = 2,
         description: str = "",
-        notes: str = ""
+        notes: str = "",
+        document_reference_number: str = "",
     ) -> Dict[str, Any]:
         """Update an existing tenure document."""
         import os
@@ -2107,6 +2150,8 @@ class TRRCMSApiClient:
         if issue_date:
             date_val = f"{issue_date}T00:00:00Z" if 'T' not in issue_date else issue_date
             form_fields["DocumentIssuedDate"] = (None, date_val)
+        if document_reference_number:
+            form_fields["DocumentReferenceNumber"] = (None, document_reference_number)
 
         logger.info(f"[API REQ] PUT {endpoint}")
 
@@ -2194,8 +2239,23 @@ class TRRCMSApiClient:
         return self._request("GET", f"/v1/Surveys/evidence/{evidence_id}")
 
     def delete_evidence(self, survey_id: str, evidence_id: str) -> bool:
-        """Soft delete an evidence record."""
+        """Soft delete a tenure evidence record."""
         self._request("DELETE", f"/v1/Surveys/{survey_id}/evidence/{evidence_id}")
+        return True
+
+    def delete_identification_document(self, survey_id: str, document_id: str) -> bool:
+        """Soft delete an identification document.
+
+        Endpoint: DELETE /api/v1/surveys/{surveyId}/evidence/identification/{documentId}
+        Survey must be in Draft status; the doc's owning person must belong to a
+        household whose unit is in this survey's building. 204 on success.
+        """
+        if not survey_id or not document_id:
+            raise ValueError("survey_id and document_id are required")
+        self._request(
+            "DELETE",
+            f"/v1/surveys/{survey_id}/evidence/identification/{document_id}",
+        )
         return True
 
     def download_evidence(self, evidence_id: str, save_path: str) -> str:

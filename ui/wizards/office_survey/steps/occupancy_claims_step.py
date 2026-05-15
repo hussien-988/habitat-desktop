@@ -288,6 +288,9 @@ class OccupancyClaimsStep(BaseStep):
                 id_ev = a.get('id_photo_evidences', [])
                 if id_ev:
                     person_data_copy['_id_photo_evidences'] = id_ev
+            id_ev_map = a.get('id_evidence_map')
+            if id_ev_map:
+                person_data_copy['_evidence_ids'] = dict(id_ev_map)
 
         is_finalized = self.context.status == "finalized"
 
@@ -365,7 +368,8 @@ class OccupancyClaimsStep(BaseStep):
                                                     relation_id=new_rel_id,
                                                     file_path=f_path,
                                                     issue_date=f_entry.get('issue_date', ''),
-                                                    file_hash=f_entry.get('hash', ''))
+                                                    file_hash=f_entry.get('hash', ''),
+                                                    document_reference_number=f_entry.get('reference_number', ''))
                                                 eid = (resp.get('id') or resp.get('evidenceId') or '')
                                                 if eid:
                                                     f_entry['evidence_id'] = eid
@@ -400,6 +404,13 @@ class OccupancyClaimsStep(BaseStep):
                 updated_data['_is_applicant'] = True
             self.context.persons[person_index] = updated_data
             self.context.finalize_response = None
+            if is_applicant and self.context.applicant is not None:
+                returned_ev_map = updated_data.get('_evidence_ids')
+                if isinstance(returned_ev_map, dict):
+                    self.context.applicant['id_evidence_map'] = dict(returned_ev_map)
+                returned_paths = updated_data.get('_uploaded_files')
+                if isinstance(returned_paths, list):
+                    self.context.applicant['id_photo_paths'] = list(returned_paths)
             self._refresh_persons_list()
             logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
 
@@ -482,42 +493,6 @@ class OccupancyClaimsStep(BaseStep):
         name_val.setWordWrap(True)
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.first_name"), name_val), 0, 0)
 
-        role_key = person.get('person_role') or person.get('relationship_type')
-        role_text = get_relationship_to_head_display(role_key) if role_key else "-"
-        _ROLE_PALETTE = {
-            'head':     ('#DBEAFE', '#1D4ED8'),
-            'spouse':   ('#FAE8FF', '#7E22CE'),
-            'wife':     ('#FAE8FF', '#7E22CE'),
-            'husband':  ('#FAE8FF', '#7E22CE'),
-            'son':      ('#DCFCE7', '#166534'),
-            'daughter': ('#DCFCE7', '#166534'),
-            'child':    ('#DCFCE7', '#166534'),
-            'brother':  ('#FEF3C7', '#B45309'),
-            'sister':   ('#FEF3C7', '#B45309'),
-            'father':   ('#FFEDD5', '#C2410C'),
-            'mother':   ('#FFEDD5', '#C2410C'),
-            'other':    ('#E0E7FF', '#4338CA'),
-        }
-        badge_bg, badge_fg = _ROLE_PALETTE.get(
-            str(role_key).lower() if role_key else '',
-            ('#DBEAFE', '#1D4ED8'),
-        )
-        role_badge = QLabel(role_text)
-        role_badge.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
-        role_badge.setStyleSheet(
-            f"background-color: {badge_bg}; color: {badge_fg};"
-            "padding: 4px 12px; border-radius: 10px; border: none;"
-        )
-        role_badge.setAlignment(Qt.AlignCenter)
-        role_holder = QWidget()
-        role_holder.setLayoutDirection(card.layoutDirection())
-        role_holder.setStyleSheet("background: transparent; border: none;")
-        rh = QHBoxLayout(role_holder)
-        rh.setContentsMargins(0, 0, 0, 0)
-        rh.setSpacing(0)
-        rh.addWidget(role_badge, 0)
-        rh.addStretch(1)
-        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.person_role"), role_holder), 0, 1)
 
         # Row 1: father_name | mother_name
         father_val = QLabel(person.get('father_name') or '-')

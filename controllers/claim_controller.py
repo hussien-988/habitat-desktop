@@ -669,7 +669,8 @@ class ClaimController(BaseController):
     def _map_household_dto(dto: dict) -> dict:
         """Map API HouseholdDto to household dict for SurveyContext demographics."""
         return {
-            "household_id": dto.get("id", ""),
+            "household_id": dto.get("id") or dto.get("householdId") or "",
+            "api_id": dto.get("id") or dto.get("householdId") or "",
             "size": dto.get("householdSize", 0),
             "male_count": dto.get("maleCount", 0),
             "female_count": dto.get("femaleCount", 0),

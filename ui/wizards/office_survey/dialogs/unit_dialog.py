@@ -569,8 +569,18 @@ class UnitDialog(QDialog):
 
     def _is_unit_unique_local(self, units_data, unit_number, floor) -> bool:
         """Check uniqueness locally against already-fetched unit list."""
+        own_ids = set()
+        if self.unit_data:
+            for key in ('unit_uuid', 'id', 'unit_id'):
+                v = self.unit_data.get(key)
+                if v:
+                    own_ids.add(str(v))
         for unit in units_data:
-            if self.unit_data and hasattr(unit, 'unit_id') and unit.unit_id == self.unit_data.get('unit_id'):
+            unit_identifiers = {
+                str(getattr(unit, attr)) for attr in ('unit_uuid', 'unit_id', 'id')
+                if getattr(unit, attr, None)
+            }
+            if own_ids and unit_identifiers & own_ids:
                 continue
             u_num = getattr(unit, 'apartment_number', None) or getattr(unit, 'unit_number', None)
             u_floor = getattr(unit, 'floor_number', None)
@@ -637,6 +647,39 @@ class UnitDialog(QDialog):
                         is_error=True
                     )
                     return
+                self._show_styled_message(tr("common.error"), str(e), is_error=True)
+                return
+            finally:
+                self._spinner.hide_loading()
+        else:
+            unit_id = (
+                self.unit_data.get('unit_uuid')
+                or self.unit_data.get('id')
+                or self.unit_data.get('unit_id')
+                or ''
+            )
+            if not unit_id or not self._survey_id:
+                self._show_styled_message(
+                    tr("common.error"),
+                    tr("wizard.unit_dialog.update_missing_ids"),
+                    is_error=True,
+                )
+                return
+
+            unit_data = self.get_unit_data()
+            unit_data['survey_id'] = self._survey_id
+            unit_data['unit_uuid'] = unit_id
+
+            logger.info(f"Updating property unit {unit_id} for survey {self._survey_id}")
+            self._spinner.show_loading(tr("component.loading.default"))
+            try:
+                response = self._api_service.update_survey_property_unit(
+                    self._survey_id, unit_id, unit_data,
+                )
+                logger.info("Property unit updated successfully via API")
+                self._updated_unit_data = response
+            except Exception as e:
+                logger.error(f"API unit update failed: {e}")
                 self._show_styled_message(tr("common.error"), str(e), is_error=True)
                 return
             finally:

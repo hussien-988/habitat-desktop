@@ -102,7 +102,6 @@ class OfficeSurveyWizard(BaseWizard):
             ReviewStep(self.context, self),           # 5 - Final review
             ClaimStep(self.context, self),            # 6 - Claim display
         ]
-        # Connect edit signal from review step
         steps[5].edit_requested.connect(self._enter_edit_mode)
         return steps
 

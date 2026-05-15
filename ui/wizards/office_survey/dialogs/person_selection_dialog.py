@@ -238,14 +238,11 @@ class PersonSelectionDialog(QDialog):
                     p.get('father_name', ''),
                     p.get('last_name', ''),
                 ]))
-                rel_type = p.get('person_role') or p.get('relationship_type') or p.get('relation_type')
-                rel_display = get_relation_type_display(rel_type) if rel_type else ""
-                badge_bg = "#10B981" if rel_type in (1, 5) else "#F59E0B" if rel_type == 3 else "#6B7280"
                 card = self._create_card(
                     name=name or "—",
                     subtitle=tr("person_selection.national_id_label", nid=p.get('national_id', '')) if p.get('national_id') else "",
-                    badge_text=rel_display,
-                    badge_bg=badge_bg,
+                    badge_text="",
+                    badge_bg="#6B7280",
                     style=default_style,
                     selected_style=selected_style,
                     selection_data={'type': 'existing', 'person_data': p, 'relation_data': None},

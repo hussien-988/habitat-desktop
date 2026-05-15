@@ -48,6 +48,8 @@ class ApplicantInfoStep(BaseStep):
         super().__init__(context, parent)
         self.uploaded_files: List[str] = []
         self._field_styles: dict = {}
+        self._evidence_ids: dict = {}
+        self._pending_id_replacements: list = []
         from services.api_client import get_api_client
         self._api_client = get_api_client()
 
@@ -431,6 +433,14 @@ class ApplicantInfoStep(BaseStep):
             self._update_upload_thumbnails("id_upload", self.uploaded_files)
 
     def _remove_uploaded_file(self, file_path: str):
+        norm = os.path.normpath(file_path)
+        if norm in self._evidence_ids:
+            evidence_id = self._evidence_ids.pop(norm)
+            self._pending_id_replacements.append(evidence_id)
+            logger.warning(
+                f"[ID-DOCS] queued for replacement: ev_id={evidence_id} "
+                f"file={os.path.basename(file_path)}"
+            )
         if file_path in self.uploaded_files:
             self.uploaded_files.remove(file_path)
         self._update_upload_thumbnails("id_upload", self.uploaded_files)
@@ -905,27 +915,84 @@ class ApplicantInfoStep(BaseStep):
                         logger.error(f"Contact person update failed: {e}")
                         result.add_error(map_exception(e))
 
-            # 6. Upload ID photos
+            # 6. ID photo replacement / upload / deletion
             person_id = self.context.get_data("contact_person_id")
-            if person_id and self.uploaded_files:
+            if person_id:
+                doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
                 already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
-                new_files = [f for f in self.uploaded_files if f not in already_uploaded]
+                new_files = [f for f in self.uploaded_files
+                             if f not in already_uploaded
+                             and os.path.normpath(f) not in self._evidence_ids]
+
+                logger.warning(
+                    f"[ID-DOCS FLOW] applicant_step: new_files={len(new_files)} "
+                    f"pending_replacements={list(self._pending_id_replacements)}"
+                )
+
+                for fp in list(new_files):
+                    if not self._pending_id_replacements:
+                        break
+                    old_ev_id = self._pending_id_replacements.pop(0)
+                    try:
+                        logger.warning(
+                            f"[ID-DOCS FLOW] PUT replace: old_id={old_ev_id} "
+                            f"new_file={os.path.basename(fp)}"
+                        )
+                        response = self._api_client.update_identification_document(
+                            survey_id=survey_id,
+                            document_id=old_ev_id,
+                            person_id=person_id,
+                            file_path=fp,
+                            document_type=doc_type,
+                        )
+                        new_eid = (response.get("id") or response.get("evidenceId")
+                                   or response.get("Id") or old_ev_id)
+                        self._evidence_ids[os.path.normpath(fp)] = new_eid
+                        new_files.remove(fp)
+                        already_uploaded.add(fp)
+                        logger.info(f"ID evidence replaced: {old_ev_id} -> {new_eid}")
+                    except Exception as e:
+                        logger.error(f"Failed to PUT replace {old_ev_id}: {e}")
+                        self._pending_id_replacements.insert(0, old_ev_id)
+                        from services.error_mapper import map_exception
+                        Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
+                        break
+
                 for fp in new_files:
                     try:
-                        doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
-                        self._api_client.upload_identification_document(
+                        response = self._api_client.upload_identification_document(
                             survey_id=survey_id,
                             person_id=person_id,
                             file_path=fp,
                             document_type=doc_type,
                         )
+                        ev_id = (response.get("id") or response.get("evidenceId")
+                                 or response.get("Id"))
+                        if ev_id:
+                            self._evidence_ids[os.path.normpath(fp)] = ev_id
                         already_uploaded.add(fp)
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                     except Exception as e:
                         logger.error(f"Failed to upload ID photo {fp}: {e}")
                         from services.error_mapper import map_exception
                         Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
+
+                for old_id in list(self._pending_id_replacements):
+                    try:
+                        self._api_client.delete_identification_document(survey_id, old_id)
+                        logger.info(f"Orphaned ID evidence deleted: {old_id}")
+                    except Exception as e:
+                        from services.exceptions import ApiException
+                        if isinstance(e, ApiException) and e.status_code == 404:
+                            logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
+                        else:
+                            logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
+                self._pending_id_replacements.clear()
+
                 self.context.update_data("uploaded_id_photos", list(already_uploaded))
+                if self.context.applicant is None:
+                    self.context.applicant = {}
+                self.context.applicant["id_evidence_map"] = dict(self._evidence_ids)
         finally:
             self._spinner.hide_loading()
 
@@ -1059,6 +1126,12 @@ class ApplicantInfoStep(BaseStep):
         photos = a.get("id_photo_paths", [])
         valid_photos = [p for p in photos if p and _os.path.exists(p)]
         self.uploaded_files = list(valid_photos)
+        saved_ev_map = a.get("id_evidence_map") or {}
+        if saved_ev_map:
+            self._evidence_ids = {
+                _os.path.normpath(p): ev for p, ev in saved_ev_map.items()
+                if ev and _os.path.exists(p)
+            }
         if valid_photos:
             self._update_upload_thumbnails("id_upload", valid_photos)
         elif photos or a.get("id_photo_evidences"):
@@ -1110,7 +1183,7 @@ class ApplicantInfoStep(BaseStep):
                 )
                 return []
             logger.warning(f"[ID-DOCS] _do_fetch processing {len(docs)} document(s)")
-            downloaded = []
+            downloaded_with_ids = []
             for doc in docs:
                 ev_id = doc.get("id") or doc.get("evidenceId", "")
                 doc_person_id = doc.get("personId") or person_id
@@ -1123,35 +1196,39 @@ class ApplicantInfoStep(BaseStep):
                 logger.warning(f"[ID-DOCS] Downloading doc id={ev_id} person={doc_person_id} file={file_name}")
                 try:
                     result_path = None
-                    # 1) New dedicated endpoint (preferred when both ids known).
                     if doc_person_id and ev_id:
                         result_path = download_identification_document_file(
                             doc_person_id, ev_id, file_name
                         )
                         logger.warning(f"[ID-DOCS] Dedicated endpoint result: {result_path}")
-                    # 2) Legacy static-file path fallback.
                     if not result_path and file_path_val:
                         result_path = download_static_file(file_path_val, file_name)
-                    # 3) Generic evidence endpoint fallback.
                     if not result_path and ev_id:
                         result_path = download_evidence_file(ev_id, file_name)
                     if result_path:
-                        downloaded.append(result_path)
+                        downloaded_with_ids.append((result_path, ev_id))
                 except Exception as e:
                     logger.warning(f"Failed to download ID photo {ev_id}: {e}")
-            return downloaded
+            return downloaded_with_ids
 
-        def _on_done(downloaded):
-            if downloaded:
+        def _on_done(downloaded_with_ids):
+            if downloaded_with_ids:
+                downloaded = [p for p, _ in downloaded_with_ids]
                 self.uploaded_files = downloaded
                 self.context.update_data("uploaded_id_photos", list(set(downloaded)))
                 self._update_upload_thumbnails("id_upload", downloaded)
-                # Persist into applicant so a subsequent collect_data() that
-                # rebuilds the dict (or a navigation back to this step) can
-                # still find the downloaded paths instead of re-fetching.
                 if self.context.applicant is None:
                     self.context.applicant = {}
                 self.context.applicant["id_photo_paths"] = list(downloaded)
+                id_evidence_map = {
+                    os.path.normpath(p): ev_id
+                    for p, ev_id in downloaded_with_ids if ev_id
+                }
+                self._evidence_ids = id_evidence_map
+                self.context.applicant["id_evidence_map"] = dict(id_evidence_map)
+                logger.warning(
+                    f"[ID-DOCS] Stored evidence_ids map: {len(id_evidence_map)} entries"
+                )
                 logger.info(f"Downloaded {len(downloaded)} ID photos from server")
 
         def _on_error(msg):

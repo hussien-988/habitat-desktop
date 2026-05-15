@@ -236,7 +236,7 @@ class _CaseCard(QFrame):
 
         content.addSpacing(4)
 
-        # Row 3: chips (survey count, claim count) + lock icon
+        # Row 3: chips (survey count, claim count)
         chips_row = QHBoxLayout()
         chips_row.setSpacing(6)
 
@@ -263,14 +263,6 @@ class _CaseCard(QFrame):
         chips_row.addWidget(claim_chip)
 
         chips_row.addStretch()
-
-        # Lock icon if not editable
-        if not self._case.is_editable:
-            lock_label = QLabel("\U0001F512")
-            lock_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-            lock_label.setStyleSheet("background: transparent; border: none;")
-            lock_label.setToolTip(tr("page.case_mgmt.not_editable"))
-            chips_row.addWidget(lock_label)
 
         content.addLayout(chips_row)
 
