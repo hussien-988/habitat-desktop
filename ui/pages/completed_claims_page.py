@@ -127,7 +127,13 @@ class _ClaimCard(QFrame):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
-        claim_id_label = QLabel(d.get("claim_id", "N/A"))
+        survey_ref = d.get("claim_id", "N/A")
+        claim_seq = d.get("claim_seq")
+        if claim_seq:
+            label_text = f"{survey_ref} - {tr('page.claims.claim_label')} {claim_seq}"
+        else:
+            label_text = survey_ref
+        claim_id_label = QLabel(label_text)
         id_font = create_font(size=10, weight=FontManager.WEIGHT_MEDIUM)
         id_font.setLetterSpacing(QFont.AbsoluteSpacing, 0.5)
         claim_id_label.setFont(id_font)
@@ -349,7 +355,7 @@ class CompletedClaimsPage(QWidget):
     """Claims listing page with dark header zone, shimmer cards,
     and comprehensive loading states."""
 
-    claim_selected = pyqtSignal(str)
+    claim_selected = pyqtSignal(str, str)  # claim_uuid, highlight_ref (survey ref to highlight)
     add_claim_clicked = pyqtSignal()
     back_to_survey_requested = pyqtSignal(str)  # survey_id
 
@@ -883,7 +889,28 @@ class CompletedClaimsPage(QWidget):
             if self._search_mode:
                 total = self._total_count or len(self.claims_data)
                 term = self._search.text().strip()
-                self._search_bar.update_count(term, total)
+                self._search_bar.update_count(
+                    term, total,
+                    noun_singular=tr("page.claims.search_noun_singular"),
+                    noun_plural=tr("page.claims.search_noun_plural"),
+                    suffix=tr("page.claims.search_results_suffix"),
+                )
+
+            # Compute per-survey claim sequence (1, 2, 3 ...) so the mini-card
+            # can disambiguate multiple claims sharing the same survey ref.
+            # Only show the sequence when a survey actually has multiple claims
+            # in the current view — avoids redundant "المطالبة 1" labels.
+            survey_totals = {}
+            for claim in self.claims_data:
+                ref = claim.get("claim_id", "") or ""
+                survey_totals[ref] = survey_totals.get(ref, 0) + 1
+            survey_counters = {}
+            for claim in self.claims_data:
+                ref = claim.get("claim_id", "") or ""
+                survey_counters[ref] = survey_counters.get(ref, 0) + 1
+                claim["claim_seq"] = (
+                    survey_counters[ref] if survey_totals[ref] > 1 else None
+                )
 
             for idx, claim in enumerate(self.claims_data):
                 card = _ClaimCard(claim)
@@ -949,7 +976,8 @@ class CompletedClaimsPage(QWidget):
             return
         self._navigating = True
         self._spinner.show_loading(tr("page.claims.loading"))
-        self.claim_selected.emit(claim_uuid)
+        highlight_ref = self._search.text().strip() if self._search_mode else ""
+        self.claim_selected.emit(claim_uuid, highlight_ref)
 
     # -- Public interface --
 

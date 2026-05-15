@@ -277,10 +277,15 @@ class _DetailsHeader(QWidget):
         self._accent_line = _AccentLine()
         outer.addWidget(self._accent_line)
 
-    def set_claim_info(self, claim_number, badges):
-        """Update header with claim identification."""
+    def set_claim_info(self, claim_number, badges, highlight=False):
+        """Update header with claim identification.
+
+        When highlight=True, draw attention to the claim number (e.g., when
+        the user arrived here from a search on the survey reference code).
+        """
         self._claim_number = claim_number
         self._num_label.setText(claim_number)
+        self._apply_num_label_style(highlight)
 
         # Clear old badges
         while self._badges_layout.count():
@@ -298,6 +303,28 @@ class _DetailsHeader(QWidget):
                 f"border-radius: 11px; padding: 0 10px; border: none; }}"
             )
             self._badges_layout.insertWidget(self._badges_layout.count() - 1, badge)
+
+    def _apply_num_label_style(self, highlight: bool):
+        if highlight:
+            self._num_label.setStyleSheet(
+                "color: #92400E; background: #FEF3C7; "
+                "border: 1.5px solid #F59E0B; "
+                "border-radius: 8px; padding: 4px 12px;"
+            )
+            glow = QGraphicsDropShadowEffect(self._num_label)
+            glow.setBlurRadius(16)
+            glow.setOffset(0, 0)
+            glow.setColor(QColor(245, 158, 11, 140))
+            self._num_label.setGraphicsEffect(glow)
+        else:
+            self._num_label.setStyleSheet(
+                "color: #2A6CB5; background: transparent;"
+            )
+            glow = QGraphicsDropShadowEffect(self._num_label)
+            glow.setBlurRadius(12)
+            glow.setOffset(0, 0)
+            glow.setColor(QColor(56, 144, 223, 80))
+            self._num_label.setGraphicsEffect(glow)
 
     def set_edit_visible(self, visible):
         self._edit_btn.setVisible(visible)
@@ -430,46 +457,10 @@ class _GlowingCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class _WatermarkScrollArea(QScrollArea):
-    """Scroll area with pulsing logo watermark behind content."""
+    """Plain scroll area (watermark removed)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._logo = LogoWidget(height=120, parent=self)
-        self._logo_effect = QGraphicsOpacityEffect(self._logo)
-        self._logo_effect.setOpacity(0.04)
-        self._logo.setGraphicsEffect(self._logo_effect)
-        self._logo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self._logo.setStyleSheet("background: transparent;")
-
-        self._logo_opacity = 0.04
-        self._logo_anim = QPropertyAnimation(self, b"logoOpacity")
-        self._logo_anim.setDuration(5000)
-        self._logo_anim.setStartValue(0.03)
-        self._logo_anim.setKeyValueAt(0.5, 0.06)
-        self._logo_anim.setEndValue(0.03)
-        self._logo_anim.setEasingCurve(QEasingCurve.InOutSine)
-        self._logo_anim.setLoopCount(-1)
-        self._logo_anim.start()
-
-    @pyqtProperty(float)
-    def logoOpacity(self):
-        return self._logo_opacity
-
-    @logoOpacity.setter
-    def logoOpacity(self, val):
-        self._logo_opacity = val
-        self._logo_effect.setOpacity(val)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # Center logo
-        lw = self._logo.width() if self._logo.pixmap() else 120
-        lh = self._logo.height() if self._logo.pixmap() else 120
-        self._logo.move(
-            (self.width() - lw) // 2,
-            (self.height() - lh) // 2,
-        )
-        self._logo.raise_()
 
 
 # ---------------------------------------------------------------------------
@@ -504,6 +495,7 @@ class ClaimDetailsPage(QWidget):
         self._edit_btn_widget = None
         self._dimmed_cards = []
         self._failed_sections = []
+        self._highlight_ref = ""
 
         self._setup_ui()
 
@@ -701,8 +693,21 @@ class ClaimDetailsPage(QWidget):
             self._ownership_share_input = None
             self._header.set_editing(False)
 
+        # Always drop any stale edit-action buttons left over from a prior
+        # edit session (e.g. user navigated away mid-edit), so re-entering
+        # edit mode doesn't duplicate the save/cancel pair.
+        if getattr(self, "_edit_btn_widget", None):
+            try:
+                self._relation_card_layout.removeWidget(self._edit_btn_widget)
+                self._edit_btn_widget.deleteLater()
+            except Exception:
+                pass
+            self._edit_btn_widget = None
+
         if data is None:
             return
+
+        self._highlight_ref = (data.get("highlight_ref") or "").strip()
 
         # Case 1: Full data dict (from controller)
         if data.get("claim"):
@@ -799,7 +804,9 @@ class ClaimDetailsPage(QWidget):
             if date_str and not date_str.startswith("0001"):
                 badges.append((date_str, "#F8FAFC", "#64748B"))
 
-            self._header.set_claim_info(claim_number, badges)
+            highlight_ref = getattr(self, "_highlight_ref", "") or ""
+            highlight = bool(highlight_ref) and highlight_ref == claim_number
+            self._header.set_claim_info(claim_number, badges, highlight=highlight)
         except Exception as e:
             logger.error(f"Error populating header: {e}")
             self._failed_sections.append("الترويسة")
@@ -981,7 +988,6 @@ class ClaimDetailsPage(QWidget):
                 _CLAIM_TYPE_OPTIONS = [
                     (1, get_claim_type_display(1)),
                     (2, get_claim_type_display(2)),
-                    (3, get_claim_type_display(3)),
                 ]
                 for code, label in _CLAIM_TYPE_OPTIONS:
                     self._claim_type_combo.addItem(label, code)
@@ -1048,6 +1054,10 @@ class ClaimDetailsPage(QWidget):
                         }
                         QLineEdit:hover { border-color: #93C5FD; }
                         QLineEdit:focus { border-color: #3890DF; }
+                        QLineEdit[invalidShare="true"] {
+                            border-color: #DC2626;
+                            background-color: #FEF2F2;
+                        }
                     """)
                     if _saved_share_text is not None:
                         self._ownership_share_input.setText(_saved_share_text)
@@ -1057,6 +1067,7 @@ class ClaimDetailsPage(QWidget):
                         except (ValueError, TypeError):
                             pass
                     self._ownership_share_input.setEnabled(True)
+                    self._ownership_share_input.textChanged.connect(self._on_ownership_share_changed)
                     share_row.addWidget(self._ownership_share_input)
                 else:
                     if raw_share is not None and raw_share > 0:
@@ -1387,6 +1398,16 @@ class ClaimDetailsPage(QWidget):
                 "border: 2px solid rgba(56, 144, 223, 0.35); border-radius: 12px; }" % Colors.SURFACE
             )
 
+            # Drop any prior edit-button container before adding a fresh one
+            # (defensive — refresh() also clears, but this guards re-entry).
+            if self._edit_btn_widget:
+                try:
+                    self._relation_card_layout.removeWidget(self._edit_btn_widget)
+                    self._edit_btn_widget.deleteLater()
+                except Exception:
+                    pass
+                self._edit_btn_widget = None
+
             # Add save/cancel buttons at bottom of card
             btn_container = QWidget()
             btn_container.setStyleSheet("background: transparent; border: none;")
@@ -1516,6 +1537,22 @@ class ClaimDetailsPage(QWidget):
             self._claim_data["claimType"] = self._claim_type_combo.currentData()
             self._populate_relation_card()
 
+    def _on_ownership_share_changed(self, text: str):
+        """Live range feedback for the ownership share input (0..2400)."""
+        if self._ownership_share_input is None:
+            return
+        invalid = False
+        cleaned = (text or "").strip()
+        if cleaned:
+            try:
+                v = int(cleaned)
+                invalid = v < 0 or v > 2400
+            except (ValueError, TypeError):
+                invalid = True
+        self._ownership_share_input.setProperty("invalidShare", "true" if invalid else "false")
+        self._ownership_share_input.style().unpolish(self._ownership_share_input)
+        self._ownership_share_input.style().polish(self._ownership_share_input)
+
     def _extract_relation_id(self):
         rel_id = self._claim_data.get("sourceRelationId")
         if rel_id:
@@ -1623,6 +1660,11 @@ class ClaimDetailsPage(QWidget):
             new_share_val = int(new_share_text) if new_share_text else None
         except (ValueError, TypeError):
             Toast.show_toast(self, tr("page.claim_details.ownership_share_required"), Toast.WARNING)
+            return
+        if new_share_val is not None and (new_share_val < 0 or new_share_val > 2400):
+            Toast.show_toast(self, tr("page.claim_details.ownership_share_out_of_range"), Toast.WARNING)
+            if self._ownership_share_input:
+                self._ownership_share_input.setFocus()
             return
         share_changed = new_share_val != self._original_ownership_share
 

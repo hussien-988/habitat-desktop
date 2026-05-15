@@ -231,44 +231,10 @@ class _GlowingCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class _WatermarkScrollArea(QScrollArea):
-    """Scroll area with pulsing logo watermark."""
+    """Plain scroll area (watermark removed)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._logo = LogoWidget(height=120, parent=self)
-        self._logo_effect = QGraphicsOpacityEffect(self._logo)
-        self._logo_effect.setOpacity(0.04)
-        self._logo.setGraphicsEffect(self._logo_effect)
-        self._logo.setStyleSheet("background: transparent;")
-
-        self._logo_opacity = 0.04
-        self._logo_anim = QPropertyAnimation(self, b"logoOpacity")
-        self._logo_anim.setDuration(5000)
-        self._logo_anim.setStartValue(0.03)
-        self._logo_anim.setKeyValueAt(0.5, 0.06)
-        self._logo_anim.setEndValue(0.03)
-        self._logo_anim.setEasingCurve(QEasingCurve.InOutSine)
-        self._logo_anim.setLoopCount(-1)
-        self._logo_anim.start()
-
-    @pyqtProperty(float)
-    def logoOpacity(self):
-        return self._logo_opacity
-
-    @logoOpacity.setter
-    def logoOpacity(self, val):
-        self._logo_opacity = val
-        self._logo_effect.setOpacity(val)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        lw = self._logo.width() if self._logo.pixmap() else 120
-        lh = self._logo.height() if self._logo.pixmap() else 120
-        self._logo.move(
-            (self.width() - lw) // 2,
-            (self.height() - lh) // 2,
-        )
-        self._logo.raise_()
 
 
 # ---------------------------------------------------------------------------
@@ -520,6 +486,59 @@ class ReviewStep(BaseStep):
         """Emit signal requesting wizard to enter edit mode for a step."""
         self.edit_requested.emit(step_index)
 
+    def _edit_unit_info(self):
+        """Open the unit dialog in edit mode to modify the selected unit's info."""
+        from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
+        from PyQt5.QtWidgets import QDialog
+
+        unit = self.context.unit
+        if not unit or not self.context.building:
+            return
+
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            Toast.show_toast(self.window() or self, tr("wizard.unit.no_survey_error"), Toast.WARNING)
+            return
+
+        main_window = self.window()
+        auth_token = getattr(main_window, '_api_token', None) if main_window else None
+
+        unit_data = {
+            'unit_uuid': unit.unit_uuid,
+            'building_uuid': self.context.building.building_uuid,
+            'unit_type': unit.unit_type,
+            'apartment_status': getattr(unit, 'apartment_status', None),
+            'floor_number': getattr(unit, 'floor_number', None),
+            'unit_number': unit.unit_number or getattr(unit, 'apartment_number', None),
+            'apartment_number': unit.unit_number or getattr(unit, 'apartment_number', None),
+            'number_of_rooms': getattr(unit, 'number_of_rooms', 0),
+            'area_sqm': getattr(unit, 'area_sqm', None),
+            'property_description': getattr(unit, 'property_description', None),
+        }
+
+        dialog = UnitDialog(
+            building=self.context.building,
+            db=self.context.db,
+            unit_data=unit_data,
+            parent=main_window,
+            auth_token=auth_token,
+            survey_id=survey_id,
+        )
+
+        if dialog.exec_() == QDialog.Accepted:
+            updated = getattr(dialog, '_updated_unit_data', None) or {}
+            new_form_data = dialog.get_unit_data()
+            for attr in ('unit_type', 'apartment_status', 'floor_number',
+                         'unit_number', 'apartment_number', 'number_of_rooms',
+                         'area_sqm', 'property_description'):
+                value = new_form_data.get(attr)
+                if value is not None:
+                    try:
+                        setattr(unit, attr, value)
+                    except Exception:
+                        pass
+            self._populate_unit_card()
+
     def _create_edit_icon_button(self, callback) -> QPushButton:
         """Create a small edit icon button for card headers."""
         btn = QPushButton()
@@ -676,16 +695,6 @@ class ReviewStep(BaseStep):
         name_lbl.setAlignment(name_align)
         name_lbl.setWordWrap(True)
         top.addWidget(name_lbl, 1)
-
-        role_key = person.get('person_role') or person.get('relationship_type')
-        if role_key:
-            role_text = get_relationship_to_head_display(role_key)
-            badge_bg, badge_fg = _ROLE_PALETTE.get(
-                str(role_key).lower(),
-                ('#DBEAFE', '#1D4ED8'),
-            )
-            role_badge = self._create_badge(role_text, badge_bg, badge_fg)
-            top.addWidget(role_badge, 0, Qt.AlignTop)
 
         v.addLayout(top)
 
@@ -957,7 +966,7 @@ class ReviewStep(BaseStep):
             self._unit_content, "move",
             tr("wizard.review.unit_card_title"),
             tr("wizard.review.unit_card_subtitle"),
-            edit_callback=lambda: self._request_edit(2),
+            edit_callback=self._edit_unit_info,
         )
 
         unit = self.context.unit

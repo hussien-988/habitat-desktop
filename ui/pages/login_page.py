@@ -971,12 +971,10 @@ class LoginPage(QWidget):
         if hasattr(self, "_btn_settings"):
             server_text = "\u0627\u0644\u062e\u0627\u062f\u0645" if tm_get_language() == "ar" else "Server"
             self._btn_settings.setText("\u25A3  " + server_text)
-        # Refresh only client-side/local errors.
-        # API errors are raw messages from backend and should remain as returned.
-        if self.error_label.isVisible() and self._current_local_error_key:
-            self.error_label.setText(
-                tr(self._current_local_error_key, **self._current_local_error_params)
-            )
+        # On language switch, hide stale error messages (API messages are
+        # localized server-side and cannot be re-translated on the client).
+        if self.error_label.isVisible():
+            self._hide_error()
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "titlebar") and self.titlebar:

@@ -196,44 +196,10 @@ class _GlowingCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class _WatermarkScrollArea(QScrollArea):
-    """Scroll area with pulsing logo watermark."""
+    """Plain scroll area (watermark removed)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._logo = LogoWidget(height=120, parent=self)
-        self._logo_effect = QGraphicsOpacityEffect(self._logo)
-        self._logo_effect.setOpacity(0.04)
-        self._logo.setGraphicsEffect(self._logo_effect)
-        self._logo.setStyleSheet("background: transparent;")
-
-        self._logo_opacity = 0.04
-        self._logo_anim = QPropertyAnimation(self, b"logoOpacity")
-        self._logo_anim.setDuration(5000)
-        self._logo_anim.setStartValue(0.03)
-        self._logo_anim.setKeyValueAt(0.5, 0.06)
-        self._logo_anim.setEndValue(0.03)
-        self._logo_anim.setEasingCurve(QEasingCurve.InOutSine)
-        self._logo_anim.setLoopCount(-1)
-        self._logo_anim.start()
-
-    @pyqtProperty(float)
-    def logoOpacity(self):
-        return self._logo_opacity
-
-    @logoOpacity.setter
-    def logoOpacity(self, val):
-        self._logo_opacity = val
-        self._logo_effect.setOpacity(val)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        lw = self._logo.width() if self._logo.pixmap() else 120
-        lh = self._logo.height() if self._logo.pixmap() else 120
-        self._logo.move(
-            (self.width() - lw) // 2,
-            (self.height() - lh) // 2,
-        )
-        self._logo.raise_()
 
 
 # ---------------------------------------------------------------------------
@@ -1286,12 +1252,6 @@ class CaseDetailsPage(QWidget):
         top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(ScreenScale.w(8))
         top.addLayout(name_block, 1)
-
-        role_key = person.get('person_role') or person.get('relationship_type') or person.get('relation_type')
-        if role_key:
-            role_text = get_relationship_to_head_display(role_key) or str(role_key)
-            role_badge = self._create_badge(role_text, "#EFF6FF", "#1D4ED8")
-            top.addWidget(role_badge, 0, Qt.AlignTop)
 
         v.addLayout(top)
 

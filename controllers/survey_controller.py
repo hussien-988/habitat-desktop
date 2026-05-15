@@ -92,16 +92,27 @@ class SurveyController:
             claim_id = detail.get("claimId")
             contact_person_id = detail.get("contactPersonId")
 
-            # Process households locally (no API call needed)
-            all_households = [
-                ClaimController._map_household_dto(h)
-                for h in (detail.get("households") or [])
-            ]
-            survey_hh_id = detail.get("householdId")
-            if survey_hh_id:
-                households = [h for h in all_households if h.get("household_id") == survey_hh_id]
-            else:
-                households = []
+            households = []
+            try:
+                survey_households = api.get_households_for_survey(survey_id) or []
+                if survey_households:
+                    def _sort_key(h):
+                        return (
+                            h.get("lastModifiedAtUtc")
+                            or h.get("createdAtUtc")
+                            or ""
+                        )
+                    survey_households.sort(key=_sort_key, reverse=True)
+                    latest = survey_households[0]
+                    households = [ClaimController._map_household_dto(latest)]
+                    logger.warning(
+                        f"[HOUSEHOLD] survey {survey_id} has {len(survey_households)} "
+                        f"household(s); using latest id={latest.get('id', '')}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to fetch households for survey {survey_id}: {e}"
+                )
             hh_id = households[0].get("household_id", "") if households else ""
 
             # Step 2: Parallel enrichment — building, unit, persons, claim, contact

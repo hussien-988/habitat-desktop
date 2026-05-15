@@ -409,6 +409,8 @@ class UnitSelectionStep(BaseStep):
                 or (saved_id and getattr(u, 'unit_uuid', None) == saved_id)
             ]
             units = [matched[0]] if matched else [saved_unit]
+            if hasattr(self, 'add_unit_btn'):
+                self.add_unit_btn.hide()
             logger.info(
                 f"Survey already has unit attached (uuid={saved_uuid}, id={saved_id}); "
                 f"restricting view to {len(units)} unit(s) (matched_from_api={bool(matched)})."
@@ -614,7 +616,7 @@ class UnitSelectionStep(BaseStep):
         # ── Top strip: selection checkmark on trailing edge (reserves height so cards stay aligned) ──
         sel_strip = QWidget()
         sel_strip.setLayoutDirection(card.layoutDirection())
-        sel_strip.setFixedHeight(ScreenScale.h(18))
+        sel_strip.setFixedHeight(ScreenScale.h(30))
         sel_strip.setStyleSheet("background: transparent;")
         strip_layout = QHBoxLayout(sel_strip)
         strip_layout.setContentsMargins(0, 0, 0, 0)
@@ -630,7 +632,21 @@ class UnitSelectionStep(BaseStep):
         check_label.setAlignment(Qt.AlignCenter)
         check_label.setVisible(is_selected)
 
+        edit_btn = QPushButton("✎")
+        edit_btn.setCursor(Qt.PointingHandCursor)
+        edit_btn.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
+        edit_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        edit_btn.setToolTip(tr("wizard.unit_dialog.title_edit"))
+        edit_btn.setStyleSheet(
+            "QPushButton { background: #F1F5F9; color: #3890DF;"
+            "border: 1px solid #DBEAFE; border-radius: 7px; padding: 0; }"
+            "QPushButton:hover { background: #E0EAFF; }"
+        )
+        edit_btn.clicked.connect(lambda _=False, u=unit: self._show_edit_unit_form(u))
+
         strip_layout.addStretch(1)
+        strip_layout.addWidget(edit_btn, 0, Qt.AlignVCenter)
+        strip_layout.addSpacing(ScreenScale.w(6))
         strip_layout.addWidget(check_label, 0, Qt.AlignVCenter)
         layout.addWidget(sel_strip)
 
@@ -772,6 +788,11 @@ class UnitSelectionStep(BaseStep):
         """Handle unit card click with toggle functionality."""
         # Toggle functionality: if clicking on already selected unit, deselect it
         if self.context.unit and self.context.unit.unit_uuid == unit.unit_uuid:
+            # When the survey already has a unit persisted, keep it locked:
+            # deselecting it would orphan downstream relations/persons.
+            if self.context.get_data("survey_property_unit_id"):
+                logger.info(f"Deselection blocked — unit {unit.unit_id} is persisted on the survey.")
+                return
             # Deselect the unit
             self.context.unit = None
             self.context.is_new_unit = False
@@ -793,6 +814,48 @@ class UnitSelectionStep(BaseStep):
             logger.info(f"Unit selected: {unit.unit_id}")
 
     # ── Inline Unit Form ──
+
+    def _show_edit_unit_form(self, unit):
+        """Show unit edit dialog (UnitDialog modal) prefilled with this unit's data."""
+        from ui.wizards.office_survey.dialogs.unit_dialog import UnitDialog
+        from PyQt5.QtWidgets import QDialog
+
+        if not self.context.building:
+            return
+
+        main_window = self.window()
+        auth_token = getattr(main_window, '_api_token', None) if main_window else None
+        survey_id = self.context.get_data("survey_id")
+        if not survey_id:
+            Toast.show_toast(main_window or self, tr("wizard.unit.no_survey_error"), Toast.WARNING)
+            return
+
+        unit_data = {
+            'unit_uuid': unit.unit_uuid,
+            'building_uuid': self.context.building.building_uuid,
+            'unit_type': unit.unit_type,
+            'apartment_status': getattr(unit, 'apartment_status', None),
+            'floor_number': getattr(unit, 'floor_number', None),
+            'unit_number': unit.unit_number or getattr(unit, 'apartment_number', None),
+            'apartment_number': unit.unit_number or getattr(unit, 'apartment_number', None),
+            'number_of_rooms': getattr(unit, 'number_of_rooms', 0),
+            'area_sqm': getattr(unit, 'area_sqm', None),
+            'property_description': getattr(unit, 'property_description', None),
+        }
+
+        dialog = UnitDialog(
+            building=self.context.building,
+            db=self.context.db,
+            unit_data=unit_data,
+            parent=main_window,
+            auth_token=auth_token,
+            survey_id=survey_id,
+        )
+
+        if dialog.exec_() == QDialog.Accepted:
+            self._loaded_building_uuid = None
+            self._pending_auto_select_uuid = unit.unit_uuid
+            self._load_units()
 
     def _show_add_unit_form(self):
         """Show unit creation dialog (UnitDialog modal)."""

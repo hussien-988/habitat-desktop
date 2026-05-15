@@ -3,7 +3,7 @@
 
 from PyQt5.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QVBoxLayout, QLabel,
-    QWidget, QComboBox,
+    QWidget, QComboBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QRegExp as _QtRegExp
 from PyQt5.QtGui import QColor, QRegExpValidator as _QRegExpValidator
@@ -502,12 +502,14 @@ def make_icon_header(
     from ui.font_utils import create_font, FontManager
 
     row = QHBoxLayout()
-    row.setSpacing(12)
+    row.setSpacing(ScreenScale.w(12))
     row.setContentsMargins(0, 0, 0, 0)
+    row.setAlignment(Qt.AlignVCenter)
 
     icon_lbl = QLabel()
     icon_lbl.setFixedSize(icon_size, icon_size)
     icon_lbl.setAlignment(Qt.AlignCenter)
+    icon_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     icon_lbl.setStyleSheet(
         f"QLabel {{ background-color: {ICON_HEADER_BG}; "
         f"border: 1px solid {ICON_HEADER_BORDER}; "
@@ -517,23 +519,33 @@ def make_icon_header(
     if px and not px.isNull():
         icon_lbl.setPixmap(px)
 
-    row.addWidget(icon_lbl)
+    row.addWidget(icon_lbl, 0, Qt.AlignVCenter)
 
-    col = QVBoxLayout()
-    col.setSpacing(2)
+    text_container = QWidget()
+    text_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+    text_container.setStyleSheet("background: transparent; border: none;")
+    col = QVBoxLayout(text_container)
+    col.setSpacing(ScreenScale.h(2))
+    col.setContentsMargins(0, 0, 0, 0)
+    col.setAlignment(Qt.AlignVCenter)
 
     t = QLabel(title)
     t.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
     t.setStyleSheet(SECTION_HEADER_STYLE)
+    t.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    t.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
 
     s = QLabel(subtitle)
     s.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
     s.setStyleSheet(SECTION_SUBTITLE_STYLE)
+    s.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    s.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
 
     col.addWidget(t)
     col.addWidget(s)
-    row.addLayout(col)
-    row.addStretch()
+
+    row.addWidget(text_container, 0, Qt.AlignVCenter)
+    row.addStretch(1)
     return row , t , s
 
 
