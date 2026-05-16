@@ -39,8 +39,7 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
-    FORM_FIELD_STYLE, make_editable_date_combo, read_int_from_combo,
-    validate_date_combo_text,
+    FORM_FIELD_STYLE, read_int_from_combo,
 )
 from utils.logger import get_logger
 
@@ -638,21 +637,25 @@ class PersonDialog(QDialog):
         birth_layout.setContentsMargins(0, 0, 0, 0)
 
         from datetime import datetime as _dt
-        self.birth_day_combo = make_editable_date_combo(
-            items=[(str(d), d) for d in range(1, 32)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
-            editable=False,
-        )
-        self.birth_month_combo = make_editable_date_combo(
-            items=[(str(m), m) for m in range(1, 13)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
-            editable=False,
-        )
-        self.birth_year_combo = make_editable_date_combo(
-            items=[(str(y), y) for y in range(_dt.now().year, 1919, -1)],
-            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
-            editable=False,
-        )
+        birth_input_style = self._input_style()
+
+        self.birth_day_combo = RtlCombo()
+        self.birth_day_combo.addItem(tr("wizard.person_dialog.day"), None)
+        for d in range(1, 32):
+            self.birth_day_combo.addItem(f"{d:02d}", d)
+        self.birth_day_combo.setStyleSheet(birth_input_style)
+
+        self.birth_month_combo = RtlCombo()
+        self.birth_month_combo.addItem(tr("wizard.person_dialog.month"), None)
+        for m in range(1, 13):
+            self.birth_month_combo.addItem(f"{m:02d}", m)
+        self.birth_month_combo.setStyleSheet(birth_input_style)
+
+        self.birth_year_combo = RtlCombo()
+        self.birth_year_combo.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(_dt.now().year, 1919, -1):
+            self.birth_year_combo.addItem(str(y), y)
+        self.birth_year_combo.setStyleSheet(birth_input_style)
 
         birth_layout.addWidget(self.birth_day_combo, 1)
         birth_layout.addWidget(self.birth_month_combo, 1)
@@ -954,10 +957,11 @@ class PersonDialog(QDialog):
             self.start_month.addItem(f"{m:02d}", m)
         self.start_month.setStyleSheet(input_style)
 
-        self.start_year = make_editable_date_combo(
-            items=[(str(y), y) for y in range(QDate.currentDate().year(), 1939, -1)],
-            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
-        )
+        self.start_year = RtlCombo()
+        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.start_year.addItem(str(y), y)
+        self.start_year.setStyleSheet(input_style)
 
         date_layout.addWidget(self.start_day, 1)
         date_layout.addWidget(self.start_month, 1)
@@ -2914,14 +2918,6 @@ class PersonDialog(QDialog):
             self._set_field_error(self.email, self._email_error, tr("wizard.person_dialog.invalid_email"))
             if not has_error:
                 self.tab_widget.setCurrentIndex(1)
-            has_error = True
-
-        # Occupancy start year is the only manually-editable date field; enforce 4-digit format
-        if not validate_date_combo_text(self.start_year, 4):
-            from ui.components.toast import Toast
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_date_format"), Toast.ERROR)
-            if not has_error:
-                self.tab_widget.setCurrentIndex(2)
             has_error = True
 
         # Ownership share: required when claim type is Owner (1)

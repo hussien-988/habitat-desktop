@@ -179,10 +179,12 @@ class _SyncPulseOverlay(QWidget):
 class _AssignmentCard(AnimatedCard):
     """Animated card for a building assignment.
 
-    Row 1: Assignment/building info (bold) + status badge (top-right)
-    Row 2: Collector name, building count, date (dot-separated)
+    Row 1: Building code + researcher name + status badge + unassign trash button
+    Row 2: Building count + date (dot-separated)
     Row 3: Status chips (transferred/pending counts)
     """
+
+    unassign_requested = pyqtSignal(str)
 
     def __init__(self, assignment: dict, parent=None):
         self._assignment = assignment
@@ -191,6 +193,8 @@ class _AssignmentCard(AnimatedCard):
 
         self._status_badge = None
         self._meta_lbl = None
+        self._researcher_lbl = None
+        self._unassign_btn = None
         self._chip_transferred = None
         self._chip_pending = None
 
@@ -259,19 +263,7 @@ class _AssignmentCard(AnimatedCard):
         apply_label_alignment(title_lbl)
         row1.addWidget(title_lbl)
 
-        row1.addStretch()
-
-        status_badge = QLabel()
-        self._apply_status_badge(status_badge, status_code, a)
-        self._status_badge = status_badge
-        row1.addWidget(status_badge)
-        layout.addLayout(row1)
-
-        # -- Row 2: collector name + building count + date (dot-separated) --
-        row2 = QHBoxLayout()
-        row2.setSpacing(4)
-
-        parts = []
+        row1.addStretch(1)
 
         researcher_name = (
             a.get("fieldCollectorName")
@@ -280,8 +272,59 @@ class _AssignmentCard(AnimatedCard):
             or a.get("field_team_name")
             or ""
         )
-        if researcher_name:
-            parts.append(researcher_name)
+        researcher_lbl = QLabel(researcher_name or "-")
+        researcher_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_MEDIUM))
+        researcher_lbl.setStyleSheet("color: #212B36; background: transparent; border: none;")
+        researcher_lbl.setAlignment(Qt.AlignCenter)
+        self._researcher_lbl = researcher_lbl
+        row1.addWidget(researcher_lbl)
+
+        row1.addStretch(1)
+
+        status_badge = QLabel()
+        self._apply_status_badge(status_badge, status_code, a)
+        self._status_badge = status_badge
+        row1.addWidget(status_badge)
+
+        unassign_btn = QPushButton()
+        unassign_btn.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        unassign_btn.setCursor(Qt.PointingHandCursor)
+        unassign_btn.setToolTip(tr("page.sync.unassign"))
+        unassign_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEF2F2;
+                border: 1px solid #FECACA;
+                border-radius: 14px;
+                padding: 0;
+            }
+            QPushButton:hover {
+                background-color: #FEE2E2;
+                border: 1px solid #FCA5A5;
+            }
+        """)
+        delete_pixmap = Icon.load_pixmap("delete", size=14)
+        if delete_pixmap and not delete_pixmap.isNull():
+            from PyQt5.QtGui import QIcon
+            from PyQt5.QtCore import QSize
+            unassign_btn.setIcon(QIcon(delete_pixmap))
+            unassign_btn.setIconSize(QSize(ScreenScale.w(14), ScreenScale.h(14)))
+        else:
+            unassign_btn.setText("×")
+            unassign_btn.setStyleSheet(
+                unassign_btn.styleSheet()
+                + " QPushButton { color: #EF4444; font-size: 14px; font-weight: bold; }"
+            )
+        unassign_btn.setVisible(status_code in _PENDING_STATUS_CODES)
+        unassign_btn.clicked.connect(self._on_unassign_clicked)
+        self._unassign_btn = unassign_btn
+        row1.addWidget(unassign_btn)
+        layout.addLayout(row1)
+
+        # -- Row 2: building count + date (dot-separated) --
+        row2 = QHBoxLayout()
+        row2.setSpacing(4)
+
+        parts = []
 
         units_count = a.get("propertyUnitsCount") or a.get("unitsCount") or 0
         if units_count:
@@ -350,21 +393,32 @@ class _AssignmentCard(AnimatedCard):
         text_color, _, _ = _resolve_status_colors(self._status_code)
         self.set_status_color(text_color)
 
-        if not self._status_badge:
-            return
-        self._apply_status_badge(self._status_badge, self._status_code, assignment)
+        if self._status_badge:
+            self._apply_status_badge(self._status_badge, self._status_code, assignment)
+        if self._unassign_btn:
+            self._unassign_btn.setVisible(self._status_code in _PENDING_STATUS_CODES)
+
+    def _on_unassign_clicked(self):
+        if self._assignment_id:
+            self.unassign_requested.emit(self._assignment_id)
+
+    def hide_unassign_button(self):
+        if self._unassign_btn:
+            self._unassign_btn.setVisible(False)
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
         self.update_status(self._assignment)
         a = self._assignment
-        parts = []
         researcher_name = (
             a.get("fieldCollectorName") or a.get("fieldCollectorNameAr")
             or a.get("assignedTo") or a.get("field_team_name") or ""
         )
-        if researcher_name:
-            parts.append(researcher_name)
+        if self._researcher_lbl:
+            self._researcher_lbl.setText(researcher_name or "-")
+        if self._unassign_btn:
+            self._unassign_btn.setToolTip(tr("page.sync.unassign"))
+        parts = []
         units_count = a.get("propertyUnitsCount") or a.get("unitsCount") or 0
         if units_count:
             parts.append(tr("page.sync.units_count", count=units_count))
@@ -636,6 +690,7 @@ class SyncDataPage(QWidget):
                 card.clicked.connect(
                     lambda a=assignment, a_id=aid: self._on_card_clicked(a, a_id)
                 )
+                card.unassign_requested.connect(self._unassign_building)
                 self._cards_layout.insertWidget(
                     self._cards_layout.count() - 1, card
                 )
@@ -1120,34 +1175,49 @@ class SyncDataPage(QWidget):
     # -- Unassign --
 
     def _unassign_building(self, assignment_id: str):
-        from ui.error_handler import ErrorHandler
+        from ui.components.bottom_sheet import BottomSheet
 
-        if not ErrorHandler.confirm(
-            self,
-            tr("page.sync.confirm_unassign_message"),
+        sheet = BottomSheet(self)
+
+        def _on_confirmed():
+            form_data = sheet.get_form_data()
+            reason = (form_data.get("reason") or "").strip()
+            if not reason:
+                Toast.show_toast(self, tr("wizard.cancel_reason_prompt"), Toast.WARNING)
+                return
+            self._submit_unassign(assignment_id, reason)
+
+        sheet.confirmed.connect(_on_confirmed)
+        sheet.show_form(
             tr("page.sync.confirm_unassign_title"),
-        ):
-            return
+            [("reason", tr("page.sync.confirm_unassign_message"), "multiline")],
+            submit_text=tr("page.sync.unassign"),
+            cancel_text=tr("action.dismiss"),
+        )
 
+    def _submit_unassign(self, assignment_id: str, reason: str):
         from services.api_client import get_api_client
         api = get_api_client()
         self._unassign_worker = ApiWorker(
-            api.unassign_building, assignment_id, cancellation_reason=tr("page.sync.cancel_reason_supervisor")
+            api.unassign_building, assignment_id, cancellation_reason=reason
         )
         self._unassign_worker.finished.connect(
-            lambda _: self._on_unassign_success()
+            lambda _: self._on_unassign_success(assignment_id)
         )
         self._unassign_worker.error.connect(
             lambda msg: self._on_unassign_error(msg)
         )
         self._unassign_worker.start()
 
-    def _on_unassign_success(self):
+    def _on_unassign_success(self, assignment_id: str = ""):
         """Handle successful unassign."""
         from ui.components.toast import Toast
 
-        # رسالة نجاح
         Toast.show_toast(self.window(), tr("page.sync.unassign_success"), Toast.SUCCESS)
+
+        card = self._card_map.get(assignment_id) if assignment_id else None
+        if card and hasattr(card, "hide_unassign_button"):
+            card.hide_unassign_button()
 
         # Invalidate building cache so map reflects updated assignment status
         try:
