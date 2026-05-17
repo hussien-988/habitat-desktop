@@ -277,6 +277,25 @@ class BuildingSelectionStep(BaseStep):
         address_row.setContentsMargins(12, 0, 12, 0)
         address_row.setSpacing(8)
 
+        self.replace_building_btn = QPushButton(tr("wizard.building.replace"))
+        self.replace_building_btn.setCursor(Qt.PointingHandCursor)
+        self.replace_building_btn.setFlat(True)
+        self.replace_building_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                color: #3890DF;
+                font-family: 'IBM Plex Sans Arabic';
+                font-weight: 600;
+                font-size: 8pt;
+                text-decoration: underline;
+                padding: 0 6px;
+            }
+            QPushButton:hover { color: #1F6FBF; }
+        """)
+        self.replace_building_btn.clicked.connect(self._on_replace_building)
+        address_row.addWidget(self.replace_building_btn)
+
         address_row.addStretch()
 
         from ui.components.icon import Icon
@@ -1111,6 +1130,18 @@ class BuildingSelectionStep(BaseStep):
             self._spinner.hide_loading()
 
         return result
+
+    def _on_replace_building(self):
+        """Clear the current building selection and let the user pick another."""
+        self.selected_building = None
+        if self.context is not None:
+            self.context.building = None
+        self.building_search.clear()
+        self.address_container.setVisible(False)
+        self.stats_card.setVisible(False)
+        self.location_card.setVisible(False)
+        self.buildings_list.setVisible(False)
+        self.building_search.setFocus()
 
     def _update_address_display(self, building):
         """Update building address bar after selection."""

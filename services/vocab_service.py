@@ -62,6 +62,27 @@ def refresh_vocabularies():
     initialize_vocabularies()
 
 
+def clear_vocab_cache():
+    """Clear in-memory + on-disk vocab caches.
+
+    Used when switching API backend so enums tied to a previous server
+    (codes/IDs that may differ across deployments) are not carried over.
+    """
+    global _initialized, _raw_vocabularies, _lookup, _options_cache
+    _initialized = False
+    _raw_vocabularies = []
+    _lookup = {}
+    _options_cache = {}
+    try:
+        from app.config import Config
+        cache_path = Config.DATA_DIR / "vocab_cache.json"
+        if cache_path.exists():
+            cache_path.unlink()
+            logger.info("Cleared vocab cache file on server change")
+    except Exception as e:
+        logger.warning(f"Could not clear vocab cache file: {e}")
+
+
 def _save_vocab_cache(data: list) -> None:
     """Save raw API vocabulary data to local cache file."""
     try:

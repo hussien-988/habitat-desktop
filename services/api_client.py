@@ -6,9 +6,16 @@
     يوفر وصولاً كاملاً لجميع endpoints الخاصة بالخريطة والمباني.
 """
 
+import base64
+import hashlib
+import json as _json
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import urllib3
+import threading
+import time
+import uuid
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -54,10 +61,60 @@ def _redact_for_log(obj):
 # Service identifier used as the keyring "service name". All credentials
 # scoped to this app live under this string so we can clear them at logout.
 _KEYRING_SERVICE = "TRRCMS"
-_KEYRING_REFRESH_KEY = "refresh_token"
+# Legacy unscoped key — read once for migration cleanup, never written to.
+_LEGACY_KEYRING_REFRESH_KEY = "refresh_token"
 
 
-def _save_refresh_token(token: str) -> bool:
+def _resolve_base_url(base_url: Optional[str]) -> str:
+    if base_url:
+        return base_url.rstrip('/').lower()
+    try:
+        from app.config import get_api_base_url
+        return get_api_base_url().rstrip('/').lower()
+    except Exception:
+        return ""
+
+
+def _keyring_refresh_key(base_url: Optional[str] = None) -> str:
+    """Scope the refresh_token entry per backend so an ngrok token never gets
+    handed to Docker (or vice-versa). 12 hex chars of SHA-1 is short enough
+    for keyring backends with key-length limits and collision-safe for the
+    handful of URLs an app will ever talk to.
+    """
+    url = _resolve_base_url(base_url)
+    digest = hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()[:12]
+    return f"refresh_token::{digest}"
+
+
+def _decode_jwt_claims_unsafe(token: Optional[str]) -> Dict[str, Any]:
+    """Decode the JWT payload **without signature verification** — diagnostics
+    only. Returns an empty dict on any failure. NEVER use for auth decisions.
+    """
+    if not token or token.count(".") < 2:
+        return {}
+    try:
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode())
+        claims = _json.loads(raw)
+        return claims if isinstance(claims, dict) else {}
+    except Exception:
+        return {}
+
+
+def _token_diag(token: Optional[str]) -> str:
+    """Short diagnostic string for a token. Never logs the token body."""
+    if not token:
+        return "none"
+    claims = _decode_jwt_claims_unsafe(token)
+    digest = hashlib.sha1(token.encode(), usedforsecurity=False).hexdigest()[:8]
+    sub = claims.get("sub") or claims.get("userId") or claims.get("nameid") or "?"
+    iss = claims.get("iss") or "?"
+    exp = claims.get("exp") or "?"
+    return f"sub={sub} iss={iss} exp={exp} hash={digest}"
+
+
+def _save_refresh_token(token: str, base_url: Optional[str] = None) -> bool:
     """Persist refresh_token in the OS credential store; never to plain disk.
 
     Returns True on success. On platforms without a keyring backend (some
@@ -69,29 +126,45 @@ def _save_refresh_token(token: str) -> bool:
         return False
     try:
         import keyring
-        keyring.set_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY, token)
+        keyring.set_password(_KEYRING_SERVICE, _keyring_refresh_key(base_url), token)
         return True
     except Exception as e:
         logger.warning(f"Could not persist refresh token to keyring: {e}")
         return False
 
 
-def _load_refresh_token() -> Optional[str]:
-    """Load the previously saved refresh_token, or None if not stored."""
+def _load_refresh_token(base_url: Optional[str] = None) -> Optional[str]:
+    """Load the previously saved refresh_token for this base_url, or None."""
     try:
         import keyring
-        return keyring.get_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY)
+        scoped = keyring.get_password(_KEYRING_SERVICE, _keyring_refresh_key(base_url))
+        if scoped:
+            return scoped
+        # One-time migration: if the unscoped legacy key exists, drop it. It
+        # cannot be safely attributed to any server, so we discard rather
+        # than guess. User logs in once after upgrade.
+        try:
+            legacy = keyring.get_password(_KEYRING_SERVICE, _LEGACY_KEYRING_REFRESH_KEY)
+            if legacy:
+                try:
+                    keyring.delete_password(_KEYRING_SERVICE, _LEGACY_KEYRING_REFRESH_KEY)
+                    logger.info("[SRV-DIAG] dropped legacy unscoped keyring refresh_token entry")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return None
     except Exception as e:
         logger.debug(f"No keyring entry available: {e}")
         return None
 
 
-def _clear_refresh_token() -> None:
-    """Remove the saved refresh_token; called at logout to end the device session."""
+def _clear_refresh_token(base_url: Optional[str] = None) -> None:
+    """Remove the saved refresh_token for this base_url; called at logout."""
     try:
         import keyring
         try:
-            keyring.delete_password(_KEYRING_SERVICE, _KEYRING_REFRESH_KEY)
+            keyring.delete_password(_KEYRING_SERVICE, _keyring_refresh_key(base_url))
         except Exception:
             pass
     except Exception:
@@ -129,12 +202,13 @@ class TRRCMSApiClient:
     def __init__(self, config: ApiConfig):
         self.config = config
         self.base_url = config.base_url.rstrip('/')
+        self._is_ngrok = "ngrok" in self.base_url.lower()
         self.access_token: Optional[str] = None
         # access_token stays in memory only (short-lived). refresh_token is
         # restored from the OS keyring so the user does not have to re-login
         # every time the desktop app starts; access_token will be re-issued
         # on first request via the existing _ensure_valid_token path.
-        self.refresh_token: Optional[str] = _load_refresh_token()
+        self.refresh_token: Optional[str] = _load_refresh_token(self.base_url)
         self.token_expires_at: Optional[datetime] = None
         self._login_failures: int = 0
         self._login_cooldown_until: Optional[datetime] = None
@@ -144,12 +218,20 @@ class TRRCMSApiClient:
         self._last_network_error_time: Optional[datetime] = None
         self._session_expired_flag = False
         self._neighborhoods_cache = None
-        # Single Session for all requests — enables TCP connection reuse on the
-        # LAN backend (keep-alive) and provides better RemoteDisconnected recovery
-        # via urllib3's connection pool. Auth headers are injected per-request in
-        # _headers(), so sharing the Session across QThreads is safe.
+        # In-flight request tracking (instrumentation): maps endpoint -> set
+        # of req_ids currently executing. Used to detect concurrent duplicates.
+        self._in_flight: Dict[str, set] = {}
+        self._in_flight_lock = threading.Lock()
+        # Single Session for all requests. urllib3 Retry covers stale
+        # keep-alive sockets (RemoteDisconnected "without response" is in
+        # the "other" bucket and safe to retry for any method since the
+        # server never saw the request).
         self._session = requests.Session()
-        _adapter = HTTPAdapter(max_retries=0)  # retry logic lives in _request()
+        _retry = Retry(
+            total=2, connect=1, read=0, status=0, other=2,
+            backoff_factor=0.5, allowed_methods=None, raise_on_status=False,
+        )
+        _adapter = HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=10)
         self._session.mount("http://", _adapter)
         self._session.mount("https://", _adapter)
         # Suppress urllib3 InsecureRequestWarning only when we are intentionally
@@ -159,6 +241,11 @@ class TRRCMSApiClient:
         logger.info(
             f"API client initialized for {self.base_url} "
             f"(verify_ssl={self._verify_ssl()}, restored_session={bool(self.refresh_token)})"
+        )
+        logger.info(
+            f"[SRV-DIAG] api_client __init__ singleton_id={id(self)} base_url={self.base_url} "
+            f"keyring_rt_present={bool(self.refresh_token)} rt_hash="
+            f"{hashlib.sha1(self.refresh_token.encode(), usedforsecurity=False).hexdigest()[:8] if self.refresh_token else 'none'}"
         )
 
     def _verify_ssl(self) -> bool:
@@ -197,8 +284,8 @@ class TRRCMSApiClient:
             response = self._session.post(
                 f"{self.base_url}/v1/Auth/login",
                 json={"username": username, "password": password},
-                headers={"Accept-Language": self._get_accept_language()},
-                timeout=self.config.timeout,
+                headers=self._anon_headers(),
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/Auth/login", 0)),
                 verify=self._verify_ssl()
             )
             response.raise_for_status()
@@ -207,7 +294,7 @@ class TRRCMSApiClient:
             self.access_token = data["accessToken"]
             self.refresh_token = data.get("refreshToken")
             if self.refresh_token:
-                _save_refresh_token(self.refresh_token)
+                _save_refresh_token(self.refresh_token, self.base_url)
 
             # Calculate token expiration
             expires_in = data.get("expiresIn", 3600)  # default 1 hour
@@ -217,6 +304,10 @@ class TRRCMSApiClient:
             self._login_cooldown_until = None
             self._session_expired_flag = False
             logger.info(f"Logged in as {username}")
+            logger.info(
+                f"[SRV-DIAG] login OK singleton_id={id(self)} base_url={self.base_url} "
+                f"access_token=({_token_diag(self.access_token)})"
+            )
             return data
 
         except requests.exceptions.RequestException as e:
@@ -229,6 +320,10 @@ class TRRCMSApiClient:
         self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
         self._session_expired_flag = False
         logger.debug(f"Access token updated externally (expires in {expires_in}s)")
+        logger.info(
+            f"[SRV-DIAG] set_access_token singleton_id={id(self)} base_url={self.base_url} "
+            f"token=({_token_diag(token)})"
+        )
 
     def refresh_access_token(self) -> bool:
         """Refresh the access token using the refresh token."""
@@ -240,8 +335,8 @@ class TRRCMSApiClient:
             response = self._session.post(
                 f"{self.base_url}/v1/Auth/refresh",
                 json={"refreshToken": self.refresh_token},
-                headers={"Accept-Language": self._get_accept_language()},
-                timeout=self.config.timeout,
+                headers=self._anon_headers(),
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/Auth/refresh", 0)),
                 verify=self._verify_ssl()
             )
             response.raise_for_status()
@@ -252,7 +347,7 @@ class TRRCMSApiClient:
             # Persist only when the server actually rotated the token, to avoid
             # touching the keyring on every refresh cycle.
             if new_refresh and new_refresh != self.refresh_token:
-                _save_refresh_token(new_refresh)
+                _save_refresh_token(new_refresh, self.base_url)
             self.refresh_token = new_refresh
 
             expires_in = data.get("expiresIn", 3600)
@@ -272,16 +367,31 @@ class TRRCMSApiClient:
             return None
 
     def logout(self) -> Dict[str, Any]:
-        """POST /v1/Auth/logout — invalidate refresh token server-side."""
+        """POST /v1/Auth/logout — invalidate refresh token server-side.
+
+        Local teardown runs in a finally so that a network failure, 4xx, or
+        5xx on the remote call still wipes in-memory tokens and the keyring
+        entry. Without that, a logout that failed once could revive the
+        previous session on the next launch.
+        """
         body = {"refreshToken": self.refresh_token} if self.refresh_token else {}
-        result = self._request("POST", "/v1/Auth/logout", body)
-        self.access_token = None
-        self.refresh_token = None
-        self.token_expires_at = None
-        # Drop the persisted refresh_token; otherwise the next launch would
-        # silently revive a logged-out session.
-        _clear_refresh_token()
-        return result or {}
+        remote_ok = False
+        result: Dict[str, Any] = {}
+        try:
+            result = self._request("POST", "/v1/Auth/logout", body) or {}
+            remote_ok = True
+        except Exception as e:
+            logger.warning(f"Remote logout failed; proceeding with local teardown: {e}")
+        finally:
+            self.access_token = None
+            self.refresh_token = None
+            self.token_expires_at = None
+            _clear_refresh_token(self.base_url)
+            logger.info(
+                f"[SRV-DIAG] logout teardown remote_ok={remote_ok} "
+                f"singleton_id={id(self)} base_url={self.base_url}"
+            )
+        return result
 
     def change_password(self, current_password: str, new_password: str, user_id: str = None) -> Dict[str, Any]:
         """POST /v1/auth/change-password."""
@@ -328,17 +438,72 @@ class TRRCMSApiClient:
         from services.translation_manager import get_language
         return get_language()
 
+    def _anon_headers(self) -> Dict[str, str]:
+        """Headers for endpoints that don't require Authorization (login/refresh)."""
+        h = {
+            "Accept-Language": self._get_accept_language(),
+            "User-Agent": "TRRCMS-Desktop/1.0",
+        }
+        if self._is_ngrok:
+            h["ngrok-skip-browser-warning"] = "true"
+        return h
+
     def _headers(self) -> Dict[str, str]:
         """الحصول على Headers مع Authorization."""
         self._ensure_valid_token()
-        return {
+        h = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Accept-Language": self._get_accept_language(),
+            "User-Agent": "TRRCMS-Desktop/1.0",
         }
+        if self._is_ngrok:
+            h["ngrok-skip-browser-warning"] = "true"
+        return h
 
     _MAX_RETRIES = 1
+    _CONNECT_TIMEOUT = 10
+
+    # Substrings that mark heavy write endpoints. These are paths where
+    # the backend performs INSERT/UPDATE chains (FK fan-out, audit, file
+    # upload) and can legitimately run tens of seconds over ngrok. The
+    # classification is method-aware: a GET to .../households (list) is
+    # NOT heavy even though the substring matches.
+    _HEAVY_WRITE_PATTERNS = (
+        "/households",
+        "/evidence/identification",
+        "/evidence/tenure",
+        "/Surveys/office",
+        "/relations",
+        "/finalize",
+        "/contact-person/",
+    )
+
+    def _is_heavy_write(self, method: str, endpoint: str) -> bool:
+        if method.upper() not in ("POST", "PUT", "PATCH", "DELETE"):
+            return False
+        return any(p in endpoint for p in self._HEAVY_WRITE_PATTERNS)
+
+    def _endpoint_timeout(self, method: str, endpoint: str, override: int) -> int:
+        """Pick a read timeout based on method + endpoint latency profile.
+
+        Localhost keeps the configured value (30s). ngrok-free adds tunnel
+        buffering + edge routing on top of backend processing, so heavy
+        writes routinely run 20-60s. Reads stay snappy regardless.
+        """
+        if override and override > 0:
+            return override
+        base = self.config.timeout
+        if not self._is_ngrok:
+            return base
+        if self._is_heavy_write(method, endpoint):
+            return max(base * 3, 90)
+        return max(base, 60)
+
+    def _timeout(self, method: str, endpoint: str, read_override: int):
+        """Return (connect, read) timeout tuple — separates handshake from read."""
+        return (self._CONNECT_TIMEOUT, self._endpoint_timeout(method, endpoint, read_override))
 
     def _request(
         self,
@@ -356,140 +521,189 @@ class TRRCMSApiClient:
 
         import json as _json
 
-        logger.info(f"[API REQ] {method} {endpoint}")
+        req_id = uuid.uuid4().hex[:8]
+        tid = threading.get_ident()
+        t_enter = time.monotonic()
+
+        effective_timeout = self._endpoint_timeout(method, endpoint, timeout_override)
+        # Heavy writes on ngrok must not auto-retry — each attempt is a 90s
+        # blocking call, so two failures = 180s of frozen UI. Surface the
+        # first failure immediately so the user can react.
+        skip_retry = disable_retry or (self._is_ngrok and self._is_heavy_write(method, endpoint))
+        max_retries = 0 if skip_retry else self._MAX_RETRIES
+
+        logger.info(
+            f"[REQ {req_id}] {method} {endpoint} | tid={tid} "
+            f"| timeout=({self._CONNECT_TIMEOUT},{effective_timeout}) "
+            f"| retries={max_retries} | ngrok={self._is_ngrok}"
+        )
+        logger.info(
+            f"[SRV-DIAG] [REQ {req_id}] singleton_id={id(self)} base_url={self.base_url} "
+            f"token=({_token_diag(self.access_token)})"
+        )
         if params:
-            logger.info(f"[API REQ] Params: {_redact_for_log(params)}")
+            logger.info(f"[REQ {req_id}] Params: {_redact_for_log(params)}")
         if json_data:
             try:
-                logger.info(f"[API REQ] Body: {_json.dumps(_redact_for_log(json_data), indent=2, ensure_ascii=False, default=str)}")
+                logger.info(f"[REQ {req_id}] Body: {_json.dumps(_redact_for_log(json_data), indent=2, ensure_ascii=False, default=str)}")
             except Exception:
-                logger.info(f"[API REQ] Body: {_redact_for_log(json_data)}")
+                logger.info(f"[REQ {req_id}] Body: {_redact_for_log(json_data)}")
 
-        effective_timeout = timeout_override if timeout_override > 0 else self.config.timeout
-        max_retries = 0 if disable_retry else self._MAX_RETRIES
+        # Concurrent-duplicate detection: warn if another request to the
+        # same endpoint is already in flight when this one starts.
+        with self._in_flight_lock:
+            bucket = self._in_flight.setdefault(endpoint, set())
+            if bucket:
+                logger.warning(
+                    f"[REQ {req_id}] CONCURRENT! Same endpoint already in-flight: {sorted(bucket)} (this is suspicious)"
+                )
+            bucket.add(req_id)
 
         last_error = None
-        for attempt in range(max_retries + 1):
-            try:
-                token_used = self.access_token
-                headers = self._headers()
-                if skip_accept_language:
-                    headers.pop("Accept-Language", None)
-                if headers_override:
-                    headers.update(headers_override)
-                response = self._session.request(
-                    method=method,
-                    url=url,
-                    json=json_data,
-                    params=params,
-                    headers=headers,
-                    timeout=effective_timeout,
-                    verify=self._verify_ssl()
-                )
-                response.raise_for_status()
-
-                result = None
-                if response.text:
-                    result = response.json()
-
-                logger.info(f"[API RES] {response.status_code} {endpoint}")
-                if result:
-                    try:
-                        res_str = _json.dumps(_redact_for_log(result), indent=2, ensure_ascii=False, default=str)
-                        if len(res_str) > 5000:
-                            logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
-                        else:
-                            logger.info(f"[API RES] Body: {res_str}")
-                    except Exception:
-                        logger.info(f"[API RES] Body: {_redact_for_log(result)}")
-
-                return result
-
-            except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code if e.response is not None else 0
-                response_data = {}
+        try:
+            for attempt in range(max_retries + 1):
                 try:
-                    response_data = e.response.json() if e.response is not None else {}
-                except (ValueError, AttributeError):
-                    pass
-                response_text = ''
-                try:
-                    response_text = e.response.text[:500] if e.response is not None else ''
-                except Exception:
-                    pass
-                api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
-                if response_data and response_data.get("detail"):
-                    logger.debug(f"[API ERR] dev detail: {response_data['detail']}")
-                if status_code == 401:
-                    if self._session_expired_flag or "/auth/change-password" in endpoint.lower():
-                        raise ApiException(
-                            message=api_msg, status_code=401, response_data=response_data,
-                            endpoint=endpoint, method=method,
-                        )
-                    # Only handle if the token hasn't changed (new login) since our request
-                    if self.access_token and self.access_token == token_used:
-                        if self.refresh_token:
-                            refresh_result = self.refresh_access_token()
-                            if refresh_result:
-                                continue  # Retry with refreshed token
-                            if refresh_result is None:
-                                # Network error during refresh — keep token, surface as network error
-                                logger.warning(f"[API ERR] 401 {method} {endpoint} — refresh failed (network), keeping token")
-                            else:
-                                # Auth rejection — clear session
-                                logger.warning(f"[API ERR] 401 {method} {endpoint} — session expired")
-                                self.access_token = None
-                                self._session_expired_flag = True
-                                if self._on_session_expired:
-                                    self._on_session_expired()
-                    elif self.access_token != token_used:
-                        logger.info(f"401 on {endpoint} ignored — token changed by new session")
-                if status_code == 403:
-                    error_code = str(response_data.get("code", "") or response_data.get("errorCode", "") or response_data.get("error", ""))
-                    if "PasswordChangeRequired" in error_code or "PasswordChangeRequired" in str(response_data):
-                        logger.warning(f"[API ERR] 403 PasswordChangeRequired on {endpoint}")
-                        if self._on_password_change_required:
-                            self._on_password_change_required()
-                        raise PasswordChangeRequiredException(
-                            message=f"Password change required on {endpoint}",
-                            response_data=response_data
-                        )
-                log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
-                log_fn(f"[API ERR] {status_code} {method} {endpoint} | Response: {response_data or response_text}")
-                if status_code >= 500:
-                    self._fire_network_error("server")
-                raise ApiException(
-                    message=api_msg,
-                    status_code=status_code,
-                    response_data=response_data,
-                    endpoint=endpoint,
-                    method=method,
-                    localized_response=not skip_accept_language,
-                )
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-                last_error = e
-                if attempt < max_retries:
-                    import time
-                    wait = attempt + 1
-                    logger.warning(
-                        f"Network error (attempt {attempt + 1}/{max_retries + 1}), "
-                        f"retrying in {wait}s: {endpoint}"
+                    token_used = self.access_token
+                    headers = self._headers()
+                    if skip_accept_language:
+                        headers.pop("Accept-Language", None)
+                    if headers_override:
+                        headers.update(headers_override)
+                    t_sent = time.monotonic()
+                    logger.info(
+                        f"[REQ {req_id}] sending (prep={int((t_sent-t_enter)*1000)}ms, attempt={attempt+1}/{max_retries+1})"
                     )
-                    time.sleep(wait)
-                    continue
-                logger.error(f"Network error: {endpoint} - {e}")
-                self._fire_network_error("network")
-                raise NetworkException(
-                    message=str(e),
-                    original_error=e
-                )
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed: {endpoint} - {e}")
-                self._fire_network_error("network")
-                raise NetworkException(
-                    message=str(e),
-                    original_error=e
-                )
+                    response = self._session.request(
+                        method=method,
+                        url=url,
+                        json=json_data,
+                        params=params,
+                        headers=headers,
+                        timeout=(self._CONNECT_TIMEOUT, effective_timeout),
+                        verify=self._verify_ssl()
+                    )
+                    t_recv = time.monotonic()
+                    logger.info(
+                        f"[REQ {req_id}] status={response.status_code} "
+                        f"wire={int((t_recv-t_sent)*1000)}ms total={int((t_recv-t_enter)*1000)}ms"
+                    )
+                    response.raise_for_status()
+
+                    result = None
+                    if response.text:
+                        result = response.json()
+
+                    logger.info(f"[API RES] {response.status_code} {endpoint}")
+                    if result:
+                        try:
+                            res_str = _json.dumps(_redact_for_log(result), indent=2, ensure_ascii=False, default=str)
+                            if len(res_str) > 5000:
+                                logger.info(f"[API RES] Body (truncated): {res_str[:5000]}...")
+                            else:
+                                logger.info(f"[API RES] Body: {res_str}")
+                        except Exception:
+                            logger.info(f"[API RES] Body: {_redact_for_log(result)}")
+
+                    return result
+
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code if e.response is not None else 0
+                    response_data = {}
+                    try:
+                        response_data = e.response.json() if e.response is not None else {}
+                    except (ValueError, AttributeError):
+                        pass
+                    response_text = ''
+                    try:
+                        response_text = e.response.text[:500] if e.response is not None else ''
+                    except Exception:
+                        pass
+                    api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
+                    if response_data and response_data.get("detail"):
+                        logger.debug(f"[API ERR] dev detail: {response_data['detail']}")
+                    if status_code == 401:
+                        if self._session_expired_flag or "/auth/change-password" in endpoint.lower():
+                            raise ApiException(
+                                message=api_msg, status_code=401, response_data=response_data,
+                                endpoint=endpoint, method=method,
+                            )
+                        # Only handle if the token hasn't changed (new login) since our request
+                        if self.access_token and self.access_token == token_used:
+                            if self.refresh_token:
+                                refresh_result = self.refresh_access_token()
+                                if refresh_result:
+                                    continue  # Retry with refreshed token
+                                if refresh_result is None:
+                                    # Network error during refresh — keep token, surface as network error
+                                    logger.warning(f"[REQ {req_id}] 401 {method} {endpoint} — refresh failed (network), keeping token")
+                                else:
+                                    # Auth rejection — clear session
+                                    logger.warning(f"[REQ {req_id}] 401 {method} {endpoint} — session expired")
+                                    self.access_token = None
+                                    self._session_expired_flag = True
+                                    if self._on_session_expired:
+                                        self._on_session_expired()
+                        elif self.access_token != token_used:
+                            logger.info(f"[REQ {req_id}] 401 on {endpoint} ignored — token changed by new session")
+                    if status_code == 403:
+                        error_code = str(response_data.get("code", "") or response_data.get("errorCode", "") or response_data.get("error", ""))
+                        if "PasswordChangeRequired" in error_code or "PasswordChangeRequired" in str(response_data):
+                            logger.warning(f"[REQ {req_id}] 403 PasswordChangeRequired on {endpoint}")
+                            if self._on_password_change_required:
+                                self._on_password_change_required()
+                            raise PasswordChangeRequiredException(
+                                message=f"Password change required on {endpoint}",
+                                response_data=response_data
+                            )
+                    log_fn = logger.warning if status_code in (401, 403, 404) else logger.error
+                    log_fn(f"[REQ {req_id}] ERR {status_code} {method} {endpoint} | Response: {response_data or response_text}")
+                    if status_code >= 500:
+                        self._fire_network_error("server")
+                    raise ApiException(
+                        message=api_msg,
+                        status_code=status_code,
+                        response_data=response_data,
+                        endpoint=endpoint,
+                        method=method,
+                        localized_response=not skip_accept_language,
+                    )
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                    last_error = e
+                    elapsed = int((time.monotonic() - t_sent) * 1000)
+                    logger.error(
+                        f"[REQ {req_id}] NETWORK-ERR after {elapsed}ms (attempt {attempt+1}/{max_retries+1}): "
+                        f"{type(e).__name__}: {e}"
+                    )
+                    if attempt < max_retries:
+                        wait = attempt + 1
+                        logger.warning(
+                            f"[REQ {req_id}] retrying in {wait}s: {endpoint}"
+                        )
+                        time.sleep(wait)
+                        continue
+                    self._fire_network_error("network")
+                    raise NetworkException(
+                        message=str(e),
+                        original_error=e
+                    )
+                except requests.exceptions.RequestException as e:
+                    elapsed = int((time.monotonic() - t_sent) * 1000) if 't_sent' in dir() else 0
+                    logger.error(f"[REQ {req_id}] REQ-FAIL after {elapsed}ms: {endpoint} - {e}")
+                    self._fire_network_error("network")
+                    raise NetworkException(
+                        message=str(e),
+                        original_error=e
+                    )
+        finally:
+            with self._in_flight_lock:
+                bucket = self._in_flight.get(endpoint)
+                if bucket is not None:
+                    bucket.discard(req_id)
+                    if not bucket:
+                        self._in_flight.pop(endpoint, None)
+            logger.info(
+                f"[REQ {req_id}] done | total={int((time.monotonic()-t_enter)*1000)}ms"
+            )
 
     def get_buildings_for_map(
         self,
@@ -1806,7 +2020,7 @@ class TRRCMSApiClient:
                     url,
                     files=files,
                     headers=headers,
-                    timeout=self.config.timeout,
+                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", endpoint, 0)),
                     verify=self._verify_ssl()
                 )
 
@@ -1906,7 +2120,7 @@ class TRRCMSApiClient:
                     url,
                     files=files,
                     headers=headers,
-                    timeout=self.config.timeout,
+                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", endpoint, 0)),
                     verify=self._verify_ssl()
                 )
 
@@ -2011,10 +2225,10 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = self._session.put(url, files=files, headers=headers,
-                                                timeout=self.config.timeout, verify=self._verify_ssl())
+                                                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
             else:
                 response = self._session.put(url, files=form_fields, headers=headers,
-                                             timeout=self.config.timeout, verify=self._verify_ssl())
+                                             timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -2082,7 +2296,7 @@ class TRRCMSApiClient:
         try:
             with self._session.get(
                 url, headers=headers, stream=True,
-                timeout=self.config.timeout, verify=self._verify_ssl(),
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", endpoint, 0)), verify=self._verify_ssl(),
             ) as resp:
                 if resp.status_code >= 400:
                     body_preview = ""
@@ -2163,10 +2377,10 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = self._session.put(url, files=files, headers=headers,
-                                                timeout=self.config.timeout, verify=self._verify_ssl())
+                                                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
             else:
                 response = self._session.put(url, files=form_fields, headers=headers,
-                                             timeout=self.config.timeout, verify=self._verify_ssl())
+                                             timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
 
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -2280,7 +2494,7 @@ class TRRCMSApiClient:
         for url in urls:
             try:
                 logger.info(f"[API REQ] GET {url.replace(self.base_url, '')}")
-                response = self._session.get(url, headers=headers, timeout=self.config.timeout, verify=self._verify_ssl())
+                response = self._session.get(url, headers=headers, timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", url.replace(self.base_url, ''), 0)), verify=self._verify_ssl())
                 response.raise_for_status()
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 with open(save_path, 'wb') as f:
@@ -3260,7 +3474,7 @@ class TRRCMSApiClient:
                 files = {"file": (file_name, f, mime_type)}
                 response = self._session.post(
                     url, files=files, headers=headers,
-                    timeout=self.config.timeout, verify=self._verify_ssl()
+                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/import/upload", 0)), verify=self._verify_ssl()
                 )
             response.raise_for_status()
             result = response.json() if response.text else {}
@@ -3553,6 +3767,7 @@ def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClie
     """
     global _api_client_instance
 
+    rebuilt = False
     if _api_client_instance is not None and config is None:
         try:
             from app.config import get_api_base_url
@@ -3570,11 +3785,74 @@ def get_api_client(config: Optional[ApiConfig] = None) -> Optional[TRRCMSApiClie
         if config is None:
             config = ApiConfig()
         _api_client_instance = TRRCMSApiClient(config)
+        rebuilt = True
+
+    if rebuilt:
+        logger.info(
+            f"[SRV-DIAG] get_api_client rebuilt singleton_id={id(_api_client_instance)} "
+            f"base_url={_api_client_instance.base_url}"
+        )
 
     return _api_client_instance
 
 
 def reset_api_client():
-    """إعادة تعيين الـ API client (للاختبار)."""
+    """إعادة تعيين الـ API client بعد تبديل سيرفر.
+
+    يُحدِّث الـ instance الموجودة مكانياً (URL جديد + مسح tokens وsession وcaches)
+    بدل تصفير المؤشّر العامّ. هذا متعمَّد: صفحات وdialogs الـ wizard تُمسك مراجع
+    `self._api_service = get_api_client()` المخزَّنة عند `__init__`؛ لو صفّرنا
+    المؤشّر، تلك المراجع تظلّ تُشير لـ instance قديمة بـ base_url قديم وtokens
+    قديمة → 403/خلط بين السيرفرين. الحلّ: نُبقي نفس الـ instance، نقلب محتواها
+    على السيرفر الجديد.
+    """
     global _api_client_instance
-    _api_client_instance = None
+    if _api_client_instance is None:
+        return
+    try:
+        from app.config import get_api_base_url
+        new_url = get_api_base_url().rstrip('/')
+        old_url = _api_client_instance.base_url
+        old_id = id(_api_client_instance)
+        # Drop the previous server's keyring entry so a future rebuild for that
+        # URL cannot silently revive a logged-out session. The new server's
+        # entry (if any) is independently scoped.
+        try:
+            _clear_refresh_token(old_url)
+        except Exception:
+            pass
+        try:
+            _api_client_instance._session.close()
+        except Exception:
+            pass
+        _api_client_instance.base_url = new_url
+        _api_client_instance._is_ngrok = "ngrok" in new_url.lower()
+        _api_client_instance.access_token = None
+        _api_client_instance.refresh_token = None
+        _api_client_instance.token_expires_at = None
+        _api_client_instance._neighborhoods_cache = None
+        _api_client_instance._login_failures = 0
+        _api_client_instance._login_cooldown_until = None
+        _api_client_instance._session_expired_flag = False
+        _api_client_instance._last_network_error_time = None
+        _api_client_instance._session = requests.Session()
+        logger.info(
+            f"[SRV-DIAG] reset_api_client {old_url} -> {new_url} singleton_id={old_id} "
+            f"(in-place; old keyring entry cleared)"
+        )
+        _retry = Retry(
+            total=2, connect=1, read=0, status=0, other=2,
+            backoff_factor=0.5, allowed_methods=None, raise_on_status=False,
+        )
+        _adapter = HTTPAdapter(max_retries=_retry, pool_connections=10, pool_maxsize=10)
+        _api_client_instance._session.mount("http://", _adapter)
+        _api_client_instance._session.mount("https://", _adapter)
+        if not _api_client_instance._verify_ssl():
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        logger.info(
+            f"API client reset in-place for {new_url} "
+            f"(verify_ssl={_api_client_instance._verify_ssl()}, all tokens cleared)"
+        )
+    except Exception as e:
+        logger.error(f"reset_api_client failed: {e}")
+        _api_client_instance = None

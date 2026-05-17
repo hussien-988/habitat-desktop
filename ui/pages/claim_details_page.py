@@ -483,6 +483,7 @@ class ClaimDetailsPage(QWidget):
         self._evidences = []
         self._claim_id = None
         self._is_editing = False
+        self._save_in_flight = False
         self._original_claim_type = None
         self._relation_id = None
         self._pending_uploads = []
@@ -1496,6 +1497,8 @@ class ClaimDetailsPage(QWidget):
                 self._edit_btn_widget = None
 
     def _on_edit_or_save_clicked(self):
+        if self._save_in_flight:
+            return
         if self._is_editing:
             self._on_save_edit()
             return
@@ -1754,7 +1757,7 @@ class ClaimDetailsPage(QWidget):
             update_data["reasonForModification"] = reason
 
         self._spinner.show_loading(tr("component.loading.default"))
-        self._header.edit_clicked.disconnect()
+        self._save_in_flight = True
         self._save_worker = ApiWorker(ctrl.update_claim, self._claim_id, update_data)
         self._save_worker.finished.connect(self._on_save_finished)
         self._save_worker.error.connect(self._on_save_error)
@@ -1762,7 +1765,7 @@ class ClaimDetailsPage(QWidget):
 
     def _on_save_finished(self, result):
         self._spinner.hide_loading()
-        self._header.edit_clicked.connect(self._on_edit_or_save_clicked)
+        self._save_in_flight = False
 
         if not result.success:
             Toast.show_toast(self, result.message, Toast.ERROR)
@@ -1787,7 +1790,7 @@ class ClaimDetailsPage(QWidget):
 
     def _on_save_error(self, error_msg: str) -> None:
         self._spinner.hide_loading()
-        self._header.edit_clicked.connect(self._on_edit_or_save_clicked)
+        self._save_in_flight = False
         logger.error(f"Save error: {error_msg}")
         Toast.show_toast(self, error_msg, Toast.ERROR)
         self._exit_edit_mode(reload=False)

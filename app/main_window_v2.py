@@ -514,6 +514,7 @@ class MainWindow(QMainWindow):
         self.office_survey_wizard.survey_completed.connect(self._on_survey_completed)
         self.office_survey_wizard.survey_cancelled.connect(self._on_survey_cancelled)
         self.office_survey_wizard.survey_saved_draft.connect(self._on_survey_saved_draft)
+        self.office_survey_wizard.building_replace_requested.connect(self._on_replace_wizard_building)
 
         # Resume draft survey from CaseDetailsPage
         self.pages[Pages.SURVEY_DETAILS].resume_requested.connect(
@@ -1024,6 +1025,79 @@ class MainWindow(QMainWindow):
         self._stop_token_refresh_timer()
         self._show_login()
 
+    def handle_server_change(self):
+        """Forced logout + state cleanup after API server URL was changed.
+
+        Triggered from ServerSettingsDialog after the user saved a new API URL.
+        The previous server's tokens are invalid against the new backend, and
+        any IDs already cached in the survey wizard (building, survey, unit,
+        person) belong to a different DB → using them returns 403 'forbidden'.
+        We clear all in-app session state, reset the wizard context, and bounce
+        the user to the login page so they sign in fresh against the new
+        backend.
+
+        Every cache that keys by an ID that is server-local (building UUIDs,
+        admin division pCodes, boundary geometries, viewport bounds) is
+        cleared here. Vocab and the api-client's neighborhoods cache were
+        already handled; we add building / viewport / divisions / boundary
+        so a stale ngrok UUID can never surface in a Docker session.
+        """
+        prev_user = getattr(self.current_user, 'username', None)
+        logger.warning(
+            f"=== SERVER CHANGE: forcing logout (prev_user={prev_user}) ==="
+        )
+        logger.info(f"[SRV-DIAG] handle_server_change ENTER prev_user={prev_user}")
+        self._stop_token_refresh_timer()
+        self._api_token = None
+        self.current_user = None
+        self._session_expiry_pending = False
+        try:
+            if getattr(self, 'office_survey_wizard', None) is not None:
+                new_context = self.office_survey_wizard.create_context()
+                self.office_survey_wizard.context = new_context
+                for step in self.office_survey_wizard.steps:
+                    step.context = new_context
+                    # Steps captured get_api_client() at __init__; force them
+                    # back onto whatever the current singleton is now (after
+                    # reset_api_client mutated it to the new URL).
+                    if hasattr(step, 'rebind_api_services'):
+                        try:
+                            step.rebind_api_services()
+                        except Exception as e:
+                            logger.warning(f"step {type(step).__name__} rebind failed: {e}")
+                self.office_survey_wizard.navigator.context = new_context
+                self.office_survey_wizard.navigator.reset()
+                self.office_survey_wizard._finalization_complete = False
+        except Exception as e:
+            logger.warning(f"Failed to reset wizard context on server change: {e}")
+        try:
+            from services.vocab_service import clear_vocab_cache
+            clear_vocab_cache()
+        except Exception as e:
+            logger.warning(f"Failed to clear vocab cache on server change: {e}")
+        try:
+            from services.building_cache_service import get_building_cache
+            get_building_cache().invalidate_cache()
+        except Exception as e:
+            logger.warning(f"Failed to clear building cache on server change: {e}")
+        try:
+            from services.viewport_map_loader import clear_all_shared_viewport_loaders
+            clear_all_shared_viewport_loaders()
+        except Exception as e:
+            logger.warning(f"Failed to clear viewport caches on server change: {e}")
+        try:
+            from services.divisions_service import DivisionsService
+            DivisionsService().invalidate()
+        except Exception as e:
+            logger.warning(f"Failed to clear divisions cache on server change: {e}")
+        try:
+            from services.boundary_service import clear_cache as _boundary_clear
+            _boundary_clear()
+        except Exception as e:
+            logger.warning(f"Failed to clear boundary cache on server change: {e}")
+        logger.info("[SRV-DIAG] handle_server_change EXIT — caches cleared, redirecting to login")
+        self._show_login()
+
     def _on_password_change_required(self):
         """Handle password change required from API 403 (called from background thread)."""
         if not self.current_user:
@@ -1061,7 +1135,12 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
                 self.current_user = None
+                # Always wipe the local copy of the token even if the remote
+                # logout raised — otherwise a follow-up login at a different
+                # server can race with stale token state and surface as 403.
+                self._api_token = None
                 self._stop_token_refresh_timer()
+                logger.info("[SRV-DIAG] _handle_logout local teardown complete")
                 # Clear login fields for security
                 login_page = self.pages.get(Pages.LOGIN)
                 if login_page:
@@ -1968,6 +2047,30 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.office_survey_wizard)
         perf_trace.mark('flow_end', outcome='wizard_shown')
 
+    def _on_replace_wizard_building(self):
+        """Re-open the building picker mid-wizard and reset the wizard with the new selection."""
+        from PyQt5.QtWidgets import QDialog
+        from ui.components.building_map_dialog_v2 import MultiSelectBuildingMapDialog
+
+        auth_token = getattr(self, '_api_token', None)
+        dialog = MultiSelectBuildingMapDialog(
+            db=self.db,
+            auth_token=auth_token,
+            parent=self,
+            max_selection=1,
+        )
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        buildings = dialog.get_selected_buildings()
+        if not buildings:
+            return
+
+        selected_building = buildings[0]
+        logger.info(f"Building replaced mid-wizard: {selected_building.building_id}")
+        self._reset_wizard(building=selected_building)
+        self.stack.setCurrentWidget(self.office_survey_wizard)
+
     def _on_survey_completed(self, data):
         """Handle survey completion from wizard — navigate to surveys page."""
         logger.info(f"Survey completed: {data}")
@@ -2026,8 +2129,11 @@ class MainWindow(QMainWindow):
             api.revert_survey_to_draft(survey_id, reason)
             Toast.show_toast(self, tr("wizard.draft.saved_success"), Toast.SUCCESS)
             self.navigate_to(Pages.SURVEYS)
-            if Pages.SURVEYS in self.pages and hasattr(self.pages[Pages.SURVEYS], 'refresh'):
-                self.pages[Pages.SURVEYS].refresh()
+            surveys_page = self.pages.get(Pages.SURVEYS)
+            if surveys_page is not None and hasattr(surveys_page, 'set_active_tab'):
+                surveys_page.set_active_tab("draft")
+            elif surveys_page is not None and hasattr(surveys_page, 'refresh'):
+                surveys_page.refresh()
         except Exception as e:
             logger.error(f"Failed to revert survey {survey_id} to draft: {e}", exc_info=True)
             Toast.show_toast(self, f"فشل إعادة المسح للمسودة: {e}", Toast.ERROR)

@@ -39,8 +39,7 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
-    FORM_FIELD_STYLE, make_editable_date_combo, read_int_from_combo,
-    validate_date_combo_text,
+    FORM_FIELD_STYLE, read_int_from_combo,
 )
 from utils.logger import get_logger
 
@@ -638,21 +637,25 @@ class PersonDialog(QDialog):
         birth_layout.setContentsMargins(0, 0, 0, 0)
 
         from datetime import datetime as _dt
-        self.birth_day_combo = make_editable_date_combo(
-            items=[(str(d), d) for d in range(1, 32)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.day_placeholder"),
-            editable=False,
-        )
-        self.birth_month_combo = make_editable_date_combo(
-            items=[(str(m), m) for m in range(1, 13)],
-            max_digits=2, placeholder=tr("wizard.person_dialog.month_placeholder"),
-            editable=False,
-        )
-        self.birth_year_combo = make_editable_date_combo(
-            items=[(str(y), y) for y in range(_dt.now().year, 1919, -1)],
-            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
-            editable=False,
-        )
+        birth_input_style = self._input_style()
+
+        self.birth_day_combo = RtlCombo()
+        self.birth_day_combo.addItem(tr("wizard.person_dialog.day"), None)
+        for d in range(1, 32):
+            self.birth_day_combo.addItem(f"{d:02d}", d)
+        self.birth_day_combo.setStyleSheet(birth_input_style)
+
+        self.birth_month_combo = RtlCombo()
+        self.birth_month_combo.addItem(tr("wizard.person_dialog.month"), None)
+        for m in range(1, 13):
+            self.birth_month_combo.addItem(f"{m:02d}", m)
+        self.birth_month_combo.setStyleSheet(birth_input_style)
+
+        self.birth_year_combo = RtlCombo()
+        self.birth_year_combo.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(_dt.now().year, 1919, -1):
+            self.birth_year_combo.addItem(str(y), y)
+        self.birth_year_combo.setStyleSheet(birth_input_style)
 
         birth_layout.addWidget(self.birth_day_combo, 1)
         birth_layout.addWidget(self.birth_month_combo, 1)
@@ -954,10 +957,11 @@ class PersonDialog(QDialog):
             self.start_month.addItem(f"{m:02d}", m)
         self.start_month.setStyleSheet(input_style)
 
-        self.start_year = make_editable_date_combo(
-            items=[(str(y), y) for y in range(QDate.currentDate().year(), 1939, -1)],
-            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
-        )
+        self.start_year = RtlCombo()
+        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.start_year.addItem(str(y), y)
+        self.start_year.setStyleSheet(input_style)
 
         date_layout.addWidget(self.start_day, 1)
         date_layout.addWidget(self.start_month, 1)
@@ -2695,16 +2699,16 @@ class PersonDialog(QDialog):
                     break
 
         if rel.get('start_date'):
-            parts = rel['start_date'].split('-')
-            if len(parts) >= 1:
+            parts = str(rel['start_date'])[:10].split('-')
+            if len(parts) >= 1 and parts[0].isdigit():
                 idx = self.start_year.findData(int(parts[0]))
                 if idx >= 0:
                     self.start_year.setCurrentIndex(idx)
-            if len(parts) >= 2:
+            if len(parts) >= 2 and parts[1].isdigit():
                 idx = self.start_month.findData(int(parts[1]))
                 if idx >= 0:
                     self.start_month.setCurrentIndex(idx)
-            if len(parts) >= 3:
+            if len(parts) >= 3 and parts[2].isdigit():
                 idx = self.start_day.findData(int(parts[2]))
                 if idx >= 0:
                     self.start_day.setCurrentIndex(idx)
@@ -2847,6 +2851,10 @@ class PersonDialog(QDialog):
         import re
         from ui.error_handler import ErrorHandler
 
+        if getattr(self, "_saving_in_progress", False):
+            logger.debug("person_dialog: ignoring duplicate save while previous in flight")
+            return
+
         has_error = False
         # Required: first_name, last_name, father_name, mother_name
         first = self.first_name.text().strip()
@@ -2916,13 +2924,6 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-        # Occupancy start year is the only manually-editable date field; enforce 4-digit format
-        if not validate_date_combo_text(self.start_year, 4):
-            from ui.components.toast import Toast
-            Toast.show_toast(self, tr("wizard.person_dialog.invalid_date_format"), Toast.ERROR)
-            if not has_error:
-                self.tab_widget.setCurrentIndex(2)
-            has_error = True
 
         # Ownership share: required when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
@@ -2946,11 +2947,24 @@ class PersonDialog(QDialog):
         if has_error:
             return
 
+        self._saving_in_progress = True
+        save_btn = getattr(self, "_save_btn", None) or getattr(self, "save_btn", None)
+        if save_btn is not None:
+            try:
+                save_btn.setEnabled(False)
+            except Exception:
+                pass
         self._spinner.show_loading(tr("component.loading.default"))
         try:
             self._on_final_save_api()
         finally:
             self._spinner.hide_loading()
+            self._saving_in_progress = False
+            if save_btn is not None:
+                try:
+                    save_btn.setEnabled(True)
+                except Exception:
+                    pass
 
     def _on_final_save_api(self):
         """Execute the API calls for final save (called after validation passes)."""
@@ -3044,8 +3058,10 @@ class PersonDialog(QDialog):
 
             # Step 1: Create person in household
             try:
-                response = self._api_service.create_person_in_household(
-                    person_data, self._survey_id, self._household_id
+                from services.api_worker import run_blocking_async
+                response = run_blocking_async(
+                    self._api_service.create_person_in_household,
+                    person_data, self._survey_id, self._household_id,
                 )
 
                 logger.info("Person created successfully via API")
@@ -3092,8 +3108,10 @@ class PersonDialog(QDialog):
                 relation_data['rel_type'] = rel_type
 
                 try:
-                    relation_response = self._api_service.link_person_to_unit(
-                        self._survey_id, self._unit_id, relation_data
+                    from services.api_worker import run_blocking_async
+                    relation_response = run_blocking_async(
+                        self._api_service.link_person_to_unit,
+                        self._survey_id, self._unit_id, relation_data,
                     )
 
                     logger.info(f"Person {person_id} linked to unit {self._unit_id}")
@@ -3257,10 +3275,12 @@ class PersonDialog(QDialog):
 
         from services.exceptions import ApiException
 
+        from services.api_worker import run_blocking_async
         for file_path in self.uploaded_files:
             try:
                 doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
-                response = self._api_service.upload_identification_document(
+                response = run_blocking_async(
+                    self._api_service.upload_identification_document,
                     self._survey_id, person_id, file_path,
                     document_type=doc_type,
                 )
@@ -3297,7 +3317,9 @@ class PersonDialog(QDialog):
             file_hash = file_entry.get("hash", "")
 
             try:
-                response = self._api_service.upload_relation_document(
+                from services.api_worker import run_blocking_async
+                response = run_blocking_async(
+                    self._api_service.upload_relation_document,
                     survey_id=self._survey_id,
                     relation_id=relation_id,
                     file_path=file_path,

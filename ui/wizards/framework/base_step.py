@@ -140,13 +140,58 @@ class BaseStep(QWidget, metaclass=ABCQWidgetMeta):
         """Create a new validation result object."""
         return StepValidationResult(is_valid=True, errors=[], warnings=[])
 
+    _API_SERVICE_ATTRS = ('_api_service', '_api_client', '_survey_api_service')
+
+    def rebind_api_services(self):
+        """Point every captured API-service attr at the current singleton.
+
+        Steps capture `get_api_client()` in their ``__init__``. After a server
+        switch (or a singleton rebuild driven by base-URL drift) those refs
+        can point at a stale instance with the previous server's base_url.
+        This routine refreshes them so the next request goes to the right
+        backend. Safe to call at any time; no-op if the ref already matches.
+        """
+        try:
+            from services.api_client import get_api_client
+            from app.config import get_api_base_url
+        except Exception:
+            return
+        try:
+            current_client = get_api_client()
+            resolved_url = get_api_base_url().rstrip('/')
+        except Exception:
+            return
+        if current_client is None:
+            return
+        for attr_name in self._API_SERVICE_ATTRS:
+            service = getattr(self, attr_name, None)
+            if service is None:
+                continue
+            svc_url = getattr(service, 'base_url', None)
+            if id(service) != id(current_client) or (svc_url and svc_url.rstrip('/') != resolved_url):
+                try:
+                    import logging
+                    logging.getLogger(__name__).info(
+                        f"[SRV-DIAG] {type(self).__name__}.{attr_name} rebind: "
+                        f"service_id={id(service)}->{id(current_client)} "
+                        f"base_url={svc_url}->{current_client.base_url}"
+                    )
+                except Exception:
+                    pass
+                setattr(self, attr_name, current_client)
+
     def _set_auth_token(self):
-        """Set auth token from main window on all API service attributes."""
+        """Rebind captured API services to the current singleton, then push the
+        latest access_token onto them. Called before every API-touching step
+        transition so a server switch + re-login cannot leave a step talking
+        to a stale client.
+        """
         main_window = self.window()
         if not (main_window and hasattr(main_window, '_api_token') and main_window._api_token):
             return
+        self.rebind_api_services()
         token = main_window._api_token
-        for attr_name in ('_api_service', '_api_client', '_survey_api_service'):
+        for attr_name in self._API_SERVICE_ATTRS:
             service = getattr(self, attr_name, None)
             if service and hasattr(service, 'set_access_token'):
                 service.set_access_token(token)

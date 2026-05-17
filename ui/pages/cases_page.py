@@ -705,6 +705,18 @@ class CasesPage(QWidget):
 
     # -- Tab & filter handlers --
 
+    def set_active_tab(self, which: str):
+        """Programmatically switch active tab (draft|finalized|obstructed) and reload."""
+        if which not in ("draft", "finalized", "obstructed"):
+            return
+        self._active_tab = which
+        self._current_page = 1
+        self._tab_draft.set_active(which == "draft")
+        self._tab_finalized.set_active(which == "finalized")
+        self._tab_obstructed.set_active(which == "obstructed")
+        self._accent_line.pulse()
+        self._load_surveys()
+
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
             return

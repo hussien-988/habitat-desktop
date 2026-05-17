@@ -675,15 +675,7 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
 # ── Shared date-combo helpers (DRY: used by applicant_info, person_dialog, household) ──
 
 def make_editable_date_combo(items, max_digits: int, placeholder: str = "", editable: bool = True) -> QComboBox:
-    """
-    QComboBox for a single date part (day / month / year).
-
-    - Items are displayed zero-padded to `max_digits` (e.g. "01"-"12" for month).
-    - When editable=True, accepts manual numeric input with strict format
-      normalization: pads single-digit month/day on focus-out, clears
-      incomplete year (max_digits=4) entries.
-    - When editable=False, behaves as a dropdown-only combo (no manual entry).
-    """
+    """QComboBox for a single date part (day / month / year)."""
     from app.config import Config
     from PyQt5.QtCore import QObject, QEvent
     from services.translation_manager import get_layout_direction

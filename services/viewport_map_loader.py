@@ -347,3 +347,16 @@ def get_shared_viewport_loader(
         if map_service:
             _viewport_loaders[provider_key].map_service = map_service
     return _viewport_loaders[provider_key]
+
+
+def clear_all_shared_viewport_loaders() -> None:
+    """Clear viewport caches across every shared loader. Used on server switch
+    so the previous server's buildings cannot surface in the new server's UI.
+    """
+    global _viewport_loaders
+    for key, loader in list(_viewport_loaders.items()):
+        try:
+            loader.clear_cache()
+        except Exception:
+            pass
+    logger.info(f"Cleared viewport caches across {len(_viewport_loaders)} shared loader(s)")
