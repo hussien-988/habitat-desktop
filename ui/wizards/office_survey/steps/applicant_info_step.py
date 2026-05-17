@@ -1172,9 +1172,9 @@ class ApplicantInfoStep(BaseStep):
             docs = list(evidences)
             if not docs and person_id:
                 try:
-                    docs = self._api_client.get_person_identification_documents(person_id)
+                    docs = self._api_client.get_person_identification_documents_for_survey(person_id)
                 except Exception as e:
-                    logger.warning(f"get_person_identification_documents failed: {e}")
+                    logger.warning(f"get_person_identification_documents_for_survey failed: {e}")
             if not docs and survey_id:
                 try:
                     docs = self._api_client.get_survey_evidences(survey_id, evidence_type="identification")

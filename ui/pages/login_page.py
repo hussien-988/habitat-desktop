@@ -640,6 +640,9 @@ class LoginPage(QWidget):
         self.password_input.returnPressed.connect(self._on_login)
         card_layout.addWidget(self.password_input)
 
+        self.username_input.installEventFilter(self)
+        self.password_input.installEventFilter(self)
+
         # Error message
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("""
@@ -835,6 +838,8 @@ class LoginPage(QWidget):
 
     def _on_login(self):
         """Submit login request to backend; backend enforces lockout/policy."""
+        self._hide_error()
+
         username = self.username_input.text().strip()
         password = self.password_input.text()
 
@@ -909,6 +914,14 @@ class LoginPage(QWidget):
 
         self.error_label.setText(tr(key, **self._current_local_error_params))
         self.error_label.show()
+    def eventFilter(self, obj, event):
+        """Clear visible error as soon as the user focuses either credential field."""
+        from PyQt5.QtCore import QEvent
+        if event.type() == QEvent.FocusIn and obj in (self.username_input, self.password_input):
+            if self.error_label.isVisible():
+                self._hide_error()
+        return super().eventFilter(obj, event)
+
     def _hide_error(self):
         """Hide error message and clear stored local error state."""
         self._current_local_error_key = None
@@ -1036,6 +1049,7 @@ class LoginPage(QWidget):
         """)
 
     def _on_password_text_changed(self, text):
+        self._hide_error()
         if (not text.strip()) or self._arabic_re.search(text):
             self.password_input.setLayoutDirection(Qt.RightToLeft)
             self.password_input.setAlignment(Qt.AlignRight)

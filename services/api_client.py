@@ -2271,6 +2271,22 @@ class TRRCMSApiClient:
             return result.get("items", result.get("$values", result.get("data", [])))
         return result if isinstance(result, list) else []
 
+    def get_person_identification_documents_for_survey(
+        self, person_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get identification documents for a person via the Surveys-scoped endpoint.
+
+        Endpoint: GET /v1/Surveys/persons/{personId}/identification-documents
+        Returns: List[IdentificationDocumentDto]
+        """
+        if not person_id:
+            raise ValueError("person_id is required")
+        endpoint = f"/v1/Surveys/persons/{person_id}/identification-documents"
+        result = self._request("GET", endpoint)
+        if isinstance(result, dict):
+            return result.get("items", result.get("$values", result.get("data", [])))
+        return result if isinstance(result, list) else []
+
     def download_identification_document(
         self, person_id: str, document_id: str, save_path: str
     ) -> bool:
