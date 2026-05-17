@@ -243,7 +243,7 @@ class SurveyController:
                 logger.warning(f"[ID-DOCS] Fetching identification documents for person={target_person_id}")
                 if target_person_id:
                     try:
-                        id_docs = api.get_person_identification_documents(target_person_id)
+                        id_docs = api.get_person_identification_documents_for_survey(target_person_id)
                         logger.warning(f"[ID-DOCS] API returned {len(id_docs) if id_docs else 0} document(s)")
                         if id_docs:
                             applicant["id_photo_evidences"] = [

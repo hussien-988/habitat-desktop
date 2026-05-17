@@ -1128,26 +1128,31 @@ class ClaimDetailsPage(QWidget):
                                if str(ev.get("id") or ev.get("evidenceId") or "") not in self._pending_deletes]
 
             if active_evidences or self._pending_uploads or self._pending_links:
-                thumbs_container = QWidget()
-                thumbs_container.setStyleSheet("background: transparent; border: none;")
-                thumbs_layout = QHBoxLayout(thumbs_container)
-                thumbs_layout.setContentsMargins(0, 0, 0, 0)
-                thumbs_layout.setSpacing(10)
+                if active_evidences:
+                    rows_container = QWidget()
+                    rows_container.setStyleSheet("background: transparent; border: none;")
+                    rows_layout = QVBoxLayout(rows_container)
+                    rows_layout.setContentsMargins(0, 0, 0, 0)
+                    rows_layout.setSpacing(6)
+                    for ev in active_evidences:
+                        rows_layout.addWidget(self._create_evidence_row(ev))
+                    self._relation_content.addWidget(rows_container)
 
-                for ev in active_evidences:
-                    card = self._create_evidence_thumbnail(ev)
-                    thumbs_layout.addWidget(card)
+                if self._pending_uploads or self._pending_links:
+                    pending_container = QWidget()
+                    pending_container.setStyleSheet("background: transparent; border: none;")
+                    pending_layout = QHBoxLayout(pending_container)
+                    pending_layout.setContentsMargins(0, 0, 0, 0)
+                    pending_layout.setSpacing(10)
 
-                for fp in self._pending_uploads:
-                    card = self._create_pending_upload_card(fp)
-                    thumbs_layout.addWidget(card)
+                    for fp in self._pending_uploads:
+                        pending_layout.addWidget(self._create_pending_upload_card(fp))
 
-                for ev_data in self._pending_links:
-                    card = self._create_pending_link_card(ev_data)
-                    thumbs_layout.addWidget(card)
+                    for ev_data in self._pending_links:
+                        pending_layout.addWidget(self._create_pending_link_card(ev_data))
 
-                thumbs_layout.addStretch()
-                self._relation_content.addWidget(thumbs_container)
+                    pending_layout.addStretch()
+                    self._relation_content.addWidget(pending_container)
             else:
                 no_ev = QLabel(tr("page.claim_details.no_documents"))
                 no_ev.setFont(create_font(size=FontManager.SIZE_BODY))
@@ -1210,6 +1215,104 @@ class ClaimDetailsPage(QWidget):
             self._failed_sections.append("الحالة")
 
     # -- Evidence helpers --
+
+    def _create_evidence_row(self, evidence):
+        """Render a single saved evidence as a horizontal row with filename, issue date,
+        reference number, and optional delete button. Inner scrolls horizontally for
+        long content."""
+        ev_id = str(evidence.get("id") or evidence.get("evidenceId") or "")
+        file_name = str(
+            evidence.get("fileName")
+            or evidence.get("originalFileName")
+            or tr("page.claim_details.document")
+        )
+        issue_date = (
+            evidence.get("documentIssuedDate")
+            or evidence.get("DocumentIssuedDate")
+            or evidence.get("issueDate")
+            or ""
+        )
+        if issue_date and isinstance(issue_date, str):
+            issue_date = issue_date[:10]
+        ref_number = (
+            evidence.get("documentReferenceNumber")
+            or evidence.get("DocumentReferenceNumber")
+            or evidence.get("referenceNumber")
+            or ""
+        )
+
+        row = QFrame()
+        row.setStyleSheet("""
+            QFrame { background-color: #ffffff; border: 1px solid #E1E8ED; border-radius: 6px; }
+            QFrame:hover { border-color: #3890DF; background-color: #F8FAFF; }
+        """)
+        row.setMinimumHeight(ScreenScale.h(40))
+
+        outer_lay = QHBoxLayout(row)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
+
+        content = QWidget()
+        content.setStyleSheet("background: transparent; border: none;")
+        content_lay = QHBoxLayout(content)
+        content_lay.setContentsMargins(10, 4, 10, 4)
+        content_lay.setSpacing(18)
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+        icon_lbl.setStyleSheet("border: none; background: transparent;")
+        self._set_file_type_icon(icon_lbl, file_name)
+        content_lay.addWidget(icon_lbl, 0, Qt.AlignVCenter)
+
+        name_lbl = QLabel(file_name)
+        name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none; background: transparent;")
+        name_lbl.setToolTip(file_name)
+        content_lay.addWidget(name_lbl, 0, Qt.AlignVCenter)
+
+        if issue_date:
+            date_lbl = QLabel(f"{tr('page.claims.issue_date')}: {issue_date}")
+            date_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            date_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+            content_lay.addWidget(date_lbl, 0, Qt.AlignVCenter)
+
+        if ref_number:
+            ref_lbl = QLabel(f"{tr('page.case_details.ref_number')}: {ref_number}")
+            ref_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
+            ref_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; border: none; background: transparent;")
+            ref_lbl.setToolTip(str(ref_number))
+            content_lay.addWidget(ref_lbl, 0, Qt.AlignVCenter)
+
+        content_lay.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setFixedHeight(ScreenScale.h(40))
+        outer_lay.addWidget(scroll, 1)
+
+        if self._is_editing and ev_id and self._is_claim_open():
+            del_btn = QPushButton("✕")
+            del_btn.setFixedSize(ScreenScale.w(22), ScreenScale.h(22))
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setStyleSheet("""
+                QPushButton { background-color: #E53E3E; color: white; border: none; border-radius: 11px; font-size: 11px; font-weight: bold; }
+                QPushButton:hover { background-color: #C53030; }
+            """)
+            del_btn.clicked.connect(lambda _, eid=ev_id: self._on_delete_evidence(eid))
+            outer_lay.addWidget(del_btn, 0, Qt.AlignVCenter)
+            outer_lay.addSpacing(8)
+        elif ev_id:
+            row.setCursor(Qt.PointingHandCursor)
+            def _on_click(event, eid=ev_id, fn=file_name, page=self):
+                page._download_and_open_evidence(eid, fn)
+            row.mousePressEvent = _on_click
+
+        return row
 
     def _create_evidence_thumbnail(self, evidence):
         from PyQt5.QtGui import QPixmap

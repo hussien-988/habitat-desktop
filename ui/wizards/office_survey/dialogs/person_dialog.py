@@ -2924,7 +2924,6 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-
         # Ownership share: required when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
         is_owner = self.rel_type_combo.currentData() == 1
