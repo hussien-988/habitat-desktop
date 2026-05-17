@@ -386,36 +386,6 @@ class UnitSelectionStep(BaseStep):
             else:
                 logger.warning(f"Filtered out unit {u.unit_id} - belongs to building {u_building}, not {building_uuid}")
 
-        # If a unit is already attached to this survey (resumed draft or earlier
-        # selection), restrict the displayed list to just that unit to prevent
-        # silently switching the survey's unit association (which would orphan
-        # downstream person/relation links).
-        saved_unit = self.context.unit
-        if not saved_unit:
-            saved_unit_id = self.context.get_data("survey_property_unit_id")
-            if saved_unit_id:
-                from models.unit import PropertyUnit
-                saved_unit = PropertyUnit(unit_uuid=saved_unit_id, unit_id=saved_unit_id)
-                self.context.unit = saved_unit
-
-        if saved_unit:
-            saved_uuid = getattr(saved_unit, 'unit_uuid', None)
-            saved_id = getattr(saved_unit, 'unit_id', None)
-            matched = [
-                u for u in units
-                if (saved_uuid and getattr(u, 'unit_uuid', None) == saved_uuid)
-                or (saved_id and getattr(u, 'unit_id', None) == saved_id)
-                or (saved_uuid and getattr(u, 'unit_id', None) == saved_uuid)
-                or (saved_id and getattr(u, 'unit_uuid', None) == saved_id)
-            ]
-            units = [matched[0]] if matched else [saved_unit]
-            if hasattr(self, 'add_unit_btn'):
-                self.add_unit_btn.hide()
-            logger.info(
-                f"Survey already has unit attached (uuid={saved_uuid}, id={saved_id}); "
-                f"restricting view to {len(units)} unit(s) (matched_from_api={bool(matched)})."
-            )
-
         logger.info(f"Showing {len(units)} units (of {len(all_units)} returned by API) for building {building_uuid}")
 
         has_units = len(units) > 0
