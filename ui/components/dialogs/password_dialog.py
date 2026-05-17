@@ -184,8 +184,8 @@ class PasswordDialog(QDialog):
         card.setFixedWidth(ScreenScale.w(440))
         card.setStyleSheet("""
             QFrame#pwdCard {
-                background-color: rgba(15, 31, 61, 160);
-                border: 1px solid rgba(56, 144, 223, 30);
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
                 border-radius: 16px;
             }
             QFrame#pwdCard QLabel {
@@ -269,13 +269,13 @@ class PasswordDialog(QDialog):
         welcome_text = tr("dialog.password.forced_welcome").replace("{name}", name)
         title = QLabel(welcome_text)
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
-        title.setStyleSheet("color: white;")
+        title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
         reason = QLabel(tr("dialog.password.forced_reason"))
         reason.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-        reason.setStyleSheet("color: #8BACC8;")
+        reason.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         reason.setAlignment(Qt.AlignCenter)
         reason.setWordWrap(True)
         layout.addWidget(reason)
@@ -284,14 +284,14 @@ class PasswordDialog(QDialog):
         """Simple title for voluntary password change."""
         title = QLabel(tr("dialog.password.change_password"))
         title.setFont(create_font(size=16, weight=FontManager.WEIGHT_BOLD))
-        title.setStyleSheet("color: white;")
+        title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
     def _build_dark_fields(self, layout: QVBoxLayout):
-        """Three dark-themed password fields: current + new + confirm."""
+        """Three password fields: current + new + confirm."""
         lbl_font = create_font(size=10, weight=QFont.DemiBold)
-        lbl_style = "color: #8BACC8;"
+        lbl_style = f"color: {Colors.TEXT_PRIMARY};"
 
         # Current password
         current_lbl = QLabel(tr("dialog.password.enter_current"))
@@ -336,7 +336,7 @@ class PasswordDialog(QDialog):
         field.setEchoMode(QLineEdit.Password)
         field.setFixedHeight(ScreenScale.h(48))
         field.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        field.setStyleSheet(_INPUT_STYLE_DARK)
+        field.setStyleSheet(_INPUT_STYLE_LIGHT)
 
         self._visibility[name] = False
         eye_icon = Icon.load_qicon("Eye")
@@ -380,17 +380,17 @@ class PasswordDialog(QDialog):
         else:
             btn.setStyleSheet("""
                 QPushButton {
-                    background: transparent;
-                    color: #8BACC8;
-                    border: 1px solid rgba(56, 144, 223, 51);
+                    background: #F8FAFF;
+                    color: #606266;
+                    border: 1px solid #E1E8ED;
                     border-radius: 10px;
                 }
                 QPushButton:hover {
-                    background: rgba(56, 144, 223, 20);
-                    color: white;
+                    background: #EFF6FF;
+                    color: #2C3E50;
                 }
                 QPushButton:pressed {
-                    background: rgba(56, 144, 223, 40);
+                    background: #E1ECFA;
                 }
             """)
 
@@ -593,19 +593,16 @@ class PasswordDialog(QDialog):
         self.accept()
 
     def _highlight_error(self, field: QLineEdit):
-        if self._is_dark:
-            field.setStyleSheet(_INPUT_ERROR_DARK)
-        else:
-            field.setStyleSheet("""
-                QLineEdit {
-                    background-color: #f0f7ff;
-                    border: 2px solid #E74C3C;
-                    border-radius: 8px;
-                    padding: 0 13px;
-                    color: #2C3E50;
-                }
-                QLineEdit::placeholder { color: #9CA3AF; }
-            """)
+        field.setStyleSheet("""
+            QLineEdit {
+                background-color: #f0f7ff;
+                border: 2px solid #E74C3C;
+                border-radius: 8px;
+                padding: 0 13px;
+                color: #2C3E50;
+            }
+            QLineEdit::placeholder { color: #9CA3AF; }
+        """)
 
     # ------------------------------------------------------------------ #
     #  Static convenience methods

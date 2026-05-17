@@ -362,15 +362,35 @@ class ServerSettingsDialog(QDialog):
                 from services.tile_server_manager import TileServerManager
                 TileServerManager.reset()
 
+        api_changed = False
         if self._api_ok:
             api_url = self._api_url_input.text().strip()
             if api_url:
+                from app.config import get_api_server_url
+                old_api = (get_api_server_url() or "").rstrip("/")
+                new_api = api_url.rstrip("/")
+                api_changed = (old_api != new_api)
                 settings["api_server_url"] = api_url
-                from services.api_client import reset_api_client
-                reset_api_client()
 
         save_local_settings(settings)
+
+        if api_changed:
+            from services.api_client import reset_api_client
+            reset_api_client()
+            mw = self._find_main_window()
+            if mw is not None and hasattr(mw, "handle_server_change"):
+                mw.handle_server_change()
+
         self.accept()
+
+    def _find_main_window(self):
+        """Walk up the parent chain to locate the MainWindow."""
+        w = self.parent()
+        while w is not None:
+            if hasattr(w, "handle_server_change"):
+                return w
+            w = w.parent() if hasattr(w, "parent") else None
+        return None
 
     def _on_reset(self):
         self._tile_url_input.setText(_DEFAULT_TILE_URL)

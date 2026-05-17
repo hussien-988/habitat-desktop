@@ -388,6 +388,7 @@ EN_TRANSLATIONS = {
     "wizard.building.code_label": "Building Number",
     "wizard.building.search_placeholder": "Search for building code...",
     "wizard.building.search_on_map": "Search on Map",
+    "wizard.building.replace": "Replace Building",
     "wizard.building.type": "Building Type",
     "wizard.building.status": "Building Status",
     "wizard.building.units_count": "Units Count",

@@ -323,20 +323,28 @@ class OccupancyClaimsStep(BaseStep):
             else:
                 if person_id:
                     try:
+                        from services.api_worker import run_blocking_async
                         self._set_auth_token()
                         if is_applicant and survey_id:
-                            self._api_service.update_contact_person(
-                                survey_id, person_id, updated_data)
+                            run_blocking_async(
+                                self._api_service.update_contact_person,
+                                survey_id, person_id, updated_data,
+                            )
                         elif survey_id and household_id:
-                            self._api_service.update_person_in_survey(
-                                survey_id, household_id, person_id, updated_data)
+                            run_blocking_async(
+                                self._api_service.update_person_in_survey,
+                                survey_id, household_id, person_id, updated_data,
+                            )
                         else:
                             logger.warning(f"Missing survey_id or household_id for person {person_id}")
                         logger.info(f"Person {person_id} updated via API")
                         relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
                         if relation_id and survey_id:
                             try:
-                                self._api_service.update_relation(survey_id, relation_id, updated_data)
+                                run_blocking_async(
+                                    self._api_service.update_relation,
+                                    survey_id, relation_id, updated_data,
+                                )
                                 logger.info(f"Relation {relation_id} updated via API")
                             except Exception as e:
                                 logger.warning(f"Failed to update relation {relation_id}: {e}")
@@ -347,8 +355,10 @@ class OccupancyClaimsStep(BaseStep):
                                 relation_data['person_id'] = person_id
                                 relation_data['rel_type'] = rel_type
                                 try:
-                                    response = self._api_service.link_person_to_unit(
-                                        survey_id, unit_id, relation_data)
+                                    response = run_blocking_async(
+                                        self._api_service.link_person_to_unit,
+                                        survey_id, unit_id, relation_data,
+                                    )
                                     new_rel_id = (
                                         response.get('id') or response.get('relationId') or
                                         response.get('personPropertyRelationId') or '')
@@ -363,13 +373,15 @@ class OccupancyClaimsStep(BaseStep):
                                             if not f_path:
                                                 continue
                                             try:
-                                                resp = self._api_service.upload_relation_document(
+                                                resp = run_blocking_async(
+                                                    self._api_service.upload_relation_document,
                                                     survey_id=survey_id,
                                                     relation_id=new_rel_id,
                                                     file_path=f_path,
                                                     issue_date=f_entry.get('issue_date', ''),
                                                     file_hash=f_entry.get('hash', ''),
-                                                    document_reference_number=f_entry.get('reference_number', ''))
+                                                    document_reference_number=f_entry.get('reference_number', ''),
+                                                )
                                                 eid = (resp.get('id') or resp.get('evidenceId') or '')
                                                 if eid:
                                                     f_entry['evidence_id'] = eid
@@ -381,8 +393,9 @@ class OccupancyClaimsStep(BaseStep):
                                             if not f_entry.get('_selected_existing') or not f_entry.get('evidence_id'):
                                                 continue
                                             try:
-                                                self._api_service.link_evidence_to_relation(
-                                                    survey_id, f_entry['evidence_id'], new_rel_id
+                                                run_blocking_async(
+                                                    self._api_service.link_evidence_to_relation,
+                                                    survey_id, f_entry['evidence_id'], new_rel_id,
                                                 )
                                                 logger.info(f"Existing evidence {f_entry['evidence_id']} linked to relation {new_rel_id}")
                                             except Exception as le:
@@ -757,7 +770,10 @@ class OccupancyClaimsStep(BaseStep):
         }
 
         try:
-            api_data = self._api_service.finalize_office_survey(survey_id, process_options)
+            from services.api_worker import run_blocking_async
+            api_data = run_blocking_async(
+                self._api_service.finalize_office_survey, survey_id, process_options,
+            )
             logger.info(f"Survey {survey_id} claims processed successfully")
             self.context.finalize_response = api_data
             self.context.update_data("_survey_finalized_once", True)
@@ -926,7 +942,10 @@ class OccupancyClaimsStep(BaseStep):
             }
 
             try:
-                response = self._api_service.link_person_to_unit(survey_id, unit_id, relation_data)
+                from services.api_worker import run_blocking_async
+                response = run_blocking_async(
+                    self._api_service.link_person_to_unit, survey_id, unit_id, relation_data,
+                )
                 new_relation_id = response.get('id') or response.get('relationId')
                 person['_relation_id'] = new_relation_id
                 logger.info(f"Auto-relinked person {person_id} to unit {unit_id}, new relation: {new_relation_id}")

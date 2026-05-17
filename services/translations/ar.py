@@ -388,6 +388,7 @@ AR_TRANSLATIONS = {
     "wizard.building.code_label": "رقم البناء",
     "wizard.building.search_placeholder": "ابحث عن رمز البناء ...",
     "wizard.building.search_on_map": "بحث على الخريطة",
+    "wizard.building.replace": "استبدال البناء",
     "wizard.building.type": "نوع البناء",
     "wizard.building.status": "حالة البناء",
     "wizard.building.units_count": "عدد الوحدات",

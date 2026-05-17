@@ -9,6 +9,7 @@ Allows user to:
 """
 
 from typing import Dict, Any, Optional
+import time
 import uuid
 
 from PyQt5.QtWidgets import (
@@ -16,8 +17,16 @@ from PyQt5.QtWidgets import (
     QFrame, QScrollArea, QWidget, QGroupBox, QSizePolicy,
     QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, QLocale, QDate
+from PyQt5.QtCore import Qt, QLocale, QDate, QTimer
 from PyQt5.QtGui import QColor
+
+
+class FocusSelectSpinBox(QSpinBox):
+    """QSpinBox that selects all text on focus so typing replaces the current value."""
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)
 
 from ui.components.rtl_combo import RtlCombo
 from ui.style_manager import StyleManager
@@ -27,7 +36,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
     make_step_card, make_icon_header, make_divider, get_step_card_style,
-    make_editable_date_combo, read_int_from_combo, validate_date_combo_text,
+    read_int_from_combo,
 )
 from app.config import Config
 from services.api_client import get_api_client
@@ -223,12 +232,13 @@ class HouseholdStep(BaseStep):
         self._total_members_label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
         self._total_members_label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         total_members_col.addWidget(self._total_members_label)
-        self.hh_total_members = QSpinBox()
+        self.hh_total_members = FocusSelectSpinBox()
         self.hh_total_members.setRange(0, 50)
         self.hh_total_members.setValue(0)
         self.hh_total_members.setAlignment(Qt.AlignCenter)
         self.hh_total_members.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.hh_total_members.setButtonSymbols(QSpinBox.NoButtons)
+        self.hh_total_members.setSpecialValueText("")
         members_widget = self._create_spinbox_with_arrows(self.hh_total_members)
         members_widget.setFixedHeight(ScreenScale.h(45))
         total_members_col.addWidget(members_widget)
@@ -248,11 +258,11 @@ class HouseholdStep(BaseStep):
         date_row = QHBoxLayout()
         date_row.setSpacing(6)
 
-        self.hh_start_year = make_editable_date_combo(
-            items=[(str(y), y) for y in range(QDate.currentDate().year(), 1939, -1)],
-            max_digits=4, placeholder=tr("wizard.person_dialog.year_placeholder"),
-            editable=False,
-        )
+        self.hh_start_year = RtlCombo()
+        self.hh_start_year.addItem(tr("wizard.person_dialog.year"), None)
+        for y in range(QDate.currentDate().year(), 1939, -1):
+            self.hh_start_year.addItem(str(y), y)
+        self.hh_start_year.setStyleSheet(FORM_FIELD_STYLE)
         date_row.addWidget(self.hh_start_year, 1)
         start_date_col.addLayout(date_row)
         family_info_layout.addLayout(start_date_col)
@@ -337,12 +347,13 @@ class HouseholdStep(BaseStep):
             _lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
             _lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
             self._demo_labels[_attr] = (_lbl, _lkey)
-            _spin = QSpinBox()
+            _spin = FocusSelectSpinBox()
             _spin.setRange(0, 50)
             _spin.setValue(0)
             _spin.setAlignment(Qt.AlignRight)
             _spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
             _spin.setButtonSymbols(QSpinBox.NoButtons)
+            _spin.setSpecialValueText("")
             setattr(self, _attr, _spin)
             # Cell wrapper — fully transparent. Only the inner spinbox shows
             # its own border; the label sits free above it without an extra
@@ -781,42 +792,71 @@ class HouseholdStep(BaseStep):
         self._set_auth_token()
         self._spinner.show_loading(tr("component.loading.default"))
 
+        logger.info(
+            f"[HOUSEHOLD-STEP] validate entered | existing={existing_household_id} "
+            f"| survey={survey_id} | property_unit={property_unit_id} | size={household['size']}"
+        )
+
+        if getattr(self, "_saving_in_progress", False):
+            logger.warning("[HOUSEHOLD-STEP] DUPLICATE validate() while save in progress — refusing")
+            result.add_error(tr("component.loading.default"))
+            return result
+        self._saving_in_progress = True
+
+        from services.api_worker import run_blocking_async
         try:
             if existing_household_id:
                 stored = self.context.households[0] if self.context.households else {}
                 if self._household_data_changed(household, stored):
+                    logger.info(f"[HOUSEHOLD-STEP] launching update_household (existing={existing_household_id})")
+                    t0 = time.monotonic()
                     try:
-                        self._api_client.update_household(existing_household_id, household, survey_id=survey_id)
-                        logger.info(f"Household {existing_household_id} updated via API")
+                        run_blocking_async(
+                            self._api_client.update_household,
+                            existing_household_id, household, survey_id=survey_id,
+                        )
+                        dt = int((time.monotonic() - t0) * 1000)
+                        logger.info(f"[HOUSEHOLD-STEP] update_household OK in {dt}ms ({existing_household_id})")
                         saved = True
                     except Exception as e:
+                        dt = int((time.monotonic() - t0) * 1000)
+                        logger.error(f"[HOUSEHOLD-STEP] update_household FAILED in {dt}ms: {e}")
                         from services.error_mapper import map_exception
-                        logger.error(f"Failed to update household via API: {e}")
                         msg = map_exception(e)
                         Toast.show_toast(self, msg, Toast.ERROR)
                         result.add_error(msg)
                         return result
                 else:
-                    logger.info(f"Household unchanged ({existing_household_id}), skipping")
+                    logger.info(f"[HOUSEHOLD-STEP] unchanged ({existing_household_id}), skipping API call")
                     saved = True
                 household["api_id"] = existing_household_id
             else:
-                logger.info(f"Creating household via API: property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}")
+                logger.info(
+                    f"[HOUSEHOLD-STEP] launching create_household via run_blocking_async: "
+                    f"property_unit_id={property_unit_id}, survey_id={survey_id}, size={household['size']}"
+                )
+                t0 = time.monotonic()
                 try:
-                    api_response = self._api_client.create_household(household, survey_id=survey_id)
-                    logger.info("Household created successfully via API")
+                    api_response = run_blocking_async(
+                        self._api_client.create_household,
+                        household, survey_id=survey_id,
+                    )
+                    dt = int((time.monotonic() - t0) * 1000)
                     household_id = api_response.get("id") or api_response.get("householdId", "")
+                    logger.info(f"[HOUSEHOLD-STEP] create_household OK in {dt}ms, household_id={household_id}")
                     household["api_id"] = household_id
                     self.context.update_data("household_id", household_id)
                     saved = True
                 except Exception as e:
+                    dt = int((time.monotonic() - t0) * 1000)
+                    logger.error(f"[HOUSEHOLD-STEP] create_household FAILED in {dt}ms: {e}")
                     from services.error_mapper import map_exception
-                    logger.error(f"Failed to create household via API: {e}")
                     msg = map_exception(e)
                     Toast.show_toast(self, msg, Toast.ERROR)
                     result.add_error(msg)
                     return result
         finally:
+            self._saving_in_progress = False
             self._spinner.hide_loading()
 
         if self.context.households:
@@ -856,8 +896,7 @@ class HouseholdStep(BaseStep):
                      self.hh_elderly_count, self.hh_disabled_count]:
             spin.setValue(0)
         self.hh_occupancy_nature.setCurrentIndex(0)
-        self.hh_start_year.setCurrentIndex(-1)
-        self.hh_start_year.clearEditText()
+        self.hh_start_year.setCurrentIndex(0)
         self.hh_notes.clear()
 
     def populate_data(self):
@@ -939,8 +978,6 @@ class HouseholdStep(BaseStep):
                     _idx = self.hh_start_year.findData(int(_parts[0]))
                     if _idx >= 0:
                         self.hh_start_year.setCurrentIndex(_idx)
-                    else:
-                        self.hh_start_year.setCurrentText(_parts[0])
 
             self.hh_total_members.setValue(int(household.get("size") or 0))
             self.hh_male_count.setValue(int(household.get("male_count") or 0))

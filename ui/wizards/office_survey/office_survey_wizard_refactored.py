@@ -66,6 +66,7 @@ class OfficeSurveyWizard(BaseWizard):
     survey_completed = pyqtSignal(dict)
     survey_cancelled = pyqtSignal()
     survey_saved_draft = pyqtSignal(str)
+    building_replace_requested = pyqtSignal()
 
     def __init__(self, db: Database = None, parent=None):
         """Initialize the wizard."""
@@ -103,6 +104,7 @@ class OfficeSurveyWizard(BaseWizard):
             ClaimStep(self.context, self),            # 6 - Claim display
         ]
         steps[5].edit_requested.connect(self._enter_edit_mode)
+        steps[0].replace_building_requested.connect(self.building_replace_requested.emit)
         return steps
 
     def set_auth_token(self, token: str):
@@ -119,6 +121,21 @@ class OfficeSurveyWizard(BaseWizard):
         # Store token for use by individual steps
         self._auth_token = token
         logger.info("API token stored in wizard")
+        # Refresh every step's captured API-service refs against the current
+        # singleton + push the new token. Without this, steps created at app
+        # startup keep talking to whichever client was current then — after a
+        # server switch + re-login that produces 403 on the first call.
+        for step in getattr(self, 'steps', []) or []:
+            try:
+                if hasattr(step, 'rebind_api_services'):
+                    step.rebind_api_services()
+                if hasattr(step, '_API_SERVICE_ATTRS'):
+                    for attr_name in step._API_SERVICE_ATTRS:
+                        service = getattr(step, attr_name, None)
+                        if service and hasattr(service, 'set_access_token'):
+                            service.set_access_token(token)
+            except Exception as e:
+                logger.warning(f"set_auth_token: step {type(step).__name__} rebind/push failed: {e}")
 
     def get_wizard_title(self) -> str:
         """Get wizard title."""

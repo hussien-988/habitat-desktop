@@ -492,6 +492,11 @@ def main():
         splash.set_progress(1.0)
         app.processEvents()
         window.show()
+        # Pump the event loop until the main window has had its first paint —
+        # otherwise splash.finish() hides the splash before MainWindow renders,
+        # leaving a black/empty window for ~200-1500ms.
+        app.processEvents()
+        app.processEvents()
         splash.finish(window)
 
         # Defer API data loading so window appears immediately

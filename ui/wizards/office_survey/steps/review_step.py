@@ -1444,6 +1444,9 @@ class ReviewStep(BaseStep):
 
     def on_next(self):
         """Called when user clicks Next/Submit button. Finalize the survey via API."""
+        if getattr(self, "_finalizing_in_progress", False):
+            logger.debug("review_step: ignoring duplicate on_next while finalize in progress")
+            return
         self._set_auth_token()
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
@@ -1451,6 +1454,7 @@ class ReviewStep(BaseStep):
             ErrorHandler.show_error(self, tr("wizard.review.no_survey_id"), tr("common.error"))
             return
 
+        self._finalizing_in_progress = True
         self._spinner.show_loading(tr("component.loading.default"))
         try:
             # Save intervieweeName before finalizing
@@ -1474,6 +1478,7 @@ class ReviewStep(BaseStep):
             self._call_finalize_endpoint(survey_id)
         finally:
             self._spinner.hide_loading()
+            self._finalizing_in_progress = False
 
     def _finalize_survey_via_api(self, survey_id: str):
         finalize_options = {
@@ -1482,7 +1487,10 @@ class ReviewStep(BaseStep):
             "autoCreateClaim": True
         }
         try:
-            response = self._api_service.finalize_office_survey(survey_id, finalize_options)
+            from services.api_worker import run_blocking_async
+            response = run_blocking_async(
+                self._api_service.finalize_office_survey, survey_id, finalize_options,
+            )
             logger.info(f"Survey {survey_id} process-claims succeeded")
             self.context.finalize_response = response
         except Exception as e:
@@ -1492,7 +1500,8 @@ class ReviewStep(BaseStep):
 
     def _call_finalize_endpoint(self, survey_id: str):
         try:
-            self._api_service.finalize_survey_status(survey_id)
+            from services.api_worker import run_blocking_async
+            run_blocking_async(self._api_service.finalize_survey_status, survey_id)
             logger.info(f"Survey {survey_id} finalized successfully")
             self.context.status = "finalized"
             # Fetch updated survey to get the proper referenceCode

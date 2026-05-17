@@ -3,7 +3,10 @@
 Step Navigator - Manages navigation between wizard steps.
 """
 
+import threading
+import time
 from typing import List, Optional
+
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from .base_step import BaseStep, StepValidationResult
@@ -58,14 +61,23 @@ class StepNavigator(QObject):
             logger.debug(f"Cannot go next: already at last step ({self.current_index})")
             return False
 
-        logger.info(f"Navigating: Step {self.current_index} → {self.current_index + 1}")
+        logger.info(
+            f"[WIZARD] next_step {self.current_index} -> {self.current_index + 1} | tid={threading.get_ident()}"
+        )
 
         # Validate current step
         if not skip_validation:
             current_step = self.get_current_step()
             if current_step:
-                logger.debug(f"Validating step {self.current_index}...")
+                step_name = type(current_step).__name__
+                logger.info(f"[WIZARD] validate START step={self.current_index} ({step_name})")
+                t0 = time.monotonic()
                 validation_result = current_step.validate()
+                dt = int((time.monotonic() - t0) * 1000)
+                logger.info(
+                    f"[WIZARD] validate END step={self.current_index} ({step_name}) "
+                    f"took={dt}ms valid={validation_result.is_valid}"
+                )
                 if not validation_result.is_valid:
                     logger.warning(
                         f"Step {self.current_index} validation failed: {validation_result.errors}"

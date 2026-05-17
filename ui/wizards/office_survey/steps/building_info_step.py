@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QFrame, QWidget,
     QLineEdit, QTextEdit, QScrollArea, QGridLayout, QSizePolicy
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
@@ -54,6 +54,8 @@ class BuildingInfoStep(BaseStep):
     Three-card layout mirroring AddBuildingPage visual design.
     No user input — validation passes if context.building is set.
     """
+
+    replace_building_requested = pyqtSignal()
 
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
@@ -220,6 +222,26 @@ class BuildingInfoStep(BaseStep):
         """)
         self._docs_btn.clicked.connect(self._on_show_documents)
         meta_row.addWidget(self._docs_btn, stretch=0)
+
+        self._replace_btn = QPushButton(tr("wizard.building.replace"))
+        self._replace_btn.setMinimumHeight(ScreenScale.h(36))
+        self._replace_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self._replace_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._replace_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._replace_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3890DF;
+                color: #FFFFFF;
+                border: 1.5px solid #3890DF;
+                border-radius: 8px;
+                padding: 0 16px;
+            }
+            QPushButton:hover { background-color: #2D7BC9; border-color: #2D7BC9; }
+            QPushButton:pressed { background-color: #2468B0; border-color: #2468B0; }
+        """)
+        self._replace_btn.clicked.connect(self.replace_building_requested.emit)
+        meta_row.addWidget(self._replace_btn, stretch=0)
+
         card_layout.addLayout(meta_row)
 
         desc_lbl = QLabel(tr("wizard.building_info.description_label"))
@@ -571,6 +593,24 @@ class BuildingInfoStep(BaseStep):
             "inPersonVisit": True,
         }
         logger.info(f"Creating office survey for building: {building_uuid}")
+        try:
+            from app.config import get_api_base_url as _gabu
+            _svc_url = getattr(self._survey_api_service, 'base_url', None)
+            _svc_token = getattr(self._survey_api_service, 'access_token', None)
+            _resolved = _gabu()
+            _mw = self.window()
+            _mw_token = getattr(_mw, '_api_token', None) if _mw else None
+            logger.info(
+                f"[SRV-DIAG] building_info_step.create_office_survey "
+                f"building_uuid={building_uuid} "
+                f"service_id={id(self._survey_api_service)} "
+                f"service_base_url={_svc_url} resolved_base_url={_resolved} "
+                f"url_match={(_svc_url or '').rstrip('/') == (_resolved or '').rstrip('/')} "
+                f"service_token_present={bool(_svc_token)} mw_token_present={bool(_mw_token)} "
+                f"tokens_match={_svc_token == _mw_token if (_svc_token and _mw_token) else False}"
+            )
+        except Exception as _diag_e:
+            logger.debug(f"[SRV-DIAG] diag log failed: {_diag_e}")
         try:
             survey_response = self._survey_api_service.create_office_survey(survey_data)
             survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
