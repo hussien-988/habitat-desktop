@@ -1329,9 +1329,9 @@ class SyncDataPage(QWidget):
                 if attr_name.startswith("_detail_"):
                     detail_body = getattr(card, attr_name, None)
                     if detail_body and isinstance(detail_body, QWidget):
-                        detail_body.setParent(None)
+                        detail_body.hide()
                         detail_body.deleteLater()
-            card.setParent(None)
+            card.hide()
             card.deleteLater()
 
         self._card_widgets.clear()

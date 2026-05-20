@@ -463,43 +463,25 @@ class TRRCMSApiClient:
         return h
 
     _MAX_RETRIES = 1
-    _CONNECT_TIMEOUT = 10
+    _CONNECT_TIMEOUT = 5
+    _READ_TIMEOUT = 15
+    _UPLOAD_READ_TIMEOUT = 60
 
-    # Substrings that mark heavy write endpoints. These are paths where
-    # the backend performs INSERT/UPDATE chains (FK fan-out, audit, file
-    # upload) and can legitimately run tens of seconds over ngrok. The
-    # classification is method-aware: a GET to .../households (list) is
-    # NOT heavy even though the substring matches.
-    _HEAVY_WRITE_PATTERNS = (
-        "/households",
-        "/evidence/identification",
-        "/evidence/tenure",
-        "/Surveys/office",
-        "/relations",
-        "/finalize",
-        "/contact-person/",
+    _UPLOAD_PATTERNS = (
+        "/identification-document",
+        "/upload",
+        "/evidence",
     )
 
-    def _is_heavy_write(self, method: str, endpoint: str) -> bool:
-        if method.upper() not in ("POST", "PUT", "PATCH", "DELETE"):
-            return False
-        return any(p in endpoint for p in self._HEAVY_WRITE_PATTERNS)
+    def _is_upload_endpoint(self, endpoint: str) -> bool:
+        return any(p in endpoint for p in self._UPLOAD_PATTERNS)
 
     def _endpoint_timeout(self, method: str, endpoint: str, override: int) -> int:
-        """Pick a read timeout based on method + endpoint latency profile.
-
-        Localhost keeps the configured value (30s). ngrok-free adds tunnel
-        buffering + edge routing on top of backend processing, so heavy
-        writes routinely run 20-60s. Reads stay snappy regardless.
-        """
         if override and override > 0:
             return override
-        base = self.config.timeout
-        if not self._is_ngrok:
-            return base
-        if self._is_heavy_write(method, endpoint):
-            return max(base * 3, 90)
-        return max(base, 60)
+        if self._is_upload_endpoint(endpoint):
+            return self._UPLOAD_READ_TIMEOUT
+        return self._READ_TIMEOUT
 
     def _timeout(self, method: str, endpoint: str, read_override: int):
         """Return (connect, read) timeout tuple — separates handshake from read."""
@@ -526,11 +508,7 @@ class TRRCMSApiClient:
         t_enter = time.monotonic()
 
         effective_timeout = self._endpoint_timeout(method, endpoint, timeout_override)
-        # Heavy writes on ngrok must not auto-retry — each attempt is a 90s
-        # blocking call, so two failures = 180s of frozen UI. Surface the
-        # first failure immediately so the user can react.
-        skip_retry = disable_retry or (self._is_ngrok and self._is_heavy_write(method, endpoint))
-        max_retries = 0 if skip_retry else self._MAX_RETRIES
+        max_retries = 0 if disable_retry else self._MAX_RETRIES
 
         logger.info(
             f"[REQ {req_id}] {method} {endpoint} | tid={tid} "

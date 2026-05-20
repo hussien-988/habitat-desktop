@@ -4,6 +4,7 @@
 import threading
 import time
 import uuid
+from typing import Optional
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from utils.logger import get_logger
@@ -30,6 +31,7 @@ class ApiWorker(QThread):
         self._func = func
         self._args = args
         self._kwargs = kwargs
+        self.exception: Optional[Exception] = None
         # Auto-register so the registry can stop us at app shutdown without
         # every call site needing to opt in.
         _register_worker(self)
@@ -43,9 +45,11 @@ class ApiWorker(QThread):
             self.finished.emit(result)
         except (ApiException, NetworkException) as e:
             # Surface a safe user-facing message; never a stack trace.
+            self.exception = e
             log_exception(e, logger, context="api_worker")
             self.error.emit(humanize_exception(e))
         except Exception as e:
+            self.exception = e
             logger.warning(f"ApiWorker error: {e}")
             self.error.emit(humanize_exception(e))
 
@@ -137,6 +141,10 @@ def run_blocking_async(func, *args, **kwargs):
         logger.warning(
             f"[BLOCKING-ASYNC {op_id}] error fn={fname} elapsed_ms={elapsed_ms} msg={result_box['error']}"
         )
+        # Preserve original exception type so callers can use isinstance()
+        # checks (e.g. ApiException.status_code == 409 for duplicate-NID).
+        if worker.exception is not None:
+            raise worker.exception
         raise RuntimeError(result_box["error"])
     logger.info(
         f"[BLOCKING-ASYNC {op_id}] done fn={fname} elapsed_ms={elapsed_ms}"

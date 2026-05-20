@@ -1364,7 +1364,11 @@ class PersonDialog(QDialog):
             else:
                 try:
                     self._refresh_token()
-                    self._api_service.delete_identification_document(self._survey_id, evidence_id)
+                    from services.api_worker import run_blocking_async
+                    run_blocking_async(
+                        self._api_service.delete_identification_document,
+                        self._survey_id, evidence_id,
+                    )
                     logger.info(f"Evidence deleted from server: {evidence_id}")
                 except Exception as e:
                     from services.exceptions import ApiException
@@ -1396,7 +1400,11 @@ class PersonDialog(QDialog):
             else:
                 try:
                     self._refresh_token()
-                    self._api_service.delete_evidence(self._survey_id, evidence_id)
+                    from services.api_worker import run_blocking_async
+                    run_blocking_async(
+                        self._api_service.delete_evidence,
+                        self._survey_id, evidence_id,
+                    )
                     logger.info(f"Tenure evidence deleted from server: {evidence_id}")
                 except Exception as e:
                     logger.error(f"Failed to delete tenure evidence: {e}")
@@ -2992,8 +3000,10 @@ class PersonDialog(QDialog):
                 relation_data['rel_type'] = rel_type
                 relation_data['is_contact'] = True
                 try:
-                    relation_response = self._api_service.link_person_to_unit(
-                        self._survey_id, self._unit_id, relation_data
+                    from services.api_worker import run_blocking_async
+                    relation_response = run_blocking_async(
+                        self._api_service.link_person_to_unit,
+                        self._survey_id, self._unit_id, relation_data,
                     )
                     relation_id = (
                         relation_response.get("id") or relation_response.get("relationId") or
@@ -3012,14 +3022,14 @@ class PersonDialog(QDialog):
                         self._upload_tenure_files(relation_id)
                         self.relation_uploaded_files = saved
 
-                    # Link existing selected documents to this relation
                     if relation_id:
                         for entry in self.relation_uploaded_files:
                             if not entry.get('_selected_existing') or not entry.get('evidence_id'):
                                 continue
                             try:
-                                self._api_service.link_evidence_to_relation(
-                                    self._survey_id, entry['evidence_id'], relation_id
+                                run_blocking_async(
+                                    self._api_service.link_evidence_to_relation,
+                                    self._survey_id, entry['evidence_id'], relation_id,
                                 )
                                 logger.info(f"Existing evidence {entry['evidence_id']} linked to relation {relation_id}")
                             except Exception as e:
@@ -3174,9 +3184,12 @@ class PersonDialog(QDialog):
                             f"[ID-DOCS FLOW] PUT replace: old_id={old_evidence_id} "
                             f"new_file={os.path.basename(file_path)} doc_type={doc_type}"
                         )
-                        response = self._api_service.update_identification_document(
-                            self._survey_id, old_evidence_id, person_id, file_path=file_path,
-                            document_type=doc_type)
+                        from services.api_worker import run_blocking_async
+                        response = run_blocking_async(
+                            self._api_service.update_identification_document,
+                            self._survey_id, old_evidence_id, person_id,
+                            file_path=file_path, document_type=doc_type,
+                        )
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         self._evidence_ids[os.path.normpath(file_path)] = new_eid
@@ -3196,7 +3209,11 @@ class PersonDialog(QDialog):
                 # Delete leftover pending IDs that were not replaced
                 for old_id in self._pending_id_replacements:
                     try:
-                        self._api_service.delete_identification_document(self._survey_id, old_id)
+                        from services.api_worker import run_blocking_async
+                        run_blocking_async(
+                            self._api_service.delete_identification_document,
+                            self._survey_id, old_id,
+                        )
                         logger.info(f"Orphaned ID evidence deleted: {old_id}")
                     except Exception as e:
                         from services.exceptions import ApiException
@@ -3218,11 +3235,14 @@ class PersonDialog(QDialog):
                         break
                     old_evidence_id = self._pending_rel_replacements.pop(0)
                     try:
-                        response = self._api_service.update_tenure_evidence(
+                        from services.api_worker import run_blocking_async
+                        response = run_blocking_async(
+                            self._api_service.update_tenure_evidence,
                             self._survey_id, old_evidence_id, relation_id,
                             file_path=file_entry["path"],
                             issue_date=file_entry.get("issue_date", ""),
-                            document_reference_number=file_entry.get("reference_number", ""))
+                            document_reference_number=file_entry.get("reference_number", ""),
+                        )
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_evidence_id)
                         file_entry["evidence_id"] = new_eid
@@ -3239,12 +3259,13 @@ class PersonDialog(QDialog):
                     self._upload_tenure_files(relation_id)
                     self.relation_uploaded_files = saved
 
-                # Link newly selected existing documents
                 for entry in self.relation_uploaded_files:
                     if entry.get('_selected_existing') and entry.get('evidence_id'):
                         try:
-                            self._api_service.link_evidence_to_relation(
-                                self._survey_id, entry['evidence_id'], relation_id
+                            from services.api_worker import run_blocking_async
+                            run_blocking_async(
+                                self._api_service.link_evidence_to_relation,
+                                self._survey_id, entry['evidence_id'], relation_id,
                             )
                             logger.info(f"Existing evidence {entry['evidence_id']} linked to relation {relation_id}")
                         except Exception as e:
@@ -3255,10 +3276,13 @@ class PersonDialog(QDialog):
                                 Toast.ERROR
                             )
 
-                # Delete leftover pending tenure IDs
                 for old_id in self._pending_rel_replacements:
                     try:
-                        self._api_service.delete_evidence(self._survey_id, old_id)
+                        from services.api_worker import run_blocking_async
+                        run_blocking_async(
+                            self._api_service.delete_evidence,
+                            self._survey_id, old_id,
+                        )
                         logger.info(f"Orphaned tenure evidence deleted: {old_id}")
                     except Exception as e:
                         logger.error(f"Failed to delete orphaned tenure evidence {old_id}: {e}")
@@ -3352,8 +3376,10 @@ class PersonDialog(QDialog):
             if not ev_id:
                 continue
             try:
-                self._api_service.link_evidence_to_relation(
-                    self._survey_id, ev_id, relation_id
+                from services.api_worker import run_blocking_async
+                run_blocking_async(
+                    self._api_service.link_evidence_to_relation,
+                    self._survey_id, ev_id, relation_id,
                 )
                 success_count += 1
                 logger.info(f"Existing evidence {ev_id} linked to relation {relation_id}")

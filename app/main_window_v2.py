@@ -1416,13 +1416,10 @@ class MainWindow(QMainWindow):
                 pass
 
     def _on_sync_requested(self):
-        """Open the sync data page; always refetch on entry."""
-        sync_page = self.pages.get(Pages.SYNC_DATA)
-        if sync_page is not None and hasattr(sync_page, "refresh"):
-            try:
-                sync_page.refresh()
-            except Exception as e:
-                logger.warning(f"Sync page refresh failed: {e}")
+        """Open the sync data page. navigate_to() refreshes after the
+        page is visible (200ms post-fade), so calling refresh() here would
+        cause the spinner overlay to briefly render while the page is still
+        hidden in the QStackedWidget."""
         self.navigate_to(Pages.SYNC_DATA)
 
     def _on_tab_changed(self, tab_index: int):

@@ -50,6 +50,7 @@ class ApplicantInfoStep(BaseStep):
         self._field_styles: dict = {}
         self._evidence_ids: dict = {}
         self._pending_id_replacements: list = []
+        self._saving_in_progress: bool = False
         from services.api_client import get_api_client
         self._api_client = get_api_client()
 
@@ -887,37 +888,55 @@ class ApplicantInfoStep(BaseStep):
         # 4. Set auth token
         self._set_auth_token()
 
+        if self._saving_in_progress:
+            logger.warning("[APPLICANT-STEP] DUPLICATE validate() while save in progress — refusing")
+            result.add_error(tr("component.loading.default"))
+            return result
+        self._saving_in_progress = True
+
+        from services.api_worker import run_blocking_async
+        from services.error_mapper import (
+            map_exception, is_duplicate_nid_error, build_duplicate_person_message,
+        )
+        from services.exceptions import ApiException
+
         self._spinner.show_loading(tr("component.loading.default"))
         try:
             # 5. Call API
             existing_cp_id = self.context.get_data("contact_person_id")
             if not existing_cp_id:
                 try:
-                    response = self._api_client.create_contact_person(survey_id, self.context.applicant)
+                    response = run_blocking_async(
+                        self._api_client.create_contact_person,
+                        survey_id, self.context.applicant,
+                    )
                     self.context.update_data(
                         "contact_person_id",
                         response.get("id") or response.get("contactPersonId", "")
                     )
                 except Exception as e:
-                    from services.exceptions import ApiException
-                    from services.error_mapper import map_exception
                     if isinstance(e, ApiException) and e.status_code == 409:
-                        from services.error_mapper import build_duplicate_person_message
-                        result.add_error(build_duplicate_person_message(e.response_data))
+                        msg = build_duplicate_person_message(e.response_data)
                     else:
                         logger.error(f"Contact person API failed: {e}")
-                        result.add_error(map_exception(e))
+                        msg = map_exception(e)
+                    Toast.show_toast(self.window(), msg, Toast.ERROR)
+                    result.add_error(msg)
             else:
                 try:
-                    self._api_client.update_contact_person(survey_id, existing_cp_id, self.context.applicant)
+                    run_blocking_async(
+                        self._api_client.update_contact_person,
+                        survey_id, existing_cp_id, self.context.applicant,
+                    )
                     logger.info(f"Contact person {existing_cp_id} updated")
                 except Exception as e:
-                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message, map_exception
                     if is_duplicate_nid_error(e):
-                        result.add_error(build_duplicate_person_message(getattr(e, 'response_data', {})))
+                        msg = build_duplicate_person_message(getattr(e, 'response_data', {}))
                     else:
                         logger.error(f"Contact person update failed: {e}")
-                        result.add_error(map_exception(e))
+                        msg = map_exception(e)
+                    Toast.show_toast(self.window(), msg, Toast.ERROR)
+                    result.add_error(msg)
 
             # 6. ID photo replacement / upload / deletion
             person_id = self.context.get_data("contact_person_id")
@@ -942,7 +961,8 @@ class ApplicantInfoStep(BaseStep):
                             f"[ID-DOCS FLOW] PUT replace: old_id={old_ev_id} "
                             f"new_file={os.path.basename(fp)}"
                         )
-                        response = self._api_client.update_identification_document(
+                        response = run_blocking_async(
+                            self._api_client.update_identification_document,
                             survey_id=survey_id,
                             document_id=old_ev_id,
                             person_id=person_id,
@@ -958,13 +978,13 @@ class ApplicantInfoStep(BaseStep):
                     except Exception as e:
                         logger.error(f"Failed to PUT replace {old_ev_id}: {e}")
                         self._pending_id_replacements.insert(0, old_ev_id)
-                        from services.error_mapper import map_exception
                         Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
                         break
 
                 for fp in new_files:
                     try:
-                        response = self._api_client.upload_identification_document(
+                        response = run_blocking_async(
+                            self._api_client.upload_identification_document,
                             survey_id=survey_id,
                             person_id=person_id,
                             file_path=fp,
@@ -978,15 +998,16 @@ class ApplicantInfoStep(BaseStep):
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                     except Exception as e:
                         logger.error(f"Failed to upload ID photo {fp}: {e}")
-                        from services.error_mapper import map_exception
                         Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
 
                 for old_id in list(self._pending_id_replacements):
                     try:
-                        self._api_client.delete_identification_document(survey_id, old_id)
+                        run_blocking_async(
+                            self._api_client.delete_identification_document,
+                            survey_id, old_id,
+                        )
                         logger.info(f"Orphaned ID evidence deleted: {old_id}")
                     except Exception as e:
-                        from services.exceptions import ApiException
                         if isinstance(e, ApiException) and e.status_code == 404:
                             logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
                         else:
@@ -998,6 +1019,7 @@ class ApplicantInfoStep(BaseStep):
                     self.context.applicant = {}
                 self.context.applicant["id_evidence_map"] = dict(self._evidence_ids)
         finally:
+            self._saving_in_progress = False
             self._spinner.hide_loading()
 
         return result

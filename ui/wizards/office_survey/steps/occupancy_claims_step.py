@@ -50,6 +50,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_relation_type_display, get_relationship_to_head_display
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
+from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
 
@@ -60,6 +61,7 @@ class OccupancyClaimsStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._api_service = get_api_client()
+        self._saving_in_progress: bool = False
 
     def setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -106,6 +108,8 @@ class OccupancyClaimsStep(BaseStep):
         pf_layout.addStretch(0)
 
         layout.addWidget(persons_frame, 1)
+
+        self._spinner = LoadingSpinnerOverlay(self)
 
     def _create_empty_state(self) -> QWidget:
         """Create empty state widget shown when no persons are added."""
@@ -308,124 +312,130 @@ class OccupancyClaimsStep(BaseStep):
         )
 
         if dialog.exec_() == QDialog.Accepted and not is_finalized:
-            updated_data = dialog.get_person_data()
-            updated_data['person_id'] = person_id
+            if self._saving_in_progress:
+                return
+            self._saving_in_progress = True
+            self._spinner.show_loading(tr("component.loading.default"))
+            try:
+                updated_data = dialog.get_person_data()
+                updated_data['person_id'] = person_id
 
-            rel_files = dialog.get_relation_uploaded_files()
-            if rel_files:
-                updated_data['_relation_uploaded_files'] = rel_files
+                rel_files = dialog.get_relation_uploaded_files()
+                if rel_files:
+                    updated_data['_relation_uploaded_files'] = rel_files
 
-            if open_as_existing:
-                # PersonDialog handled link_person_to_unit() + evidence upload internally
-                rel_id = dialog.get_api_relation_id()
-                if rel_id:
-                    updated_data['_relation_id'] = rel_id
-            else:
-                if person_id:
-                    try:
-                        from services.api_worker import run_blocking_async
-                        self._set_auth_token()
-                        if is_applicant and survey_id:
-                            run_blocking_async(
-                                self._api_service.update_contact_person,
-                                survey_id, person_id, updated_data,
-                            )
-                        elif survey_id and household_id:
-                            run_blocking_async(
-                                self._api_service.update_person_in_survey,
-                                survey_id, household_id, person_id, updated_data,
-                            )
-                        else:
-                            logger.warning(f"Missing survey_id or household_id for person {person_id}")
-                        logger.info(f"Person {person_id} updated via API")
-                        relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
-                        if relation_id and survey_id:
-                            try:
+                if open_as_existing:
+                    rel_id = dialog.get_api_relation_id()
+                    if rel_id:
+                        updated_data['_relation_id'] = rel_id
+                else:
+                    if person_id:
+                        try:
+                            from services.api_worker import run_blocking_async
+                            self._set_auth_token()
+                            if is_applicant and survey_id:
                                 run_blocking_async(
-                                    self._api_service.update_relation,
-                                    survey_id, relation_id, updated_data,
+                                    self._api_service.update_contact_person,
+                                    survey_id, person_id, updated_data,
                                 )
-                                logger.info(f"Relation {relation_id} updated via API")
-                            except Exception as e:
-                                logger.warning(f"Failed to update relation {relation_id}: {e}")
-                        elif not relation_id and survey_id and unit_id:
-                            rel_type = updated_data.get('relation_data', {}).get('rel_type')
-                            if rel_type:
-                                relation_data = dict(updated_data.get('relation_data', {}))
-                                relation_data['person_id'] = person_id
-                                relation_data['rel_type'] = rel_type
+                            elif survey_id and household_id:
+                                run_blocking_async(
+                                    self._api_service.update_person_in_survey,
+                                    survey_id, household_id, person_id, updated_data,
+                                )
+                            else:
+                                logger.warning(f"Missing survey_id or household_id for person {person_id}")
+                            logger.info(f"Person {person_id} updated via API")
+                            relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
+                            if relation_id and survey_id:
                                 try:
-                                    response = run_blocking_async(
-                                        self._api_service.link_person_to_unit,
-                                        survey_id, unit_id, relation_data,
+                                    run_blocking_async(
+                                        self._api_service.update_relation,
+                                        survey_id, relation_id, updated_data,
                                     )
-                                    new_rel_id = (
-                                        response.get('id') or response.get('relationId') or
-                                        response.get('personPropertyRelationId') or '')
-                                    if new_rel_id:
-                                        updated_data['_relation_id'] = new_rel_id
-                                        logger.info(f"Created relation for person {person_id}: {new_rel_id}")
-                                        tenure_files = updated_data.get('_relation_uploaded_files', [])
-                                        for f_entry in tenure_files:
-                                            if f_entry.get('evidence_id'):
-                                                continue
-                                            f_path = f_entry.get('path', '')
-                                            if not f_path:
-                                                continue
-                                            try:
-                                                resp = run_blocking_async(
-                                                    self._api_service.upload_relation_document,
-                                                    survey_id=survey_id,
-                                                    relation_id=new_rel_id,
-                                                    file_path=f_path,
-                                                    issue_date=f_entry.get('issue_date', ''),
-                                                    file_hash=f_entry.get('hash', ''),
-                                                    document_reference_number=f_entry.get('reference_number', ''),
-                                                )
-                                                eid = (resp.get('id') or resp.get('evidenceId') or '')
-                                                if eid:
-                                                    f_entry['evidence_id'] = eid
-                                                logger.info(f"Tenure file uploaded for relation {new_rel_id}: {f_path}")
-                                            except Exception as ue:
-                                                logger.error(f"Failed to upload tenure file {f_path}: {ue}")
-                                        # Link existing selected documents to the new relation
-                                        for f_entry in tenure_files:
-                                            if not f_entry.get('_selected_existing') or not f_entry.get('evidence_id'):
-                                                continue
-                                            try:
-                                                run_blocking_async(
-                                                    self._api_service.link_evidence_to_relation,
-                                                    survey_id, f_entry['evidence_id'], new_rel_id,
-                                                )
-                                                logger.info(f"Existing evidence {f_entry['evidence_id']} linked to relation {new_rel_id}")
-                                            except Exception as le:
-                                                log_exception(le, logger, context="evidence.link_existing")
-                                                Toast.show_toast(self, humanize_exception(le, context="evidence.link_existing"), Toast.ERROR)
+                                    logger.info(f"Relation {relation_id} updated via API")
                                 except Exception as e:
-                                    logger.error(f"Failed to create relation for person {person_id}: {e}")
-                                    Toast.show_toast(self, map_exception(e), Toast.ERROR)
-                    except Exception as e:
-                        from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
-                        if is_duplicate_nid_error(e):
-                            ErrorHandler.show_warning(self, build_duplicate_person_message(getattr(e, 'response_data', {})), tr("common.warning"))
-                        else:
-                            logger.error(f"Failed to update person via API: {e}")
-                            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-                        return
+                                    logger.warning(f"Failed to update relation {relation_id}: {e}")
+                            elif not relation_id and survey_id and unit_id:
+                                rel_type = updated_data.get('relation_data', {}).get('rel_type')
+                                if rel_type:
+                                    relation_data = dict(updated_data.get('relation_data', {}))
+                                    relation_data['person_id'] = person_id
+                                    relation_data['rel_type'] = rel_type
+                                    try:
+                                        response = run_blocking_async(
+                                            self._api_service.link_person_to_unit,
+                                            survey_id, unit_id, relation_data,
+                                        )
+                                        new_rel_id = (
+                                            response.get('id') or response.get('relationId') or
+                                            response.get('personPropertyRelationId') or '')
+                                        if new_rel_id:
+                                            updated_data['_relation_id'] = new_rel_id
+                                            logger.info(f"Created relation for person {person_id}: {new_rel_id}")
+                                            tenure_files = updated_data.get('_relation_uploaded_files', [])
+                                            for f_entry in tenure_files:
+                                                if f_entry.get('evidence_id'):
+                                                    continue
+                                                f_path = f_entry.get('path', '')
+                                                if not f_path:
+                                                    continue
+                                                try:
+                                                    resp = run_blocking_async(
+                                                        self._api_service.upload_relation_document,
+                                                        survey_id=survey_id,
+                                                        relation_id=new_rel_id,
+                                                        file_path=f_path,
+                                                        issue_date=f_entry.get('issue_date', ''),
+                                                        file_hash=f_entry.get('hash', ''),
+                                                        document_reference_number=f_entry.get('reference_number', ''),
+                                                    )
+                                                    eid = (resp.get('id') or resp.get('evidenceId') or '')
+                                                    if eid:
+                                                        f_entry['evidence_id'] = eid
+                                                    logger.info(f"Tenure file uploaded for relation {new_rel_id}: {f_path}")
+                                                except Exception as ue:
+                                                    logger.error(f"Failed to upload tenure file {f_path}: {ue}")
+                                            for f_entry in tenure_files:
+                                                if not f_entry.get('_selected_existing') or not f_entry.get('evidence_id'):
+                                                    continue
+                                                try:
+                                                    run_blocking_async(
+                                                        self._api_service.link_evidence_to_relation,
+                                                        survey_id, f_entry['evidence_id'], new_rel_id,
+                                                    )
+                                                    logger.info(f"Existing evidence {f_entry['evidence_id']} linked to relation {new_rel_id}")
+                                                except Exception as le:
+                                                    log_exception(le, logger, context="evidence.link_existing")
+                                                    Toast.show_toast(self, humanize_exception(le, context="evidence.link_existing"), Toast.ERROR)
+                                    except Exception as e:
+                                        logger.error(f"Failed to create relation for person {person_id}: {e}")
+                                        Toast.show_toast(self, map_exception(e), Toast.ERROR)
+                        except Exception as e:
+                            from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                            if is_duplicate_nid_error(e):
+                                ErrorHandler.show_warning(self, build_duplicate_person_message(getattr(e, 'response_data', {})), tr("common.warning"))
+                            else:
+                                logger.error(f"Failed to update person via API: {e}")
+                                ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                            return
 
-            if person_data.get('_is_applicant'):
-                updated_data['_is_applicant'] = True
-            self.context.persons[person_index] = updated_data
-            self.context.finalize_response = None
-            if is_applicant and self.context.applicant is not None:
-                returned_ev_map = updated_data.get('_evidence_ids')
-                if isinstance(returned_ev_map, dict):
-                    self.context.applicant['id_evidence_map'] = dict(returned_ev_map)
-                returned_paths = updated_data.get('_uploaded_files')
-                if isinstance(returned_paths, list):
-                    self.context.applicant['id_photo_paths'] = list(returned_paths)
-            self._refresh_persons_list()
-            logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
+                if person_data.get('_is_applicant'):
+                    updated_data['_is_applicant'] = True
+                self.context.persons[person_index] = updated_data
+                self.context.finalize_response = None
+                if is_applicant and self.context.applicant is not None:
+                    returned_ev_map = updated_data.get('_evidence_ids')
+                    if isinstance(returned_ev_map, dict):
+                        self.context.applicant['id_evidence_map'] = dict(returned_ev_map)
+                    returned_paths = updated_data.get('_uploaded_files')
+                    if isinstance(returned_paths, list):
+                        self.context.applicant['id_photo_paths'] = list(returned_paths)
+                self._refresh_persons_list()
+                logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
+            finally:
+                self._saving_in_progress = False
+                self._spinner.hide_loading()
 
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         from PyQt5.QtWidgets import QGraphicsDropShadowEffect
@@ -761,7 +771,6 @@ class OccupancyClaimsStep(BaseStep):
 
         logger.info(f"Processing claims for survey {survey_id}")
 
-        # Only send notes on first finalization to prevent duplication
         already_finalized = self.context.get_data("_survey_finalized_once")
         process_options = {
             "finalNotes": "" if already_finalized else "Survey completed from office wizard",
@@ -769,6 +778,10 @@ class OccupancyClaimsStep(BaseStep):
             "autoCreateClaim": True
         }
 
+        if self._saving_in_progress:
+            return
+        self._saving_in_progress = True
+        self._spinner.show_loading(tr("component.loading.default"))
         try:
             from services.api_worker import run_blocking_async
             api_data = run_blocking_async(
@@ -791,6 +804,9 @@ class OccupancyClaimsStep(BaseStep):
             logger.error(f"Failed to process claims via API: {e}")
             from services.error_mapper import map_exception
             ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+        finally:
+            self._saving_in_progress = False
+            self._spinner.hide_loading()
 
     # BaseStep interface
 
@@ -810,6 +826,10 @@ class OccupancyClaimsStep(BaseStep):
     def validate(self) -> StepValidationResult:
         """Validate - at least one person required, at least one with a property relation."""
         result = self.create_validation_result()
+
+        if self._saving_in_progress:
+            result.add_error(tr("component.loading.default"))
+            return result
 
         if len(self.context.persons) == 0:
             result.add_error(tr("wizard.person.min_one_required"))
