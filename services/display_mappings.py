@@ -143,6 +143,11 @@ def get_contract_type_options() -> list:
 def get_evidence_type_options() -> list:
     return _vocab_options("EvidenceType")
 
+def get_evidence_type_display(type_key) -> str:
+    if type_key is None:
+        return tr("mapping.not_specified")
+    return _vocab_label("EvidenceType", type_key, {})
+
 def get_identification_document_type_options() -> list:
     return _vocab_options("IdentificationDocumentType")
 

@@ -253,6 +253,7 @@ class SurveyController:
                                     "fileName": doc.get("fileName") or doc.get("originalFileName") or "",
                                     "mimeType": doc.get("mimeType") or "",
                                     "filePath": doc.get("filePath") or "",
+                                    "documentType": doc.get("documentType"),
                                 }
                                 for doc in id_docs
                             ]
@@ -267,7 +268,8 @@ class SurveyController:
             )
 
             survey_status = detail.get("status", 1)
-            status_str = "finalized" if survey_status == 3 else "draft"
+            _status_map = {1: "draft", 2: "draft", 3: "finalized", 4: "obstructed", 8: "cancelled"}
+            status_str = _status_map.get(survey_status, "draft")
 
             resume_step = self._determine_resume_step(detail, households, persons)
 

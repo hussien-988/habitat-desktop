@@ -393,6 +393,21 @@ class TRRCMSApiClient:
             )
         return result
 
+    def get_password_policy(self) -> Dict[str, Any]:
+        """GET /api/v1/security-settings/current — anonymous, returns passwordPolicy."""
+        try:
+            response = self._session.get(
+                f"{self.base_url}/api/v1/security-settings/current",
+                headers=self._anon_headers(),
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", "/api/v1/security-settings/current", 0)),
+                verify=self._verify_ssl()
+            )
+            response.raise_for_status()
+            return response.json() or {}
+        except Exception as e:
+            logger.warning(f"get_password_policy failed: {e}")
+            raise
+
     def change_password(self, current_password: str, new_password: str, user_id: str = None) -> Dict[str, Any]:
         """POST /v1/auth/change-password."""
         body = {
@@ -3531,26 +3546,39 @@ class TRRCMSApiClient:
         return self._request("GET", f"/v1/import/packages/{package_id}/staged-entities")
 
     def detect_duplicates(self, package_id: str) -> Dict[str, Any]:
-        """Trigger duplicate detection."""
+        """Trigger duplicate detection. State-changing; no client-side retry."""
         logger.info(f"Detecting duplicates for package: {package_id}")
-        return self._request("POST", f"/v1/import/packages/{package_id}/detect-duplicates")
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/detect-duplicates",
+            disable_retry=True,
+        )
 
     def approve_import_package(self, package_id: str) -> Dict[str, Any]:
-        """Approve staging records for commit."""
+        """Approve staging records for commit. State-changing; no client-side retry."""
         logger.info(f"Approving import package: {package_id}")
         return self._request(
             "POST",
             f"/v1/import/packages/{package_id}/approve",
-            json_data={"packageId": package_id}
+            json_data={"packageId": package_id},
+            disable_retry=True,
         )
 
     def commit_import_package(self, package_id: str) -> Dict[str, Any]:
-        """Commit approved staging records to production tables."""
+        """Commit approved staging records to production tables.
+
+        State-changing and slow; client-side retry is disabled to avoid sending
+        a second commit if the backend succeeded but the response was delayed
+        (which the server then rejects with 409 Conflict because the package
+        is already in 'Completed' state).
+        """
         logger.info(f"Committing import package: {package_id}")
         return self._request(
             "POST",
             f"/v1/import/packages/{package_id}/commit",
-            json_data={"packageId": package_id}
+            json_data={"packageId": package_id},
+            disable_retry=True,
+            timeout_override=300,
         )
 
     def get_commit_report(self, package_id: str) -> Dict[str, Any]:
@@ -3573,25 +3601,32 @@ class TRRCMSApiClient:
             "POST",
             f"/v1/import/packages/{package_id}/reset-commit",
             json_data=body,
+            disable_retry=True,
         )
 
     def cancel_import_package(self, package_id: str, reason: str = "Cancelled by user") -> Dict[str, Any]:
-        """Cancel an active import package."""
+        """Cancel an active import package. State-changing; no client-side retry."""
         logger.info(f"Cancelling import package: {package_id}")
         return self._request(
             "POST",
             f"/v1/import/packages/{package_id}/cancel",
             json_data={"packageId": package_id, "reason": reason},
+            disable_retry=True,
         )
 
     def quarantine_import_package(self, package_id: str, reason: str = "") -> Dict[str, Any]:
-        """Quarantine a suspicious import package. Reason is sent verbatim."""
+        """Quarantine a suspicious import package. State-changing; no client-side retry."""
         logger.info(f"Quarantining import package: {package_id}")
         body = {
             "importPackageId": package_id,
             "reason": reason,
         }
-        return self._request("POST", f"/v1/import/packages/{package_id}/quarantine", json_data=body)
+        return self._request(
+            "POST",
+            f"/v1/import/packages/{package_id}/quarantine",
+            json_data=body,
+            disable_retry=True,
+        )
 
     def uncancel_import_package(
         self, package_id: str, reason: Optional[str] = None

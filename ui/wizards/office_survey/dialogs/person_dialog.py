@@ -107,9 +107,6 @@ class PersonDialog(QDialog):
         if self.read_only:
             self._apply_read_only_mode()
 
-        if self._existing_person_mode:
-            self._apply_existing_person_mode()
-
         if self._initial_tab > 0:
             self.tab_widget.setCurrentIndex(self._initial_tab)
 
@@ -640,21 +637,30 @@ class PersonDialog(QDialog):
         birth_input_style = self._input_style()
 
         self.birth_day_combo = RtlCombo()
-        self.birth_day_combo.addItem(tr("wizard.person_dialog.day"), None)
         for d in range(1, 32):
             self.birth_day_combo.addItem(f"{d:02d}", d)
+        self.birth_day_combo.setCurrentIndex(-1)
+        _le = self.birth_day_combo.lineEdit()
+        if _le is not None:
+            _le.setPlaceholderText(tr("wizard.person_dialog.day_placeholder"))
         self.birth_day_combo.setStyleSheet(birth_input_style)
 
         self.birth_month_combo = RtlCombo()
-        self.birth_month_combo.addItem(tr("wizard.person_dialog.month"), None)
         for m in range(1, 13):
             self.birth_month_combo.addItem(f"{m:02d}", m)
+        self.birth_month_combo.setCurrentIndex(-1)
+        _le = self.birth_month_combo.lineEdit()
+        if _le is not None:
+            _le.setPlaceholderText(tr("wizard.person_dialog.month_placeholder"))
         self.birth_month_combo.setStyleSheet(birth_input_style)
 
         self.birth_year_combo = RtlCombo()
-        self.birth_year_combo.addItem(tr("wizard.person_dialog.year"), None)
         for y in range(_dt.now().year, 1919, -1):
             self.birth_year_combo.addItem(str(y), y)
+        self.birth_year_combo.setCurrentIndex(-1)
+        _le = self.birth_year_combo.lineEdit()
+        if _le is not None:
+            _le.setPlaceholderText(tr("wizard.person_dialog.year_placeholder"))
         self.birth_year_combo.setStyleSheet(birth_input_style)
 
         birth_layout.addWidget(self.birth_day_combo, 1)
@@ -936,40 +942,20 @@ class PersonDialog(QDialog):
         grid.addLayout(ownership_container, row, 1)
         row += 1
 
-        # Row: Start Date (3 fields) | Evidence Type
-        grid.addWidget(self._label(tr("wizard.person_dialog.relation_start_date"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_type"), label_style), row, 1)
-        row += 1
-        date_layout = QHBoxLayout()
-        date_layout.setSpacing(6)
-        date_layout.setContentsMargins(0, 0, 0, 0)
-        input_style = self._input_style()
-
         self.start_day = RtlCombo()
-        self.start_day.addItem(tr("wizard.person_dialog.day"), None)
         for d in range(1, 32):
             self.start_day.addItem(f"{d:02d}", d)
-        self.start_day.setStyleSheet(input_style)
+        self.start_day.setCurrentIndex(-1)
 
         self.start_month = RtlCombo()
-        self.start_month.addItem(tr("wizard.person_dialog.month"), None)
         for m in range(1, 13):
             self.start_month.addItem(f"{m:02d}", m)
-        self.start_month.setStyleSheet(input_style)
+        self.start_month.setCurrentIndex(-1)
 
         self.start_year = RtlCombo()
-        self.start_year.addItem(tr("wizard.person_dialog.year"), None)
         for y in range(QDate.currentDate().year(), 1939, -1):
             self.start_year.addItem(str(y), y)
-        self.start_year.setStyleSheet(input_style)
-
-        date_layout.addWidget(self.start_day, 1)
-        date_layout.addWidget(self.start_month, 1)
-        date_layout.addWidget(self.start_year, 1)
-        date_container = QWidget()
-        date_container.setStyleSheet("background-color: transparent;")
-        date_container.setLayout(date_layout)
-        grid.addWidget(date_container, row, 0)
+        self.start_year.setCurrentIndex(-1)
 
         self.evidence_type = RtlCombo()
         self.evidence_type.addItem(tr("wizard.person_dialog.select"), None)
@@ -977,9 +963,6 @@ class PersonDialog(QDialog):
             if code == 0:
                 continue
             self.evidence_type.addItem(display_name, code)
-        self.evidence_type.setStyleSheet(self._input_style())
-        grid.addWidget(self.evidence_type, row, 1)
-        row += 1
 
         # Row: Evidence Description (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 0, 1, 2)
@@ -1140,11 +1123,11 @@ class PersonDialog(QDialog):
             return
 
         rows = (file_count + columns - 1) // columns
-        visible_rows = min(rows, 2)
+        visible_rows = min(rows, 2 if columns > 1 else 3)
 
-        row_height = ScreenScale.h(58)
-        spacing = ScreenScale.h(6)
-        vertical_padding = ScreenScale.h(4)
+        row_height = ScreenScale.h(78) if columns == 1 else ScreenScale.h(58)
+        spacing = ScreenScale.h(8)
+        vertical_padding = ScreenScale.h(6)
 
         height = visible_rows * row_height
         if visible_rows > 1:
@@ -1968,12 +1951,11 @@ class PersonDialog(QDialog):
         if not new_files:
             return
 
-        # Issue date + reference number: single file → direct dialog,
-        # multiple → ask same or separate
         if len(new_files) == 1:
             meta = self._show_issue_date_dialog(os.path.basename(new_files[0]["path"]))
             if meta is None:
                 return
+            new_files[0]["evidence_type"] = meta.get("evidence_type")
             new_files[0]["issue_date"] = meta.get("issue_date", "")
             new_files[0]["reference_number"] = meta.get("reference_number", "")
         elif len(new_files) > 1:
@@ -1985,6 +1967,7 @@ class PersonDialog(QDialog):
                 if meta is None:
                     return
                 for f in new_files:
+                    f["evidence_type"] = meta.get("evidence_type")
                     f["issue_date"] = meta.get("issue_date", "")
                     f["reference_number"] = meta.get("reference_number", "")
             else:
@@ -1993,9 +1976,10 @@ class PersonDialog(QDialog):
                     meta = self._show_issue_date_dialog(fname)
                     if meta is None:
                         continue
+                    f["evidence_type"] = meta.get("evidence_type")
                     f["issue_date"] = meta.get("issue_date", "")
                     f["reference_number"] = meta.get("reference_number", "")
-                new_files = [f for f in new_files if f.get("issue_date") or f.get("reference_number")]
+                new_files = [f for f in new_files if f.get("evidence_type") is not None]
                 if not new_files:
                     return
 
@@ -2055,7 +2039,7 @@ class PersonDialog(QDialog):
                 or ev.get('Id') or ev.get('EvidenceId') or '')
 
     def _refresh_relation_thumbnails(self):
-        """Refresh relation document thumbnails including existing doc labels."""
+        """Refresh relation document cards (mobile-style full-width cards)."""
         frame = self.findChild(QFrame, "rel_upload")
         if not frame or not hasattr(frame, "_thumbnails_layout"):
             return
@@ -2067,24 +2051,117 @@ class PersonDialog(QDialog):
             if item.widget():
                 item.widget().deleteLater()
 
-        columns = self._thumbnail_columns_for_frame(frame)
-        self._sync_upload_scroll_height(frame, len(self.relation_uploaded_files), columns)
-
         if not self.relation_uploaded_files:
+            self._sync_upload_scroll_height(frame, 0, 1)
             return
 
-        for index, entry in enumerate(self.relation_uploaded_files):
-            if entry.get("_selected_existing"):
-                display = entry.get("_display_name", tr("wizard.person_dialog.document_default"))
-                widget = self._create_existing_doc_widget(display, entry)
-            elif entry.get("path"):
-                widget = self._create_thumbnail_widget(entry["path"], self._remove_relation_file)
-            else:
-                continue
+        card_count = sum(
+            1 for e in self.relation_uploaded_files
+            if e.get("_selected_existing") or e.get("path")
+        )
+        self._sync_upload_scroll_height(frame, card_count, 1)
 
-            row = index // columns
-            col = index % columns
-            layout.addWidget(widget, row, col, Qt.AlignRight | Qt.AlignTop)
+        row_idx = 0
+        for index, entry in enumerate(self.relation_uploaded_files):
+            if not (entry.get("_selected_existing") or entry.get("path")):
+                continue
+            card = self._create_relation_doc_card(entry, index)
+            layout.addWidget(card, row_idx, 0)
+            row_idx += 1
+
+    def _create_relation_doc_card(self, entry: dict, index: int) -> QWidget:
+        """Create a wide card showing evidence type badge + edit/delete icons."""
+        from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout
+        from services.display_mappings import get_evidence_type_display
+
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: #FFFFFF;
+                border: 1.5px solid #3B82F6;
+                border-radius: {ScreenScale.w(10)}px;
+            }}
+        """)
+        card.setMinimumHeight(ScreenScale.h(56))
+
+        h = QHBoxLayout(card)
+        h.setContentsMargins(ScreenScale.w(12), ScreenScale.h(10),
+                             ScreenScale.w(12), ScreenScale.h(10))
+        h.setSpacing(ScreenScale.w(8))
+
+        delete_btn = QPushButton("🗑")
+        delete_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+        delete_btn.setCursor(Qt.PointingHandCursor)
+        delete_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: #DC2626;
+                border: none;
+                font-size: {ScreenScale.w(14)}px;
+            }}
+            QPushButton:hover {{ background-color: #FEE2E2; border-radius: {ScreenScale.w(6)}px; }}
+        """)
+        delete_btn.setToolTip(tr("common.delete"))
+        delete_btn.clicked.connect(lambda _, e=entry: self._delete_relation_doc(e))
+        h.addWidget(delete_btn)
+
+        edit_btn = QPushButton("✎")
+        edit_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+        edit_btn.setCursor(Qt.PointingHandCursor)
+        edit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: #4B5563;
+                border: none;
+                font-size: {ScreenScale.w(14)}px;
+            }}
+            QPushButton:hover {{ background-color: #F3F4F6; border-radius: {ScreenScale.w(6)}px; }}
+        """)
+        edit_btn.setToolTip(tr("common.edit"))
+        edit_btn.clicked.connect(lambda _, e=entry: self._edit_relation_doc(e))
+        h.addWidget(edit_btn)
+
+        h.addStretch(1)
+
+        ev_type_text = get_evidence_type_display(entry.get("evidence_type")) if entry.get("evidence_type") is not None else tr("wizard.person_dialog.document_default")
+        badge = QLabel(ev_type_text)
+        badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: #DBEAFE;
+                color: #1E40AF;
+                border-radius: {ScreenScale.w(6)}px;
+                padding: {ScreenScale.h(4)}px {ScreenScale.w(12)}px;
+                font-size: {ScreenScale.w(11)}px;
+                font-weight: 600;
+            }}
+        """)
+        badge.setAlignment(Qt.AlignCenter)
+        h.addWidget(badge)
+
+        return card
+
+    def _delete_relation_doc(self, entry: dict):
+        """Remove a document entry from the relation files list."""
+        self.relation_uploaded_files = [
+            f for f in self.relation_uploaded_files if f is not entry
+        ]
+        self._refresh_relation_thumbnails()
+
+    def _edit_relation_doc(self, entry: dict):
+        """Open the add-document dialog with prefilled data and update entry on confirm."""
+        import os
+        filename = ""
+        if entry.get("path"):
+            filename = os.path.basename(entry["path"])
+        elif entry.get("_display_name"):
+            filename = entry["_display_name"]
+        result = self._show_issue_date_dialog(filename=filename, initial=entry)
+        if result is None:
+            return
+        entry["evidence_type"] = result.get("evidence_type")
+        entry["issue_date"] = result.get("issue_date", "")
+        entry["reference_number"] = result.get("reference_number", "")
+        self._refresh_relation_thumbnails()
 
     def _create_existing_doc_widget(self, display_name: str, entry: dict) -> QWidget:
         """Create a thumbnail widget for an existing server document with preview."""
@@ -2272,11 +2349,12 @@ class PersonDialog(QDialog):
             logger.warning(f"Could not compute hash for {file_path}: {e}")
             return ""
 
-    def _show_issue_date_dialog(self, filename: str = None):
-        """Show a mini popup to enter document issue date and reference number.
+    def _show_issue_date_dialog(self, filename: str = None, initial: dict = None):
+        """Show the 'Add new tenure document' popup matching the mobile layout.
 
-        Returns dict {issue_date, reference_number} or None if cancelled.
-        Empty strings indicate the user confirmed without filling that field.
+        Returns dict {evidence_type, issue_date, reference_number} or None if
+        cancelled. The evidence_type field is required (asterisk in label).
+        When `initial` dict is provided, fields are prefilled (edit mode).
         """
         from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                      QPushButton, QGraphicsDropShadowEffect, QComboBox, QLineEdit)
@@ -2284,19 +2362,24 @@ class PersonDialog(QDialog):
         from ui.font_utils import create_font, FontManager
         from datetime import date as _date
 
+        from PyQt5.QtWidgets import QSizePolicy
+
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         dlg.setAttribute(Qt.WA_TranslucentBackground)
-        dlg.setFixedWidth(ScreenScale.w(340))
+        dlg.setLayoutDirection(get_layout_direction())
+        dlg.setMinimumWidth(ScreenScale.w(440))
+        dlg.setMaximumWidth(ScreenScale.w(560))
 
         container = QWidget(dlg)
         container.setObjectName("date_container")
         container.setStyleSheet("""
             QWidget#date_container {
                 background-color: #FFFFFF;
-                border-radius: 10px;
+                border-radius: 12px;
             }
         """)
+        container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(30)
@@ -2305,12 +2388,12 @@ class PersonDialog(QDialog):
         container.setGraphicsEffect(shadow)
 
         c_layout = QVBoxLayout(container)
-        c_layout.setContentsMargins(20, 20, 20, 16)
-        c_layout.setSpacing(12)
+        c_layout.setContentsMargins(24, 22, 24, 18)
+        c_layout.setSpacing(14)
 
-        title_lbl = QLabel(tr("wizard.person_dialog.issue_date_title"))
+        title_lbl = QLabel(tr("wizard.person_dialog.add_tenure_doc_title"))
         title_lbl.setAlignment(Qt.AlignCenter)
-        title_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
         title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
         c_layout.addWidget(title_lbl)
 
@@ -2318,7 +2401,7 @@ class PersonDialog(QDialog):
             file_lbl = QLabel(filename)
             file_lbl.setAlignment(Qt.AlignCenter)
             file_lbl.setFont(create_font(size=9))
-            file_lbl.setStyleSheet("color: #6B7280; background: transparent;")
+            file_lbl.setStyleSheet("color: #6B7280; background: transparent; padding: 4px 8px;")
             file_lbl.setWordWrap(True)
             c_layout.addWidget(file_lbl)
 
@@ -2326,49 +2409,108 @@ class PersonDialog(QDialog):
             QComboBox {
                 border: 1px solid #D1D5DB;
                 border-radius: 8px;
-                padding: 6px 10px;
+                padding: 8px 12px;
                 background-color: #F9FAFB;
                 font-size: 13px;
-                min-height: 20px;
+                min-height: 24px;
             }
             QComboBox:focus { border-color: #3B82F6; }
-            QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center left; width: 20px; border: none; }
+            QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center left; width: 22px; border: none; }
         """
 
-        # Labels row
+        def _make_section(label_html: str):
+            wrap = QVBoxLayout()
+            wrap.setSpacing(6)
+            wrap.setContentsMargins(0, 0, 0, 0)
+            lbl = QLabel(label_html)
+            lbl.setStyleSheet("background: transparent;")
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            wrap.addWidget(lbl)
+            return wrap
+
+        ev_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.supporting_documents")}</span>'
+            f' <span style="color: #DC2626;">*</span>'
+        )
+
+        ev_type_combo = QComboBox()
+        ev_type_combo.setStyleSheet(combo_style)
+        ev_type_combo.setLayoutDirection(get_layout_direction())
+        ev_type_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ev_type_combo.addItem(tr("wizard.person_dialog.select"), None)
+        for code, display_name in get_evidence_type_options():
+            if code == 0:
+                continue
+            ev_type_combo.addItem(display_name, code)
+        ev_section.addWidget(ev_type_combo)
+
+        ev_type_error = QLabel("")
+        ev_type_error.setStyleSheet("color: #DC2626; font-size: 10px; background: transparent;")
+        ev_type_error.setVisible(False)
+        ev_section.addWidget(ev_type_error)
+        c_layout.addLayout(ev_section)
+
+        ref_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.document_reference_number")}</span>'
+        )
+        ref_field_label = None
+
+        ref_input = QLineEdit()
+        ref_input.setPlaceholderText(tr("wizard.person_dialog.document_reference_placeholder"))
+        ref_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ref_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #F9FAFB;
+                font-size: 13px;
+                min-height: 24px;
+            }
+            QLineEdit:focus { border-color: #3B82F6; }
+        """)
+        ref_section.addWidget(ref_input)
+        c_layout.addLayout(ref_section)
+
+        date_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.document_issue_date")}</span>'
+        )
+
+        sub_label_style = "color: #6B7280; font-size: 10px; font-weight: 600; background: transparent;"
         labels_row = QHBoxLayout()
         labels_row.setSpacing(8)
-        label_style = "color: #6B7280; font-size: 10px; font-weight: 600; background: transparent;"
+        labels_row.setContentsMargins(0, 0, 0, 0)
         lbl_year = QLabel(tr("wizard.person_dialog.year"))
-        lbl_year.setStyleSheet(label_style)
+        lbl_year.setStyleSheet(sub_label_style)
         lbl_year.setAlignment(Qt.AlignCenter)
         lbl_month = QLabel(tr("wizard.person_dialog.month"))
-        lbl_month.setStyleSheet(label_style)
+        lbl_month.setStyleSheet(sub_label_style)
         lbl_month.setAlignment(Qt.AlignCenter)
         lbl_day = QLabel(tr("wizard.person_dialog.day"))
-        lbl_day.setStyleSheet(label_style)
+        lbl_day.setStyleSheet(sub_label_style)
         lbl_day.setAlignment(Qt.AlignCenter)
         labels_row.addWidget(lbl_year, 1)
         labels_row.addWidget(lbl_month, 1)
         labels_row.addWidget(lbl_day, 1)
-        c_layout.addLayout(labels_row)
+        date_section.addLayout(labels_row)
 
-        # Combo row
         date_row = QHBoxLayout()
         date_row.setSpacing(8)
+        date_row.setContentsMargins(0, 0, 0, 0)
 
         current_year = _date.today().year
         year_combo = QComboBox()
         year_combo.setStyleSheet(combo_style)
         year_combo.setLayoutDirection(Qt.LeftToRight)
+        year_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         year_combo.addItem("--", None)
         for y in range(current_year, 1949, -1):
             year_combo.addItem(str(y), y)
-        year_combo.setCurrentIndex(1)
 
         month_combo = QComboBox()
         month_combo.setStyleSheet(combo_style)
         month_combo.setLayoutDirection(Qt.LeftToRight)
+        month_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         month_combo.addItem("--", None)
         for m in range(1, 13):
             month_combo.addItem(str(m), m)
@@ -2376,6 +2518,7 @@ class PersonDialog(QDialog):
         day_combo = QComboBox()
         day_combo.setStyleSheet(combo_style)
         day_combo.setLayoutDirection(Qt.LeftToRight)
+        day_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         day_combo.addItem("--", None)
         for d in range(1, 32):
             day_combo.addItem(str(d), d)
@@ -2383,87 +2526,132 @@ class PersonDialog(QDialog):
         date_row.addWidget(year_combo, 1)
         date_row.addWidget(month_combo, 1)
         date_row.addWidget(day_combo, 1)
-        c_layout.addLayout(date_row)
-
-        c_layout.addSpacing(8)
-
-        ref_label = QLabel(tr("wizard.person_dialog.document_reference_number"))
-        ref_label.setStyleSheet(label_style)
-        c_layout.addWidget(ref_label)
-
-        ref_input = QLineEdit()
-        ref_input.setPlaceholderText(tr("wizard.person_dialog.document_reference_placeholder"))
-        ref_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #D1D5DB;
-                border-radius: 8px;
-                padding: 6px 10px;
-                background-color: #F9FAFB;
-                font-size: 13px;
-                min-height: 20px;
-            }
-            QLineEdit:focus { border-color: #3B82F6; }
-        """)
-        c_layout.addWidget(ref_input)
+        date_section.addLayout(date_row)
+        c_layout.addLayout(date_section)
 
         c_layout.addSpacing(4)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row.setSpacing(ScreenScale.w(10))
+        btn_row.setContentsMargins(0, ScreenScale.h(6), 0, 0)
+
+        btn_height = ScreenScale.h(40)
+        btn_padding_v = ScreenScale.h(8)
+        btn_padding_h = ScreenScale.w(20)
 
         cancel_btn = QPushButton(tr("common.cancel"))
-        cancel_btn.setFixedHeight(ScreenScale.h(34))
+        cancel_btn.setMinimumHeight(btn_height)
         cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
-        cancel_btn.setStyleSheet("""
-            QPushButton {
+        cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        cancel_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #F3F4F6;
                 color: #4B5563;
                 border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
-            }
-            QPushButton:hover { background-color: #E5E7EB; }
+                border-radius: {ScreenScale.w(8)}px;
+                padding: {btn_padding_v}px {btn_padding_h}px;
+            }}
+            QPushButton:hover {{ background-color: #E5E7EB; }}
         """)
         cancel_btn.clicked.connect(dlg.reject)
 
         confirm_btn = QPushButton(tr("common.confirm"))
-        confirm_btn.setFixedHeight(ScreenScale.h(34))
+        confirm_btn.setMinimumHeight(btn_height)
         confirm_btn.setCursor(Qt.PointingHandCursor)
-        confirm_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
-        confirm_btn.setStyleSheet("""
-            QPushButton {
+        confirm_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        confirm_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        confirm_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #3B82F6;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
-            }
-            QPushButton:hover { background-color: #2563EB; }
+                border-radius: {ScreenScale.w(8)}px;
+                padding: {btn_padding_v}px {btn_padding_h}px;
+            }}
+            QPushButton:hover {{ background-color: #2563EB; }}
         """)
-        confirm_btn.clicked.connect(dlg.accept)
+        if initial:
+            ev_init = initial.get("evidence_type")
+            if ev_init is not None:
+                idx = ev_type_combo.findData(ev_init)
+                if idx >= 0:
+                    ev_type_combo.setCurrentIndex(idx)
+            ref_input.setText(str(initial.get("reference_number") or ""))
+            date_str = str(initial.get("issue_date") or "")[:10]
+            parts = date_str.split("-")
+            if len(parts) == 3 and parts[0].isdigit():
+                yi = year_combo.findData(int(parts[0]))
+                if yi >= 0:
+                    year_combo.setCurrentIndex(yi)
+                if parts[1].isdigit():
+                    mi = month_combo.findData(int(parts[1]))
+                    if mi >= 0:
+                        month_combo.setCurrentIndex(mi)
+                if parts[2].isdigit():
+                    di = day_combo.findData(int(parts[2]))
+                    if di >= 0:
+                        day_combo.setCurrentIndex(di)
+
+        def _on_confirm():
+            ev_type_value = ev_type_combo.currentData()
+            if ev_type_value is None:
+                ev_type_error.setText(tr("wizard.person_dialog.supporting_documents_required"))
+                ev_type_error.setVisible(True)
+                ev_type_combo.setStyleSheet(combo_style + " QComboBox { border-color: #DC2626; }")
+                return
+            ev_type_error.setVisible(False)
+            ev_type_combo.setStyleSheet(combo_style)
+
+            y = year_combo.currentData()
+            m = month_combo.currentData()
+            d = day_combo.currentData()
+            if any((y, m, d)) and not all((y, m, d)):
+                Toast.show_toast(self, tr("wizard.person_dialog.issue_date_incomplete"), Toast.ERROR)
+                return
+            if y and m and d:
+                try:
+                    issued = _date(y, m, d)
+                    if issued > _date.today():
+                        Toast.show_toast(self, tr("wizard.person_dialog.issue_date_future"), Toast.ERROR)
+                        return
+                except ValueError:
+                    Toast.show_toast(self, tr("wizard.person_dialog.issue_date_invalid"), Toast.ERROR)
+                    return
+
+            dlg.accept()
+
+        confirm_btn.clicked.connect(_on_confirm)
 
         btn_row.addWidget(cancel_btn, 1)
         btn_row.addWidget(confirm_btn, 1)
         c_layout.addLayout(btn_row)
 
         main_layout = QVBoxLayout(dlg)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        outer_margin = ScreenScale.w(12)
+        main_layout.setContentsMargins(outer_margin, outer_margin, outer_margin, outer_margin)
         main_layout.addWidget(container)
+        dlg.adjustSize()
 
         if dlg.exec_() == QDialog.Accepted:
             y = year_combo.currentData()
             m = month_combo.currentData()
             d = day_combo.currentData()
             ref_value = ref_input.text().strip()
+            ev_type_value = ev_type_combo.currentData()
             if y:
                 month = m if m else 1
                 day = d if d else 1
                 return {
+                    "evidence_type": ev_type_value,
                     "issue_date": f"{y:04d}-{month:02d}-{day:02d}",
                     "reference_number": ref_value,
                 }
-            return {"issue_date": "", "reference_number": ref_value}
+            return {
+                "evidence_type": ev_type_value,
+                "issue_date": "",
+                "reference_number": ref_value,
+            }
         return None
 
     def _ask_same_or_separate_dates(self, file_count: int):
@@ -2579,6 +2767,39 @@ class PersonDialog(QDialog):
                 self.ownership_share.setText("0")
         except ValueError:
             self.ownership_share.setText("")
+
+    def _validate_dates(self, check_start: bool = True):
+        from datetime import date as _date
+        today = _date.today()
+
+        y = read_int_from_combo(self.birth_year_combo)
+        m = read_int_from_combo(self.birth_month_combo)
+        d = read_int_from_combo(self.birth_day_combo)
+        if any((y, m, d)) and not all((y, m, d)):
+            return False, tr("wizard.person_dialog.birth_date_incomplete"), 0
+        if y and m and d:
+            try:
+                bd = _date(y, m, d)
+                if bd > today:
+                    return False, tr("wizard.person_dialog.birth_date_future"), 0
+            except ValueError:
+                return False, tr("wizard.person_dialog.birth_date_invalid"), 0
+
+        if check_start:
+            sy = read_int_from_combo(self.start_year)
+            sm = self.start_month.currentData()
+            sd = self.start_day.currentData()
+            if any((sy, sm, sd)) and not all((sy, sm, sd)):
+                return False, tr("wizard.person_dialog.start_date_incomplete"), 2
+            if sy and sm and sd:
+                try:
+                    sdate = _date(sy, sm, sd)
+                    if sdate > today:
+                        return False, tr("wizard.person_dialog.start_date_future"), 2
+                except ValueError:
+                    return False, tr("wizard.person_dialog.start_date_invalid"), 2
+
+        return True, None, None
 
     def _build_birth_date_iso(self) -> str:
         """Build ISO date string from birth date combo boxes."""
@@ -2758,17 +2979,98 @@ class PersonDialog(QDialog):
         if self._survey_id:
             try:
                 evidences = self._api_service.get_survey_evidences(self._survey_id)
-                person_id = data.get('person_id')
-                id_count = sum(1 for e in evidences
-                               if e.get('personId') == person_id
-                               and not e.get('personPropertyRelationId'))
-                rel_count = sum(1 for e in evidences
-                                if e.get('personPropertyRelationId'))
-                if id_count > 0 or rel_count > 0:
-                    logger.info(f"Server evidences: {id_count} identification + {rel_count} tenure")
+                rel_count = sum(1 for e in evidences if e.get('personPropertyRelationId'))
+                if rel_count > 0:
+                    logger.info(f"Server tenure evidences: {rel_count}")
                 self._server_evidences = evidences
             except Exception as e:
                 logger.warning(f"Could not fetch evidences from server: {e}")
+
+        person_id_for_docs = data.get('person_id') if isinstance(data, dict) else None
+        seed_id_docs = data.get('_id_photo_evidences') if isinstance(data, dict) else None
+
+        id_docs = list(seed_id_docs) if seed_id_docs else []
+        if not id_docs and person_id_for_docs and self._api_service:
+            try:
+                id_docs = self._api_service.get_person_identification_documents_for_survey(person_id_for_docs) or []
+            except Exception as e:
+                logger.warning(f"Could not fetch identification documents from server: {e}")
+                id_docs = []
+
+        if id_docs:
+            logger.info(f"Identification docs for person {person_id_for_docs}: {len(id_docs)} (seeded={bool(seed_id_docs)})")
+            self._server_id_evidence_ids = [
+                d.get('id') or d.get('evidenceId') or d.get('Id')
+                for d in id_docs if (d.get('id') or d.get('evidenceId') or d.get('Id'))
+            ]
+            if hasattr(self, 'id_doc_type_combo'):
+                server_doc_type = id_docs[0].get('documentType')
+                if server_doc_type is not None:
+                    idx = self.id_doc_type_combo.findData(server_doc_type)
+                    if idx >= 0:
+                        self.id_doc_type_combo.setCurrentIndex(idx)
+                    self._loaded_id_doc_type = server_doc_type
+            if not self.uploaded_files and person_id_for_docs:
+                self._download_id_docs_in_background(person_id_for_docs, id_docs)
+
+    def _download_id_docs_in_background(self, person_id: str, id_docs: list):
+        from services.api_worker import ApiWorker
+        from utils.helpers import (
+            download_identification_document_file,
+            download_static_file,
+            download_evidence_file,
+        )
+        import os as _os
+
+        docs = list(id_docs)
+
+        def _fetch():
+            results = []
+            for doc in docs:
+                ev_id = doc.get('id') or doc.get('evidenceId') or doc.get('Id') or ''
+                if not ev_id:
+                    continue
+                file_name = (doc.get('originalFileName')
+                             or doc.get('fileName')
+                             or f"{ev_id}.jpg")
+                file_path_val = doc.get('filePath') or doc.get('file_path') or ''
+                local_path = None
+                try:
+                    local_path = download_identification_document_file(person_id, ev_id, file_name)
+                except Exception as e:
+                    logger.warning(f"download_identification_document_file failed for {ev_id}: {e}")
+                if not local_path and file_path_val:
+                    try:
+                        local_path = download_static_file(file_path_val, file_name)
+                    except Exception as e:
+                        logger.warning(f"download_static_file failed for {ev_id}: {e}")
+                if not local_path:
+                    try:
+                        local_path = download_evidence_file(ev_id, file_name)
+                    except Exception as e:
+                        logger.warning(f"download_evidence_file failed for {ev_id}: {e}")
+                if local_path:
+                    results.append((local_path, ev_id))
+            return results
+
+        def _on_done(results):
+            if not results:
+                return
+            paths = [p for p, _ in results]
+            self.uploaded_files = paths
+            self._evidence_ids = {
+                _os.path.normpath(p): ev_id for p, ev_id in results if ev_id
+            }
+            self._update_upload_thumbnails("id_upload", paths)
+            logger.info(f"Downloaded {len(paths)} ID document(s) from server")
+
+        def _on_error(msg):
+            logger.warning(f"ID document download worker failed: {msg}")
+
+        self._id_doc_download_worker = ApiWorker(_fetch)
+        self._id_doc_download_worker.finished.connect(_on_done)
+        self._id_doc_download_worker.error.connect(_on_error)
+        self._id_doc_download_worker.start()
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get all person data from all 3 tabs."""
@@ -2847,6 +3149,12 @@ class PersonDialog(QDialog):
         if not self._validate_landline(self.landline_digits.text().strip()):
             self._set_field_error(self.landline_digits, self._landline_error, tr("wizard.person_dialog.invalid_landline"))
             self.tab_widget.setCurrentIndex(1)
+            has_error = True
+        dates_ok, dates_msg, dates_tab = self._validate_dates(check_start=False)
+        if not dates_ok:
+            Toast.show_toast(self, dates_msg, Toast.ERROR)
+            if not has_error and dates_tab is not None:
+                self.tab_widget.setCurrentIndex(dates_tab)
             has_error = True
         if has_error:
             return
@@ -2951,6 +3259,13 @@ class PersonDialog(QDialog):
             except ValueError:
                 pass
 
+        dates_ok, dates_msg, dates_tab = self._validate_dates(check_start=True)
+        if not dates_ok:
+            Toast.show_toast(self, dates_msg, Toast.ERROR)
+            if not has_error and dates_tab is not None:
+                self.tab_widget.setCurrentIndex(dates_tab)
+            has_error = True
+
         if has_error:
             return
 
@@ -2986,6 +3301,24 @@ class PersonDialog(QDialog):
                 return
             self._api_person_id = person_id
             person_data = self.get_person_data()
+
+            if self._survey_id and self._household_id:
+                try:
+                    from services.api_worker import run_blocking_async
+                    run_blocking_async(
+                        self._api_service.update_person_in_survey,
+                        self._survey_id, self._household_id, person_id, person_data,
+                    )
+                    logger.info(f"Person {person_id} updated in survey {self._survey_id}")
+                except Exception as e:
+                    from services.error_mapper import is_duplicate_nid_error, build_duplicate_person_message
+                    if is_duplicate_nid_error(e):
+                        ErrorHandler.show_warning(self, build_duplicate_person_message(getattr(e, 'response_data', {})), tr("common.warning"))
+                    else:
+                        log_exception(e, logger, context="person.update")
+                        ErrorHandler.show_error(self, humanize_exception(e, context="person.update"), tr("common.error"))
+                    return
+
             # Only link to unit if person has a relation type (claim from Tab 3).
             # Do NOT fall back to person_role/relationship_type: those are
             # RelationshipToHead codes (head/spouse/child) — sending them as
@@ -3057,6 +3390,7 @@ class PersonDialog(QDialog):
                     self, tr("wizard.person_dialog.link_failed_person_saved"), tr("common.warning")
                 )
                 return
+            self._persist_id_documents(person_id)
             self.accept()
             return
 
@@ -3162,66 +3496,7 @@ class PersonDialog(QDialog):
             import os
             person_id = self.person_data.get('person_id')
 
-            # Identification files: new files not yet on server
-            new_id_files = [f for f in self.uploaded_files
-                            if os.path.normpath(f) not in self._evidence_ids]
-
-            logger.warning(
-                f"[ID-DOCS FLOW] new_files={len(new_id_files)} "
-                f"pending_replacements={list(self._pending_id_replacements)} "
-                f"survey_id={self._survey_id} person_id={person_id}"
-            )
-
-            if self._survey_id and person_id:
-                # Replace: pair new files with pending replacement IDs (PUT)
-                for file_path in list(new_id_files):
-                    if not self._pending_id_replacements:
-                        break
-                    old_evidence_id = self._pending_id_replacements.pop(0)
-                    try:
-                        doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
-                        logger.warning(
-                            f"[ID-DOCS FLOW] PUT replace: old_id={old_evidence_id} "
-                            f"new_file={os.path.basename(file_path)} doc_type={doc_type}"
-                        )
-                        from services.api_worker import run_blocking_async
-                        response = run_blocking_async(
-                            self._api_service.update_identification_document,
-                            self._survey_id, old_evidence_id, person_id,
-                            file_path=file_path, document_type=doc_type,
-                        )
-                        new_eid = (response.get("id") or response.get("evidenceId")
-                                   or response.get("Id") or old_evidence_id)
-                        self._evidence_ids[os.path.normpath(file_path)] = new_eid
-                        new_id_files.remove(file_path)
-                        logger.info(f"ID evidence replaced: {old_evidence_id} -> {new_eid}")
-                    except Exception as e:
-                        logger.error(f"Failed to replace ID evidence {old_evidence_id}: {e}")
-                        self._pending_id_replacements.insert(0, old_evidence_id)
-
-                # Upload remaining new files that had no replacement target (POST)
-                if new_id_files:
-                    saved = self.uploaded_files
-                    self.uploaded_files = new_id_files
-                    self._upload_identification_files(person_id)
-                    self.uploaded_files = saved
-
-                # Delete leftover pending IDs that were not replaced
-                for old_id in self._pending_id_replacements:
-                    try:
-                        from services.api_worker import run_blocking_async
-                        run_blocking_async(
-                            self._api_service.delete_identification_document,
-                            self._survey_id, old_id,
-                        )
-                        logger.info(f"Orphaned ID evidence deleted: {old_id}")
-                    except Exception as e:
-                        from services.exceptions import ApiException
-                        if isinstance(e, ApiException) and e.status_code == 404:
-                            logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
-                        else:
-                            logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
-                self._pending_id_replacements.clear()
+            self._persist_id_documents(person_id)
 
             # Tenure files: new files without evidence_id (exclude existing selected)
             relation_id = self._api_relation_id
@@ -3290,11 +3565,16 @@ class PersonDialog(QDialog):
 
         self.accept()
 
-    def _upload_identification_files(self, person_id: str):
-        """Upload identification files for the created person."""
+    def _upload_identification_files(self, person_id: str) -> set:
+        """Upload identification files for the created person.
+
+        Returns set of evidence IDs whose DocumentType was sent in the POST,
+        so callers can skip a redundant doc_type PUT for them.
+        """
         import os
+        synced_ids: set = set()
         if not self.uploaded_files:
-            return
+            return synced_ids
 
         from services.exceptions import ApiException
 
@@ -3313,10 +3593,108 @@ class PersonDialog(QDialog):
                 )
                 if evidence_id:
                     self._evidence_ids[os.path.normpath(file_path)] = evidence_id
+                    if doc_type is not None:
+                        synced_ids.add(evidence_id)
                 logger.info(f"Identification uploaded: {file_path} (evidence_id={evidence_id})")
             except Exception as e:
                 logger.error(f"Failed to upload identification file {file_path}: {e}")
                 Toast.show_toast(self, map_exception(e), Toast.ERROR)
+        return synced_ids
+
+    def _persist_id_documents(self, person_id: str):
+        """Persist identification document changes: replacements, new uploads,
+        deletions, and document-type updates.
+
+        Safe to call from any save path (existing_person_mode, editing_mode,
+        or new-person). If no survey/person id, returns silently.
+        """
+        import os
+        if not (self._survey_id and person_id):
+            return
+
+        new_id_files = [f for f in self.uploaded_files
+                        if os.path.normpath(f) not in self._evidence_ids]
+
+        logger.warning(
+            f"[ID-DOCS FLOW] new_files={len(new_id_files)} "
+            f"pending_replacements={list(self._pending_id_replacements)} "
+            f"survey_id={self._survey_id} person_id={person_id}"
+        )
+
+        doc_type_synced_ids: set = set()
+
+        for file_path in list(new_id_files):
+            if not self._pending_id_replacements:
+                break
+            old_evidence_id = self._pending_id_replacements.pop(0)
+            try:
+                doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
+                logger.warning(
+                    f"[ID-DOCS FLOW] PUT replace: old_id={old_evidence_id} "
+                    f"new_file={os.path.basename(file_path)} doc_type={doc_type}"
+                )
+                from services.api_worker import run_blocking_async
+                response = run_blocking_async(
+                    self._api_service.update_identification_document,
+                    self._survey_id, old_evidence_id, person_id,
+                    file_path=file_path, document_type=doc_type,
+                )
+                new_eid = (response.get("id") or response.get("evidenceId")
+                           or response.get("Id") or old_evidence_id)
+                self._evidence_ids[os.path.normpath(file_path)] = new_eid
+                if doc_type is not None:
+                    doc_type_synced_ids.add(new_eid)
+                new_id_files.remove(file_path)
+                logger.info(f"ID evidence replaced: {old_evidence_id} -> {new_eid}")
+            except Exception as e:
+                logger.error(f"Failed to replace ID evidence {old_evidence_id}: {e}")
+                self._pending_id_replacements.insert(0, old_evidence_id)
+
+        if new_id_files:
+            saved = self.uploaded_files
+            self.uploaded_files = new_id_files
+            doc_type_synced_ids.update(self._upload_identification_files(person_id))
+            self.uploaded_files = saved
+
+        for old_id in self._pending_id_replacements:
+            try:
+                from services.api_worker import run_blocking_async
+                run_blocking_async(
+                    self._api_service.delete_identification_document,
+                    self._survey_id, old_id,
+                )
+                logger.info(f"Orphaned ID evidence deleted: {old_id}")
+            except Exception as e:
+                from services.exceptions import ApiException
+                if isinstance(e, ApiException) and e.status_code == 404:
+                    logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
+                else:
+                    logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
+        self._pending_id_replacements.clear()
+
+        current_doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
+        loaded_doc_type = getattr(self, '_loaded_id_doc_type', None)
+        if current_doc_type is not None and current_doc_type != loaded_doc_type:
+            server_ev_ids = list(getattr(self, '_server_id_evidence_ids', []) or [])
+            local_ev_ids = [ev for ev in self._evidence_ids.values() if ev]
+            seen = set()
+            target_ids = []
+            for ev in server_ev_ids + local_ev_ids:
+                if ev and ev not in seen and ev not in doc_type_synced_ids:
+                    seen.add(ev)
+                    target_ids.append(ev)
+            for ev_id in target_ids:
+                try:
+                    from services.api_worker import run_blocking_async
+                    run_blocking_async(
+                        self._api_service.update_identification_document,
+                        self._survey_id, ev_id, person_id,
+                        document_type=current_doc_type,
+                    )
+                    logger.info(f"ID doc_type updated to {current_doc_type} for evidence {ev_id}")
+                except Exception as e:
+                    logger.error(f"Failed to update doc_type for evidence {ev_id}: {e}")
+            self._loaded_id_doc_type = current_doc_type
 
     def _upload_tenure_files(self, relation_id: str):
         """Upload new tenure files and link existing selected documents."""
@@ -3341,14 +3719,20 @@ class PersonDialog(QDialog):
 
             try:
                 from services.api_worker import run_blocking_async
-                response = run_blocking_async(
-                    self._api_service.upload_relation_document,
+                upload_kwargs = dict(
                     survey_id=self._survey_id,
                     relation_id=relation_id,
                     file_path=file_path,
                     issue_date=issue_date,
                     file_hash=file_hash,
                     document_reference_number=file_entry.get("reference_number", ""),
+                )
+                ev_type_val = file_entry.get("evidence_type")
+                if ev_type_val is not None:
+                    upload_kwargs["evidence_type"] = ev_type_val
+                response = run_blocking_async(
+                    self._api_service.upload_relation_document,
+                    **upload_kwargs,
                 )
                 evidence_id = (
                     response.get("id") or response.get("evidenceId") or

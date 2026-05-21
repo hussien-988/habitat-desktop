@@ -715,26 +715,43 @@ class MainWindow(QMainWindow):
     # -- Forced Password Change (async UX flow) --
 
     def _start_forced_password_change(self, user):
-        """Step 1: Show password change dialog."""
+        """Show forced-change dialog and submit asynchronously without closing on errors."""
         from ui.components.dialogs.password_dialog import PasswordDialog
         from ui.components.toast import Toast
 
         name_ar = getattr(user, 'full_name_ar', '') or ''
         name_en = getattr(user, 'full_name', '') or getattr(user, 'username', '')
-        result = PasswordDialog.forced_change_password(
-            parent=self, username=name_ar, username_en=name_en
+
+        self._pwd_change_user = user
+        self._pwd_change_new_password = None
+
+        dialog = PasswordDialog.open_forced_async(
+            parent=self,
+            username=name_ar,
+            username_en=name_en,
+            on_submit=self._submit_forced_password_change,
         )
-        if result is None:
+        self._forced_pwd_dialog = dialog
+        accepted = dialog.exec_() == PasswordDialog.Accepted
+        self._forced_pwd_dialog = None
+
+        if not accepted:
             Toast.show_toast(self, tr("dialog.password.change_cancelled"), Toast.WARNING)
             self._show_login()
             return
 
-        current_password, new_password = result
-        self._pwd_change_user = user
-        self._pwd_change_new_password = new_password
+        self._on_forced_password_accepted()
 
-        # Step 2: Show loader and call API async
-        self._show_login_loading_msg(tr("dialog.password.changing"))
+    def _submit_forced_password_change(self, dialog, current_password, new_password):
+        user = self._pwd_change_user
+        user_id = getattr(user, 'user_id', None)
+        if not user_id:
+            logger.warning("Forced password change attempted without user_id for username=%s",
+                           getattr(user, 'username', None))
+            dialog.report_error(tr("page.user_mgmt.password_change_failed"), field='current')
+            return
+
+        self._pwd_change_new_password = new_password
 
         from services.api_client import get_api_client
         api_client = get_api_client()
@@ -742,31 +759,39 @@ class MainWindow(QMainWindow):
         if token:
             api_client.set_access_token(token)
 
-        def _call_change_password(cur_pwd, new_pwd, uid):
-            try:
-                return api_client.change_password(cur_pwd, new_pwd, user_id=uid)
-            except Exception as e:
-                detail = ""
-                if hasattr(e, 'response_data') and e.response_data:
-                    detail = e.response_data.get('message') or ""
-                raise Exception(detail) if detail else e
-
         from services.api_worker import ApiWorker
-        self._pwd_worker = ApiWorker(
-            _call_change_password,
-            current_password, new_password,
-            getattr(user, 'user_id', None)
+        worker = ApiWorker(
+            api_client.change_password,
+            current_password, new_password, user_id
         )
-        self._pwd_worker.finished.connect(self._on_password_changed)
-        self._pwd_worker.error.connect(self._on_password_change_failed)
-        self._pwd_worker.start()
+        worker.finished.connect(lambda _res, d=dialog: self._on_password_change_ok(d))
+        worker.error.connect(lambda msg, d=dialog: self._on_password_change_err(d, msg))
+        self._pwd_worker = worker
+        worker.start()
 
-    def _on_password_changed(self, result):
-        """Step 3: Password changed — show success dialog, then re-auth."""
-        self._hide_login_loading()
+    def _on_password_change_ok(self, dialog):
         logger.info("Password changed successfully for user: %s",
-                     self._pwd_change_user.username)
+                    getattr(self._pwd_change_user, 'username', '<unknown>'))
+        dialog.accept()
 
+    def _on_password_change_err(self, dialog, error_msg):
+        logger.error("Password change failed: %s", error_msg)
+        field = self._classify_pwd_error_field(error_msg)
+        dialog.report_error(error_msg, field=field)
+
+    @staticmethod
+    def _classify_pwd_error_field(error_msg: str) -> str:
+        """Decide which input to highlight based on the backend message."""
+        if not error_msg:
+            return 'current'
+        msg = error_msg.lower()
+        new_markers = ("جديدة", "ضعيف", "weak", "policy", "min", "uppercase",
+                       "lowercase", "digit", "special", "tarikh", "history")
+        if any(m in error_msg for m in ("جديدة", "ضعيف")) or any(m in msg for m in new_markers):
+            return 'new'
+        return 'current'
+
+    def _on_forced_password_accepted(self):
         from ui.components.dialogs.message_dialog import MessageDialog
         MessageDialog.show_success(
             self,
@@ -774,7 +799,6 @@ class MainWindow(QMainWindow):
             tr("dialog.password.change_success_message"),
         )
 
-        # Step 4: Re-authenticate with new password
         self._show_login_loading_msg(tr("dialog.password.logging_in"))
 
         from services.api_worker import ApiWorker
@@ -788,19 +812,6 @@ class MainWindow(QMainWindow):
         self._reauth_worker.finished.connect(self._on_reauth_finished)
         self._reauth_worker.error.connect(self._on_reauth_failed)
         self._reauth_worker.start()
-
-    def _on_password_change_failed(self, error_msg):
-        """Password change API failed — show specific error and retry."""
-        self._hide_login_loading()
-        logger.error("Password change failed: %s", error_msg)
-
-        from ui.components.dialogs.message_dialog import MessageDialog
-        MessageDialog.show_error(
-            self,
-            tr("page.user_mgmt.password_change_failed_title"),
-            error_msg or tr("page.user_mgmt.password_change_failed"),
-        )
-        self._start_forced_password_change(self._pwd_change_user)
 
     def _on_reauth_finished(self, result):
         """Step 5: Re-auth done — continue to main app."""
@@ -826,41 +837,17 @@ class MainWindow(QMainWindow):
     # -- Voluntary Password Change (from navbar settings) --
 
     def _on_voluntary_password_change(self):
-        """User requested password change from settings pill."""
+        """User requested password change from settings pill — dialog stays open on backend errors."""
         from ui.components.dialogs.password_dialog import PasswordDialog
 
-        result = PasswordDialog.change_password(parent=self)
-        if result is None:
+        dialog = PasswordDialog.open_change_async(
+            parent=self,
+            on_submit=self._submit_voluntary_password_change,
+        )
+        accepted = dialog.exec_() == PasswordDialog.Accepted
+        if not accepted:
             return
 
-        current_password, new_password = result
-
-        self._show_login_loading_msg(tr("dialog.password.changing"))
-
-        from services.api_client import get_api_client
-        api_client = get_api_client()
-
-        user_id = getattr(self.current_user, 'user_id', None)
-
-        def _call_change(cur_pwd, new_pwd, uid):
-            try:
-                return api_client.change_password(cur_pwd, new_pwd, user_id=uid)
-            except Exception as e:
-                detail = ""
-                if hasattr(e, 'response_data') and e.response_data:
-                    detail = e.response_data.get('message') or ""
-                raise Exception(detail) if detail else e
-
-        from services.api_worker import ApiWorker
-        self._vol_pwd_worker = ApiWorker(
-            _call_change, current_password, new_password, user_id
-        )
-        self._vol_pwd_worker.finished.connect(self._on_voluntary_pwd_success)
-        self._vol_pwd_worker.error.connect(self._on_voluntary_pwd_error)
-        self._vol_pwd_worker.start()
-
-    def _on_voluntary_pwd_success(self, result):
-        self._hide_login_loading()
         from ui.components.dialogs.message_dialog import MessageDialog
         MessageDialog.show_success(
             self,
@@ -868,15 +855,30 @@ class MainWindow(QMainWindow):
             tr("dialog.password.change_success_message"),
         )
 
-    def _on_voluntary_pwd_error(self, error_msg):
-        self._hide_login_loading()
-        logger.error("Voluntary password change failed: %s", error_msg)
-        from ui.components.dialogs.message_dialog import MessageDialog
-        MessageDialog.show_error(
-            self,
-            tr("page.user_mgmt.password_change_failed_title"),
-            error_msg or tr("page.user_mgmt.password_change_failed"),
+    def _submit_voluntary_password_change(self, dialog, current_password, new_password):
+        user_id = getattr(self.current_user, 'user_id', None)
+        if not user_id:
+            logger.warning("Voluntary password change attempted without user_id for username=%s",
+                           getattr(self.current_user, 'username', None))
+            dialog.report_error(tr("page.user_mgmt.password_change_failed"), field='current')
+            return
+
+        from services.api_client import get_api_client
+        api_client = get_api_client()
+
+        from services.api_worker import ApiWorker
+        worker = ApiWorker(
+            api_client.change_password, current_password, new_password, user_id
         )
+        worker.finished.connect(lambda _res, d=dialog: d.accept())
+        worker.error.connect(
+            lambda msg, d=dialog: (
+                logger.error("Voluntary password change failed: %s", msg),
+                d.report_error(msg, field=self._classify_pwd_error_field(msg)),
+            )
+        )
+        self._vol_pwd_worker = worker
+        worker.start()
 
     def _show_login_loading_msg(self, message):
         """Show loading spinner with a custom message."""

@@ -937,12 +937,15 @@ class UnitSelectionStep(BaseStep):
                                 "claims_count", "created_claims"):
                         self.context.update_data(key, None)
 
-        # Link unit synchronously — block progression if it fails
         if not self.context.get_data("unit_linked"):
             self._set_auth_token()
             self._spinner.show_loading(tr("component.loading.default"))
+            from services.api_worker import run_blocking_async
             try:
-                self._api_service.link_unit_to_survey(survey_id, current_unit_id)
+                run_blocking_async(
+                    self._api_service.link_unit_to_survey,
+                    survey_id, current_unit_id,
+                )
                 logger.info(f"Unit {current_unit_id} linked to survey {survey_id}")
                 self.context.update_data("unit_linked", True)
                 self.context.update_data("linked_unit_uuid", current_unit_id)

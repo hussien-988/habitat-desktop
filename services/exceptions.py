@@ -241,9 +241,7 @@ class ApiException(Exception):
         return "\n".join(lines)
 
     def __str__(self):
-        if self.status_code:
-            return f"[{self.status_code}] {self.message}"
-        return self.message
+        return self.message or ""
 
 
 class ValidationException(Exception):

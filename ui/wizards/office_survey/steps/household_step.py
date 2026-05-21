@@ -103,7 +103,7 @@ class HouseholdStep(BaseStep):
 
         # Address row
         self._address_container = QFrame()
-        self._address_container.setFixedHeight(ScreenScale.h(32))
+        self._address_container.setMinimumHeight(ScreenScale.h(32))
         self._address_container.setStyleSheet("""
             QFrame {
                 background-color: #F0F4FA;
@@ -259,9 +259,9 @@ class HouseholdStep(BaseStep):
         date_row.setSpacing(6)
 
         self.hh_start_year = RtlCombo()
-        self.hh_start_year.addItem(tr("wizard.person_dialog.year"), None)
         for y in range(QDate.currentDate().year(), 1939, -1):
             self.hh_start_year.addItem(str(y), y)
+        self.hh_start_year.setCurrentIndex(-1)
         self.hh_start_year.setStyleSheet(FORM_FIELD_STYLE)
         date_row.addWidget(self.hh_start_year, 1)
         start_date_col.addLayout(date_row)
@@ -766,6 +766,9 @@ class HouseholdStep(BaseStep):
             return result
 
         _y = read_int_from_combo(self.hh_start_year)
+        if _y and _y > QDate.currentDate().year():
+            result.add_error(tr("wizard.household.start_year_future"))
+            return result
         occupancy_start_date = f"{_y:04d}-01-01" if _y else None
 
         household = {
@@ -896,7 +899,7 @@ class HouseholdStep(BaseStep):
                      self.hh_elderly_count, self.hh_disabled_count]:
             spin.setValue(0)
         self.hh_occupancy_nature.setCurrentIndex(0)
-        self.hh_start_year.setCurrentIndex(0)
+        self.hh_start_year.setCurrentIndex(-1)
         self.hh_notes.clear()
 
     def populate_data(self):
@@ -911,12 +914,14 @@ class HouseholdStep(BaseStep):
             # Update building stats - same as unit_selection_step
             building = self.context.building
 
-            # Use display properties directly (they return Arabic text)
             self.ui_building_type.setText(building.building_type_display or "-")
             self.ui_building_status.setText(building.building_status_display or "-")
-            self.ui_units_count.setText(str(getattr(building, 'number_of_apartments', 0) + (building.number_of_shops or 0)))
-            self.ui_parcels_count.setText(str(getattr(building, 'number_of_apartments', 0)))
-            self.ui_shops_count.setText(str(building.number_of_shops or 0))
+            apartments = getattr(building, 'number_of_apartments', 0) or 0
+            shops = building.number_of_shops or 0
+            total = apartments + shops
+            self.ui_units_count.setText(str(total) if total else "-")
+            self.ui_parcels_count.setText(str(apartments) if apartments else "-")
+            self.ui_shops_count.setText(str(shops) if shops else "-")
 
         # Update unit information (Row 3) - use centralized display_mappings
         # Get unit data from context
@@ -928,7 +933,7 @@ class HouseholdStep(BaseStep):
 
             floor_number = getattr(unit, 'floor_number', None)
             unit_number = getattr(unit, 'unit_number', None) or getattr(unit, 'apartment_number', None)
-            rooms_count = getattr(unit, 'apartment_number', None)
+            rooms_count = getattr(unit, 'number_of_rooms', None)
             area = getattr(unit, 'area_sqm', None)
         elif self.context.new_unit_data:
             unit_type_raw = self.context.new_unit_data.get('unit_type')
@@ -950,7 +955,7 @@ class HouseholdStep(BaseStep):
         self.ui_unit_status.setText(unit_status_display)
         self.ui_floor_number.setText(str(floor_number) if floor_number is not None else "-")
         self.ui_unit_number.setText(str(unit_number) if unit_number else "-")
-        self.ui_rooms_count.setText(str(rooms_count) if rooms_count is not None else "-")
+        self.ui_rooms_count.setText(str(rooms_count) if rooms_count else "-")
         # Format area with 2 decimal places
         if area:
             try:
