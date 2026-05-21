@@ -812,12 +812,21 @@ class CaseDetailsPage(QWidget):
         is_finalized = (not is_cancelled) and (not is_draft) and (not is_obstructed)
 
         can_manage = self._user_role in ("admin", "data_manager")
-        can_resume_obstructed = is_obstructed and can_manage
         can_revert = is_finalized and can_manage
+
+        if is_obstructed:
+            show_draft_actions = False
+            can_resume_obstructed = False
+            can_revert = False
+            can_view_linked = False
+        else:
+            show_draft_actions = is_draft
+            can_resume_obstructed = False
+            can_view_linked = can_revert
 
         badges = []
 
-        self._header.set_info(ref, badges, is_draft, can_resume_obstructed, can_revert ,can_revert)
+        self._header.set_info(ref, badges, show_draft_actions, can_resume_obstructed, can_revert, can_view_linked)
 
     # -- Survey Info Card --
 

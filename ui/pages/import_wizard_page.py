@@ -112,11 +112,11 @@ class _PkgStatus:
     TERMINAL = _IMPORT_HISTORY | {FAILED}
 
 
-_STATUS_POLL_INTERVAL_MS = 5000  # 5 seconds
-_MAX_POLL_COUNT = 24  # 24 polls × 5s = 120s default timeout (was 300s)
-_TIMEOUT_EXTENSION_POLLS = 12  # +60s if user clicks "wait more" (one-time)
-_STUCK_WARN_POLLS = 6   # 6 polls × 5s = 30s with same transient status
-_STUCK_RETRY_POLLS = 12  # 12 polls × 5s = 1 minute with same transient status → show retry toast
+_STATUS_POLL_INTERVAL_MS = 5000
+_MAX_POLL_COUNT = 6
+_TIMEOUT_EXTENSION_POLLS = 6
+_STUCK_WARN_POLLS = 3
+_STUCK_RETRY_POLLS = 5
 
 
 def _status_name(code) -> str:
@@ -1503,6 +1503,7 @@ class ImportWizardPage(QWidget):
         will only view and then leave. setCurrentWidget locks the visible
         child regardless of QStackedWidget index ordering.
         """
+        self._hide_error_banner()
         # Tear down any other step widgets first to keep the stack clean.
         for step_attr in ("step2", "step_review", "step_commit"):
             step = getattr(self, step_attr, None)

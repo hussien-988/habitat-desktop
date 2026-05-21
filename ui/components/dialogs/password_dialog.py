@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QGraphicsDropShadowEffect,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 
 from ui.components.icon import Icon
@@ -124,10 +124,11 @@ def _create_shield_icon(size: int = 56) -> QPixmap:
 class PasswordDialog(QDialog):
     """Dialog for setting or changing user password."""
 
-    # Mode constants
     SET = "set"
     CHANGE = "change"
     FORCED = "forced"
+
+    submission_requested = pyqtSignal(str, str)
 
     def __init__(self, mode: str = SET, parent=None, username: str = "", username_en: str = ""):
         super().__init__(parent)
@@ -138,6 +139,12 @@ class PasswordDialog(QDialog):
         self._username_en = username_en
         self._visibility = {}
         self._is_dark = mode in (self.CHANGE, self.FORCED)
+        self._async_mode = False
+        self._save_btn = None
+        self._save_btn_default_text = ""
+        self._current_error_label = None
+        self._password_error_label = None
+        self._confirm_error_label = None
 
         self.setModal(True)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -147,9 +154,9 @@ class PasswordDialog(QDialog):
         from PyQt5.QtWidgets import QApplication
         _scr = QApplication.primaryScreen().availableGeometry()
         if self._is_dark:
-            h = 600 if mode == self.FORCED else 530
-            self.resize(min(500, int(_scr.width() * 0.40)), min(h, int(_scr.height() * 0.65)))
-            self.setMinimumSize(400, 420)
+            h = 670 if mode == self.FORCED else 600
+            self.resize(min(500, int(_scr.width() * 0.40)), min(h, int(_scr.height() * 0.78)))
+            self.setMinimumSize(400, 460)
         else:
             self.resize(min(613, int(_scr.width() * 0.48)), min(384, int(_scr.height() * 0.45)))
             self.setMinimumSize(450, 320)
@@ -244,9 +251,10 @@ class PasswordDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(12)
 
-        save_btn = self._create_dark_button(tr("button.save"), primary=True)
-        save_btn.clicked.connect(self._on_save)
-        btn_layout.addWidget(save_btn)
+        self._save_btn = self._create_dark_button(tr("button.save"), primary=True)
+        self._save_btn_default_text = self._save_btn.text()
+        self._save_btn.clicked.connect(self._on_save)
+        btn_layout.addWidget(self._save_btn)
 
         cancel_btn = self._create_dark_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
@@ -289,11 +297,10 @@ class PasswordDialog(QDialog):
         layout.addWidget(title)
 
     def _build_dark_fields(self, layout: QVBoxLayout):
-        """Three password fields: current + new + confirm."""
+        """Three password fields: current + new + confirm, each with inline error."""
         lbl_font = create_font(size=10, weight=QFont.DemiBold)
         lbl_style = f"color: {Colors.TEXT_PRIMARY};"
 
-        # Current password
         current_lbl = QLabel(tr("dialog.password.enter_current"))
         current_lbl.setFont(lbl_font)
         current_lbl.setStyleSheet(lbl_style)
@@ -304,9 +311,14 @@ class PasswordDialog(QDialog):
         )
         layout.addWidget(self.current_input)
 
+        self._current_error_label = self._create_inline_error_label()
+        layout.addWidget(self._current_error_label)
+        self.current_input.textChanged.connect(
+            lambda _: self._clear_field_error('current')
+        )
+
         layout.addSpacing(4)
 
-        # New password
         new_lbl = QLabel(tr("dialog.password.enter_new"))
         new_lbl.setFont(lbl_font)
         new_lbl.setStyleSheet(lbl_style)
@@ -317,9 +329,14 @@ class PasswordDialog(QDialog):
         )
         layout.addWidget(self.password_input)
 
+        self._password_error_label = self._create_inline_error_label()
+        layout.addWidget(self._password_error_label)
+        self.password_input.textChanged.connect(
+            lambda _: self._clear_field_error('new')
+        )
+
         layout.addSpacing(4)
 
-        # Confirm password
         confirm_lbl = QLabel(tr("dialog.password.reenter_new"))
         confirm_lbl.setFont(lbl_font)
         confirm_lbl.setStyleSheet(lbl_style)
@@ -329,6 +346,28 @@ class PasswordDialog(QDialog):
             tr("dialog.password.enter_password"), "confirm"
         )
         layout.addWidget(self.confirm_input)
+
+        self._confirm_error_label = self._create_inline_error_label()
+        layout.addWidget(self._confirm_error_label)
+        self.confirm_input.textChanged.connect(
+            lambda _: self._clear_field_error('confirm')
+        )
+
+    def _create_inline_error_label(self) -> QLabel:
+        lbl = QLabel("")
+        lbl.setWordWrap(True)
+        lbl.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
+        lbl.setMinimumHeight(0)
+        lbl.setContentsMargins(2, 0, 2, 0)
+        lbl.setStyleSheet(
+            "color: #E74C3C;"
+            "background: transparent;"
+            "font-size: 10px;"
+            "padding: 2px 4px 0 4px;"
+        )
+        lbl.setFont(create_font(size=9))
+        lbl.hide()
+        return lbl
 
     def _create_dark_password_field(self, placeholder: str, name: str) -> QLineEdit:
         field = QLineEdit()
@@ -444,9 +483,10 @@ class PasswordDialog(QDialog):
         btn_layout.setSpacing(12)
         btn_layout.addStretch()
 
-        save_btn = self._create_light_button(tr("button.save"), primary=True)
-        save_btn.clicked.connect(self._on_save)
-        btn_layout.addWidget(save_btn)
+        self._save_btn = self._create_light_button(tr("button.save"), primary=True)
+        self._save_btn_default_text = self._save_btn.text()
+        self._save_btn.clicked.connect(self._on_save)
+        btn_layout.addWidget(self._save_btn)
 
         cancel_btn = self._create_light_button(tr("button.cancel"), primary=False)
         cancel_btn.clicked.connect(self.reject)
@@ -570,27 +610,126 @@ class PasswordDialog(QDialog):
         )
 
     def _on_save(self):
+        self.clear_errors()
         pwd = self.password_input.text().strip()
         if not pwd:
+            self._show_field_error('new', tr("dialog.password.enter_password"))
             return
 
         confirm = self.confirm_input.text().strip()
         if pwd != confirm:
-            self._highlight_error(self.confirm_input)
-            self._policy_error_label.setText(tr("dialog.password.mismatch"))
-            self._policy_error_label.show()
+            self._show_field_error('confirm', tr("dialog.password.mismatch"))
             return
 
+        current_for_check = None
         if self._mode in (self.CHANGE, self.FORCED):
             current = self.current_input.text().strip()
             if not current:
-                self._highlight_error(self.current_input)
+                self._show_field_error('current', tr("dialog.password.enter_current"))
                 return
             self.current_password = current
+            current_for_check = current
 
-        self._policy_error_label.hide()
+        from services.password_policy_service import validate_password
+        errors = validate_password(pwd, current_pwd=current_for_check)
+        if errors:
+            first = errors[0]
+            msg = tr(first["key"]).format(**first.get("params", {}))
+            self._show_field_error('new', msg)
+            return
+
         self.password = pwd
+
+        if self._async_mode and self._mode in (self.CHANGE, self.FORCED):
+            self.set_submitting(True)
+            self.submission_requested.emit(current_for_check or "", pwd)
+            return
+
         self.accept()
+
+    def enable_async_submission(self):
+        """Switch the dialog to async submission mode.
+
+        In async mode the dialog stays open after the user clicks save and the
+        caller is expected to invoke either report_error() or accept() after
+        the backend responds.
+        """
+        self._async_mode = True
+
+    def set_submitting(self, busy: bool):
+        if self._save_btn is None:
+            return
+        self._save_btn.setEnabled(not busy)
+        if busy:
+            self._save_btn.setText(tr("dialog.password.submitting"))
+        else:
+            self._save_btn.setText(self._save_btn_default_text or tr("button.save"))
+
+    def report_error(self, message: str, field: str = 'current'):
+        """Display backend error inline under the relevant field and keep the dialog open."""
+        self.set_submitting(False)
+        if not message:
+            message = tr("page.user_mgmt.password_change_failed")
+        target = field
+        if target == 'current' and self._mode not in (self.CHANGE, self.FORCED):
+            target = 'new'
+        self._show_field_error(target, message)
+
+    def clear_errors(self):
+        for label in (
+            self._current_error_label,
+            self._password_error_label,
+            self._confirm_error_label,
+            getattr(self, '_policy_error_label', None),
+        ):
+            if label is not None:
+                label.clear()
+                label.hide()
+        for field in (
+            getattr(self, 'current_input', None),
+            getattr(self, 'password_input', None),
+            getattr(self, 'confirm_input', None),
+        ):
+            if field is not None:
+                self._reset_field_style(field)
+
+    def _show_field_error(self, field: str, message: str):
+        widget, label = self._field_widgets(field)
+        if widget is None:
+            if getattr(self, '_policy_error_label', None) is not None:
+                self._policy_error_label.setText(message)
+                self._policy_error_label.show()
+            return
+        self._highlight_error(widget)
+        if label is not None:
+            label.setText(message)
+            label.show()
+        else:
+            if getattr(self, '_policy_error_label', None) is not None:
+                self._policy_error_label.setText(message)
+                self._policy_error_label.show()
+        widget.setFocus()
+        widget.selectAll()
+
+    def _clear_field_error(self, field: str):
+        widget, label = self._field_widgets(field)
+        if label is not None and label.isVisible():
+            label.clear()
+            label.hide()
+        if widget is not None:
+            self._reset_field_style(widget)
+
+    def _field_widgets(self, field: str):
+        if field == 'current':
+            return (getattr(self, 'current_input', None), self._current_error_label)
+        if field == 'new':
+            return (getattr(self, 'password_input', None), self._password_error_label)
+        if field == 'confirm':
+            return (getattr(self, 'confirm_input', None), self._confirm_error_label)
+        return (None, None)
+
+    def _reset_field_style(self, field: QLineEdit):
+        field.setStyleSheet(_INPUT_STYLE_LIGHT if not self._is_dark else _INPUT_STYLE_LIGHT)
 
     def _highlight_error(self, field: QLineEdit):
         field.setStyleSheet("""
@@ -634,3 +773,32 @@ class PasswordDialog(QDialog):
         if dialog.exec_() == QDialog.Accepted:
             return (dialog.current_password, dialog.password)
         return None
+
+    @staticmethod
+    def open_change_async(parent, on_submit) -> "PasswordDialog":
+        """Open a CHANGE dialog in async mode.
+
+        ``on_submit(dialog, current, new)`` is invoked when the user clicks save
+        and local validation passes. The handler must eventually call either
+        ``dialog.accept()`` (success) or ``dialog.report_error(msg, field)`` to
+        keep the dialog open and surface a backend error inline.
+        """
+        dialog = PasswordDialog(mode=PasswordDialog.CHANGE, parent=parent)
+        dialog.enable_async_submission()
+        dialog.submission_requested.connect(
+            lambda cur, new, d=dialog: on_submit(d, cur, new)
+        )
+        return dialog
+
+    @staticmethod
+    def open_forced_async(parent, username: str, username_en: str, on_submit) -> "PasswordDialog":
+        """Open a FORCED dialog in async mode (see ``open_change_async``)."""
+        dialog = PasswordDialog(
+            mode=PasswordDialog.FORCED, parent=parent,
+            username=username, username_en=username_en
+        )
+        dialog.enable_async_submission()
+        dialog.submission_requested.connect(
+            lambda cur, new, d=dialog: on_submit(d, cur, new)
+        )
+        return dialog

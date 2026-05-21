@@ -17,8 +17,24 @@ from PyQt5.QtWidgets import (
     QPushButton, QSpinBox, QTextEdit, QFrame, QGraphicsDropShadowEffect,
     QWidget
 )
-from PyQt5.QtCore import Qt, QLocale
+from PyQt5.QtCore import Qt, QLocale, QTimer
 from PyQt5.QtGui import QDoubleValidator, QColor
+
+
+class FocusSelectSpinBox(QSpinBox):
+    """QSpinBox that selects all text on focus so typing replaces the current value."""
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)
+
+
+class FocusSelectLineEdit(QLineEdit):
+    """QLineEdit that selects all text on focus so typing replaces the current value."""
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)
 
 from app.config import Config
 from ui.components.rtl_combo import RtlCombo
@@ -31,6 +47,7 @@ from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import get_unit_type_options, get_unit_status_options
 from services.error_mapper import map_exception
+from services.exceptions import humanize_exception, log_exception
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
@@ -236,18 +253,21 @@ class UnitDialog(QDialog):
         row1 = QHBoxLayout()
         row1.setSpacing(16)
 
-        self.floor_spin = QSpinBox()
+        self.floor_spin = FocusSelectSpinBox()
         self.floor_spin.setRange(-3, 100)
         self.floor_spin.setValue(0)
+        self.floor_spin.setLayoutDirection(Qt.LeftToRight)
         self.floor_spin.setAlignment(Qt.AlignRight)
         self.floor_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.floor_spin.setButtonSymbols(QSpinBox.NoButtons)
         floor_widget = self._create_spinbox_with_arrows(self.floor_spin)
         row1.addLayout(self._create_field_container(tr("wizard.unit_dialog.floor_number"), floor_widget), 1)
 
-        self.unit_number_spin = QSpinBox()
+        self.unit_number_spin = FocusSelectSpinBox()
         self.unit_number_spin.setRange(0, 9999)
         self.unit_number_spin.setValue(0)
+        self.unit_number_spin.setSpecialValueText("")
+        self.unit_number_spin.setLayoutDirection(Qt.LeftToRight)
         self.unit_number_spin.setAlignment(Qt.AlignRight)
         self.unit_number_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.unit_number_spin.setButtonSymbols(QSpinBox.NoButtons)
@@ -282,18 +302,21 @@ class UnitDialog(QDialog):
         row3 = QHBoxLayout()
         row3.setSpacing(16)
 
-        self.rooms_spin = QSpinBox()
+        self.rooms_spin = FocusSelectSpinBox()
         self.rooms_spin.setRange(0, 20)
-        self.rooms_spin.setSpecialValueText("-")
+        self.rooms_spin.setSpecialValueText("")
         self.rooms_spin.setValue(0)
+        self.rooms_spin.setLayoutDirection(Qt.LeftToRight)
         self.rooms_spin.setAlignment(Qt.AlignRight)
         self.rooms_spin.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         self.rooms_spin.setButtonSymbols(QSpinBox.NoButtons)
         rooms_widget = self._create_spinbox_with_arrows(self.rooms_spin)
         row3.addLayout(self._create_field_container(tr("wizard.unit_dialog.rooms"), rooms_widget), 1)
 
-        self.area_input = QLineEdit()
+        self.area_input = FocusSelectLineEdit()
         self.area_input.setFixedHeight(ScreenScale.h(48))
+        self.area_input.setLayoutDirection(Qt.LeftToRight)
+        self.area_input.setAlignment(Qt.AlignRight)
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
 
@@ -639,15 +662,19 @@ class UnitDialog(QDialog):
                 logger.info("Property unit created successfully via API")
                 self._created_unit_data = response
             except Exception as e:
-                logger.error(f"API unit creation failed: {e}")
-                if "409" in str(e):
+                log_exception(e, logger, context="unit.create")
+                if getattr(e, "status_code", None) == 409:
                     self._show_styled_message(
                         tr("common.error"),
                         tr("wizard.unit_dialog.duplicate_unit"),
                         is_error=True
                     )
                     return
-                self._show_styled_message(tr("common.error"), str(e), is_error=True)
+                self._show_styled_message(
+                    tr("common.error"),
+                    humanize_exception(e, context="unit.create"),
+                    is_error=True,
+                )
                 return
             finally:
                 self._spinner.hide_loading()
@@ -679,8 +706,19 @@ class UnitDialog(QDialog):
                 logger.info("Property unit updated successfully via API")
                 self._updated_unit_data = response
             except Exception as e:
-                logger.error(f"API unit update failed: {e}")
-                self._show_styled_message(tr("common.error"), str(e), is_error=True)
+                log_exception(e, logger, context="unit.update")
+                if getattr(e, "status_code", None) == 409:
+                    self._show_styled_message(
+                        tr("common.error"),
+                        tr("wizard.unit_dialog.duplicate_unit"),
+                        is_error=True,
+                    )
+                    return
+                self._show_styled_message(
+                    tr("common.error"),
+                    humanize_exception(e, context="unit.update"),
+                    is_error=True,
+                )
                 return
             finally:
                 self._spinner.hide_loading()

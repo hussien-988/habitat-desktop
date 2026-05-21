@@ -612,7 +612,10 @@ class BuildingInfoStep(BaseStep):
         except Exception as _diag_e:
             logger.debug(f"[SRV-DIAG] diag log failed: {_diag_e}")
         try:
-            survey_response = self._survey_api_service.create_office_survey(survey_data)
+            from services.api_worker import run_blocking_async
+            survey_response = run_blocking_async(
+                self._survey_api_service.create_office_survey, survey_data,
+            )
             survey_id = survey_response.get("id") or survey_response.get("surveyId", "")
             self.context.update_data("survey_id", survey_id)
             self.context.update_data("survey_data", survey_response)

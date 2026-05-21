@@ -16,11 +16,12 @@ from PyQt5.QtWidgets import (
     QPushButton, QMenu, QSizePolicy, QGraphicsOpacityEffect,
 )
 from PyQt5.QtCore import (
-    Qt, pyqtSignal, pyqtProperty, QSize,
+    Qt, pyqtSignal, pyqtProperty, QSize, QUrl,
     QPropertyAnimation, QEasingCurve, QRectF,
 )
 from PyQt5.QtGui import (
     QColor, QIcon, QPainter, QLinearGradient, QPen, QPainterPath, QCursor,
+    QDesktopServices,
 )
 
 from ui.wizards.framework import BaseStep, StepValidationResult
@@ -642,7 +643,7 @@ class ReviewStep(BaseStep):
     # ── Person row ───────────────────────────────────────────────────
 
     def _create_person_row(self, person: dict, alt_bg: bool = False) -> QWidget:
-        """Compact person card designed for a responsive grid (2–3 cols)."""
+        """Compact person card with a link to view full review details in a dialog."""
         is_rtl = get_layout_direction() == Qt.RightToLeft
 
         card = QFrame()
@@ -676,7 +677,6 @@ class ReviewStep(BaseStep):
         )
         v.setSpacing(ScreenScale.h(8))
 
-        # Row 1: name + role badge
         top = QHBoxLayout()
         top.setSpacing(ScreenScale.w(8))
         top.setContentsMargins(0, 0, 0, 0)
@@ -695,35 +695,485 @@ class ReviewStep(BaseStep):
         name_lbl.setAlignment(name_align)
         name_lbl.setWordWrap(True)
         top.addWidget(name_lbl, 1)
-
         v.addLayout(top)
 
-        # View button (wizard mode only)
-        if not self._read_only:
-            btn_row = QHBoxLayout()
-            btn_row.setContentsMargins(0, 0, 0, 0)
-            view_btn = QPushButton(tr("wizard.review.view_personal_info"))
-            view_btn.setCursor(Qt.PointingHandCursor)
-            view_btn.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
-            view_btn.setStyleSheet("""
-                QPushButton {
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        view_btn = QPushButton(tr("wizard.review.view_personal_info"))
+        view_btn.setCursor(Qt.PointingHandCursor)
+        view_btn.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        view_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                color: #3890DF;
+                border: none;
+                padding: 4px 0;
+            }
+            QPushButton:hover { color: #1D4ED8; }
+        """)
+        view_btn.clicked.connect(lambda _=False, p=person: self._show_person_review_dialog(p))
+        if is_rtl:
+            btn_row.addWidget(view_btn)
+            btn_row.addStretch(1)
+        else:
+            btn_row.addStretch(1)
+            btn_row.addWidget(view_btn)
+        v.addLayout(btn_row)
+
+        return card
+
+    def _show_person_review_dialog(self, person: dict):
+        """Open a separate dialog with the expanded person review (mobile-like)."""
+        from PyQt5.QtWidgets import QDialog, QScrollArea, QApplication
+        from services.display_mappings import (
+            get_evidence_type_display, get_relation_type_display, get_claim_type_display,
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setLayoutDirection(get_layout_direction())
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        target_w = min(ScreenScale.w(520), int(screen.width() * 0.45))
+        target_h = max(ScreenScale.h(620), int(screen.height() * 0.82))
+        dlg.setMinimumWidth(ScreenScale.w(440))
+        dlg.setMaximumWidth(ScreenScale.w(600))
+        dlg.setMinimumHeight(ScreenScale.h(560))
+        dlg.setMaximumHeight(int(screen.height() * 0.92))
+        dlg.resize(target_w, target_h)
+
+        container = QFrame(dlg)
+        container.setObjectName("PersonReviewContainer")
+        container.setStyleSheet(f"""
+            QFrame#PersonReviewContainer {{
+                background-color: #FFFFFF;
+                border-radius: {ScreenScale.w(12)}px;
+            }}
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 6)
+        container.setGraphicsEffect(shadow)
+
+        container.setLayoutDirection(get_layout_direction())
+
+        c_layout = QVBoxLayout(container)
+        c_layout.setContentsMargins(
+            ScreenScale.w(20), ScreenScale.h(18),
+            ScreenScale.w(20), ScreenScale.h(16),
+        )
+        c_layout.setSpacing(ScreenScale.h(10))
+
+        full_name = f"{person.get('first_name', '')} {person.get('father_name', '')} {person.get('last_name', '')}".strip()
+        if not full_name:
+            full_name = person.get('full_name', person.get('name', '-'))
+
+        is_rtl_dlg = get_layout_direction() == Qt.RightToLeft
+        absolute_align = (Qt.AlignRight if is_rtl_dlg else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(ScreenScale.w(8))
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(ScreenScale.w(30), ScreenScale.h(30))
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: #64748B;
+                border: none;
+                font-size: {ScreenScale.w(15)}px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background-color: #F1F5F9; border-radius: {ScreenScale.w(6)}px; }}
+        """)
+        close_btn.clicked.connect(dlg.reject)
+
+        title_lbl = QLabel(full_name or '-')
+        title_lbl.setFont(create_font(size=FontManager.SIZE_HEADING, weight=FontManager.WEIGHT_BOLD))
+        title_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        title_lbl.setLayoutDirection(get_layout_direction())
+        title_lbl.setAlignment(absolute_align)
+
+        person_icon = QLabel()
+        person_icon.setFixedSize(ScreenScale.w(28), ScreenScale.h(28))
+        person_icon.setAlignment(Qt.AlignCenter)
+        person_icon.setStyleSheet(
+            f"QLabel {{ background-color: #EBF5FF; border: 1px solid #DBEAFE; "
+            f"border-radius: {ScreenScale.w(6)}px; }}"
+        )
+        _pm = Icon.load_pixmap("user-account", size=ScreenScale.w(16))
+        if _pm and not _pm.isNull():
+            person_icon.setPixmap(_pm)
+
+        header_row.addWidget(person_icon)
+        header_row.addWidget(title_lbl)
+        header_row.addStretch(1)
+        header_row.addWidget(close_btn)
+        c_layout.addLayout(header_row)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(f"QScrollArea {{ background: transparent; border: none; }} {StyleManager.scrollbar()}")
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        sv = QVBoxLayout(scroll_content)
+        sv.setContentsMargins(0, 0, 0, 0)
+        sv.setSpacing(ScreenScale.h(8))
+
+        sv.addWidget(self._build_review_personal_section(person))
+
+        sv.addWidget(self._build_review_claims_section(
+            person, get_evidence_type_display, get_relation_type_display, get_claim_type_display,
+        ))
+
+        sv.addStretch(1)
+        scroll.setWidget(scroll_content)
+        c_layout.addWidget(scroll, 1)
+
+        main_layout = QVBoxLayout(dlg)
+        m = ScreenScale.w(12)
+        main_layout.setContentsMargins(m, m, m, m)
+        main_layout.addWidget(container)
+        dlg.exec_()
+
+    def _review_section_header(self, icon_name: str, text: str,
+                               title_size: int = None) -> QWidget:
+        """Build an icon-badge + title row that stays right-aligned in RTL."""
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        if title_size is None:
+            title_size = FontManager.SIZE_SUBHEADING
+        wrap = QWidget()
+        wrap.setLayoutDirection(get_layout_direction())
+        wrap.setStyleSheet("background: transparent; border: none;")
+        h = QHBoxLayout(wrap)
+        h.setContentsMargins(0, ScreenScale.h(2), 0, ScreenScale.h(2))
+        h.setSpacing(ScreenScale.w(8))
+
+        icon_lbl = QLabel()
+        icon_lbl.setFixedSize(ScreenScale.w(26), ScreenScale.h(26))
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet(
+            f"QLabel {{ background-color: #EBF5FF; border: 1px solid #DBEAFE; "
+            f"border-radius: {ScreenScale.w(6)}px; }}"
+        )
+        pm = Icon.load_pixmap(icon_name, size=ScreenScale.w(14))
+        if pm and not pm.isNull():
+            icon_lbl.setPixmap(pm)
+
+        title_lbl = QLabel(text)
+        title_lbl.setFont(create_font(size=title_size, weight=FontManager.WEIGHT_BOLD))
+        title_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        title_lbl.setLayoutDirection(get_layout_direction())
+        title_lbl.setAlignment(
+            (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+        )
+
+        h.addWidget(icon_lbl)
+        h.addWidget(title_lbl)
+        h.addStretch(1)
+        return wrap
+
+    def _build_review_personal_section(self, person: dict) -> QWidget:
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+        wrap = QFrame()
+        wrap.setLayoutDirection(get_layout_direction())
+        wrap.setStyleSheet("background: transparent; border: none;")
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(0, ScreenScale.h(4), 0, ScreenScale.h(4))
+        v.setSpacing(ScreenScale.h(8))
+
+        v.addWidget(self._review_section_header(
+            "user-account", tr("wizard.review.personal_info"),
+        ))
+
+        gender_val = person.get("gender")
+        if isinstance(gender_val, str):
+            gender_text = tr(f"mapping.gender.{gender_val.lower()}") if gender_val.lower() in ("male", "female") else gender_val
+        elif gender_val == 1:
+            gender_text = tr("mapping.gender.male")
+        elif gender_val == 2:
+            gender_text = tr("mapping.gender.female")
+        else:
+            gender_text = "N/A"
+
+        def _val(v):
+            return str(v) if v not in (None, "", "None") else "N/A"
+
+        rows = [
+            (tr("wizard.person_dialog.national_id"), _val(person.get("national_id"))),
+            (tr("wizard.person_dialog.phone"), _val(person.get("landline"))),
+            (tr("wizard.person_dialog.mobile"), _val(person.get("phone"))),
+            (tr("wizard.person_dialog.gender"), gender_text),
+            (tr("wizard.person_dialog.father_name"), _val(person.get("father_name"))),
+            (tr("wizard.person_dialog.mother_name"), _val(person.get("mother_name"))),
+            (tr("wizard.person_dialog.birth_date"), _val(str(person.get("birth_date") or "")[:10] if person.get("birth_date") else None)),
+        ]
+        for label, value in rows:
+            v.addWidget(self._review_kv_row(label, value))
+
+        id_files = person.get("_uploaded_files") or []
+        if id_files:
+            v.addSpacing(ScreenScale.h(4))
+            photos_lbl = QLabel(tr("wizard.review.personal_photos"))
+            photos_lbl.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_BOLD))
+            photos_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+            photos_lbl.setLayoutDirection(get_layout_direction())
+            photos_lbl.setAlignment(align)
+            v.addWidget(photos_lbl)
+
+            thumbs_row = QHBoxLayout()
+            thumbs_row.setContentsMargins(0, 0, 0, 0)
+            thumbs_row.setSpacing(ScreenScale.w(8))
+            for path in id_files[:6]:
+                thumbs_row.addWidget(self._review_photo_thumb(path))
+            thumbs_row.addStretch(1)
+            v.addLayout(thumbs_row)
+
+        return wrap
+
+    def _review_kv_row(self, label: str, value: str) -> QWidget:
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        row_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+        row = QFrame()
+        row.setLayoutDirection(get_layout_direction())
+        row.setStyleSheet("background: transparent; border: none;")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, ScreenScale.h(3), 0, ScreenScale.h(3))
+        h.setSpacing(ScreenScale.w(6))
+        lbl = QLabel(f"{label}:")
+        lbl.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_SEMIBOLD))
+        lbl.setStyleSheet("color: #1F2937; background: transparent;")
+        lbl.setLayoutDirection(get_layout_direction())
+        lbl.setAlignment(row_align)
+        val = QLabel(value)
+        val.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_REGULAR))
+        val.setStyleSheet("color: #1F2937; background: transparent;")
+        val.setWordWrap(True)
+        val.setLayoutDirection(get_layout_direction())
+        val.setAlignment(row_align)
+        h.addWidget(lbl, 0)
+        h.addWidget(val, 0)
+        h.addStretch(1)
+        return row
+
+    def _review_photo_thumb(self, path: str) -> QWidget:
+        import os as _os
+        thumb = QLabel()
+        thumb.setFixedSize(ScreenScale.w(56), ScreenScale.h(56))
+        thumb.setAlignment(Qt.AlignCenter)
+        thumb.setStyleSheet(f"""
+            QLabel {{
+                border: 1px solid #DBEAFE;
+                border-radius: {ScreenScale.w(8)}px;
+                background-color: #F0F7FF;
+            }}
+        """)
+        thumb.setCursor(Qt.PointingHandCursor)
+        if path and _os.path.exists(path):
+            from PyQt5.QtGui import QPixmap
+            pm = QPixmap(path)
+            if not pm.isNull():
+                thumb.setPixmap(pm.scaled(
+                    ScreenScale.w(50), ScreenScale.h(50),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                ))
+            else:
+                thumb.setText("")
+        else:
+            thumb.setText("📄")
+
+        def _open(e, fp=path):
+            import os as __os
+            if fp and __os.path.exists(fp):
+                from PyQt5.QtGui import QDesktopServices
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+        thumb.mousePressEvent = _open
+        return thumb
+
+    def _build_review_claims_section(self, person: dict,
+                                     ev_type_display, rel_type_display, claim_type_display):
+        rel = person.get("relation_data") or {}
+        rel_type = rel.get("rel_type")
+        docs = person.get("_relation_uploaded_files") or []
+
+        wrap = QFrame()
+        wrap.setLayoutDirection(get_layout_direction())
+        wrap.setStyleSheet("background: transparent; border: none;")
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(0, ScreenScale.h(8), 0, 0)
+        v.setSpacing(ScreenScale.h(8))
+
+        v.addWidget(self._review_section_header(
+            "list", tr("wizard.review.claims_details"),
+        ))
+        v.addWidget(self._review_section_header(
+            "user-account", tr("wizard.review.claim_type"),
+            title_size=FontManager.SIZE_BODY,
+        ))
+
+        if rel_type is not None:
+            v.addWidget(self._review_kv_row(
+                tr("wizard.review.claim_type_label"),
+                rel_type_display(rel_type) if rel_type_display else str(rel_type),
+            ))
+        share = rel.get("ownership_share")
+        if share:
+            v.addWidget(self._review_kv_row(
+                tr("wizard.review.ownership_share"),
+                f"{share} {tr('wizard.review.shares')}",
+            ))
+        if rel.get("evidence_desc"):
+            v.addWidget(self._review_kv_row(
+                tr("wizard.review.description"),
+                str(rel.get("evidence_desc")),
+            ))
+        if rel.get("notes"):
+            v.addWidget(self._review_kv_row(
+                tr("wizard.review.notes"),
+                str(rel.get("notes")),
+            ))
+
+        if docs:
+            v.addSpacing(ScreenScale.h(6))
+            v.addWidget(self._review_section_header(
+                "user-account", tr("wizard.review.personal_claims"),
+                title_size=FontManager.SIZE_BODY,
+            ))
+            for entry in docs:
+                v.addWidget(self._review_doc_card(entry, ev_type_display))
+
+        return wrap
+
+    def _review_doc_card(self, entry: dict, ev_type_display) -> QWidget:
+        import os as _os
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+        wrap = QFrame()
+        wrap.setLayoutDirection(get_layout_direction())
+        wrap.setStyleSheet(f"""
+            QFrame {{
+                background-color: #F8FAFF;
+                border: 1px solid #DBEAFE;
+                border-radius: {ScreenScale.w(8)}px;
+            }}
+        """)
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(
+            ScreenScale.w(12), ScreenScale.h(10),
+            ScreenScale.w(12), ScreenScale.h(10),
+        )
+        v.setSpacing(ScreenScale.h(4))
+
+        ev_type = entry.get("evidence_type")
+        if ev_type is not None and ev_type_display:
+            v.addWidget(self._review_kv_row(
+                tr("wizard.person_dialog.supporting_documents"),
+                ev_type_display(ev_type),
+            ))
+        ref_num = entry.get("reference_number")
+        if ref_num:
+            v.addWidget(self._review_kv_row(
+                tr("wizard.person_dialog.document_reference_number"),
+                str(ref_num),
+            ))
+        issue_date = entry.get("issue_date")
+        if issue_date:
+            v.addWidget(self._review_kv_row(
+                tr("wizard.person_dialog.document_issue_date"),
+                str(issue_date)[:10],
+            ))
+
+        path = entry.get("path") or ""
+        if path and _os.path.exists(path):
+            file_row = QFrame()
+            file_row.setStyleSheet(f"""
+                QFrame {{
+                    background-color: #FFFFFF;
+                    border: 1px solid #E2EAF2;
+                    border-radius: {ScreenScale.w(6)}px;
+                }}
+            """)
+            fh = QHBoxLayout(file_row)
+            fh.setContentsMargins(ScreenScale.w(10), ScreenScale.h(8),
+                                  ScreenScale.w(10), ScreenScale.h(8))
+            fh.setSpacing(ScreenScale.w(8))
+
+            icon = QLabel()
+            icon.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
+            icon.setAlignment(Qt.AlignCenter)
+            icon.setStyleSheet("background: transparent; border: none;")
+            _file_pm = Icon.load_pixmap("upload_file", size=ScreenScale.w(20))
+            if _file_pm and not _file_pm.isNull():
+                icon.setPixmap(_file_pm)
+            else:
+                icon.setText("📄")
+                icon.setFont(create_font(size=14))
+
+            file_name = _os.path.basename(path)
+            try:
+                size_kb = _os.path.getsize(path) / 1024.0
+                size_text = f"{size_kb:.2f} KB"
+            except Exception:
+                size_text = ""
+
+            name_v = QVBoxLayout()
+            name_v.setSpacing(0)
+            name_lbl = QLabel(tr("wizard.review.document"))
+            name_lbl.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_BOLD))
+            name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+            name_lbl.setToolTip(file_name)
+            name_lbl.setLayoutDirection(get_layout_direction())
+            name_lbl.setAlignment(align)
+            size_lbl = QLabel(size_text)
+            size_lbl.setFont(create_font(size=FontManager.SIZE_CAPTION))
+            size_lbl.setStyleSheet("color: #64748B; background: transparent;")
+            size_lbl.setLayoutDirection(get_layout_direction())
+            size_lbl.setAlignment(align)
+            name_v.addWidget(name_lbl)
+            name_v.addWidget(size_lbl)
+
+            open_btn = QPushButton()
+            open_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+            open_btn.setCursor(Qt.PointingHandCursor)
+            open_btn.setToolTip(tr("button.view"))
+            eye_icon = Icon.load_qicon("Eye")
+            if eye_icon:
+                from PyQt5.QtCore import QSize as _QSize
+                open_btn.setIcon(eye_icon)
+                open_btn.setIconSize(_QSize(ScreenScale.w(18), ScreenScale.h(18)))
+            else:
+                open_btn.setText("👁")
+                open_btn.setFont(create_font(size=12))
+            open_btn.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
                     color: #3890DF;
                     border: none;
-                    padding: 4px 0;
-                }
-                QPushButton:hover { color: #1D4ED8; }
+                    border-radius: {ScreenScale.w(6)}px;
+                }}
+                QPushButton:hover {{ background-color: #DBEAFE; }}
+                QPushButton:pressed {{ background-color: #BFDBFE; }}
             """)
-            view_btn.clicked.connect(lambda _=False, p=person: self._view_person_editable(p))
-            if is_rtl:
-                btn_row.addWidget(view_btn)
-                btn_row.addStretch(1)
-            else:
-                btn_row.addStretch(1)
-                btn_row.addWidget(view_btn)
-            v.addLayout(btn_row)
+            def _open(_=False, fp=path):
+                from PyQt5.QtGui import QDesktopServices
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+            open_btn.clicked.connect(_open)
 
-        return card
+            fh.addWidget(icon)
+            fh.addLayout(name_v)
+            fh.addStretch(1)
+            fh.addWidget(open_btn)
+
+            v.addWidget(file_row)
+
+        return wrap
 
     # ── Map dialog ───────────────────────────────────────────────────
 

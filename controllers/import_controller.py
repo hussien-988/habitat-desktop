@@ -285,9 +285,8 @@ class ImportController(BaseController):
             if not isinstance(result, dict):
                 result = {}
             latency = int((time.monotonic() - t) * 1000)
-            counts = {k: (len(v) if isinstance(v, list) else v) for k, v in result.items()}
             logger.info(
-                f"[import-flow] api GET /staged-entities/{package_id} → {counts} latency={latency}ms"
+                f"[import-flow] api GET /staged-entities/{package_id} received latency={latency}ms"
             )
             return OperationResult.ok(data=result)
         except (ApiException, NetworkException) as e:

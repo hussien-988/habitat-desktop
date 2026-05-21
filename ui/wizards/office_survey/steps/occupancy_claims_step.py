@@ -285,16 +285,6 @@ class OccupancyClaimsStep(BaseStep):
             ):
                 if not person_data_copy.get(person_key) and a.get(applicant_key):
                     person_data_copy[person_key] = a[applicant_key]
-            id_photos = a.get('id_photo_paths', [])
-            if id_photos:
-                person_data_copy['_uploaded_files'] = id_photos
-            else:
-                id_ev = a.get('id_photo_evidences', [])
-                if id_ev:
-                    person_data_copy['_id_photo_evidences'] = id_ev
-            id_ev_map = a.get('id_evidence_map')
-            if id_ev_map:
-                person_data_copy['_evidence_ids'] = dict(id_ev_map)
 
         is_finalized = self.context.status == "finalized"
 

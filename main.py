@@ -508,6 +508,12 @@ def main():
                 logger.warning(f"Vocabularies initialization failed: {e}")
 
             try:
+                from services.password_policy_service import initialize_password_policy  # type: ignore
+                initialize_password_policy()
+            except Exception as e:
+                logger.warning(f"Password policy initialization failed: {e}")
+
+            try:
                 from services.web_profile import prewarm_shared_map_profile
                 prewarm_shared_map_profile()
             except Exception as e:

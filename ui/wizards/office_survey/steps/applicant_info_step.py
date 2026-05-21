@@ -238,21 +238,21 @@ class ApplicantInfoStep(BaseStep):
         birth_input_style = self._input_style()
 
         self.birth_day_combo = RtlCombo()
-        self.birth_day_combo.addItem(tr("wizard.person_dialog.day"), None)
         for d in range(1, 32):
             self.birth_day_combo.addItem(f"{d:02d}", d)
+        self.birth_day_combo.setCurrentIndex(-1)
         self.birth_day_combo.setStyleSheet(birth_input_style)
 
         self.birth_month_combo = RtlCombo()
-        self.birth_month_combo.addItem(tr("wizard.person_dialog.month"), None)
         for m in range(1, 13):
             self.birth_month_combo.addItem(f"{m:02d}", m)
+        self.birth_month_combo.setCurrentIndex(-1)
         self.birth_month_combo.setStyleSheet(birth_input_style)
 
         self.birth_year_combo = RtlCombo()
-        self.birth_year_combo.addItem(tr("wizard.person_dialog.year"), None)
         for y in range(2010, 1919, -1):
             self.birth_year_combo.addItem(str(y), y)
+        self.birth_year_combo.setCurrentIndex(-1)
         self.birth_year_combo.setStyleSheet(birth_input_style)
         birth_layout.addWidget(self.birth_day_combo, 1)
         birth_layout.addWidget(self.birth_month_combo, 1)
@@ -873,6 +873,20 @@ class ApplicantInfoStep(BaseStep):
             self._set_err(self.national_id, self._nid_error)
             result.add_error(tr("wizard.applicant.national_id_11_digits"))
 
+        y = read_int_from_combo(self.birth_year_combo)
+        m = read_int_from_combo(self.birth_month_combo)
+        d = read_int_from_combo(self.birth_day_combo)
+        if any((y, m, d)) and not all((y, m, d)):
+            result.add_error(tr("wizard.applicant.birth_date_incomplete"))
+        elif y and m and d:
+            from datetime import date as _date
+            try:
+                bd = _date(y, m, d)
+                if bd > _date.today():
+                    result.add_error(tr("wizard.applicant.birth_date_future"))
+            except ValueError:
+                result.add_error(tr("wizard.applicant.birth_date_invalid"))
+
         if not result.is_valid:
             return result
 
@@ -914,6 +928,7 @@ class ApplicantInfoStep(BaseStep):
                         "contact_person_id",
                         response.get("id") or response.get("contactPersonId", "")
                     )
+                    self._loaded_applicant_snapshot = self._applicant_snapshot(self.context.applicant)
                 except Exception as e:
                     if isinstance(e, ApiException) and e.status_code == 409:
                         msg = build_duplicate_person_message(e.response_data)
@@ -923,20 +938,24 @@ class ApplicantInfoStep(BaseStep):
                     Toast.show_toast(self.window(), msg, Toast.ERROR)
                     result.add_error(msg)
             else:
-                try:
-                    run_blocking_async(
-                        self._api_client.update_contact_person,
-                        survey_id, existing_cp_id, self.context.applicant,
-                    )
-                    logger.info(f"Contact person {existing_cp_id} updated")
-                except Exception as e:
-                    if is_duplicate_nid_error(e):
-                        msg = build_duplicate_person_message(getattr(e, 'response_data', {}))
-                    else:
-                        logger.error(f"Contact person update failed: {e}")
-                        msg = map_exception(e)
-                    Toast.show_toast(self.window(), msg, Toast.ERROR)
-                    result.add_error(msg)
+                if not self._applicant_data_changed(self.context.applicant):
+                    logger.info(f"[APPLICANT-STEP] unchanged ({existing_cp_id}), skipping update_contact_person")
+                else:
+                    try:
+                        run_blocking_async(
+                            self._api_client.update_contact_person,
+                            survey_id, existing_cp_id, self.context.applicant,
+                        )
+                        logger.info(f"Contact person {existing_cp_id} updated")
+                        self._loaded_applicant_snapshot = self._applicant_snapshot(self.context.applicant)
+                    except Exception as e:
+                        if is_duplicate_nid_error(e):
+                            msg = build_duplicate_person_message(getattr(e, 'response_data', {}))
+                        else:
+                            logger.error(f"Contact person update failed: {e}")
+                            msg = map_exception(e)
+                        Toast.show_toast(self.window(), msg, Toast.ERROR)
+                        result.add_error(msg)
 
             # 6. ID photo replacement / upload / deletion
             person_id = self.context.get_data("contact_person_id")
@@ -946,6 +965,7 @@ class ApplicantInfoStep(BaseStep):
                 new_files = [f for f in self.uploaded_files
                              if f not in already_uploaded
                              and os.path.normpath(f) not in self._evidence_ids]
+                doc_type_synced_ids: set = set()
 
                 logger.warning(
                     f"[ID-DOCS FLOW] applicant_step: new_files={len(new_files)} "
@@ -972,6 +992,8 @@ class ApplicantInfoStep(BaseStep):
                         new_eid = (response.get("id") or response.get("evidenceId")
                                    or response.get("Id") or old_ev_id)
                         self._evidence_ids[os.path.normpath(fp)] = new_eid
+                        if doc_type is not None:
+                            doc_type_synced_ids.add(new_eid)
                         new_files.remove(fp)
                         already_uploaded.add(fp)
                         logger.info(f"ID evidence replaced: {old_ev_id} -> {new_eid}")
@@ -994,6 +1016,8 @@ class ApplicantInfoStep(BaseStep):
                                  or response.get("Id"))
                         if ev_id:
                             self._evidence_ids[os.path.normpath(fp)] = ev_id
+                            if doc_type is not None:
+                                doc_type_synced_ids.add(ev_id)
                         already_uploaded.add(fp)
                         logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
                     except Exception as e:
@@ -1013,6 +1037,29 @@ class ApplicantInfoStep(BaseStep):
                         else:
                             logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
                 self._pending_id_replacements.clear()
+
+                current_doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
+                loaded_doc_type = getattr(self, '_loaded_id_doc_type', None)
+                if current_doc_type is not None and current_doc_type != loaded_doc_type:
+                    server_ev_ids = list(getattr(self, '_server_id_evidence_ids', []) or [])
+                    local_ev_ids = [ev for ev in self._evidence_ids.values() if ev]
+                    seen = set()
+                    target_ids = []
+                    for ev in server_ev_ids + local_ev_ids:
+                        if ev and ev not in seen and ev not in doc_type_synced_ids:
+                            seen.add(ev)
+                            target_ids.append(ev)
+                    for ev_id in target_ids:
+                        try:
+                            run_blocking_async(
+                                self._api_client.update_identification_document,
+                                survey_id, ev_id, person_id,
+                                document_type=current_doc_type,
+                            )
+                            logger.info(f"ID doc_type updated to {current_doc_type} for evidence {ev_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to update doc_type for evidence {ev_id}: {e}")
+                    self._loaded_id_doc_type = current_doc_type
 
                 self.context.update_data("uploaded_id_photos", list(already_uploaded))
                 if self.context.applicant is None:
@@ -1169,6 +1216,37 @@ class ApplicantInfoStep(BaseStep):
             self._download_id_photos_from_api()
         else:
             logger.warning("[ID-DOCS] populate_data: no id_photo_paths and no id_photo_evidences — nothing to download")
+
+        id_evidences = a.get("id_photo_evidences") or []
+        self._server_id_evidence_ids = [
+            d.get('id') or d.get('evidenceId') or d.get('Id')
+            for d in id_evidences if (d.get('id') or d.get('evidenceId') or d.get('Id'))
+        ]
+        if id_evidences and hasattr(self, '_id_doc_type_combo'):
+            server_doc_type = id_evidences[0].get('documentType')
+            if server_doc_type is not None:
+                idx = self._id_doc_type_combo.findData(server_doc_type)
+                if idx >= 0:
+                    self._id_doc_type_combo.setCurrentIndex(idx)
+                self._loaded_id_doc_type = server_doc_type
+
+        self._loaded_applicant_snapshot = self._applicant_snapshot(a)
+
+    def _applicant_snapshot(self, data):
+        if not data:
+            return None
+        keys = (
+            "first_name_ar", "father_name_ar", "mother_name_ar", "last_name_ar",
+            "birth_date", "gender", "nationality", "national_id",
+            "phone", "landline", "in_person", "full_name",
+        )
+        return {k: data.get(k) for k in keys}
+
+    def _applicant_data_changed(self, current):
+        snapshot = getattr(self, "_loaded_applicant_snapshot", None)
+        if snapshot is None:
+            return True
+        return self._applicant_snapshot(current) != snapshot
 
     def _download_id_photos_from_api(self):
         """Download ID photos from server when resuming a draft (local paths gone)."""
