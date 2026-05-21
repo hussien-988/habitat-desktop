@@ -17,21 +17,33 @@ _logger: Optional[logging.Logger] = None
 def setup_logger() -> logging.Logger:
     """
     Setup application logger with file and console handlers.
+
+    In frozen (PyInstaller) builds, file logging is disabled entirely — no
+    log file is created on the user's machine. Only a NullHandler is
+    attached so logger.* calls remain safe no-ops. Development builds keep
+    the full file + console handler stack.
     """
     global _logger
 
-    # Use direct path instead of Config to avoid circular imports
+    is_frozen = getattr(sys, "frozen", False)
+
+    logger = logging.getLogger("trrcms")
+    logger.handlers.clear()
+
+    if is_frozen:
+        # Production exe: no file, no console — silent logger.
+        logger.setLevel(logging.CRITICAL + 1)
+        logger.addHandler(logging.NullHandler())
+        logger.propagate = False
+        _logger = logger
+        return logger
+
+    # Development: full logging to file + console
     logs_dir = Path(__file__).parent.parent / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create logger
-    logger = logging.getLogger("trrcms")
     logger.setLevel(logging.DEBUG)
 
-    # Clear existing handlers
-    logger.handlers.clear()
-
-    # File handler with rotation
     log_path = logs_dir / "app.log"
     file_handler = RotatingFileHandler(
         log_path,

@@ -11,6 +11,7 @@ them to a per-crash log file, and surface a friendly dialog so the user
 knows something went wrong and can copy the details.
 """
 
+import os
 import sys
 import traceback
 from datetime import datetime
@@ -23,13 +24,19 @@ logger = get_logger(__name__)
 
 
 def _crash_log_path() -> Path:
-    """Return ``logs/crash-YYYYMMDD-HHMMSS.log`` under the user-writable root.
+    """Return ``crash-YYYYMMDD-HHMMSS.log`` under a user-writable root.
 
-    The directory matches where ``setup_logger`` writes ``app.log`` so support
-    staff find both files in the same place.
+    In frozen builds the CWD can be anywhere and `logs/` next to the exe may
+    require admin rights, so crash files go under %APPDATA%\\TRRCMS\\logs.
+    In development the original relative `logs/` is preserved.
     """
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return Path("logs") / f"crash-{timestamp}.log"
+    filename = f"crash-{timestamp}.log"
+    if getattr(sys, "frozen", False):
+        appdata = os.environ.get("APPDATA")
+        base = Path(appdata) / "TRRCMS" / "logs" if appdata else Path(sys.executable).parent / "logs"
+        return base / filename
+    return Path("logs") / filename
 
 
 def _write_crash_log(traceback_text: str) -> Optional[Path]:
