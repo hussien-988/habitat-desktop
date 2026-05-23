@@ -1010,19 +1010,45 @@ class ImportPackagesPage(QWidget):
             self._spinner.hide_loading()
 
         if not result.success:
+            # A duplicate upload (409) carries the already-imported package in
+            # the body — link to it instead of just showing a generic error.
+            dup = result.data if isinstance(result.data, dict) else {}
+            if dup.get("isDuplicatePackage"):
+                existing = dup.get("package") or {}
+                existing_id = str(existing.get("id") or existing.get("packageId") or "")
+                ErrorHandler.show_error(
+                    self, result.message_ar or tr("import.error.duplicate_package")
+                )
+                if existing_id:
+                    self.view_package.emit(existing_id)
+                else:
+                    self._load_packages()
+                return
             ErrorHandler.show_error(
                 self,
                 result.message_ar or tr("import.error.stage_failed"),
             )
             return
 
-        # Extract the new package id and open the wizard on it.
+        # Inspect the body (not the HTTP code): a quarantined package still
+        # returns 201, so the only way to know is the isQuarantined flag.
         data = result.data or {}
-        pkg_id = str(data.get("id") or data.get("packageId") or "")
-        print(
-            f"[UPLOAD-DEBUG] Upload UI received — pkg_id={pkg_id}, status={data.get('status')}",
-            flush=True,
+        pkg = data.get("package") if isinstance(data.get("package"), dict) else data
+        pkg_id = str(
+            (pkg or {}).get("id") or (pkg or {}).get("packageId")
+            or data.get("id") or data.get("packageId") or ""
         )
+
+        if data.get("isQuarantined"):
+            # Do not proceed to staging; surface the reason immediately.
+            ErrorHandler.show_error(
+                self, data.get("message") or tr("import.error.quarantined")
+            )
+            if pkg_id:
+                self._show_quarantine_report(pkg_id)
+            self._load_packages()
+            return
+
         if pkg_id:
             self.view_package.emit(pkg_id)
         else:

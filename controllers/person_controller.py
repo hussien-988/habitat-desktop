@@ -369,22 +369,25 @@ class PersonController(BaseController):
 
     def _api_dto_to_person(self, dto: Dict[str, Any]) -> Person:
         """Convert API DTO (camelCase) to Person model."""
+        dob = str(dto.get("dateOfBirth") or "")
+        year_of_birth = int(dob[:4]) if dob[:4].isdigit() else None
         return Person(
-            person_uuid=dto.get("id") or dto.get("personUuid") or "",
-            first_name=dto.get("firstNameArabic") or dto.get("firstName") or "",
-            last_name=dto.get("familyNameArabic") or dto.get("familyName") or "",
-            father_name=dto.get("fatherNameArabic") or dto.get("fatherName") or "",
-            mother_name=dto.get("motherNameArabic") or dto.get("motherName") or "",
-            full_name=dto.get("fullName") or (
-                f"{dto.get('firstNameArabic', '')} {dto.get('familyNameArabic', '')}".strip()
-            ),
+            person_id=dto.get("id") or dto.get("personId") or dto.get("personUuid") or "",
+            first_name=dto.get("firstName") or "",
+            first_name_ar=dto.get("firstNameArabic") or dto.get("firstName") or "",
+            father_name=dto.get("fatherName") or "",
+            father_name_ar=dto.get("fatherNameArabic") or dto.get("fatherName") or "",
+            last_name=dto.get("familyName") or "",
+            last_name_ar=dto.get("familyNameArabic") or dto.get("familyName") or "",
+            mother_name=dto.get("motherName") or "",
+            mother_name_ar=dto.get("motherNameArabic") or dto.get("motherName") or "",
             national_id=dto.get("nationalId") or dto.get("national_id") or "",
             gender=str(dto.get("gender") or ""),
             nationality=str(dto.get("nationality") or ""),
-            birth_date=dto.get("dateOfBirth") or "",
-            phone=dto.get("mobileNumber") or dto.get("phone") or "",
-            landline=dto.get("phoneNumber") or dto.get("landline") or "",
-            email=dto.get("email") or "",
+            year_of_birth=year_of_birth,
+            mobile_number=dto.get("mobileNumber") or dto.get("phone") or None,
+            phone_number=dto.get("phoneNumber") or dto.get("landline") or None,
+            email=dto.get("email") or None,
         )
 
     def _validate_person_data(

@@ -397,9 +397,9 @@ class TRRCMSApiClient:
         """GET /api/v1/security-settings/current — anonymous, returns passwordPolicy."""
         try:
             response = self._session.get(
-                f"{self.base_url}/api/v1/security-settings/current",
+                f"{self.base_url}/v1/security-settings/current",
                 headers=self._anon_headers(),
-                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", "/api/v1/security-settings/current", 0)),
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", "/v1/security-settings/current", 0)),
                 verify=self._verify_ssl()
             )
             response.raise_for_status()
@@ -1249,6 +1249,65 @@ class TRRCMSApiClient:
             logger.warning(f"Failed to fetch building documents for {building_id}: {e}")
             return []
 
+    def get_building_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single building document's metadata by its id.
+
+        Endpoint: GET /v1/building-documents/{id}. Returns the dto or None.
+        """
+        if not document_id:
+            return None
+        try:
+            return self._request("GET", f"/v1/building-documents/{document_id}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch building document {document_id}: {e}")
+            return None
+
+    def download_building_document(self, document_id: str, save_path: str) -> bool:
+        """Download a building document binary to save_path.
+
+        Endpoint: GET /v1/building-documents/{id}/download
+        Returns True on success, False on failure (including 404 when the file
+        is missing on the server, e.g. metadata-only imports).
+        """
+        import os as _os
+        if not document_id:
+            raise ValueError("document_id is required")
+        endpoint = f"/v1/building-documents/{document_id}/download"
+        url = f"{self.base_url}{endpoint}"
+        self._ensure_valid_token()
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "*/*",
+        }
+        logger.info(f"[BLDG-DOCS DOWNLOAD] GET {url}")
+        try:
+            with self._session.get(
+                url, headers=headers, stream=True,
+                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", endpoint, 0)), verify=self._verify_ssl(),
+            ) as resp:
+                if resp.status_code >= 400:
+                    body_preview = ""
+                    try:
+                        body_preview = resp.text[:1000]
+                    except Exception:
+                        pass
+                    logger.warning(
+                        f"[BLDG-DOCS DOWNLOAD] HTTP {resp.status_code} "
+                        f"headers={dict(resp.headers)!r} body={body_preview!r}"
+                    )
+                resp.raise_for_status()
+                parent = _os.path.dirname(save_path)
+                if parent:
+                    _os.makedirs(parent, exist_ok=True)
+                with open(save_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            return _os.path.exists(save_path) and _os.path.getsize(save_path) > 0
+        except Exception as e:
+            logger.warning(f"Building document download failed (doc={document_id}): {e}")
+            return False
+
     def health_check(self) -> bool:
         """Check API connectivity."""
         try:
@@ -1930,19 +1989,40 @@ class TRRCMSApiClient:
         if not survey_id or not relation_id:
             raise ValueError("survey_id and relation_id are required")
 
+        # Callers may pass a full person dict (get_person_data output) whose
+        # relation fields live under a nested 'relation_data' key. Flatten so
+        # the fields below are found regardless of the shape passed in.
+        nested = relation_data.get('relation_data')
+        if isinstance(nested, dict):
+            relation_data = {**relation_data, **nested}
+
         api_data = {}
-        if 'propertyUnitId' in relation_data:
+        if relation_data.get('propertyUnitId'):
             api_data["propertyUnitId"] = relation_data['propertyUnitId']
-        if 'rel_type' in relation_data or 'relationship_type' in relation_data:
-            api_data["relationType"] = int(relation_data.get('rel_type') or relation_data.get('relationship_type', 99))
-        if 'contract_type' in relation_data or 'occupancy_type' in relation_data:
-            val = relation_data.get('contract_type') or relation_data.get('occupancy_type')
-            if val:
-                api_data["occupancyType"] = int(val)
-        if 'ownership_share' in relation_data:
+        # rel_type is the property RelationType (Owner/Tenant/Heir/...). Do NOT
+        # fall back to relationship_type: that is RelationshipToHead and the
+        # enum codes collide (head=1 == Owner=1), which would silently change
+        # the claim to Owner.
+        rel_type_val = relation_data.get('rel_type')
+        if rel_type_val is not None:
+            api_data["relationType"] = int(rel_type_val)
+        occ_val = relation_data.get('contract_type') or relation_data.get('occupancy_type')
+        if occ_val:
+            api_data["occupancyType"] = int(occ_val)
+        # Backend rejects ownershipShare <= 0, so only send it when positive
+        # (a zero/empty share simply means "not an ownership claim").
+        if relation_data.get('ownership_share'):
             api_data["ownershipShare"] = relation_data['ownership_share']
         if 'has_documents' in relation_data:
-            api_data["hasEvidence"] = relation_data['has_documents']
+            api_data["hasEvidence"] = bool(relation_data['has_documents'])
+        # Forward the remaining editable relation fields so edits aren't lost
+        # (the dialog round-trips these via relation_data).
+        if 'evidence_desc' in relation_data or 'contract_details' in relation_data:
+            api_data["contractDetails"] = (
+                relation_data.get('evidence_desc') or relation_data.get('contract_details')
+            )
+        if 'notes' in relation_data:
+            api_data["notes"] = relation_data.get('notes')
 
         logger.info(f"Updating relation {relation_id}: {api_data}")
         result = self._request("PATCH", f"/v1/Surveys/{survey_id}/relations/{relation_id}", json_data=api_data)
@@ -2423,7 +2503,21 @@ class TRRCMSApiClient:
         endpoint = f"/v1/Surveys/{survey_id}/evidence/{evidence_id}/link-to-relation"
         body = {"personPropertyRelationId": relation_id}
         logger.info(f"Linking evidence {evidence_id} to relation {relation_id}")
-        result = self._request("POST", endpoint, json_data=body)
+        try:
+            result = self._request("POST", endpoint, json_data=body)
+        except Exception as e:
+            # Idempotent: the backend returns 400 when the evidence is already
+            # linked to this relation. That is the desired end state, so treat
+            # it as success rather than surfacing an error to the user.
+            rd = getattr(e, "response_data", None) or {}
+            detail = str(rd.get("detail") or "").lower()
+            if getattr(e, "status_code", None) == 400 and "already linked" in detail:
+                logger.info(
+                    f"Evidence {evidence_id} already linked to relation "
+                    f"{relation_id}; treating as success"
+                )
+                return {"id": evidence_id, "alreadyLinked": True}
+            raise
         logger.info(f"Evidence linked: {result.get('id', 'N/A')}")
         return result
 
@@ -3473,11 +3567,21 @@ class TRRCMSApiClient:
 
         file_name = os.path.basename(file_path)
         mime_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
-        url = f"{self.config.base_url}/v1/import/upload"
+        # Use self.base_url, not self.config.base_url: reset_api_client() updates
+        # self.base_url on a server switch but never touches the original config,
+        # so config.base_url goes stale. Targeting it sent the current server's
+        # token to the previous server → JWT signature failure (IDX10503) → 401.
+        url = f"{self.base_url}/v1/import/upload"
         headers = self._headers()
         headers.pop("Content-Type", None)
 
+        req_id = uuid.uuid4().hex[:8]
         logger.info(f"Uploading import package: {file_name}")
+        # import_upload bypasses _request, so emit the same SRV-DIAG line here.
+        logger.info(
+            f"[SRV-DIAG] [UPLOAD {req_id}] singleton_id={id(self)} base_url={self.base_url} "
+            f"token=({_token_diag(self.access_token)})"
+        )
         try:
             with open(file_path, "rb") as f:
                 files = {"file": (file_name, f, mime_type)}
@@ -3502,6 +3606,11 @@ class TRRCMSApiClient:
                     response_data = resp.json()
                 except Exception:
                     pass
+            upload_status = resp.status_code if resp is not None else 0
+            logger.warning(
+                f"[SRV-DIAG] [UPLOAD {req_id}] ERR {upload_status} base_url={self.base_url} "
+                f"token=({_token_diag(self.access_token)}) | Response: {response_data}"
+            )
             upload_api_msg = (response_data.get("message") or response_data.get("title") or str(e)) if response_data else str(e)
             raise ApiException(
                 status_code=resp.status_code if resp is not None else 0,
@@ -3652,6 +3761,24 @@ class TRRCMSApiClient:
             raise ValueError("package_id is required")
         return self._request(
             "GET", f"/v1/import/packages/{package_id}/quarantine-report"
+        )
+
+    def get_reconciliation_queue(
+        self,
+        entity_type: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        """List records committed via Keep-Separate that need later reconciliation.
+
+        Persons whose National ID was cleared and property units whose
+        identifier was suffixed. Read-only; pageSize applies per entity type.
+        """
+        params: Dict[str, Any] = {"page": page, "pageSize": page_size}
+        if entity_type:
+            params["entityType"] = entity_type
+        return self._request(
+            "GET", "/v1/import/reconciliation-queue", params=params
         )
 
     def get_conflicts(
@@ -3855,6 +3982,12 @@ def reset_api_client():
         except Exception:
             pass
         _api_client_instance.base_url = new_url
+        # Keep the embedded config in sync so anything reading config.base_url
+        # cannot target the previous server after an in-place switch.
+        try:
+            _api_client_instance.config.base_url = new_url
+        except Exception:
+            pass
         _api_client_instance._is_ngrok = "ngrok" in new_url.lower()
         _api_client_instance.access_token = None
         _api_client_instance.refresh_token = None

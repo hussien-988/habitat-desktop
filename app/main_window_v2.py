@@ -836,9 +836,23 @@ class MainWindow(QMainWindow):
 
     # -- Voluntary Password Change (from navbar settings) --
 
+    def _refresh_password_policy(self):
+        """Re-fetch the password policy so the change-password dialog validates
+        against the latest security settings configured in the Dashboard.
+        Runs on a worker thread to keep the UI responsive; on failure the
+        previously cached policy remains in effect."""
+        from services.password_policy_service import initialize_password_policy
+        from services.api_worker import run_blocking_async
+        try:
+            run_blocking_async(initialize_password_policy)
+        except Exception as e:
+            logger.warning(f"Password policy refresh failed: {e}")
+
     def _on_voluntary_password_change(self):
         """User requested password change from settings pill — dialog stays open on backend errors."""
         from ui.components.dialogs.password_dialog import PasswordDialog
+
+        self._refresh_password_policy()
 
         dialog = PasswordDialog.open_change_async(
             parent=self,

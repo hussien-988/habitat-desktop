@@ -207,6 +207,10 @@ class ImportWizardPage(QWidget):
         self._loading_started_at = None
         self._loading_elapsed_timer = None
         self._active_worker = None
+        # Workers that were detached while still running. We keep references
+        # here so Qt does not destroy a QThread mid-run (a hard crash); each
+        # is reaped once it actually finishes.
+        self._orphaned_workers = []
         # When True, the wizard is in a hard-error state (e.g. /stage 500,
         # missing .uhc file). Forward navigation is blocked; only cancel
         # package and back-to-list remain enabled until the user recovers.
@@ -779,13 +783,46 @@ class ImportWizardPage(QWidget):
         error_handler(error_type, msg_ar)
 
     def _cancel_active_worker(self):
-        """Cancel any running worker (best-effort)."""
-        if self._active_worker is not None and self._active_worker.isRunning():
-            self._active_worker.finished.disconnect()
-            self._active_worker.error.disconnect()
-            self._active_worker.quit()
-            self._active_worker.wait(2000)
-            self._active_worker = None
+        """Detach the active worker WITHOUT blocking the UI thread.
+
+        Previously this called wait(2000) on the UI thread — freezing the
+        spinner during processing — and then dropped the only reference to a
+        still-running QThread, letting Qt destroy it mid-run (a hard crash,
+        "QThread: Destroyed while thread is still running"). Instead we orphan
+        the worker: stop routing its result, keep a reference so it is not
+        garbage collected while running, and reap it once it truly finishes.
+        """
+        worker = self._active_worker
+        self._active_worker = None
+        if worker is None:
+            return
+        if not worker.isRunning():
+            worker.deleteLater()
+            return
+        try:
+            worker.finished.disconnect()
+            worker.error.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        self._orphaned_workers.append(worker)
+        worker.finished.connect(lambda *a, w=worker: self._reap_worker(w))
+        worker.error.connect(lambda *a, w=worker: self._reap_worker(w))
+        # Guard against the worker finishing between the isRunning() check
+        # above and the reconnection — reap it now if it already stopped.
+        if not worker.isRunning():
+            self._reap_worker(worker)
+
+    def _reap_worker(self, worker):
+        """Free an orphaned worker after it has finished (runs on UI thread).
+
+        Called from the worker's own finished/error signal, so the thread is
+        already done; wait() returns immediately and is only a safety bound
+        before the object is deleted. Idempotent."""
+        if worker not in self._orphaned_workers:
+            return
+        self._orphaned_workers.remove(worker)
+        worker.wait(2000)
+        worker.deleteLater()
 
     def _on_api_error(self, error_type, msg_ar):
         """Default error handler for API worker errors."""
@@ -1000,7 +1037,7 @@ class ImportWizardPage(QWidget):
         """
         if self.current_step == 0:
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
-                self._cancel_validation_failed_package()
+                self._retry_failed_package()
                 return
             self._transition_step2_to_review()
 
@@ -1260,12 +1297,77 @@ class ImportWizardPage(QWidget):
         self._start_status_poll()
 
     def _handle_validation_failed(self):
-        """Status 4: ValidationFailed — non-actionable terminal state."""
+        """Status 4: ValidationFailed — offer Retry (re-stage) or Cancel.
+
+        There is no dedicated retry endpoint and re-uploading the same file
+        would 409, so "retry" re-invokes /stage on the SAME package. The
+        wizard stays on the processing view and surfaces a translated reason
+        with Retry / Cancel actions instead of silently bouncing to the list.
+        """
+        self._stop_status_poll()
+        self._pipeline_in_flight = False
         self._set_buttons_enabled(True)
-        self.terminal_state_message.emit(
-            "error", tr("wizard.import.bounce_validation_failed")
+        if self.step2 is not None and hasattr(self.step2, "set_status"):
+            try:
+                self.step2.set_status(_PkgStatus.VALIDATION_FAILED)
+            except Exception:
+                pass
+        self._show_validation_failed_banner(tr("wizard.import.validation_failed_retry_body"))
+
+    def _show_validation_failed_banner(self, body: str):
+        """Inline banner for a ValidationFailed package: Retry + Cancel."""
+        self._clear_banner_action()
+        self._apply_banner_severity("error")
+        self._error_title.setText(tr("wizard.import.error_validation_errors"))
+        self._error_message.setText(body)
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+
+        self._banner_action_btn.setText(tr("action.retry"))
+        self._banner_action_btn.setVisible(True)
+        self._banner_action_btn.clicked.connect(self._retry_failed_package)
+
+        self._banner_secondary_btn.setText(tr("wizard.import.action_cancel_package"))
+        self._banner_secondary_btn.setVisible(True)
+        self._banner_secondary_btn.clicked.connect(self._cancel_validation_failed_package)
+
+        self._error_banner.setVisible(True)
+        self._active_banner_refresh = lambda: self._show_validation_failed_banner(body)
+
+    def _retry_failed_package(self):
+        """Retry a ValidationFailed package by re-invoking /stage on the SAME
+        package. Best-effort: if the backend refuses to re-stage, a translated
+        message is shown (never raw backend text)."""
+        pkg_id = self._current_package_id
+        if not pkg_id:
+            return
+        self._hide_error_banner()
+        logger.info(f"[import-flow] retry-validation-failed pkg={pkg_id} via re-stage")
+
+        def on_retry_done(result):
+            if not result.success:
+                self._set_buttons_enabled(True)
+                # Always a translated message; the raw backend text may be English.
+                self._show_validation_failed_banner(
+                    tr("wizard.import.retry_failed_body")
+                )
+                return
+            # Re-staging accepted — resume polling for the new outcome.
+            self._pipeline_in_flight = True
+            self._current_package_status = _PkgStatus.VALIDATING
+            if self.step2 is not None and hasattr(self.step2, "set_status"):
+                try:
+                    self.step2.set_status(_PkgStatus.VALIDATING)
+                except Exception:
+                    pass
+            self._update_navigation()
+            self._start_status_poll()
+
+        self._run_api(
+            lambda: self.import_controller.stage_package(pkg_id),
+            on_retry_done,
+            loading_msg=tr("wizard.import.loading_processing_server"),
         )
-        self.cancelled.emit()
 
     def _handle_quarantined(self):
         """Status 5: Quarantined — non-actionable terminal state.
@@ -2106,7 +2208,7 @@ class ImportWizardPage(QWidget):
 
         if self.current_step == 0:
             if self._current_package_status == _PkgStatus.VALIDATION_FAILED:
-                self.btn_next.setText(tr("wizard.import.btn_validation_failed_cancel"))
+                self.btn_next.setText(tr("action.retry"))
                 self.btn_next.setEnabled(True)
                 self.btn_next.setToolTip("")
             elif self._current_package_status == _PkgStatus.REVIEWING_CONFLICTS:

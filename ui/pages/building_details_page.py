@@ -54,6 +54,8 @@ class BuildingDetailsPage(QWidget):
         # calls so we don't tear down a QWebEngineView mid-load on every
         # API refresh / language toggle.
         self._map_preview = None
+        # Worker for the on-demand "attached documents" fetch.
+        self._docs_worker = None
 
         self._setup_ui()
 
@@ -163,6 +165,10 @@ class BuildingDetailsPage(QWidget):
         # would throttle WebEngine paint).
         self.location_card, self.location_content = self._create_simple_card(with_shadow=False)
         self._scroll_layout.addWidget(self.location_card)
+
+        # Card 4: Attached documents (photos / PDFs)
+        self.docs_card, self.docs_content = self._create_simple_card()
+        self._scroll_layout.addWidget(self.docs_card)
 
         self._scroll_layout.addStretch()
 
@@ -453,6 +459,7 @@ class BuildingDetailsPage(QWidget):
         self._clear_layout(self.info_content)
         self._clear_layout(self.stats_content)
         self._clear_layout(self.location_content, keep=keep)
+        self._clear_layout(self.docs_content)
 
         building_code = building.building_id_formatted or building.building_id_display or building.building_id or "-"
         status = building.building_status_display if hasattr(building, 'building_status_display') else "-"
@@ -584,6 +591,84 @@ class BuildingDetailsPage(QWidget):
         content_row.addLayout(gen_desc_section, stretch=1)
 
         self.location_content.addLayout(content_row)
+
+        self._build_documents_card(building)
+
+    # Attached documents
+
+    def _build_documents_card(self, building: Building):
+        """Render the 'attached documents' button (same UX as the survey step).
+
+        Clicking fetches the building's documents; an empty result shows a
+        toast, otherwise a dialog lists them and each opens via the download
+        endpoint (never the stored filePath).
+        """
+        self._docs_btn = QPushButton(tr("page.building_details.attached_documents"))
+        self._docs_btn.setCursor(Qt.PointingHandCursor)
+        self._docs_btn.setFixedHeight(ScreenScale.h(40))
+        self._docs_btn.setMinimumWidth(ScreenScale.w(220))
+        self._docs_btn.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._docs_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #3890DF;
+                border: 1px solid #3890DF;
+                border-radius: 8px;
+                padding: 8px 18px;
+            }
+            QPushButton:hover { background-color: #EBF5FF; }
+            QPushButton:disabled { color: #9AA7B2; border-color: #C9D4DD; }
+        """)
+        self._docs_btn.clicked.connect(self._on_show_documents)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self._docs_btn)
+        btn_row.addStretch()
+        self.docs_content.addLayout(btn_row)
+
+    def _on_show_documents(self):
+        """Fetch building documents (non-blocking); open dialog or toast if none."""
+        b = self.current_building
+        if not b:
+            return
+        uuid = getattr(b, "building_uuid", None) or getattr(b, "building_id", None)
+        if not uuid:
+            Toast.show_toast(self, tr("page.building_details.no_uuid"), Toast.WARNING)
+            return
+
+        self._docs_btn.setEnabled(False)
+        self._docs_btn.setText(tr("component.loading.default"))
+
+        self._docs_worker = ApiWorker(self._fetch_documents_bg, uuid)
+        self._docs_worker.finished.connect(self._on_documents_loaded)
+        self._docs_worker.error.connect(self._on_documents_error)
+        self._docs_worker.start()
+
+    def _fetch_documents_bg(self, building_uuid):
+        """Background: fetch building documents metadata from the API."""
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if not api:
+            return []
+        return api.get_building_documents(building_uuid)
+
+    def _on_documents_loaded(self, docs):
+        """Callback: open the documents dialog, or toast when there are none."""
+        self._docs_btn.setEnabled(True)
+        self._docs_btn.setText(tr("page.building_details.attached_documents"))
+        if not docs:
+            Toast.show_toast(self, tr("page.building_details.no_documents"), Toast.INFO)
+            return
+        from ui.components.building_document_viewer import show_building_documents_dialog
+        show_building_documents_dialog(self, docs)
+
+    def _on_documents_error(self, error_msg):
+        """Callback: document fetch failed."""
+        self._docs_btn.setEnabled(True)
+        self._docs_btn.setText(tr("page.building_details.attached_documents"))
+        logger.warning(f"Failed to load building documents: {error_msg}")
+        Toast.show_toast(self, tr("page.building_details.load_docs_failed"), Toast.WARNING)
+
     def _on_toggle_lock(self):
         """Toggle building lock state with confirmation."""
         if not self.current_building:
@@ -648,7 +733,7 @@ class BuildingDetailsPage(QWidget):
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
         self._scroll_content.setLayoutDirection(direction)
-        for card in [self.info_card, self.stats_card, self.location_card]:
+        for card in [self.info_card, self.stats_card, self.location_card, self.docs_card]:
             card.setLayoutDirection(direction)
         self._back_btn.setText(tr("action.back"))
         self._stat_units.set_label(tr("page.building_details.units_count"))
