@@ -2006,7 +2006,7 @@ class PersonDialog(QDialog):
 
         already_linked = {
             f.get("evidence_id") for f in self.relation_uploaded_files
-            if f.get("_selected_existing")
+            if f.get("evidence_id")
         }
 
         from ui.components.dialogs.evidence_picker_dialog import EvidencePickerDialog
@@ -2055,12 +2055,6 @@ class PersonDialog(QDialog):
             self._sync_upload_scroll_height(frame, 0, 1)
             return
 
-        card_count = sum(
-            1 for e in self.relation_uploaded_files
-            if e.get("_selected_existing") or e.get("path")
-        )
-        self._sync_upload_scroll_height(frame, card_count, 1)
-
         row_idx = 0
         for index, entry in enumerate(self.relation_uploaded_files):
             if not (entry.get("_selected_existing") or entry.get("path")):
@@ -2068,6 +2062,30 @@ class PersonDialog(QDialog):
             card = self._create_relation_doc_card(entry, index)
             layout.addWidget(card, row_idx, 0)
             row_idx += 1
+
+        self._sync_relation_scroll_height(frame, row_idx)
+
+    def _sync_relation_scroll_height(self, frame: QFrame, card_count: int):
+        """Size the relation documents area to the actual card heights.
+
+        The shared _sync_upload_scroll_height reserves a fixed 78px row meant for
+        ID thumbnails, which leaves a blank strip below the shorter relation cards.
+        Here the height tracks the real card height so no empty box appears."""
+        scroll = getattr(frame, "_thumbnails_scroll", None)
+        if scroll is None:
+            return
+        if card_count <= 0:
+            scroll.setVisible(False)
+            return
+        card_height = ScreenScale.h(56)
+        spacing = ScreenScale.h(6)
+        visible_rows = min(card_count, 3)
+        height = visible_rows * card_height
+        if visible_rows > 1:
+            height += (visible_rows - 1) * spacing
+        height += ScreenScale.h(4)
+        scroll.setFixedHeight(height)
+        scroll.setVisible(True)
 
     def _create_relation_doc_card(self, entry: dict, index: int) -> QWidget:
         """Create a wide card showing evidence type badge + edit/delete icons."""
@@ -2141,7 +2159,33 @@ class PersonDialog(QDialog):
         return card
 
     def _delete_relation_doc(self, entry: dict):
-        """Remove a document entry from the relation files list."""
+        """Remove a relation document and reconcile it with the server.
+
+        - existing/shared docs (linked via 'choose existing') are only unlinked
+          locally — never deleted from the server, since they may belong to
+          other relations;
+        - documents owned by this relation are deleted from the server (deferred
+          in edit mode so a follow-up attachment can replace them via PUT);
+        - brand-new attachments not yet uploaded are simply dropped.
+        """
+        evidence_id = entry.get("evidence_id")
+        if entry.get("_selected_existing"):
+            pass  # unlink only, keep the shared evidence on the server
+        elif evidence_id and self._survey_id:
+            if self.editing_mode:
+                self._pending_rel_replacements.append(evidence_id)
+                logger.info(f"Tenure evidence {evidence_id} queued for deletion/replacement")
+            else:
+                try:
+                    self._refresh_token()
+                    from services.api_worker import run_blocking_async
+                    run_blocking_async(
+                        self._api_service.delete_evidence,
+                        self._survey_id, evidence_id,
+                    )
+                    logger.info(f"Tenure evidence deleted from server: {evidence_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete tenure evidence {evidence_id}: {e}")
         self.relation_uploaded_files = [
             f for f in self.relation_uploaded_files if f is not entry
         ]
@@ -2225,6 +2269,20 @@ class PersonDialog(QDialog):
             f for f in self.relation_uploaded_files if f is not entry
         ]
         self._refresh_relation_thumbnails()
+
+    def _no_documents_selected(self) -> bool:
+        """True when the user picked the 'no documents' radio for this relation."""
+        return hasattr(self, 'rb_no_docs') and self.rb_no_docs.isChecked()
+
+    def _discard_all_relation_documents(self):
+        """Remove every relation document when 'no documents' is selected.
+
+        Each document is routed through the standard per-document removal so the
+        server stays consistent: owned uploads are deleted (or queued for
+        deletion in edit mode), shared/existing docs are only unlinked, and
+        brand-new attachments are dropped."""
+        for entry in list(self.relation_uploaded_files):
+            self._delete_relation_doc(entry)
 
     def _show_duplicate_file_dialog(self, file_names: list) -> bool:
         """Show a small floating dialog for duplicate files. Returns True to replace, False to cancel."""
@@ -2760,7 +2818,7 @@ class PersonDialog(QDialog):
     def _clamp_ownership_share(self):
         """Clamp ownership share to 0-2400 range on focus out."""
         try:
-            val = int(self.ownership_share.text() or 0)
+            val = int(float(self.ownership_share.text() or 0))
             if val > 2400:
                 self.ownership_share.setText("2400")
             elif val < 0:
@@ -2943,7 +3001,12 @@ class PersonDialog(QDialog):
                     self.start_day.setCurrentIndex(idx)
 
         if rel.get('ownership_share') is not None:
-            self.ownership_share.setText(str(rel['ownership_share']))
+            # Backend may send the share as a float (e.g. 1200.0); the field is
+            # integer-only, so normalize to an int string.
+            try:
+                self.ownership_share.setText(str(int(float(rel['ownership_share']))))
+            except (TypeError, ValueError):
+                self.ownership_share.setText("")
 
         if rel.get('evidence_type') is not None:
             idx = self.evidence_type.findData(rel['evidence_type'])
@@ -2966,11 +3029,38 @@ class PersonDialog(QDialog):
             self._evidence_ids = data['_evidence_ids']
 
         if data.get('_relation_uploaded_files'):
-            self.relation_uploaded_files = [
+            restored = [
                 f for f in data['_relation_uploaded_files']
                 if os.path.exists(f.get("path", "")) or f.get("evidence_id")
             ]
+            # Drop duplicate entries that share an evidence_id, keeping the one
+            # backed by a real local file so the same document is shown once.
+            deduped = []
+            by_evidence = {}
+            for f in restored:
+                eid = f.get("evidence_id")
+                if not eid:
+                    deduped.append(f)
+                    continue
+                existing = by_evidence.get(eid)
+                if existing is None:
+                    by_evidence[eid] = f
+                    deduped.append(f)
+                elif os.path.exists(f.get("path", "")) and not os.path.exists(existing.get("path", "")):
+                    deduped[deduped.index(existing)] = f
+                    by_evidence[eid] = f
+            self.relation_uploaded_files = deduped
             self._refresh_relation_thumbnails()
+
+        # Restore the documents radio to reflect the relation's actual state
+        # (defaults to 'has documents'); otherwise reopening a draft would always
+        # show 'has documents' even when the relation was saved without any.
+        if hasattr(self, 'rb_no_docs') and hasattr(self, 'rb_has_docs'):
+            has_docs = bool(self.relation_uploaded_files) or bool(rel.get('has_documents'))
+            if has_docs:
+                self.rb_has_docs.setChecked(True)
+            else:
+                self.rb_no_docs.setChecked(True)
 
         if data.get('_relation_id'):
             self._api_relation_id = data['_relation_id']
@@ -3074,6 +3164,13 @@ class PersonDialog(QDialog):
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get all person data from all 3 tabs."""
+        # 'no documents' selected: the relation carries no documents. Server-side
+        # reconciliation (deleting owned evidence, unlinking shared) happens in
+        # the save flow via _discard_all_relation_documents.
+        if self._no_documents_selected():
+            rel_files = []
+        else:
+            rel_files = list(self.relation_uploaded_files)
         return {
             'person_id': self.person_data.get('person_id') if self.person_data else str(uuid.uuid4()),
             # Tab 1
@@ -3095,16 +3192,16 @@ class PersonDialog(QDialog):
             'relation_data': {
                 'rel_type': self.rel_type_combo.currentData(),
                 'start_date': self._build_start_date_iso(),
-                'ownership_share': int(self.ownership_share.text() or 0),
+                'ownership_share': int(float(self.ownership_share.text() or 0)),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
                 'evidence_desc': self.evidence_desc.text().strip() or None,
                 'notes': self.notes.toPlainText().strip() or None,
-                'has_documents': bool(self.relation_uploaded_files),
+                'has_documents': bool(rel_files),
             },
             # Document files (internal, for same-session persistence)
             '_uploaded_files': list(self.uploaded_files),
             '_evidence_ids': dict(self._evidence_ids),
-            '_relation_uploaded_files': [dict(f) for f in self.relation_uploaded_files],
+            '_relation_uploaded_files': [dict(f) for f in rel_files],
             '_relation_id': self._api_relation_id or (
                 self.person_data.get('_relation_id') if self.person_data else None
             ),
@@ -3292,6 +3389,9 @@ class PersonDialog(QDialog):
         """Execute the API calls for final save (called after validation passes)."""
         from ui.error_handler import ErrorHandler
 
+        if self._no_documents_selected():
+            self._discard_all_relation_documents()
+
         if self._existing_person_mode:
             self._refresh_token()
             person_id = (self.person_data or {}).get('person_id', '')
@@ -3357,7 +3457,9 @@ class PersonDialog(QDialog):
 
                     if relation_id:
                         for entry in self.relation_uploaded_files:
-                            if not entry.get('_selected_existing') or not entry.get('evidence_id'):
+                            if (not entry.get('_selected_existing')
+                                    or not entry.get('evidence_id')
+                                    or entry.get('_server_existing')):
                                 continue
                             try:
                                 run_blocking_async(

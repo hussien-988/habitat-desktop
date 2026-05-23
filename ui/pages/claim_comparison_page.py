@@ -573,6 +573,19 @@ class ClaimComparisonPage(QWidget):
         options_layout.addStretch()
         res_layout.addLayout(options_layout)
 
+        # Explain the consequence of the selected action — notably that
+        # Keep-Separate auto-adjusts the unique field and lands in the
+        # reconciliation queue for later cleanup.
+        self._resolution_hint = QLabel(tr("page.comparison.merge_hint"))
+        self._resolution_hint.setWordWrap(True)
+        self._resolution_hint.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._resolution_hint.setStyleSheet(
+            "color: #6B7280; background: #F8FAFC;"
+            " border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 12px;"
+        )
+        res_layout.addWidget(self._resolution_hint)
+        self._resolution_group.buttonClicked.connect(self._update_resolution_hint)
+
         self._justification_label = QLabel()
         self._justification_label.setText(
             f"{tr('page.comparison.justification_required')} "
@@ -1278,6 +1291,13 @@ class ClaimComparisonPage(QWidget):
         self._spinner.show_loading(tr("component.loading.default"))
         self._resolution_worker.start()
 
+    def _update_resolution_hint(self, *args):
+        btn = self._resolution_group.checkedButton()
+        val = btn.property("resolution_type") if btn else "merge"
+        key = ("page.comparison.keep_separate_hint" if val == "keep_separate"
+               else "page.comparison.merge_hint")
+        self._resolution_hint.setText(tr(key))
+
     def _on_resolution_done(self, success: bool):
         self._spinner.hide_loading()
         if success:
@@ -1303,9 +1323,70 @@ class ClaimComparisonPage(QWidget):
         else:
             Toast.show_toast(self, tr("page.comparison.action_failed"), Toast.WARNING)
 
-    def _on_resolution_err(self, error_msg: str):
+    def _on_resolution_err(self, error_msg: str, exc=None):
         self._spinner.hide_loading()
+
+        # A merge against a conflict whose entities were re-staged/committed
+        # returns 409 — offer to regenerate fresh conflicts instead of a dead end.
+        status = getattr(exc, "status_code", None)
+        rd = getattr(exc, "response_data", {}) or {}
+        raw = ""
+        if isinstance(rd, dict):
+            raw = str(rd.get("message") or rd.get("detail") or "")
+        haystack = f"{error_msg} {raw} {getattr(exc, 'message', '')}".lower()
+        is_stale = status == 409 and (
+            "no longer exist" in haystack
+            or "re-run duplicate detection" in haystack
+            or "regenerate conflicts" in haystack
+        )
+        if is_stale:
+            self._prompt_rerun_detection(raw or error_msg)
+            return
+
         Toast.show_toast(self, f"{tr('page.comparison.action_failed')}: {error_msg}", Toast.ERROR)
+
+    def _prompt_rerun_detection(self, message: str):
+        """Stale conflict: confirm, then re-run duplicate detection."""
+        from ui.error_handler import ErrorHandler
+        pkg_id = self._current_import_package_id or ""
+        body = f"{message}\n\n{tr('page.comparison.rerun_detection_prompt')}".strip()
+        if not ErrorHandler.confirm(
+            self, body, tr("page.comparison.stale_conflict_title")
+        ):
+            return
+        if not pkg_id:
+            Toast.show_toast(self, tr("page.comparison.no_package_for_rerun"), Toast.WARNING)
+            return
+
+        from controllers.import_controller import ImportController
+        self._spinner.show_loading(tr("page.comparison.rerunning_detection"))
+        controller = ImportController(self.db)
+        self._rerun_worker = ApiWorker(controller.detect_duplicates, pkg_id)
+        self._rerun_worker.finished.connect(self._on_rerun_done)
+        self._rerun_worker.error.connect(self._on_rerun_error)
+        self._rerun_worker.start()
+
+    def _on_rerun_done(self, result):
+        self._spinner.hide_loading()
+        if bool(getattr(result, "success", False)):
+            Toast.show_toast(self, tr("page.comparison.rerun_detection_done"), Toast.SUCCESS)
+            try:
+                from app.config import Pages as _Pages
+                main_win = self.window()
+                if main_win is not None and hasattr(main_win, "pages"):
+                    dup_page = main_win.pages.get(_Pages.DUPLICATES)
+                    if dup_page is not None and hasattr(dup_page, "refresh"):
+                        dup_page.refresh()
+            except Exception as e:
+                logger.warning(f"Could not pre-refresh duplicates list: {e}")
+            QTimer.singleShot(250, self.back_requested.emit)
+        else:
+            msg = getattr(result, "message_ar", "") or getattr(result, "message", "")
+            Toast.show_toast(self, msg or tr("page.comparison.action_failed"), Toast.ERROR)
+
+    def _on_rerun_error(self, error_msg):
+        self._spinner.hide_loading()
+        Toast.show_toast(self, str(error_msg), Toast.ERROR)
 
     # ────────────────────────────────────────────
     # Refresh — populate with real data from API
@@ -1614,7 +1695,9 @@ class ClaimComparisonPage(QWidget):
             if is_person and idx < len(person_national_ids) and person_national_ids[idx]:
                 subtitle = person_national_ids[idx]
             elif not is_person:
-                subtitle = self._current_conflict_type
+                # Property records show the (translated) duplicate type, not the
+                # raw server conflictType string (e.g. "PropertyDuplicate").
+                subtitle = tr("page.duplicates.type_property")
 
             icon_name = "yelow" if is_person else "blue"
             card_data = {
@@ -1944,6 +2027,7 @@ class ClaimComparisonPage(QWidget):
         for idx, btn in enumerate(self._resolution_group.buttons()):
             if idx < len(resolution_labels):
                 btn.setText(resolution_labels[idx])
+        self._update_resolution_hint()
 
         # Justification label
         self._justification_label.setText(

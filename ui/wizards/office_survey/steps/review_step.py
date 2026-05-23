@@ -722,12 +722,93 @@ class ReviewStep(BaseStep):
 
         return card
 
+    def _ensure_person_documents(self, person: dict):
+        """Lazily fetch this person's ID photos and relation evidences from the
+        server so they show in the review popup after a reopen.
+
+        Persons loaded from the API (`_normalize_api_person`) carry no document
+        keys; this populates `_uploaded_files` (ID photos) and
+        `_relation_uploaded_files` (relation evidences) in place. Cached helpers
+        make repeat opens instant; relation evidences are flagged
+        `_server_existing` so they are never re-linked on save.
+        """
+        if not isinstance(person, dict):
+            return
+        from services.api_client import get_api_client
+        api = get_api_client()
+        if not api:
+            return
+        person_id = person.get('person_id')
+
+        if person_id and not person.get('_uploaded_files'):
+            try:
+                from utils.helpers import download_identification_document_file
+                docs = api.get_person_identification_documents_for_survey(person_id) or []
+                paths = []
+                for d in docs:
+                    ev_id = d.get('id') or d.get('evidenceId') or d.get('Id') or ''
+                    if not ev_id:
+                        continue
+                    fn = d.get('originalFileName') or d.get('fileName') or f"{ev_id}.jpg"
+                    local = download_identification_document_file(person_id, ev_id, fn)
+                    if local:
+                        paths.append(local)
+                if paths:
+                    person['_uploaded_files'] = paths
+            except Exception as e:
+                logger.warning(f"Review: could not load ID photos for {person_id}: {e}")
+
+        survey_id = self.context.get_data('survey_id')
+        if survey_id and not person.get('_relation_uploaded_files'):
+            rel_id = person.get('_relation_id')
+            # Persons loaded from the API carry no _relation_id; resolve it from
+            # the unit's relations by matching person_id so this works even when
+            # the claims-step enrichment hasn't run yet.
+            if not rel_id and person_id:
+                unit_id = None
+                if self.context.unit:
+                    unit_id = getattr(self.context.unit, 'unit_uuid', None)
+                elif getattr(self.context, 'new_unit_data', None):
+                    unit_id = self.context.new_unit_data.get('unit_uuid')
+                if unit_id:
+                    try:
+                        for r in (api.get_unit_relations(survey_id, unit_id) or []):
+                            if (r.get('personId') or r.get('PersonId')) == person_id:
+                                rel_id = r.get('id') or r.get('Id') or r.get('relationId')
+                                person['_relation_id'] = rel_id
+                                break
+                    except Exception as e:
+                        logger.warning(f"Review: could not resolve relation id for {person_id}: {e}")
+            if rel_id:
+                try:
+                    evs = api.get_relation_evidences(survey_id, rel_id) or []
+                    entries = []
+                    for ev in evs:
+                        ev_id = ev.get('id') or ev.get('evidenceId') or ev.get('Id') or ''
+                        if not ev_id:
+                            continue
+                        entries.append({
+                            'path': '',
+                            'evidence_id': ev_id,
+                            'issue_date': ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or '',
+                            '_selected_existing': True,
+                            '_server_existing': True,
+                            '_display_name': ev.get('originalFileName') or ev.get('OriginalFileName') or ev_id,
+                        })
+                    if entries:
+                        person['_relation_uploaded_files'] = entries
+                        logger.info(f"Review: loaded {len(entries)} relation evidence(s) for {person_id}")
+                except Exception as e:
+                    logger.warning(f"Review: could not load relation evidences for {rel_id}: {e}")
+
     def _show_person_review_dialog(self, person: dict):
         """Open a separate dialog with the expanded person review (mobile-like)."""
         from PyQt5.QtWidgets import QDialog, QScrollArea, QApplication
         from services.display_mappings import (
             get_evidence_type_display, get_relation_type_display, get_claim_type_display,
         )
+
+        self._ensure_person_documents(person)
 
         dlg = QDialog(self)
         dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
@@ -1090,90 +1171,65 @@ class ReviewStep(BaseStep):
                 str(issue_date)[:10],
             ))
 
+        # Resolve a local file: in-session uploads carry a path; server
+        # evidences are downloaded (cached) so they preview inline too.
         path = entry.get("path") or ""
-        if path and _os.path.exists(path):
-            file_row = QFrame()
-            file_row.setStyleSheet(f"""
-                QFrame {{
-                    background-color: #FFFFFF;
-                    border: 1px solid #E2EAF2;
-                    border-radius: {ScreenScale.w(6)}px;
-                }}
-            """)
-            fh = QHBoxLayout(file_row)
-            fh.setContentsMargins(ScreenScale.w(10), ScreenScale.h(8),
-                                  ScreenScale.w(10), ScreenScale.h(8))
-            fh.setSpacing(ScreenScale.w(8))
-
-            icon = QLabel()
-            icon.setFixedSize(ScreenScale.w(24), ScreenScale.h(24))
-            icon.setAlignment(Qt.AlignCenter)
-            icon.setStyleSheet("background: transparent; border: none;")
-            _file_pm = Icon.load_pixmap("upload_file", size=ScreenScale.w(20))
-            if _file_pm and not _file_pm.isNull():
-                icon.setPixmap(_file_pm)
-            else:
-                icon.setText("📄")
-                icon.setFont(create_font(size=14))
-
-            file_name = _os.path.basename(path)
+        if (not path or not _os.path.exists(path)) and entry.get("evidence_id"):
             try:
-                size_kb = _os.path.getsize(path) / 1024.0
-                size_text = f"{size_kb:.2f} KB"
-            except Exception:
-                size_text = ""
+                from utils.helpers import download_evidence_file
+                path = download_evidence_file(
+                    entry["evidence_id"],
+                    entry.get("_display_name") or entry["evidence_id"],
+                ) or ""
+            except Exception as e:
+                logger.warning(
+                    f"Review: could not download evidence {entry.get('evidence_id')}: {e}"
+                )
+                path = ""
 
-            name_v = QVBoxLayout()
-            name_v.setSpacing(0)
-            name_lbl = QLabel(tr("wizard.review.document"))
-            name_lbl.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_BOLD))
-            name_lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
-            name_lbl.setToolTip(file_name)
-            name_lbl.setLayoutDirection(get_layout_direction())
-            name_lbl.setAlignment(align)
-            size_lbl = QLabel(size_text)
-            size_lbl.setFont(create_font(size=FontManager.SIZE_CAPTION))
-            size_lbl.setStyleSheet("color: #64748B; background: transparent;")
-            size_lbl.setLayoutDirection(get_layout_direction())
-            size_lbl.setAlignment(align)
-            name_v.addWidget(name_lbl)
-            name_v.addWidget(size_lbl)
-
-            open_btn = QPushButton()
-            open_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
-            open_btn.setCursor(Qt.PointingHandCursor)
-            open_btn.setToolTip(tr("button.view"))
-            eye_icon = Icon.load_qicon("Eye")
-            if eye_icon:
-                from PyQt5.QtCore import QSize as _QSize
-                open_btn.setIcon(eye_icon)
-                open_btn.setIconSize(_QSize(ScreenScale.w(18), ScreenScale.h(18)))
-            else:
-                open_btn.setText("👁")
-                open_btn.setFont(create_font(size=12))
-            open_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    color: #3890DF;
-                    border: none;
-                    border-radius: {ScreenScale.w(6)}px;
-                }}
-                QPushButton:hover {{ background-color: #DBEAFE; }}
-                QPushButton:pressed {{ background-color: #BFDBFE; }}
-            """)
-            def _open(_=False, fp=path):
-                from PyQt5.QtGui import QDesktopServices
-                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
-            open_btn.clicked.connect(_open)
-
-            fh.addWidget(icon)
-            fh.addLayout(name_v)
-            fh.addStretch(1)
-            fh.addWidget(open_btn)
-
-            v.addWidget(file_row)
+        if path and _os.path.exists(path):
+            v.addWidget(self._review_doc_preview(path))
 
         return wrap
+
+    def _review_doc_preview(self, path: str) -> QWidget:
+        """Inline, clickable document preview: an image thumbnail for images, a
+        file tile otherwise. Clicking opens it full-size with the system app —
+        no separate button."""
+        import os as _os
+        from PyQt5.QtGui import QPixmap, QDesktopServices
+
+        preview = QLabel()
+        preview.setCursor(Qt.PointingHandCursor)
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setStyleSheet(f"""
+            QLabel {{
+                border: 1px solid #DBEAFE;
+                border-radius: {ScreenScale.w(8)}px;
+                background-color: #F0F7FF;
+            }}
+        """)
+        preview.setToolTip(_os.path.basename(path))
+
+        ext = _os.path.splitext(path)[1].lower()
+        pm = QPixmap(path) if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else QPixmap()
+        if not pm.isNull():
+            preview.setFixedSize(ScreenScale.w(190), ScreenScale.h(190))
+            preview.setPixmap(pm.scaled(
+                ScreenScale.w(184), ScreenScale.h(184),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation,
+            ))
+        else:
+            preview.setFixedSize(ScreenScale.w(190), ScreenScale.h(74))
+            preview.setText("📄  " + tr("wizard.review.document"))
+            preview.setFont(create_font(size=FontManager.SIZE_SUBHEADING, weight=FontManager.WEIGHT_SEMIBOLD))
+
+        def _open(e, fp=path):
+            import os as __os
+            if fp and __os.path.exists(fp):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fp))
+        preview.mousePressEvent = _open
+        return preview
 
     # ── Map dialog ───────────────────────────────────────────────────
 

@@ -382,6 +382,38 @@ def download_identification_document_file(
     return None
 
 
+def download_building_document_file(document_id: str, file_name: str) -> Optional[str]:
+    """Cached download of a building document via the download endpoint.
+
+    Uses GET /v1/building-documents/{id}/download. Mirrors download_evidence_file's
+    caching: writes to TEMP/trrcms_building_docs and short-circuits on subsequent
+    calls when the cached file is present. Returns the local path or None.
+    """
+    if not document_id:
+        return None
+    import os, tempfile, logging
+    _logger = logging.getLogger(__name__)
+
+    cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_building_docs")
+    os.makedirs(cache_dir, exist_ok=True)
+    safe_name = sanitize_filename(file_name) if file_name else document_id
+    save_path = os.path.join(cache_dir, f"{document_id}_{safe_name}")
+
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        return save_path
+
+    from services.api_client import get_api_client
+    api = get_api_client()
+    try:
+        if api.download_building_document(document_id, save_path):
+            return save_path
+    except Exception as e:
+        _logger.warning(
+            f"download_building_document_file failed (doc={document_id}): {e}"
+        )
+    return None
+
+
 def validate_coordinates(lat: float, lon: float) -> bool:
     """
     Validate latitude and longitude values.

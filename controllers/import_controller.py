@@ -32,6 +32,7 @@ from services.exceptions import (
     CTX_QUARANTINE,
     CTX_UNCANCEL,
     CTX_QUARANTINE_REPORT,
+    CTX_RECONCILIATION_QUEUE,
 )
 from utils.logger import get_logger
 
@@ -112,11 +113,16 @@ class ImportController(BaseController):
             if e.status_code == 409:
                 e.context = context
                 log_exception(e, logger, context=context)
-                return OperationResult.fail(
+                fail = OperationResult.fail(
                     message=str(e),
                     message_ar=tr("import.error.duplicate_package"),
                     error=e,
                 )
+                # Pass the backend body through so the UI can link to the
+                # already-imported package (isDuplicatePackage + package).
+                if isinstance(getattr(e, "response_data", None), dict):
+                    fail.data = e.response_data
+                return fail
             return _fail_from_exception(e, context)
         except NetworkException as e:
             return _fail_from_exception(e, context)
@@ -515,3 +521,20 @@ class ImportController(BaseController):
             return _fail_from_exception(e, CTX_QUARANTINE_REPORT)
         except Exception as e:
             return _fail_from_exception(e, CTX_QUARANTINE_REPORT)
+
+    def get_reconciliation_queue(
+        self,
+        entity_type: str = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> OperationResult[Dict]:
+        """Fetch the Keep-Separate reconciliation queue (persons + units)."""
+        try:
+            api = get_api_client()
+            return OperationResult.ok(
+                data=api.get_reconciliation_queue(entity_type, page, page_size)
+            )
+        except (ApiException, NetworkException) as e:
+            return _fail_from_exception(e, CTX_RECONCILIATION_QUEUE)
+        except Exception as e:
+            return _fail_from_exception(e, CTX_RECONCILIATION_QUEUE)

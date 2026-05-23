@@ -21,6 +21,7 @@ from PyQt5.QtGui import (
 
 from repositories.database import Database
 from services.duplicate_service import DuplicateService
+from services.conflict_classifier import get_conflict_display_category, PERSON, PROPERTY
 from ui.components.dark_header_zone import DarkHeaderZone
 from app.config import Pages
 from ui.components.stat_pill import StatPill
@@ -198,9 +199,17 @@ class _DuplicateCard(AnimatedCard):
         row2 = QHBoxLayout()
         row2.setSpacing(0)
 
-        ctype = conflict.get("conflictType", "")
-        type_cfg = _get_type_config(ctype) if ctype else {"label": "-"}
-        type_text = type_cfg["label"]
+        # Classify via entityType/conflictType so server variants like
+        # "PersonDuplicate_WithinBatch" still show the translated label
+        # instead of the raw English type string.
+        category = get_conflict_display_category(conflict)
+        if category == PERSON:
+            type_text = tr("page.duplicates.type_person")
+        elif category == PROPERTY:
+            type_text = tr("page.duplicates.type_property")
+        else:
+            ctype = conflict.get("conflictType", "")
+            type_text = _get_type_config(ctype)["label"] if ctype else "-"
 
         first_id = conflict.get("firstEntityIdentifier", conflict.get("firstEntityId", "-"))
         second_id = conflict.get("secondEntityIdentifier", conflict.get("secondEntityId", "-"))
@@ -454,7 +463,9 @@ class _ConflictWorker(QThread):
 
 class _ResolutionWorker(QThread):
     finished = Signal(bool)
-    error = Signal(str)
+    # (humanized_message, ApiException|None) — the exception lets callers
+    # branch on status_code (e.g. a stale-conflict 409) instead of substring.
+    error = Signal(str, object)
 
     def __init__(self, service: DuplicateService, action: str,
                  conflict_id: str, justification: str, master_id: str = ""):
@@ -482,10 +493,10 @@ class _ResolutionWorker(QThread):
             self.finished.emit(result)
         except (ApiException, NetworkException) as e:
             log_exception(e, logger, context=CTX_RESOLVE_CONFLICT)
-            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
+            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT), e)
         except Exception as e:
             logger.error(f"Resolution unexpected error: {e}")
-            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT))
+            self.error.emit(humanize_exception(e, context=CTX_RESOLVE_CONFLICT), None)
 
 
 # _EmptyStateConflicts removed — using EmptyStateAnimated from animated_card.py
@@ -960,10 +971,12 @@ class DuplicatesPage(QWidget):
     # -- Data Loading ------------------------------------------------------
 
     def _get_active_filters(self) -> dict:
+        # NOTE: the type filter is intentionally NOT sent to the server. The
+        # backend filters conflictType by exact match, which drops server
+        # variants like "PersonDuplicate_WithinBatch". Instead we fetch all
+        # types (status/priority/package still server-side) and filter by the
+        # robust entity category client-side in _on_load_finished.
         filters = {}
-        ct = self._type_filter.currentData()
-        if ct:
-            filters["conflict_type"] = ct
         st = self._status_filter.currentData()
         if st:
             filters["status"] = st
@@ -1012,7 +1025,10 @@ class DuplicatesPage(QWidget):
             s.stop()
         self._shimmer_container.setVisible(False)
 
-        # Update summary cards
+        # Update summary cards. These are GLOBAL (all-packages) counts — the
+        # backend has no per-package summary endpoint. Package scope is conveyed
+        # by the import banner and the list's "showing X of Y" counter, and the
+        # card titles are suffixed accordingly in import-context mode below.
         summary = data.get("summary", {})
         pending_total = summary.get("pendingReviewCount", summary.get("totalConflicts", 0))
         pending_property = summary.get("pendingPropertyDuplicates", summary.get("propertyDuplicateCount", 0))
@@ -1036,6 +1052,15 @@ class DuplicatesPage(QWidget):
         all_items = conflicts_data.get("items", [])
         self._total_pages = conflicts_data.get("totalPages", 1)
         total_count = conflicts_data.get("totalCount", 0)
+
+        # Client-side type filter by robust entity category. Catches server
+        # variants (e.g. PersonDuplicate_WithinBatch) that the exact-match
+        # server conflictType filter would drop.
+        type_sel = self._type_filter.currentData()
+        if type_sel in ("PersonDuplicate", "PropertyDuplicate"):
+            want = PERSON if type_sel == "PersonDuplicate" else PROPERTY
+            all_items = [c for c in all_items if get_conflict_display_category(c) == want]
+            total_count = len(all_items)
 
         if self._exclude_resolved:
             _resolved = {"resolved", "autoresolved"}

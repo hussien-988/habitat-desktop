@@ -92,6 +92,15 @@ class ImportStep6Report(QWidget):
         self._pkg_number_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
         self._meta_layout.addWidget(self._pkg_number_label)
 
+        # Optional: attachment deduplication + archive info.
+        self._dedup_label = QLabel("")
+        self._dedup_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._meta_layout.addWidget(self._dedup_label)
+
+        self._archive_label = QLabel("")
+        self._archive_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+        self._meta_layout.addWidget(self._archive_label)
+
         self._meta_layout.addStretch()
         self._result_card_layout.addLayout(self._meta_layout)
 
@@ -391,7 +400,8 @@ class ImportStep6Report(QWidget):
             self._result_subtitle.setStyleSheet("color: #B91C1C; background: transparent;")
             meta_color = "#B91C1C"
 
-        for lbl in (self._duration_label, self._date_label, self._pkg_number_label):
+        for lbl in (self._duration_label, self._date_label, self._pkg_number_label,
+                    self._dedup_label, self._archive_label):
             lbl.setStyleSheet(f"color: {meta_color}; background: transparent;")
 
     def _create_loading_overlay(self):
@@ -493,14 +503,31 @@ class ImportStep6Report(QWidget):
         success_rate = d.get("successRate", 0)
         is_fully_ok = d.get("isFullySuccessful", False)
 
+        # Decide the headline by the report's `status` string when present
+        # ("Completed" / "PartiallyCompleted" / "Failed"), per the backend
+        # guide; fall back to the count heuristic for older payloads.
+        status = str(d.get("status") or "").lower()
+        if status == "completed":
+            outcome = "success"
+        elif status == "partiallycompleted":
+            outcome = "partial"
+        elif status == "failed":
+            outcome = "error"
+        elif is_fully_ok and total_failed == 0:
+            outcome = "success"
+        elif total_committed > 0 and total_failed > 0:
+            outcome = "partial"
+        else:
+            outcome = "error"
+
         # Result header
-        if is_fully_ok and total_failed == 0:
+        if outcome == "success":
             self._set_result_style("success")
             self._result_title.setText(tr("wizard.import.step6.commit_success"))
             self._result_subtitle.setText(
                 tr("wizard.import.step6.commit_success_detail", count=total_committed)
             )
-        elif total_committed > 0 and total_failed > 0:
+        elif outcome == "partial":
             self._set_result_style("partial")
             self._result_title.setText(tr("wizard.import.step6.commit_partial"))
             self._result_subtitle.setText(
@@ -523,6 +550,23 @@ class ImportStep6Report(QWidget):
             self._date_label.setText(tr("wizard.import.step6.meta_date", value=date_part))
         if pkg_number:
             self._pkg_number_label.setText(tr("wizard.import.step6.meta_package_number", value=pkg_number))
+
+        # Optional dedup / archive surfacing.
+        dup_attachments = int(d.get("duplicateAttachmentsFound", 0) or 0)
+        bytes_saved = int(d.get("deduplicationBytesSaved", 0) or 0)
+        if dup_attachments or bytes_saved:
+            mb_saved = bytes_saved / (1024 * 1024)
+            self._dedup_label.setText(tr(
+                "wizard.import.step6.meta_dedup",
+                count=dup_attachments, mb=f"{mb_saved:.1f}",
+            ))
+        else:
+            self._dedup_label.setText("")
+
+        if d.get("isArchived"):
+            self._archive_label.setText(tr("wizard.import.step6.meta_archived"))
+        else:
+            self._archive_label.setText("")
 
         # Summary stat boxes
         self._update_stat_value(self._approved_box, str(total_approved))
@@ -661,6 +705,8 @@ class ImportStep6Report(QWidget):
         self._duration_label.setText("")
         self._date_label.setText("")
         self._pkg_number_label.setText("")
+        self._dedup_label.setText("")
+        self._archive_label.setText("")
         self._update_stat_value(self._approved_box, "0")
         self._update_stat_value(self._committed_box, "0")
         self._update_stat_value(self._failed_box, "0")

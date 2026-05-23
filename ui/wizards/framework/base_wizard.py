@@ -240,8 +240,11 @@ class BaseWizard(QWidget, metaclass=ABCQWidgetMeta):
             else:
                 self.navigator.next_step()
         finally:
-            self._last_next_ms = int(time.time() * 1000)
-            QTimer.singleShot(150, lambda: self.btn_next.setEnabled(True))
+            # Re-enable when the 600ms debounce window expires, measured from the
+            # initial click. Avoids a gap where the button is enabled but clicks
+            # are still rejected by the guard above (silent, no validation/toast).
+            elapsed = int(time.time() * 1000) - self._last_next_ms
+            QTimer.singleShot(max(0, 600 - elapsed), lambda: self.btn_next.setEnabled(True))
 
     def _handle_cancel(self):
         """Handle cancel button click."""

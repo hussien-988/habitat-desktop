@@ -24,10 +24,12 @@ _PROPERTY_ENTITY_TYPES = {
     "building", "buildings", "property",
 }
 
-_PERSON_CONFLICT_TYPES = {"personduplicate", "persons_duplicate"}
-_PROPERTY_CONFLICT_TYPES = {
+# Matched as prefixes so server variants like "PersonDuplicate_WithinBatch"
+# or "PersonDuplicate_CrossBatch" still classify correctly.
+_PERSON_CONFLICT_PREFIXES = ("personduplicate", "persons_duplicate")
+_PROPERTY_CONFLICT_PREFIXES = (
     "propertyduplicate", "propertyunitduplicate", "buildingduplicate",
-}
+)
 
 
 def _norm(value: Any) -> str:
@@ -55,9 +57,9 @@ def get_conflict_display_category(conflict: Dict) -> str:
         return PROPERTY
 
     conflict_type = _norm(conflict.get("conflictType"))
-    if conflict_type in _PERSON_CONFLICT_TYPES:
+    if conflict_type.startswith(_PERSON_CONFLICT_PREFIXES):
         return PERSON
-    if conflict_type in _PROPERTY_CONFLICT_TYPES:
+    if conflict_type.startswith(_PROPERTY_CONFLICT_PREFIXES):
         return PROPERTY
 
     first_type = _norm(conflict.get("firstEntityType"))

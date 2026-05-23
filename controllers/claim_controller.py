@@ -663,6 +663,16 @@ class ClaimController(BaseController):
             "_relation_id": relation_dto.get("id", ""),
             "_is_contact_person": bool(person_dto.get("isContactPerson")),
             "_household_id": person_dto.get("householdId"),
+            # Rebuild the property-relation block so reopening a draft restores
+            # the claim type / ownership share / documents flag in the dialog
+            # (Tab 3 reads exclusively from relation_data).
+            "relation_data": {
+                "rel_type": relation_dto.get("relationType"),
+                "ownership_share": relation_dto.get("ownershipShare"),
+                "contract_type": relation_dto.get("occupancyType"),
+                "start_date": relation_dto.get("relationStartDate") or relation_dto.get("startDate"),
+                "has_documents": bool(relation_dto.get("hasEvidence")),
+            },
         }
 
     @staticmethod

@@ -506,7 +506,7 @@ class BuildingInfoStep(BaseStep):
 
         mime_type = doc.get("mimeType", "")
         file_name = doc.get("originalFileName", "") or tr("wizard.building_info.document_fallback")
-        file_path = doc.get("filePath", "")
+        doc_id = doc.get("id", "")
 
         icon_text = "IMG" if mime_type.startswith("image/") else "PDF" if "pdf" in mime_type else "DOC"
         icon_bg = "#DBEAFE" if mime_type.startswith("image/") else "#FEE2E2" if "pdf" in mime_type else "#E5E7EB"
@@ -526,15 +526,13 @@ class BuildingInfoStep(BaseStep):
         name_lbl.setStyleSheet("color: #303133; border: none; background: transparent;")
         lay.addWidget(name_lbl, stretch=1)
 
-        row.mousePressEvent = lambda event, fp=file_path: self._open_doc_file(fp)
+        row.mousePressEvent = lambda event, did=doc_id, fn=file_name: self._open_doc_file(did, fn)
         return row
 
-    def _open_doc_file(self, file_path: str):
-        """Open document file if available."""
-        if file_path:
-            from PyQt5.QtCore import QUrl
-            from PyQt5.QtGui import QDesktopServices
-            QDesktopServices.openUrl(QUrl.fromLocalFile(file_path))
+    def _open_doc_file(self, document_id: str, file_name: str):
+        """Download the building document and open it with the system app."""
+        from ui.components.building_document_viewer import download_and_open_building_document
+        download_and_open_building_document(self, document_id, file_name)
     # Map viewer
 
     def _open_map_view(self):

@@ -7,7 +7,7 @@ Allows user to add/view/delete persons with their relation data
 using the 3-tab PersonDialog.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import uuid
 
 from PyQt5.QtWidgets import (
@@ -53,6 +53,24 @@ from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 
 logger = get_logger(__name__)
+
+
+# Maps a person-card field (snake_case, used in context.persons) to the
+# matching applicant field (context.applicant uses *_ar suffixes for names).
+# Single source of truth for keeping the applicant's two representations in sync.
+_APPLICANT_FIELD_MAP = (
+    ('first_name',  'first_name_ar'),
+    ('father_name', 'father_name_ar'),
+    ('mother_name', 'mother_name_ar'),
+    ('last_name',   'last_name_ar'),
+    ('phone',       'phone'),
+    ('email',       'email'),
+    ('landline',    'landline'),
+    ('national_id', 'national_id'),
+    ('birth_date',  'birth_date'),
+    ('gender',      'gender'),
+    ('nationality', 'nationality'),
+)
 
 
 class OccupancyClaimsStep(BaseStep):
@@ -198,6 +216,58 @@ class OccupancyClaimsStep(BaseStep):
 
         return auth_token, survey_id, household_id, unit_id
 
+    def _find_applicant_person_index(self) -> Optional[int]:
+        """Index of the applicant (contact person) entry in context.persons."""
+        contact_person_id = self.context.get_data('contact_person_id')
+        for i, person in enumerate(self.context.persons):
+            if person.get('_is_applicant') or person.get('_is_contact_person'):
+                return i
+            if contact_person_id and person.get('person_id') == contact_person_id:
+                return i
+        return None
+
+    def _sync_applicant_into_persons(self):
+        """Forward-sync identity fields edited in the applicant step
+        (context.applicant) into the applicant's card entry in context.persons,
+        so the mini-card reflects the latest applicant data."""
+        applicant = self.context.applicant
+        if not applicant:
+            return
+        idx = self._find_applicant_person_index()
+        if idx is None:
+            return
+        person = self.context.persons[idx]
+        for person_key, applicant_key in _APPLICANT_FIELD_MAP:
+            value = applicant.get(applicant_key)
+            if value is not None:
+                person[person_key] = value
+        person['_is_applicant'] = True
+
+    def _sync_persons_into_applicant(self, updated_data: Dict[str, Any]):
+        """Backward-sync identity fields edited via the person dialog into
+        context.applicant, keeping the applicant step form and draft persistence
+        consistent. Also carries over ID-photo evidence metadata."""
+        if self.context.applicant is None:
+            self.context.applicant = {}
+        applicant = self.context.applicant
+        for person_key, applicant_key in _APPLICANT_FIELD_MAP:
+            value = updated_data.get(person_key)
+            if value is not None:
+                applicant[applicant_key] = value
+        applicant['full_name'] = " ".join(
+            p for p in (
+                applicant.get('first_name_ar', ''),
+                applicant.get('father_name_ar', ''),
+                applicant.get('last_name_ar', ''),
+            ) if p
+        )
+        returned_ev_map = updated_data.get('_evidence_ids')
+        if isinstance(returned_ev_map, dict):
+            applicant['id_evidence_map'] = dict(returned_ev_map)
+        returned_paths = updated_data.get('_uploaded_files')
+        if isinstance(returned_paths, list):
+            applicant['id_photo_paths'] = list(returned_paths)
+
     def _add_person(self):
         """Open PersonDialog directly to add a new person."""
         auth_token, survey_id, household_id, unit_id = self._get_context_ids()
@@ -262,27 +332,17 @@ class OccupancyClaimsStep(BaseStep):
             initial_tab = 0
             open_as_existing = False
         else:
-            initial_tab = 2 if has_relation else 1
             # No relation yet → open in existing_person_mode so link_person_to_unit() is called
             open_as_existing = not has_relation
+            # Editing an existing person starts on the first tab (like the applicant);
+            # only the link-new-relation flow jumps ahead to capture the relation.
+            initial_tab = 0 if has_relation else 1
 
         person_data_copy = dict(person_data)
         if is_applicant and self.context.applicant:
             a = self.context.applicant
             # PersonDialog expects 'first_name' key; applicant context stores 'first_name_ar'
-            for person_key, applicant_key in (
-                ('first_name',  'first_name_ar'),
-                ('father_name', 'father_name_ar'),
-                ('mother_name', 'mother_name_ar'),
-                ('last_name',   'last_name_ar'),
-                ('phone',       'phone'),
-                ('email',       'email'),
-                ('landline',    'landline'),
-                ('national_id', 'national_id'),
-                ('birth_date',  'birth_date'),
-                ('gender',      'gender'),
-                ('nationality', 'nationality'),
-            ):
+            for person_key, applicant_key in _APPLICANT_FIELD_MAP:
                 if not person_data_copy.get(person_key) and a.get(applicant_key):
                     person_data_copy[person_key] = a[applicant_key]
 
@@ -345,7 +405,13 @@ class OccupancyClaimsStep(BaseStep):
                                     )
                                     logger.info(f"Relation {relation_id} updated via API")
                                 except Exception as e:
-                                    logger.warning(f"Failed to update relation {relation_id}: {e}")
+                                    # Surface the failure instead of swallowing it:
+                                    # the person fields already persisted via a
+                                    # separate call, so a silent relation failure
+                                    # looked like "everything saved except the claim".
+                                    logger.error(f"Failed to update relation {relation_id}: {e}")
+                                    ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+                                    return
                             elif not relation_id and survey_id and unit_id:
                                 rel_type = updated_data.get('relation_data', {}).get('rel_type')
                                 if rel_type:
@@ -387,7 +453,9 @@ class OccupancyClaimsStep(BaseStep):
                                                 except Exception as ue:
                                                     logger.error(f"Failed to upload tenure file {f_path}: {ue}")
                                             for f_entry in tenure_files:
-                                                if not f_entry.get('_selected_existing') or not f_entry.get('evidence_id'):
+                                                if (not f_entry.get('_selected_existing')
+                                                        or not f_entry.get('evidence_id')
+                                                        or f_entry.get('_server_existing')):
                                                     continue
                                                 try:
                                                     run_blocking_async(
@@ -410,17 +478,12 @@ class OccupancyClaimsStep(BaseStep):
                                 ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
                             return
 
-                if person_data.get('_is_applicant'):
+                if is_applicant:
                     updated_data['_is_applicant'] = True
                 self.context.persons[person_index] = updated_data
                 self.context.finalize_response = None
-                if is_applicant and self.context.applicant is not None:
-                    returned_ev_map = updated_data.get('_evidence_ids')
-                    if isinstance(returned_ev_map, dict):
-                        self.context.applicant['id_evidence_map'] = dict(returned_ev_map)
-                    returned_paths = updated_data.get('_uploaded_files')
-                    if isinstance(returned_paths, list):
-                        self.context.applicant['id_photo_paths'] = list(returned_paths)
+                if is_applicant:
+                    self._sync_persons_into_applicant(updated_data)
                 self._refresh_persons_list()
                 logger.info(f"Person updated: {updated_data.get('first_name', '')} {updated_data.get('last_name', '')}")
             finally:
@@ -670,10 +733,61 @@ class OccupancyClaimsStep(BaseStep):
             if persons:
                 self.context.persons = [self._normalize_api_person(p) for p in persons]
                 logger.info(f"Loaded {len(persons)} persons from API")
+                self._enrich_persons_with_relations()
             else:
                 logger.info("No persons found from API")
         except Exception as e:
             logger.error(f"Failed to fetch persons from API: {e}")
+
+    def _enrich_persons_with_relations(self):
+        """Populate each person's relation_data from the unit's person-property
+        relations.
+
+        The persons endpoint does not embed the property RelationType (it is a
+        separate entity). Without this, the edit dialog's Tab 3 opens blank and
+        saving sends rel_type=None, so the claim type can never be changed.
+        Only fills fields not already set locally so in-session edits win.
+        """
+        survey_id = self.context.get_data("survey_id")
+        _, _, _, unit_id = self._get_context_ids()
+        if not survey_id or not unit_id:
+            return
+
+        try:
+            self._set_auth_token()
+            relations = self._api_service.get_unit_relations(survey_id, unit_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch unit relations for enrichment: {e}")
+            return
+
+        by_person = {}
+        for rel in relations or []:
+            pid = rel.get('personId') or rel.get('PersonId')
+            if pid:
+                by_person[pid] = rel
+
+        for person in self.context.persons:
+            rel = by_person.get(person.get('person_id'))
+            if not rel:
+                continue
+            existing = person.get('relation_data') or {}
+            if not existing.get('rel_type'):
+                person['relation_data'] = {
+                    **existing,
+                    'rel_type': rel.get('relationType') or rel.get('RelationType'),
+                    'ownership_share': rel.get('ownershipShare') or rel.get('OwnershipShare'),
+                    'occupancy_type': rel.get('occupancyType') or rel.get('OccupancyType'),
+                    'evidence_desc': rel.get('contractDetails') or rel.get('ContractDetails'),
+                    'notes': rel.get('notes') or rel.get('Notes'),
+                    'has_documents': bool(
+                        rel.get('hasEvidence') or rel.get('evidenceCount')
+                        or rel.get('HasEvidence') or rel.get('EvidenceCount')
+                    ),
+                }
+            if not person.get('_relation_id'):
+                person['_relation_id'] = (
+                    rel.get('id') or rel.get('Id') or rel.get('relationId')
+                )
 
     @staticmethod
     def _normalize_api_person(p: dict) -> dict:
@@ -691,10 +805,14 @@ class OccupancyClaimsStep(BaseStep):
             "phone":           p.get("mobileNumber") or p.get("phone", ""),
             "landline":        p.get("phoneNumber") or p.get("landline", ""),
             "email":           p.get("email", ""),
-            "person_role":     p.get("relationType") or p.get("person_role"),
-            "relationship_type": p.get("relationshipType") or p.get("relationship_type"),
+            # person_role / relationship_type are RelationshipToHead — NOT the
+            # property RelationType. Never seed them from relationType: the enum
+            # codes collide (head=1 == Owner=1). The property relation type is
+            # loaded separately into relation_data by _enrich_persons_with_relations.
+            "person_role":     p.get("person_role"),
+            "relationship_type": p.get("relationshipToHead") or p.get("relationship_type"),
             "_relation_id":    p.get("relationId") or p.get("_relation_id"),
-            "relation_data":   p.get("relation_data", {}),
+            "relation_data":   p.get("relation_data", {}) or {},
         }
 
     def _enrich_persons_with_server_evidences(self):
@@ -720,22 +838,34 @@ class OccupancyClaimsStep(BaseStep):
 
         relation_ev_map: dict = {}
         for ev in evidences:
-            rel_id = (ev.get('personPropertyRelationId')
-                      or ev.get('PersonPropertyRelationId'))
-            if not rel_id:
-                continue
             ev_id = (ev.get('id') or ev.get('evidenceId')
                      or ev.get('Id') or ev.get('EvidenceId') or '')
             if not ev_id:
                 continue
-            relation_ev_map.setdefault(rel_id, []).append({
-                'path': '',
-                'evidence_id': ev_id,
-                'issue_date': (ev.get('documentIssuedDate')
-                               or ev.get('DocumentIssuedDate') or ''),
-                '_selected_existing': True,
-                '_display_name': (ev.get('originalFileName') or ev.get('OriginalFileName') or ev_id),
-            })
+            # The /v2 evidence response nests the relation links under
+            # evidenceRelations[] (each has personPropertyRelationId). A flat
+            # personPropertyRelationId is only a legacy fallback.
+            links = ev.get('evidenceRelations') or ev.get('EvidenceRelations') or []
+            rel_ids = [
+                (l.get('personPropertyRelationId') or l.get('PersonPropertyRelationId'))
+                for l in links
+                if isinstance(l, dict) and l.get('isActive', True)
+            ]
+            flat = ev.get('personPropertyRelationId') or ev.get('PersonPropertyRelationId')
+            if flat:
+                rel_ids.append(flat)
+            for rel_id in [r for r in rel_ids if r]:
+                relation_ev_map.setdefault(rel_id, []).append({
+                    'path': '',
+                    'evidence_id': ev_id,
+                    'issue_date': (ev.get('documentIssuedDate')
+                                   or ev.get('DocumentIssuedDate') or ''),
+                    '_selected_existing': True,
+                    # Already linked to this relation on the backend — the save
+                    # paths must NOT re-link it (would 400 "already linked").
+                    '_server_existing': True,
+                    '_display_name': (ev.get('originalFileName') or ev.get('OriginalFileName') or ev_id),
+                })
 
         for person in self.context.persons:
             rel_id = person.get('_relation_id')
@@ -899,8 +1029,14 @@ class OccupancyClaimsStep(BaseStep):
         """Called when step is shown."""
         super().on_show()
         self._fetch_persons_from_api()
+        # Pull previously-saved relation evidences so they reappear after a
+        # reopen. They are flagged _server_existing (already linked on the
+        # backend), so the save paths skip re-linking them — avoiding the 400
+        # "already linked" this used to cause. They show as read-only download
+        # cards.
         self._enrich_persons_with_server_evidences()
         self._auto_relink_orphaned_persons()
+        self._sync_applicant_into_persons()
         self._refresh_persons_list()
 
     def _auto_relink_orphaned_persons(self):

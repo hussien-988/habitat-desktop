@@ -320,7 +320,7 @@ class UnitDialog(QDialog):
         self.area_input.setPlaceholderText(tr("wizard.unit_dialog.area_placeholder"))
         self.area_input.setStyleSheet(self._input_style())
 
-        area_validator = QDoubleValidator(0.0, 999999.99, 2, self.area_input)
+        area_validator = QDoubleValidator(0.0, 10000.0, 2, self.area_input)
         area_validator.setLocale(QLocale(QLocale.English, QLocale.UnitedStates))
         area_validator.setNotation(QDoubleValidator.StandardNotation)
         self.area_input.setValidator(area_validator)
@@ -553,7 +553,12 @@ class UnitDialog(QDialog):
             return
 
         try:
-            float(text.strip())
+            value = float(text.strip())
+            if value > 10000:
+                self.area_error_label.setText(tr("wizard.unit_dialog.area_too_large"))
+                self.area_error_label.setVisible(True)
+                self.area_input.setStyleSheet(self._input_error_style())
+                return
             self.area_error_label.setVisible(False)
             self.area_input.setStyleSheet(self._input_style())
         except ValueError:
@@ -578,15 +583,21 @@ class UnitDialog(QDialog):
         area_text = self.area_input.text().strip()
         if area_text:
             try:
-                float(area_text)
-                self.area_error_label.setVisible(False)
-                self.area_input.setStyleSheet(self._input_style())
+                area_value = float(area_text)
             except ValueError:
                 self.area_error_label.setText(tr("wizard.unit_dialog.area_numbers_only"))
                 self.area_error_label.setVisible(True)
                 self.area_input.setStyleSheet(self._input_error_style())
                 self.area_input.setFocus()
                 return False
+            if area_value > 10000:
+                self.area_error_label.setText(tr("wizard.unit_dialog.area_too_large"))
+                self.area_error_label.setVisible(True)
+                self.area_input.setStyleSheet(self._input_error_style())
+                self.area_input.setFocus()
+                return False
+            self.area_error_label.setVisible(False)
+            self.area_input.setStyleSheet(self._input_style())
 
         return True
 
