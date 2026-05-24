@@ -725,6 +725,8 @@ class MainWindow(QMainWindow):
         self._pwd_change_user = user
         self._pwd_change_new_password = None
 
+        self._refresh_password_policy()
+
         dialog = PasswordDialog.open_forced_async(
             parent=self,
             username=name_ar,
@@ -765,7 +767,7 @@ class MainWindow(QMainWindow):
             current_password, new_password, user_id
         )
         worker.finished.connect(lambda _res, d=dialog: self._on_password_change_ok(d))
-        worker.error.connect(lambda msg, d=dialog: self._on_password_change_err(d, msg))
+        worker.error.connect(lambda msg, d=dialog, w=worker: self._on_password_change_err(d, msg, w))
         self._pwd_worker = worker
         worker.start()
 
@@ -774,10 +776,32 @@ class MainWindow(QMainWindow):
                     getattr(self._pwd_change_user, 'username', '<unknown>'))
         dialog.accept()
 
-    def _on_password_change_err(self, dialog, error_msg):
+    def _on_password_change_err(self, dialog, error_msg, worker=None):
         logger.error("Password change failed: %s", error_msg)
-        field = self._classify_pwd_error_field(error_msg)
-        dialog.report_error(error_msg, field=field)
+        field, message = self._resolve_pwd_error(getattr(worker, "exception", None), error_msg)
+        dialog.report_error(message, field=field)
+
+    def _resolve_pwd_error(self, exc, fallback_msg):
+        """Map a backend password-change error to (dialog_field, message).
+
+        Prefers the backend's per-field validation message so the exact rule
+        (e.g. minimum length) is shown under the right input. Falls back to the
+        humanized message classified by keyword when no field errors exist.
+        """
+        from services.exceptions import ApiException
+        if isinstance(exc, ApiException):
+            by_key = {k.lower(): v for k, v in exc.field_errors.items()}
+            for backend_key, dialog_field in (
+                ("newpassword", "new"),
+                ("password", "new"),
+                ("currentpassword", "current"),
+                ("oldpassword", "current"),
+                ("confirmpassword", "confirm"),
+            ):
+                msgs = by_key.get(backend_key)
+                if msgs:
+                    return dialog_field, msgs[0]
+        return self._classify_pwd_error_field(fallback_msg), fallback_msg
 
     @staticmethod
     def _classify_pwd_error_field(error_msg: str) -> str:
@@ -885,12 +909,7 @@ class MainWindow(QMainWindow):
             api_client.change_password, current_password, new_password, user_id
         )
         worker.finished.connect(lambda _res, d=dialog: d.accept())
-        worker.error.connect(
-            lambda msg, d=dialog: (
-                logger.error("Voluntary password change failed: %s", msg),
-                d.report_error(msg, field=self._classify_pwd_error_field(msg)),
-            )
-        )
+        worker.error.connect(lambda msg, d=dialog, w=worker: self._on_password_change_err(d, msg, w))
         self._vol_pwd_worker = worker
         worker.start()
 

@@ -71,7 +71,9 @@ class Building:
     number_of_units: int = 0
     number_of_apartments: int = 0
     number_of_shops: int = 0
-    number_of_floors: int = 1
+    # API never returns a floor count; default None (not a fabricated 1) so the
+    # UI can show "—" for "no data" rather than inventing a value.
+    number_of_floors: Optional[int] = None
 
     # Geometry (point coordinates for prototype)
     latitude: Optional[float] = None

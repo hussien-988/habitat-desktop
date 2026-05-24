@@ -790,6 +790,10 @@ class ReviewStep(BaseStep):
                         entries.append({
                             'path': '',
                             'evidence_id': ev_id,
+                            'evidence_type': ev.get('evidenceType') or ev.get('EvidenceType') or ev.get('type'),
+                            'reference_number': (ev.get('documentReferenceNumber')
+                                                 or ev.get('DocumentReferenceNumber')
+                                                 or ev.get('referenceNumber') or ''),
                             'issue_date': ev.get('documentIssuedDate') or ev.get('DocumentIssuedDate') or '',
                             '_selected_existing': True,
                             '_server_existing': True,

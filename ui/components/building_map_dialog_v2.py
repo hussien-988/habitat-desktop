@@ -564,7 +564,7 @@ class BuildingMapDialog(BaseMapDialog):
                     boundary_level='neighbourhoods',
                     max_selection=getattr(self, '_max_selection', None),
                     already_selected_ids=list(getattr(self, '_already_selected_ids', set()) or []),
-                    show_building_labels=self._is_view_only,
+                    show_building_labels=True,
                     skip_fit_bounds=self._is_view_only,
                     show_assignment_legend=self._show_assignment_legend,
                     legend_labels=self._build_legend_labels() if self._show_assignment_legend else None,
@@ -1295,6 +1295,12 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
                 self._viewport_loader.map_service = fa_service
             except Exception as e:
                 logger.warning(f"Could not wire FieldAssignmentMapProvider to viewport loader: {e}")
+
+        # Clear the session viewport cache on open so building geometry edits
+        # (e.g. relocations done in QGIS) are reflected immediately instead of
+        # being served stale from the 30-minute session cache.
+        if self._viewport_loader:
+            self._viewport_loader.clear_cache()
 
     def _on_buildings_multiselected(self, building_ids_json: str):
         """Override: process batch building IDs from multiselect JS.

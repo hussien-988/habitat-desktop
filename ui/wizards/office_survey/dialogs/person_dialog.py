@@ -78,6 +78,8 @@ class PersonDialog(QDialog):
         self._server_evidences = []   # List[EvidenceDto] from server on edit
         self._pending_id_replacements = []    # deferred evidence_ids for ID file replacement
         self._pending_rel_replacements = []   # deferred evidence_ids for tenure file replacement
+        self._pending_rel_unlinks = []        # deferred evidence_ids to detach from the relation on save
+        self._initial_relation_signature = None  # relation core fields at load, to detect real edits
         self._field_styles = {}  # {widget: original_stylesheet} for error state restore
 
         self._overlay = None
@@ -103,6 +105,7 @@ class PersonDialog(QDialog):
 
         if (self.editing_mode or self._existing_person_mode) and person_data:
             self._load_person_data(person_data)
+            self._initial_relation_signature = self._relation_signature()
 
         if self.read_only:
             self._apply_read_only_mode()
@@ -1371,7 +1374,9 @@ class PersonDialog(QDialog):
         Existing selected docs are just unlinked (not deleted)."""
         entry = next((f for f in self.relation_uploaded_files if f.get("path") == file_path), None)
         if entry and entry.get('_selected_existing'):
-            # Existing doc: just remove from list, don't delete from server
+            # Existing doc: queue a server-side detach (if linked there), but
+            # never delete the evidence — it may belong to other relations.
+            self._queue_relation_unlink(entry)
             self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f is not entry]
             self._refresh_relation_thumbnails()
             return
@@ -1393,6 +1398,52 @@ class PersonDialog(QDialog):
                     logger.error(f"Failed to delete tenure evidence: {e}")
         self.relation_uploaded_files = [f for f in self.relation_uploaded_files if f.get("path") != file_path]
         self._refresh_relation_thumbnails()
+
+    def _queue_relation_unlink(self, entry: dict):
+        """Queue a shared/existing evidence to be detached from this relation.
+
+        Only entries already linked on the backend (_server_existing) need a
+        server call, and it is deferred to the save flow so cancelling the
+        dialog discards it. Freshly picked docs not yet linked need nothing —
+        they are simply dropped from the list. The evidence and its links to
+        other relations are kept; this is the inverse of link_evidence_to_relation.
+        """
+        if not entry or not entry.get("_server_existing"):
+            return
+        evidence_id = entry.get("evidence_id")
+        if evidence_id and evidence_id not in self._pending_rel_unlinks:
+            self._pending_rel_unlinks.append(evidence_id)
+
+    def _flush_relation_unlinks(self, relation_id: str):
+        """Execute queued evidence->relation detaches against the server.
+
+        Skips any evidence still present in the relation's file list (removed
+        then re-added in the same session) so it stays linked. Called from the
+        save flow once the relation id is known.
+        """
+        if not (self._pending_rel_unlinks and relation_id and self._survey_id):
+            return
+        still_linked = {
+            f.get("evidence_id") for f in self.relation_uploaded_files if f.get("evidence_id")
+        }
+        from services.api_worker import run_blocking_async
+        for evidence_id in list(self._pending_rel_unlinks):
+            if evidence_id in still_linked:
+                continue
+            try:
+                run_blocking_async(
+                    self._api_service.unlink_evidence_from_relation,
+                    self._survey_id, evidence_id, relation_id,
+                )
+                logger.info(f"Evidence {evidence_id} unlinked from relation {relation_id}")
+            except Exception as e:
+                logger.error(f"Failed to unlink evidence {evidence_id} from relation {relation_id}: {e}")
+                Toast.show_toast(
+                    self,
+                    tr("wizard.person_dialog.unlink_existing_doc_failed"),
+                    Toast.ERROR
+                )
+        self._pending_rel_unlinks.clear()
 
     # Editable combo + gender radio helpers
 
@@ -2026,6 +2077,10 @@ class PersonDialog(QDialog):
             self.relation_uploaded_files.append({
                 'path': '',
                 'evidence_id': ev_id,
+                'evidence_type': ev.get('evidenceType') or ev.get('EvidenceType') or ev.get('type'),
+                'reference_number': (ev.get('documentReferenceNumber')
+                                     or ev.get('DocumentReferenceNumber')
+                                     or ev.get('referenceNumber') or ''),
                 'issue_date': str(issue_date)[:10] if issue_date else '',
                 '_selected_existing': True,
                 '_display_name': display,
@@ -2170,7 +2225,10 @@ class PersonDialog(QDialog):
         """
         evidence_id = entry.get("evidence_id")
         if entry.get("_selected_existing"):
-            pass  # unlink only, keep the shared evidence on the server
+            # Unlink only, keep the shared evidence on the server. For docs
+            # already linked on the backend this queues a detach so the removal
+            # persists across reopen; freshly picked docs are just dropped.
+            self._queue_relation_unlink(entry)
         elif evidence_id and self._survey_id:
             if self.editing_mode:
                 self._pending_rel_replacements.append(evidence_id)
@@ -2265,6 +2323,7 @@ class PersonDialog(QDialog):
 
     def _remove_existing_doc(self, entry: dict):
         """Remove a selected existing document (just unlink, don't delete from server)."""
+        self._queue_relation_unlink(entry)
         self.relation_uploaded_files = [
             f for f in self.relation_uploaded_files if f is not entry
         ]
@@ -3215,6 +3274,37 @@ class PersonDialog(QDialog):
         """Return the API-generated relation ID after linking, or None."""
         return self._api_relation_id
 
+    def _relation_signature(self):
+        """Comparable snapshot of the relation's core fields (excludes documents).
+
+        Mirrors the relation_data fields sent by update_relation so the save flow
+        can tell whether the user actually changed the relation.
+        """
+        try:
+            share_text = self.ownership_share.text().strip()
+            share = int(float(share_text)) if share_text else 0
+        except (TypeError, ValueError):
+            share = 0
+        return (
+            self.rel_type_combo.currentData(),
+            self._build_start_date_iso(),
+            share,
+            self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
+            self.evidence_desc.text().strip() or None,
+            self.notes.toPlainText().strip() or None,
+        )
+
+    def relation_fields_changed(self) -> bool:
+        """True if any relation core field differs from the values loaded on open.
+
+        Returns True when there is no baseline (new person / not loaded) so callers
+        default to sending the update. Document add/remove is intentionally excluded:
+        the backend keeps hasEvidence in sync via the evidence link/unlink endpoints.
+        """
+        if self._initial_relation_signature is None:
+            return True
+        return self._relation_signature() != self._initial_relation_signature
+
     def get_relation_uploaded_files(self) -> List[Dict]:
         """Return uploaded relation/tenure evidence files (with evidence_id if uploaded)."""
         return list(self.relation_uploaded_files)
@@ -3337,24 +3427,23 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-        # Ownership share: required when claim type is Owner (1)
+        # Ownership share: required and must be > 0 when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
         is_owner = self.rel_type_combo.currentData() == 1
-        if is_owner and not ownership_text:
-            self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.ownership_share_required"))
+        try:
+            ownership_val = int(ownership_text) if ownership_text else 0
+        except ValueError:
+            ownership_val = -1
+        if is_owner and ownership_val <= 0:
+            self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.ownership_share_positive"))
             if not has_error:
                 self.tab_widget.setCurrentIndex(2)
             has_error = True
-        elif ownership_text:
-            try:
-                ownership_val = int(ownership_text)
-                if ownership_val < 0 or ownership_val > 2400:
-                    self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.invalid_ownership_share"))
-                    if not has_error:
-                        self.tab_widget.setCurrentIndex(2)
-                    has_error = True
-            except ValueError:
-                pass
+        elif ownership_text and (ownership_val < 0 or ownership_val > 2400):
+            self._set_field_error(self.ownership_share, self._ownership_error, tr("wizard.person_dialog.invalid_ownership_share"))
+            if not has_error:
+                self.tab_widget.setCurrentIndex(2)
+            has_error = True
 
         dates_ok, dates_msg, dates_tab = self._validate_dates(check_start=True)
         if not dates_ok:
@@ -3606,6 +3695,10 @@ class PersonDialog(QDialog):
                              if not f.get("evidence_id") and not f.get("_selected_existing")]
 
             if self._survey_id and relation_id:
+                # Detach shared/existing docs the user removed this session.
+                # Runs before the link loop so a removed-then-re-added doc stays linked.
+                self._flush_relation_unlinks(relation_id)
+
                 # Replace: pair new tenure files with pending replacement IDs (PUT)
                 for file_entry in list(new_rel_files):
                     if not self._pending_rel_replacements:

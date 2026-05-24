@@ -481,6 +481,11 @@ class TRRCMSApiClient:
     _CONNECT_TIMEOUT = 5
     _READ_TIMEOUT = 15
     _UPLOAD_READ_TIMEOUT = 60
+    # urllib3 2.x sends the request body while the socket timeout is still the
+    # connect timeout (read timeout is only applied right before reading the
+    # response). So uploads write under the connect value, not _UPLOAD_READ_TIMEOUT.
+    # A 3MB package over a slow tunnel needs more than _CONNECT_TIMEOUT to push.
+    _UPLOAD_WRITE_TIMEOUT = 120
 
     _UPLOAD_PATTERNS = (
         "/identification-document",
@@ -2521,6 +2526,37 @@ class TRRCMSApiClient:
         logger.info(f"Evidence linked: {result.get('id', 'N/A')}")
         return result
 
+    def unlink_evidence_from_relation(
+        self, survey_id: str, evidence_id: str, relation_id: str, reason: str = None
+    ) -> Dict[str, Any]:
+        """Detach an evidence from one person-property relation, keeping the evidence.
+
+        Endpoint: DELETE /api/v1/Surveys/{surveyId}/evidence/{evidenceId}/unlink-from-relation/{relationId}
+        Exact inverse of link_evidence_to_relation. Survey must be in Draft. The
+        evidence and its links to other relations are untouched; if this was the
+        relation's last evidence the backend clears its hasEvidence flag.
+        """
+        if not survey_id or not evidence_id or not relation_id:
+            raise ValueError("survey_id, evidence_id, and relation_id are required")
+        endpoint = f"/v1/Surveys/{survey_id}/evidence/{evidence_id}/unlink-from-relation/{relation_id}"
+        params = {"reason": reason} if reason else None
+        logger.info(f"Unlinking evidence {evidence_id} from relation {relation_id}")
+        try:
+            result = self._request("DELETE", endpoint, params=params)
+        except Exception as e:
+            # Idempotent: the backend returns 404 when no active link exists
+            # between this evidence and relation. That is the desired end state,
+            # so treat it as success rather than surfacing an error.
+            if getattr(e, "status_code", None) == 404:
+                logger.info(
+                    f"Evidence {evidence_id} has no active link to relation "
+                    f"{relation_id}; treating as success"
+                )
+                return {"id": evidence_id, "alreadyUnlinked": True}
+            raise
+        logger.info(f"Evidence unlinked from relation {relation_id}")
+        return result if isinstance(result, dict) else {"id": evidence_id}
+
     def get_survey_evidences(self, survey_id: str, evidence_type: str = None) -> List[Dict[str, Any]]:
         """Get all evidence records for a survey."""
         params = {}
@@ -3587,7 +3623,7 @@ class TRRCMSApiClient:
                 files = {"file": (file_name, f, mime_type)}
                 response = self._session.post(
                     url, files=files, headers=headers,
-                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/import/upload", 0)), verify=self._verify_ssl()
+                    timeout=(self._UPLOAD_WRITE_TIMEOUT, self._UPLOAD_READ_TIMEOUT), verify=self._verify_ssl()
                 )
             response.raise_for_status()
             result = response.json() if response.text else {}

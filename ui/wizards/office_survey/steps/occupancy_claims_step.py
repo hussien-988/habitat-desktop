@@ -242,6 +242,14 @@ class OccupancyClaimsStep(BaseStep):
             if value is not None:
                 person[person_key] = value
         person['_is_applicant'] = True
+        # Carry ID-photo state forward so the claims-side person dialog reflects
+        # edits made in the applicant step (keys match PersonDialog seeding).
+        id_paths = applicant.get('id_photo_paths')
+        if id_paths is not None:
+            person['_uploaded_files'] = list(id_paths)
+        ev_map = applicant.get('id_evidence_map')
+        if isinstance(ev_map, dict):
+            person['_evidence_ids'] = dict(ev_map)
 
     def _sync_persons_into_applicant(self, updated_data: Dict[str, Any]):
         """Backward-sync identity fields edited via the person dialog into
@@ -397,7 +405,9 @@ class OccupancyClaimsStep(BaseStep):
                                 logger.warning(f"Missing survey_id or household_id for person {person_id}")
                             logger.info(f"Person {person_id} updated via API")
                             relation_id = updated_data.get('_relation_id') or person_data.get('_relation_id')
-                            if relation_id and survey_id:
+                            if relation_id and survey_id and not dialog.relation_fields_changed():
+                                logger.info(f"Relation {relation_id} fields unchanged; skipping update_relation")
+                            elif relation_id and survey_id:
                                 try:
                                     run_blocking_async(
                                         self._api_service.update_relation,
@@ -858,6 +868,11 @@ class OccupancyClaimsStep(BaseStep):
                 relation_ev_map.setdefault(rel_id, []).append({
                     'path': '',
                     'evidence_id': ev_id,
+                    'evidence_type': (ev.get('evidenceType')
+                                      or ev.get('EvidenceType') or ev.get('type')),
+                    'reference_number': (ev.get('documentReferenceNumber')
+                                         or ev.get('DocumentReferenceNumber')
+                                         or ev.get('referenceNumber') or ''),
                     'issue_date': (ev.get('documentIssuedDate')
                                    or ev.get('DocumentIssuedDate') or ''),
                     '_selected_existing': True,
