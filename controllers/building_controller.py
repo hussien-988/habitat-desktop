@@ -778,7 +778,7 @@ class BuildingController(BaseController):
                 dto.get("numberOfPropertyUnits") or
                 (dto.get("numberOfApartments", 0) or 0) + (dto.get("numberOfShops", 0) or 0)
             ),
-            number_of_floors=dto.get("numberOfFloors", 1),
+            number_of_floors=dto.get("numberOfFloors"),
             latitude=dto.get("latitude"),
             longitude=dto.get("longitude"),
             geo_location=dto.get("buildingGeometryWkt") or dto.get("geoLocation"),

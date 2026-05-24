@@ -110,8 +110,24 @@ class GeoJSONConverter:
         geometry = None
         geometry_type = None
 
+        # Strategy 0 (point markers): prefer explicit lat/lng first, mirroring the
+        # QGIS plugin's map layer (layer_manager.py reads latitude/longitude before
+        # any WKT). lat/lng is the field the backend updates on a geometry edit,
+        # whereas the POINT WKT (geo_location) can be left stale (see
+        # BACKEND_TEAM_ISSUES.md BE-001). Only when force_points is on, so polygon
+        # footprint rendering (force_points=False) keeps the WKT.
+        if force_points and building.latitude and building.longitude:
+            try:
+                lat = float(building.latitude)
+                lng = float(building.longitude)
+                if -90 <= lat <= 90 and -180 <= lng <= 180:
+                    geometry = {"type": "Point", "coordinates": [lng, lat]}
+                    geometry_type = GeometryType.POINT
+            except (ValueError, TypeError):
+                pass
+
         # Strategy 1: Try polygon from geo_location
-        if building.geo_location:
+        if not geometry and building.geo_location:
             geometry, geometry_type = GeoJSONConverter._parse_geo_location(
                 building.geo_location
             )

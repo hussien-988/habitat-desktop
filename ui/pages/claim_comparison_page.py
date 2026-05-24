@@ -564,7 +564,13 @@ class ClaimComparisonPage(QWidget):
         for idx, (label, value) in enumerate(resolution_options):
             radio = QRadioButton(label)
             radio.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            radio.setStyleSheet(RADIO_STYLE + " QRadioButton { padding: 6px 12px; }")
+            radio.setStyleSheet(RADIO_STYLE)
+            # QSS padding on a QRadioButton is not added to its sizeHint, which
+            # clipped the trailing (left, in RTL) part of the Arabic label. Size
+            # to the label so it always shows in full.
+            radio.setMinimumWidth(
+                radio.fontMetrics().horizontalAdvance(label) + ScreenScale.w(40)
+            )
             radio.setProperty("resolution_type", value)
             self._resolution_group.addButton(radio, idx)
             options_layout.addWidget(radio)
@@ -2027,6 +2033,11 @@ class ClaimComparisonPage(QWidget):
         for idx, btn in enumerate(self._resolution_group.buttons()):
             if idx < len(resolution_labels):
                 btn.setText(resolution_labels[idx])
+                # Re-fit width to the new language's label (see setup note).
+                btn.setMinimumWidth(
+                    btn.fontMetrics().horizontalAdvance(resolution_labels[idx])
+                    + ScreenScale.w(40)
+                )
         self._update_resolution_hint()
 
         # Justification label

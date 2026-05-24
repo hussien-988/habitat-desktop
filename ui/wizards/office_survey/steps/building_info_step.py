@@ -29,6 +29,7 @@ from services.display_mappings import get_building_type_display, get_building_st
 from services.translation_manager import tr, get_layout_direction
 from services.api_client import get_api_client
 from services.api_worker import ApiWorker
+from controllers.building_controller import BuildingController
 from services.exceptions import humanize_exception, log_exception
 from utils.logger import get_logger
 from ui.components.building_location_map_preview import BuildingLocationMapPreview
@@ -60,6 +61,9 @@ class BuildingInfoStep(BaseStep):
     def __init__(self, context: SurveyContext, parent=None):
         super().__init__(context, parent)
         self._survey_api_service = get_api_client()
+        self.building_controller = BuildingController(context.db)
+        self._building_refetch_worker = None
+        self._refetched_uuid = None
     # UI construction
 
     def setup_ui(self):
@@ -309,6 +313,7 @@ class BuildingInfoStep(BaseStep):
         lbl = QLabel(label_text)
         lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
         lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        lbl.setWordWrap(True)
         vbox.addWidget(lbl)
 
         field = QLineEdit()
@@ -324,6 +329,48 @@ class BuildingInfoStep(BaseStep):
     # Data population
 
     def populate_data(self):
+        b = self.context.building
+        if not b:
+            return
+        self._render_building_fields()
+        # The building handed to this step can be a lightweight search/selection
+        # DTO missing status and unit counts. Re-fetch the full record by UUID
+        # (GET /v1/Buildings/{id}) so حالة البناء and العدد الكلي reflect the
+        # backend. Non-blocking; on failure we keep what we already show.
+        self._refetch_full_building()
+
+    def _refetch_full_building(self):
+        b = self.context.building
+        uuid = getattr(b, "building_uuid", None) if b else None
+        if not uuid or self._refetched_uuid == uuid:
+            return
+
+        main_window = self.window()
+        token = getattr(main_window, "_api_token", None) if main_window else None
+        if token:
+            self.building_controller.set_auth_token(token)
+
+        def _on_done(result):
+            # Strict ID-based fetch: only replace on a successful by-ID hit;
+            # never blank out the existing display on miss/error.
+            if result and getattr(result, "success", False) and result.data:
+                fetched = result.data
+                if getattr(fetched, "building_uuid", None) == uuid:
+                    self._refetched_uuid = uuid
+                    self.context.building = fetched
+                    self._render_building_fields()
+
+        def _on_err(msg):
+            logger.warning(f"Full building re-fetch failed for {uuid}: {msg}")
+
+        self._building_refetch_worker = ApiWorker(
+            self.building_controller.get_building, uuid
+        )
+        self._building_refetch_worker.finished.connect(_on_done)
+        self._building_refetch_worker.error.connect(_on_err)
+        self._building_refetch_worker.start()
+
+    def _render_building_fields(self):
         b = self.context.building
         if not b:
             return
@@ -354,7 +401,8 @@ class BuildingInfoStep(BaseStep):
         )
         self.f_apartments.setText(str(getattr(b, "number_of_apartments", 0) or 0))
         self.f_shops.setText(str(getattr(b, "number_of_shops", 0) or 0))
-        self.f_floors.setText(str(getattr(b, "number_of_floors", 0) or 0))
+        floors = getattr(b, "number_of_floors", None)
+        self.f_floors.setText(str(floors) if floors is not None else "—")
         self.f_total.setText(str(getattr(b, "number_of_units", 0) or 0))
 
         # Card 3 — location status
@@ -504,9 +552,11 @@ class BuildingInfoStep(BaseStep):
         lay.setContentsMargins(12, 4, 12, 4)
         lay.setSpacing(10)
 
-        mime_type = doc.get("mimeType", "")
-        file_name = doc.get("originalFileName", "") or tr("wizard.building_info.document_fallback")
-        doc_id = doc.get("id", "")
+        mime_type = doc.get("mimeType", "") or doc.get("contentType", "") or ""
+        display_name = (
+            doc.get("originalFileName") or doc.get("fileName") or ""
+        ).strip() or tr("wizard.building_info.document_fallback")
+        doc_id = doc.get("id") or doc.get("documentId") or ""
 
         icon_text = "IMG" if mime_type.startswith("image/") else "PDF" if "pdf" in mime_type else "DOC"
         icon_bg = "#DBEAFE" if mime_type.startswith("image/") else "#FEE2E2" if "pdf" in mime_type else "#E5E7EB"
@@ -521,12 +571,12 @@ class BuildingInfoStep(BaseStep):
         )
         lay.addWidget(icon_lbl)
 
-        name_lbl = QLabel(file_name)
+        name_lbl = QLabel(display_name)
         name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
         name_lbl.setStyleSheet("color: #303133; border: none; background: transparent;")
         lay.addWidget(name_lbl, stretch=1)
 
-        row.mousePressEvent = lambda event, did=doc_id, fn=file_name: self._open_doc_file(did, fn)
+        row.mousePressEvent = lambda event, did=doc_id, fn=display_name: self._open_doc_file(did, fn)
         return row
 
     def _open_doc_file(self, document_id: str, file_name: str):

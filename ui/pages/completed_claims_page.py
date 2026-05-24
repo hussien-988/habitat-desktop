@@ -57,6 +57,57 @@ _STATUS_STYLES = {
 }
 
 
+def _claimtype_is_ownership(claim_type) -> bool:
+    """True when a claim's `claimType` means Ownership (code 1 / 'Ownership').
+
+    ClaimType vocab: 1=ownership, 2=occupancy, 3=tenancy. This is the field
+    the detail badge shows.
+    """
+    if claim_type is None or claim_type == "" or isinstance(claim_type, bool):
+        return False
+    if isinstance(claim_type, int):
+        return claim_type == 1
+    s = str(claim_type).strip().lower()
+    if s.endswith("claim"):
+        s = s[:-len("claim")]
+    return s in ("ownership", "1")
+
+
+def _claim_is_ownership(summary: Dict) -> bool:
+    """Classify a claim summary as Ownership (→ 'ملكية' / closed tab).
+
+    Source of truth is `claimType` — the same field the detail badge uses —
+    which `_fetch_all_claim_summaries` enriches onto each summary from
+    /v1/Claims (the /v2/claims/summaries payload omits it). Without that
+    enrichment the chain degrades to `relationType` (the only type-ish field
+    summaries carry), then `caseStatus`.
+
+    Note: for imported-package claims the backend writes claimType,
+    relationType and caseStatus independently, and they can contradict each
+    other (e.g. a Guest relation with an Ownership claimType). Only claimType
+    matches the detail, which is why it must come first.
+    """
+    ct = summary.get("claimType")
+    if ct is not None and ct != "":
+        return _claimtype_is_ownership(ct)
+
+    rel = summary.get("relationType")
+    if rel is not None and rel != "":
+        try:
+            from ui.wizards.office_survey.steps.occupancy_claims_step import (
+                _is_owner_relation,
+            )
+            return _is_owner_relation(rel)
+        except Exception:
+            if isinstance(rel, int):
+                return rel in (1, 5)
+            return str(rel).strip().lower() in (
+                "owner", "co_owner", "coowner", "heir",
+            )
+
+    return summary.get("caseStatus", 0) == CASE_STATUS_CLOSED
+
+
 # ---------------------------------------------------------------------------
 #  _ClaimCard — Card with blue tint, animated shimmer, press-down, chevron
 # ---------------------------------------------------------------------------
@@ -756,28 +807,142 @@ class CompletedClaimsPage(QWidget):
                 total_count = 0
 
         else:
+            # Tabs are partitioned by claimType (the field the detail badge
+            # shows), not the backend caseStatus. The summaries payload omits
+            # claimType, so _fetch_all_claim_summaries enriches it from
+            # /v1/Claims. Imported-package claims set claimType, relationType
+            # and caseStatus independently and they can contradict each other,
+            # so only claimType matches the detail. Fetch every claim and
+            # partition locally so the tab and card badge match the detail.
             try:
-                raw = api._request("GET", "/v2/claims/summaries", params={
-                    "caseStatus": case_status,
-                    "page": self._current_page,
-                    "pageSize": self._page_size,
-                })
-                if isinstance(raw, dict):
-                    summaries = raw.get("items", [])
-                    total_count = raw.get("totalCount", len(summaries))
-                else:
-                    summaries = raw if isinstance(raw, list) else []
-                    total_count = len(summaries)
+                all_summaries = self._fetch_all_claim_summaries(api)
+                want_ownership = (case_status == CASE_STATUS_CLOSED)
+                bucket = [
+                    s for s in all_summaries
+                    if _claim_is_ownership(s) == want_ownership
+                ]
+                total_count = len(bucket)
+                start = (self._current_page - 1) * self._page_size
+                summaries = bucket[start:start + self._page_size]
             except Exception as e:
-                logger.warning(f"Paginated claims fetch failed: {e}")
-                summaries = api.get_claims_summaries(claim_status=case_status)
-                total_count = len(summaries)
+                logger.warning(f"Claims fetch/partition failed: {e}")
+                summaries = []
+                total_count = 0
 
         return {
             "summaries": summaries,
             "case_status": case_status,
             "total_count": total_count,
         }
+
+    def _fetch_all_claim_summaries(self, api) -> List[Dict]:
+        """Fetch every claim summary across both case statuses (paged).
+
+        Tabs are partitioned client-side by claim type, so the full set is
+        needed regardless of the backend caseStatus value. Mirrors the paged
+        fetch-all loop used by the import packages page, with a hard cap and a
+        dedupe guard against backends that ignore pagination.
+        """
+        FETCH_PAGE_SIZE = 100
+        MAX_TOTAL = 1000
+        items: List[Dict] = []
+        seen = set()
+        page = 1
+        while len(items) < MAX_TOTAL:
+            raw = api._request("GET", "/v2/claims/summaries", params={
+                "page": page,
+                "pageSize": FETCH_PAGE_SIZE,
+            })
+            if isinstance(raw, dict):
+                page_items = raw.get("items", [])
+                total = raw.get("totalCount")
+            elif isinstance(raw, list):
+                page_items = raw
+                total = None
+            else:
+                break
+            if not page_items:
+                break
+            added = 0
+            for s in page_items:
+                key = s.get("claimId") or s.get("id") or s.get("claimNumber")
+                if key is not None and key in seen:
+                    continue
+                if key is not None:
+                    seen.add(key)
+                items.append(s)
+                added += 1
+            # Backend replayed only already-seen rows (e.g. it ignores
+            # pagination and returns page 1 again) — stop to avoid a loop.
+            if added == 0:
+                break
+            if total is not None and len(items) >= total:
+                break
+            if len(page_items) < FETCH_PAGE_SIZE:
+                break
+            page += 1
+        if len(items) >= MAX_TOTAL:
+            logger.warning(
+                "Claim summaries reached cap (%s); some claims may be omitted "
+                "from local tab partitioning", MAX_TOTAL,
+            )
+
+        # The summaries omit claimType (the field the detail badge shows), so
+        # enrich each one from /v1/Claims (joined by id). relationType in the
+        # summary is written independently by the import pipeline and can
+        # contradict claimType, so it is only a fallback.
+        try:
+            type_map = self._fetch_claim_types_map(api)
+            if type_map:
+                for s in items:
+                    key = s.get("claimId") or s.get("id")
+                    ct = type_map.get(key)
+                    if ct is not None:
+                        s["claimType"] = ct
+        except Exception as e:
+            logger.warning(
+                "claimType enrichment failed (%s); falling back to "
+                "relationType/caseStatus", e,
+            )
+
+        return items
+
+    def _fetch_claim_types_map(self, api) -> Dict:
+        """Build {claimId: claimType} from /v1/Claims (paged).
+
+        Full claim DTOs carry `claimType`, which /v2/claims/summaries omits.
+        Same paged loop + dedupe guard as the summaries fetch.
+        """
+        FETCH_PAGE_SIZE = 100
+        MAX_TOTAL = 1000
+        out: Dict = {}
+        page = 1
+        while len(out) < MAX_TOTAL:
+            raw = api._request("GET", "/v1/Claims", params={
+                "page": page,
+                "pageSize": FETCH_PAGE_SIZE,
+            })
+            if isinstance(raw, dict):
+                claims = raw.get("items") or raw.get("data") or []
+            elif isinstance(raw, list):
+                claims = raw
+            else:
+                break
+            if not claims:
+                break
+            added = 0
+            for c in claims:
+                cid = c.get("id") or c.get("claimId")
+                if not cid or cid in out:
+                    continue
+                out[cid] = c.get("claimType")
+                added += 1
+            if added == 0:
+                break
+            if len(claims) < FETCH_PAGE_SIZE:
+                break
+            page += 1
+        return out
 
     def _on_claims_loaded(self, result):
         try:
@@ -831,8 +996,10 @@ class CompletedClaimsPage(QWidget):
             )
             date_str = s.get("createdAtUtc") or s.get("surveyDate") or ""
             building_code = s.get("buildingCode", "")
-            status_int = s.get("caseStatus", 0)
-            status_str = "open" if status_int == CASE_STATUS_OPEN else "closed"
+            # Derive the card's status badge from the relation type (matches
+            # the detail badge and the tab) rather than the backend caseStatus,
+            # which is inconsistent for imported-package claims.
+            status_str = "closed" if _claim_is_ownership(s) else "open"
             claim_type = s.get("claimType", "")
 
             address = ""

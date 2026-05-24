@@ -185,9 +185,11 @@ def _make_doc_row(parent: QWidget, doc: dict):
     lay.setContentsMargins(12, 4, 12, 4)
     lay.setSpacing(10)
 
-    mime_type = doc.get("mimeType", "") or ""
-    file_name = doc.get("originalFileName", "") or tr("building_documents.document_fallback")
-    doc_id = doc.get("id", "")
+    mime_type = doc.get("mimeType", "") or doc.get("contentType", "") or ""
+    display_name = (
+        doc.get("originalFileName") or doc.get("fileName") or ""
+    ).strip() or tr("building_documents.document_fallback")
+    doc_id = doc.get("id") or doc.get("documentId") or ""
 
     is_image = mime_type.startswith("image/")
     icon_text = "IMG" if is_image else "PDF" if "pdf" in mime_type else "DOC"
@@ -203,10 +205,10 @@ def _make_doc_row(parent: QWidget, doc: dict):
     )
     lay.addWidget(icon_lbl)
 
-    name_lbl = QLabel(file_name)
+    name_lbl = QLabel(display_name)
     name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
     name_lbl.setStyleSheet("color: #303133; border: none; background: transparent;")
     lay.addWidget(name_lbl, stretch=1)
 
-    row.mousePressEvent = lambda event, did=doc_id, fn=file_name: download_and_open_building_document(parent, did, fn)
+    row.mousePressEvent = lambda event, did=doc_id, fn=display_name: download_and_open_building_document(parent, did, fn)
     return row

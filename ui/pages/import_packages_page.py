@@ -21,6 +21,7 @@ from ui.design_system import PageDimensions, ScreenScale
 from ui.style_manager import StyleManager
 from ui.font_utils import create_font, FontManager
 from controllers.import_controller import ImportController
+from services.api_worker import ApiWorker
 from services.vocab_service import get_label as vocab_get_label
 from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from services.exceptions import humanize_exception, log_exception
@@ -1003,11 +1004,26 @@ class ImportPackagesPage(QWidget):
         if not file_path:
             return
 
+        # Upload off the UI thread: a 3MB package over a slow tunnel blocks
+        # for tens of seconds, freezing the window and the spinner animation.
+        # ApiWorker keeps the event loop live so the spinner keeps spinning.
         self._spinner.show_loading(tr("wizard.import.loading_staging"))
-        try:
-            result = self.import_controller.upload_package(file_path)
-        finally:
-            self._spinner.hide_loading()
+        self._upload_btn.setEnabled(False)
+        self._upload_worker = ApiWorker(
+            self.import_controller.upload_package, file_path
+        )
+        self._upload_worker.finished.connect(self._on_upload_finished)
+        self._upload_worker.error.connect(self._on_upload_error)
+        self._upload_worker.start()
+
+    def _on_upload_error(self, msg):
+        self._spinner.hide_loading()
+        self._upload_btn.setEnabled(True)
+        ErrorHandler.show_error(self, msg or tr("import.error.stage_failed"))
+
+    def _on_upload_finished(self, result):
+        self._spinner.hide_loading()
+        self._upload_btn.setEnabled(True)
 
         if not result.success:
             # A duplicate upload (409) carries the already-imported package in

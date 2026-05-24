@@ -437,15 +437,21 @@ class _ConflictWorker(QThread):
                 is_escalated=self.filters.get("is_escalated"),
                 import_package_id=self.import_package_id,
             )
-            # Always fetch the global summary from the backend so the four
-            # summary cards stay populated in every entry path (global view
-            # and import-context view). Backend has no per-package summary
-            # endpoint, so in import-context mode the cards show the
-            # aggregate (all packages) counts. Summary endpoint failure
-            # must NOT corrupt the conflicts view — fall back to an empty
-            # dict and keep the conflicts list intact.
+            # Summary cards: global view uses the backend aggregate summary.
+            # Import-context view has no per-package summary endpoint, so counts
+            # are computed client-side from this package's conflicts — keeping
+            # the cards (e.g. the resolved chip) consistent with the
+            # package-scoped list. Summary failure must NOT corrupt the conflicts
+            # view — fall back to an empty dict and keep the list intact.
             try:
-                summary = self.service.get_conflicts_summary()
+                if self.import_package_id:
+                    pkg_all = self.service.get_conflicts(
+                        page=1, page_size=1000,
+                        import_package_id=self.import_package_id,
+                    )
+                    summary = self.service.compute_local_summary(pkg_all.get("items", []))
+                else:
+                    summary = self.service.get_conflicts_summary()
             except (ApiException, NetworkException) as se:
                 log_exception(se, logger, context="load_conflicts_summary")
                 summary = {}
@@ -1025,10 +1031,10 @@ class DuplicatesPage(QWidget):
             s.stop()
         self._shimmer_container.setVisible(False)
 
-        # Update summary cards. These are GLOBAL (all-packages) counts — the
-        # backend has no per-package summary endpoint. Package scope is conveyed
-        # by the import banner and the list's "showing X of Y" counter, and the
-        # card titles are suffixed accordingly in import-context mode below.
+        # Update summary cards. Global view shows backend aggregate counts;
+        # import-context view shows counts computed client-side from this
+        # package's conflicts (see _ConflictWorker). Card titles are suffixed
+        # to indicate the scope in import-context mode below.
         summary = data.get("summary", {})
         pending_total = summary.get("pendingReviewCount", summary.get("totalConflicts", 0))
         pending_property = summary.get("pendingPropertyDuplicates", summary.get("propertyDuplicateCount", 0))

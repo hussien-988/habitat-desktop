@@ -151,6 +151,40 @@ def sanitize_filename(filename: str) -> str:
     return filename
 
 
+def sniff_file_extension(path: str) -> Optional[str]:
+    """Detect a file's extension from its magic bytes.
+
+    The building-documents server reports an unreliable mimeType (often
+    application/octet-stream → a useless ".bin"), so the real type is read from
+    the file content. Covers the formats expected here, mostly phone images.
+    Returns an extension like ".jpg" or None if unrecognized.
+    """
+    try:
+        with open(path, "rb") as f:
+            head = f.read(32)
+    except OSError:
+        return None
+    if head[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if head[:4] == b"%PDF":
+        return ".pdf"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    if head[:2] == b"BM":
+        return ".bmp"
+    if head[:4] in (b"II*\x00", b"MM\x00*"):
+        return ".tiff"
+    if head[4:8] == b"ftyp" and head[8:12] in (
+        b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1",
+    ):
+        return ".heic"
+    return None
+
+
 def parse_building_id(building_id: str) -> dict:
     """
     Parse a 17-digit building ID into components.
@@ -382,36 +416,60 @@ def download_identification_document_file(
     return None
 
 
-def download_building_document_file(document_id: str, file_name: str) -> Optional[str]:
-    """Cached download of a building document via the download endpoint.
+def download_building_document_file(document_id: str, file_name: str = "") -> Optional[str]:
+    """Download a building document to a temp cache and return an openable path.
 
-    Uses GET /v1/building-documents/{id}/download. Mirrors download_evidence_file's
-    caching: writes to TEMP/trrcms_building_docs and short-circuits on subsequent
-    calls when the cached file is present. Returns the local path or None.
+    Uses GET /v1/building-documents/{id}/download. The server's mimeType is
+    unreliable (often application/octet-stream), so the real type is detected
+    from the downloaded bytes and the cached file is given the matching
+    extension — guaranteeing the OS opens it with the right app. Cached by
+    document_id to avoid re-downloading. ``file_name`` is only a fallback for
+    the extension when the content can't be sniffed. Returns the path or None.
     """
     if not document_id:
         return None
-    import os, tempfile, logging
+    import os, glob, tempfile, logging
     _logger = logging.getLogger(__name__)
 
     cache_dir = os.path.join(tempfile.gettempdir(), "trrcms_building_docs")
     os.makedirs(cache_dir, exist_ok=True)
-    safe_name = sanitize_filename(file_name) if file_name else document_id
-    save_path = os.path.join(cache_dir, f"{document_id}_{safe_name}")
 
-    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-        return save_path
+    # Cache hit: a previously downloaded "{id}.{ext}" with content.
+    for cached in glob.glob(os.path.join(cache_dir, f"{document_id}.*")):
+        if cached.endswith(".part"):
+            continue
+        try:
+            if os.path.getsize(cached) > 0:
+                return cached
+        except OSError:
+            pass
 
+    raw_path = os.path.join(cache_dir, f"{document_id}.part")
     from services.api_client import get_api_client
     api = get_api_client()
     try:
-        if api.download_building_document(document_id, save_path):
-            return save_path
+        if not api.download_building_document(document_id, raw_path):
+            return None
     except Exception as e:
         _logger.warning(
             f"download_building_document_file failed (doc={document_id}): {e}"
         )
-    return None
+        return None
+
+    if not (os.path.exists(raw_path) and os.path.getsize(raw_path) > 0):
+        return None
+
+    ext = (
+        sniff_file_extension(raw_path)
+        or os.path.splitext(sanitize_filename(file_name or ""))[1]
+        or ".bin"
+    )
+    final_path = os.path.join(cache_dir, f"{document_id}{ext}")
+    try:
+        os.replace(raw_path, final_path)
+    except OSError:
+        final_path = raw_path
+    return final_path
 
 
 def validate_coordinates(lat: float, lon: float) -> bool:
