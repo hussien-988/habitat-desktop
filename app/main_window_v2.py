@@ -429,6 +429,7 @@ class MainWindow(QMainWindow):
         self.navbar.language_change_requested.connect(self.toggle_language)
         self.navbar.password_change_requested.connect(self._on_voluntary_password_change)
         self.navbar.import_requested.connect(self._on_import_requested)
+        self.navbar.vocab_refresh_requested.connect(self._on_vocab_refresh_requested)
 
         # Import pages signals. The wizard is always entered with a specific
         # package id via `view_package`; there is no package-less entry point.
@@ -635,6 +636,11 @@ class MainWindow(QMainWindow):
                 logger.warning(f"Vocab refresh failed (non-critical): {e}")
 
         self._vocab_worker = ApiWorker(_background_vocab_refresh)
+        # finished is emitted from the worker thread; connecting a bound method
+        # of this QObject makes it a queued connection so repopulation runs on
+        # the UI thread. Pages persist across logout, so they keep stale vocab
+        # options unless told to repopulate after the login refresh lands.
+        self._vocab_worker.finished.connect(self._on_login_vocab_refreshed)
         self._vocab_worker.start()
 
         # Pre-initialize map services in background (tile server + landmark icons)
@@ -1277,6 +1283,86 @@ class MainWindow(QMainWindow):
     def _on_import_requested(self):
         """Handle import data request from navbar menu."""
         self.navigate_to(Pages.IMPORT_PACKAGES)
+
+    def _on_vocab_refresh_requested(self):
+        """Re-fetch vocabularies from the API on demand (Dashboard sync).
+
+        Runs off the UI thread so the window never blocks; vocabularies are
+        otherwise only loaded at login, so this lets the user pull the latest
+        terms edited on the Dashboard without restarting.
+        """
+        from ui.components.toast import Toast
+        from services.api_worker import ApiWorker
+
+        Toast.show_toast(self, tr("navbar.vocab.refreshing"), Toast.INFO)
+
+        def _do_refresh():
+            from services.vocab_service import refresh_vocabularies
+            refresh_vocabularies()
+
+        self._vocab_refresh_worker = ApiWorker(_do_refresh)
+        self._vocab_refresh_worker.finished.connect(self._on_vocab_refresh_done)
+        self._vocab_refresh_worker.error.connect(self._on_vocab_refresh_error)
+        self._vocab_refresh_worker.start()
+
+    def _on_vocab_refresh_done(self, _result=None):
+        from ui.components.toast import Toast
+        logger.info("Vocabularies refreshed on demand from navbar")
+        self._reload_vocab_consumers()
+        Toast.show_toast(self, tr("navbar.vocab.refresh_success"), Toast.SUCCESS)
+
+    def _on_login_vocab_refreshed(self, _result=None):
+        """Repopulate vocab-backed widgets after the post-login refresh lands."""
+        self._reload_vocab_consumers()
+
+    def _reload_vocab_consumers(self):
+        """Make the live UI reflect refreshed vocabularies without an app restart.
+
+        refresh_vocabularies() updates the in-memory cache, but the UI built it
+        once: persistent combo boxes keep their old options, and table cells
+        keep the labels they resolved at render time. Pages live for the whole
+        session (cached in self.pages, reused across logout/login), so a full
+        app restart was the only thing that rebuilt them — which is exactly the
+        difference the user sees between "close the app" and "log out / refresh".
+
+        Two steps close that gap:
+          1) repopulate persistent vocab combos (pages opt in via
+             reload_vocabularies()); transient dialogs/forms already rebuild on
+             next open since they read the now-fresh cache.
+          2) re-render the visible page so table cells re-resolve their labels.
+        """
+        reloaded = 0
+        for page in self.pages.values():
+            reload_fn = getattr(page, "reload_vocabularies", None)
+            if callable(reload_fn):
+                try:
+                    reload_fn()
+                    reloaded += 1
+                except Exception as e:
+                    logger.warning(
+                        f"reload_vocabularies failed for {type(page).__name__}: {e}"
+                    )
+
+        current = self.stack.currentWidget()
+        refresh_fn = getattr(current, "refresh", None)
+        refreshed_current = False
+        if callable(refresh_fn):
+            try:
+                refresh_fn()
+                refreshed_current = True
+            except Exception as e:
+                logger.warning(
+                    f"visible-page refresh failed for {type(current).__name__}: {e}"
+                )
+        logger.info(
+            f"Vocab UI reload: {reloaded} combo page(s); "
+            f"visible={type(current).__name__} refreshed={refreshed_current}"
+        )
+
+    def _on_vocab_refresh_error(self, error_msg):
+        from ui.components.toast import Toast
+        logger.warning(f"On-demand vocab refresh failed: {error_msg}")
+        Toast.show_toast(self, tr("navbar.vocab.refresh_failed"), Toast.ERROR)
 
     def _on_view_import_package(self, pkg_id: str):
         """Open the import wizard on a specific package id.

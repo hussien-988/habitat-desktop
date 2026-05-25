@@ -675,7 +675,7 @@ class ImportStep6Report(QWidget):
                 id_label.setFixedWidth(ScreenScale.w(100))
                 row_layout.addWidget(id_label)
 
-            msg = err.get("errorMessage", "")
+            msg = self._clean_error_message(err)
             msg_label = QLabel(msg)
             msg_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
             msg_label.setStyleSheet("color: #7F1D1D;")
@@ -685,6 +685,21 @@ class ImportStep6Report(QWidget):
             self._errors_layout.addWidget(row)
 
         self._errors_layout.addStretch()
+
+    @staticmethod
+    def _clean_error_message(err: dict) -> str:
+        """Map a backend import error to a clean, localized user message.
+
+        The backend returns raw English errorMessage strings that can leak
+        technical/DB exception text (e.g. SqlException details). We never show
+        that text; we surface a clean Arabic message instead — a specific one
+        for the common duplicate-national-id case, generic otherwise.
+        """
+        raw = (err.get("errorMessage") or "").lower()
+        duplicate_markers = ("national id", "already exists", "duplicate", "unique", "keep-separate")
+        if any(marker in raw for marker in duplicate_markers):
+            return tr("wizard.import.step6.error_duplicate_nid")
+        return tr("wizard.import.step6.error_generic")
 
     def set_error(self, error_message: str):
         """Set the report to error state with a message."""

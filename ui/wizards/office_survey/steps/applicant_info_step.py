@@ -1196,39 +1196,43 @@ class ApplicantInfoStep(BaseStep):
         self.in_person_check.setChecked(a.get("in_person", True))
 
         import os as _os
-        photos = a.get("id_photo_paths", [])
-        valid_photos = [p for p in photos if p and _os.path.exists(p)]
-        self.uploaded_files = list(valid_photos)
-        saved_ev_map = a.get("id_evidence_map") or {}
-        if saved_ev_map:
-            self._evidence_ids = {
-                _os.path.normpath(p): ev for p, ev in saved_ev_map.items()
-                if ev and _os.path.exists(p)
-            }
-        if valid_photos:
-            self._update_upload_thumbnails("id_upload", valid_photos)
-        elif photos or a.get("id_photo_evidences"):
-            # Had photos in draft but local temp files are gone — fetch from server
-            logger.warning(
-                f"[ID-DOCS] populate_data triggering download "
-                f"(paths={len(photos)}, evidences={len(a.get('id_photo_evidences') or [])})"
-            )
-            self._download_id_photos_from_api()
+        person_id = self.context.get_data("contact_person_id")
+        if person_id:
+            # Once the contact person exists on the server, the server owns its
+            # ID photos. Re-fetch them every time the step is shown so deletions
+            # or additions made elsewhere (e.g. the claims-step person dialog)
+            # are reflected. Local id_photo_paths are a cache only, never the
+            # source of truth. Doc type and server evidence ids are refreshed
+            # from the authoritative list inside the download callback.
+            self.uploaded_files = []
+            self._evidence_ids = {}
+            self._update_upload_thumbnails("id_upload", [])
+            self._download_id_photos_from_api(force_server=True)
         else:
-            logger.warning("[ID-DOCS] populate_data: no id_photo_paths and no id_photo_evidences — nothing to download")
+            # Not yet persisted — the in-progress form upload is the only state.
+            photos = a.get("id_photo_paths", [])
+            valid_photos = [p for p in photos if p and _os.path.exists(p)]
+            self.uploaded_files = list(valid_photos)
+            saved_ev_map = a.get("id_evidence_map") or {}
+            if saved_ev_map:
+                self._evidence_ids = {
+                    _os.path.normpath(p): ev for p, ev in saved_ev_map.items()
+                    if ev and _os.path.exists(p)
+                }
+            self._update_upload_thumbnails("id_upload", valid_photos)
 
-        id_evidences = a.get("id_photo_evidences") or []
-        self._server_id_evidence_ids = [
-            d.get('id') or d.get('evidenceId') or d.get('Id')
-            for d in id_evidences if (d.get('id') or d.get('evidenceId') or d.get('Id'))
-        ]
-        if id_evidences and hasattr(self, '_id_doc_type_combo'):
-            server_doc_type = id_evidences[0].get('documentType')
-            if server_doc_type is not None:
-                idx = self._id_doc_type_combo.findData(server_doc_type)
-                if idx >= 0:
-                    self._id_doc_type_combo.setCurrentIndex(idx)
-                self._loaded_id_doc_type = server_doc_type
+            id_evidences = a.get("id_photo_evidences") or []
+            self._server_id_evidence_ids = [
+                d.get('id') or d.get('evidenceId') or d.get('Id')
+                for d in id_evidences if (d.get('id') or d.get('evidenceId') or d.get('Id'))
+            ]
+            if id_evidences and hasattr(self, '_id_doc_type_combo'):
+                server_doc_type = id_evidences[0].get('documentType')
+                if server_doc_type is not None:
+                    idx = self._id_doc_type_combo.findData(server_doc_type)
+                    if idx >= 0:
+                        self._id_doc_type_combo.setCurrentIndex(idx)
+                    self._loaded_id_doc_type = server_doc_type
 
         self._loaded_applicant_snapshot = self._applicant_snapshot(a)
 
@@ -1248,9 +1252,16 @@ class ApplicantInfoStep(BaseStep):
             return True
         return self._applicant_snapshot(current) != snapshot
 
-    def _download_id_photos_from_api(self):
-        """Download ID photos from server when resuming a draft (local paths gone)."""
-        import tempfile
+    def _download_id_photos_from_api(self, force_server: bool = False):
+        """Download ID photos from the server.
+
+        force_server=True makes the server the single source of truth: the
+        authoritative document list is fetched fresh (ignoring locally cached
+        evidence metadata), so deletions or additions made elsewhere are
+        reflected. Used whenever the contact person already exists on the
+        server. force_server=False keeps the resume behaviour of seeding from
+        cached evidence metadata first.
+        """
         from services.api_worker import ApiWorker
 
         applicant = self.context.applicant or {}
@@ -1269,18 +1280,29 @@ class ApplicantInfoStep(BaseStep):
                 download_static_file,
                 download_identification_document_file,
             )
-            docs = list(evidences)
-            if not docs and person_id:
+            list_ok = True
+            if force_server and person_id:
                 try:
-                    docs = self._api_client.get_person_identification_documents_for_survey(person_id)
+                    docs = self._api_client.get_person_identification_documents_for_survey(person_id) or []
                 except Exception as e:
+                    list_ok = False
+                    docs = []
                     logger.warning(f"get_person_identification_documents_for_survey failed: {e}")
+            else:
+                docs = list(evidences)
+                if not docs and person_id:
+                    try:
+                        docs = self._api_client.get_person_identification_documents_for_survey(person_id)
+                    except Exception as e:
+                        list_ok = False
+                        logger.warning(f"get_person_identification_documents_for_survey failed: {e}")
             if not docs:
                 logger.warning(
                     f"[ID-DOCS] _do_fetch found no documents "
-                    f"(evidences_seed={len(evidences)}, person_id={person_id}, survey_id={survey_id})"
+                    f"(evidences_seed={len(evidences)}, person_id={person_id}, "
+                    f"survey_id={survey_id}, list_ok={list_ok})"
                 )
-                return []
+                return [], [], list_ok
             logger.warning(f"[ID-DOCS] _do_fetch processing {len(docs)} document(s)")
             downloaded_with_ids = []
             for doc in docs:
@@ -1308,27 +1330,54 @@ class ApplicantInfoStep(BaseStep):
                         downloaded_with_ids.append((result_path, ev_id))
                 except Exception as e:
                     logger.warning(f"Failed to download ID photo {ev_id}: {e}")
-            return downloaded_with_ids
+            return downloaded_with_ids, docs, list_ok
 
-        def _on_done(downloaded_with_ids):
-            if downloaded_with_ids:
-                downloaded = [p for p, _ in downloaded_with_ids]
-                self.uploaded_files = downloaded
-                self.context.update_data("uploaded_id_photos", list(set(downloaded)))
-                self._update_upload_thumbnails("id_upload", downloaded)
-                if self.context.applicant is None:
-                    self.context.applicant = {}
-                self.context.applicant["id_photo_paths"] = list(downloaded)
-                id_evidence_map = {
-                    os.path.normpath(p): ev_id
-                    for p, ev_id in downloaded_with_ids if ev_id
+        def _on_done(result):
+            downloaded_with_ids, docs, list_ok = result
+            if force_server and not list_ok:
+                # Transient failure listing the server's documents — keep the
+                # current display rather than wiping photos on an incomplete read.
+                return
+
+            downloaded = [p for p, _ in downloaded_with_ids]
+            self.uploaded_files = downloaded
+            self.context.update_data("uploaded_id_photos", list(set(downloaded)))
+            self._update_upload_thumbnails("id_upload", downloaded)
+            if self.context.applicant is None:
+                self.context.applicant = {}
+            self.context.applicant["id_photo_paths"] = list(downloaded)
+            id_evidence_map = {
+                os.path.normpath(p): ev_id
+                for p, ev_id in downloaded_with_ids if ev_id
+            }
+            self._evidence_ids = id_evidence_map
+            self.context.applicant["id_evidence_map"] = dict(id_evidence_map)
+
+            # Refresh server-side evidence metadata + doc type from the list we
+            # just read, so the cached context matches the server exactly.
+            normalized = [
+                {
+                    "id": d.get("id") or d.get("evidenceId") or d.get("Id") or "",
+                    "personId": d.get("personId") or person_id,
+                    "fileName": d.get("fileName") or d.get("originalFileName") or "",
+                    "mimeType": d.get("mimeType") or "",
+                    "filePath": d.get("filePath") or d.get("file_path") or "",
+                    "documentType": d.get("documentType"),
                 }
-                self._evidence_ids = id_evidence_map
-                self.context.applicant["id_evidence_map"] = dict(id_evidence_map)
-                logger.warning(
-                    f"[ID-DOCS] Stored evidence_ids map: {len(id_evidence_map)} entries"
-                )
-                logger.info(f"Downloaded {len(downloaded)} ID photos from server")
+                for d in docs
+            ]
+            self.context.applicant["id_photo_evidences"] = normalized
+            self._server_id_evidence_ids = [e["id"] for e in normalized if e["id"]]
+            if normalized and hasattr(self, '_id_doc_type_combo'):
+                server_doc_type = normalized[0].get('documentType')
+                if server_doc_type is not None:
+                    idx = self._id_doc_type_combo.findData(server_doc_type)
+                    if idx >= 0:
+                        self._id_doc_type_combo.setCurrentIndex(idx)
+                    self._loaded_id_doc_type = server_doc_type
+            logger.info(
+                f"Synced {len(downloaded)} ID photo(s) from server (force_server={force_server})"
+            )
 
         def _on_error(msg):
             logger.warning(f"Could not download ID photos from API: {msg}")

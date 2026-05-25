@@ -1032,8 +1032,8 @@ class ImportPackagesPage(QWidget):
             if dup.get("isDuplicatePackage"):
                 existing = dup.get("package") or {}
                 existing_id = str(existing.get("id") or existing.get("packageId") or "")
-                ErrorHandler.show_error(
-                    self, result.message_ar or tr("import.error.duplicate_package")
+                ErrorHandler.show_info(
+                    self, self._duplicate_package_message(existing, existing_id)
                 )
                 if existing_id:
                     self.view_package.emit(existing_id)
@@ -1071,6 +1071,30 @@ class ImportPackagesPage(QWidget):
             # Upload succeeded but server didn't return an id — refresh the
             # list so the user can pick the new package manually.
             self._load_packages()
+
+    def _duplicate_package_message(self, existing: dict, existing_id: str) -> str:
+        """Build the 'already uploaded' message from the 409 body.
+
+        Display-only: the duplicate-upload flow (open the existing package)
+        is unchanged. Absent fields are shown as "—".
+        """
+        status_raw = existing.get("status", 0)
+        if isinstance(status_raw, str) and status_raw.isdigit():
+            status_raw = int(status_raw)
+        meta = status_meta(status_raw) if status_raw else None
+        if meta:
+            status_label = tr(meta["label_key"])
+        else:
+            status_label = vocab_get_label("import_status", status_raw) or "—"
+
+        date_raw = existing.get("packageCreatedDate") or existing.get("createdAtUtc") or ""
+        return tr(
+            "import.error.duplicate_package_detailed",
+            name=existing.get("fileName") or "—",
+            status=status_label,
+            date=str(date_raw)[:10] or "—",
+            pkg_id=existing_id or "—",
+        )
 
     # -- Package actions ---------------------------------------------------
 

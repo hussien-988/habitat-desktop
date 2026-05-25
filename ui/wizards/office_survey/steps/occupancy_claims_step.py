@@ -272,6 +272,13 @@ class OccupancyClaimsStep(BaseStep):
         returned_ev_map = updated_data.get('_evidence_ids')
         if isinstance(returned_ev_map, dict):
             applicant['id_evidence_map'] = dict(returned_ev_map)
+            surviving_ids = {ev for ev in returned_ev_map.values() if ev}
+            existing_evidences = applicant.get('id_photo_evidences') or []
+            if existing_evidences:
+                applicant['id_photo_evidences'] = [
+                    d for d in existing_evidences
+                    if (d.get('id') or d.get('evidenceId') or d.get('Id')) in surviving_ids
+                ]
         returned_paths = updated_data.get('_uploaded_files')
         if isinstance(returned_paths, list):
             applicant['id_photo_paths'] = list(returned_paths)

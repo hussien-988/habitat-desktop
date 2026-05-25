@@ -316,6 +316,7 @@ class Navbar(QFrame):
     language_change_requested = pyqtSignal()
     password_change_requested = pyqtSignal()
     import_requested = pyqtSignal()
+    vocab_refresh_requested = pyqtSignal()
 
     def __init__(self, user_id=None, username="", parent=None):
         super().__init__(parent)
@@ -510,7 +511,7 @@ class Navbar(QFrame):
         """Collapsible frosted glass pill: trigger label + expandable content."""
         self._pill_expanded = False
         self._pill_collapsed_w = ScreenScale.w(120)
-        self._pill_expanded_w = ScreenScale.w(530)
+        self._pill_expanded_w = ScreenScale.w(700)
 
         pill = QFrame()
         pill.setObjectName("navbar_pill")
@@ -611,6 +612,23 @@ class Navbar(QFrame):
         except Exception:
             pass
         content_lay.addWidget(self._pill_lang_btn)
+
+        content_lay.addSpacing(4)
+        content_lay.addWidget(self._create_pill_separator())
+        content_lay.addSpacing(4)
+
+        # Refresh vocabularies button
+        self._pill_vocab_btn = QPushButton()
+        self._pill_vocab_btn.setStyleSheet(_BTN_STYLE)
+        self._pill_vocab_btn.setFixedHeight(ScreenScale.h(28))
+        self._pill_vocab_btn.setFont(_btn_font)
+        self._pill_vocab_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._pill_vocab_btn.setFocusPolicy(Qt.NoFocus)
+        self._pill_vocab_btn.clicked.connect(self._on_vocab_refresh_requested)
+        self._load_pill_icon(self._pill_vocab_btn, "data", tr("navbar.menu.refresh_vocab"))
+        content_lay.addWidget(self._pill_vocab_btn)
+        # Vocabulary refresh feature deferred; keep wired but hidden from the badge.
+        self._pill_vocab_btn.setVisible(False)
 
         content_lay.addSpacing(4)
         content_lay.addWidget(self._create_pill_separator())
@@ -844,6 +862,8 @@ class Navbar(QFrame):
             self._pill_trigger.setText("\u25C8  " + tr("navbar.pill.settings"))
         if hasattr(self, '_pill_pwd_btn'):
             self._load_pill_icon(self._pill_pwd_btn, "safe", tr("navbar.menu.change_password"))
+        if hasattr(self, '_pill_vocab_btn'):
+            self._load_pill_icon(self._pill_vocab_btn, "data", tr("navbar.menu.refresh_vocab"))
         if hasattr(self, '_pill_logout_btn'):
             self._load_pill_icon(self._pill_logout_btn, "logout", tr("navbar.menu.logout"))
         if hasattr(self, '_pill_lang_btn'):
@@ -879,6 +899,9 @@ class Navbar(QFrame):
 
     def _on_password_change_requested(self):
         self.password_change_requested.emit()
+
+    def _on_vocab_refresh_requested(self):
+        self.vocab_refresh_requested.emit()
 
     def _on_import_requested(self):
         self.import_requested.emit()

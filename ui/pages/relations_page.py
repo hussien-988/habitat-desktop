@@ -817,6 +817,26 @@ class RelationsPage(QWidget):
 
         self._setup_ui()
 
+    def reload_vocabularies(self):
+        """Repopulate the relation-type filter after the vocab cache changes.
+
+        Called by MainWindow after a vocabulary refresh. The current selection
+        is preserved by code; the filter signal is blocked so repopulation does
+        not trigger a spurious results reload.
+        """
+        combo = getattr(self, "type_filter", None)
+        if combo is None:
+            return
+        current = combo.currentData()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(self.i18n.t("all"), "")
+        for code, label in vocab_get_options("RelationType"):
+            combo.addItem(label, code)
+        idx = combo.findData(current)
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        combo.blockSignals(False)
+
     def _setup_ui(self):
         self.setStyleSheet(f"background-color: {Config.BACKGROUND_COLOR};")
 

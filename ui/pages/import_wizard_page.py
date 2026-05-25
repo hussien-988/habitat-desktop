@@ -113,10 +113,16 @@ class _PkgStatus:
 
 
 _STATUS_POLL_INTERVAL_MS = 5000
-_MAX_POLL_COUNT = 6
-_TIMEOUT_EXTENSION_POLLS = 6
-_STUCK_WARN_POLLS = 3
-_STUCK_RETRY_POLLS = 5
+# Absolute safety ceiling (~10 min) so polling never spins forever if the
+# backend hangs silently in a transient state. The user-facing timeout decision
+# is driven by lack of progress (_TIMEOUT_UNCHANGED_POLLS), not by this ceiling:
+# an import that keeps advancing through states never trips the timeout prompt.
+_MAX_POLL_COUNT = 120
+_TIMEOUT_EXTENSION_POLLS = 18
+# Consecutive polls with the SAME backend status before each escalation.
+_STUCK_WARN_POLLS = 6           # ~30s no progress -> "server slow" warning
+_STUCK_RETRY_POLLS = 10         # ~50s no progress -> stuck banner with retry
+_TIMEOUT_UNCHANGED_POLLS = 18   # ~90s no progress -> timeout decision banner
 
 
 def _status_name(code) -> str:
@@ -1799,6 +1805,23 @@ class ImportWizardPage(QWidget):
                         f"unchanged_x{self._poll_unchanged_count} elapsed={elapsed_secs}s"
                     )
                     self._show_stuck_banner(elapsed_secs)
+
+                if (
+                    self._poll_unchanged_count >= _TIMEOUT_UNCHANGED_POLLS
+                    and not self._timeout_extension_used
+                ):
+                    # Backend status has not advanced for ~90s. Pause polling and
+                    # let the user decide (wait more / cancel) instead of spinning.
+                    # A progressing import resets _poll_unchanged_count on every
+                    # status change, so it never reaches this point.
+                    logger.warning(
+                        f"[import-flow] TIMEOUT-NOPROGRESS pkg={pkg_id} status={new_status} "
+                        f"unchanged_x{self._poll_unchanged_count} elapsed={elapsed_secs}s next=user_decision"
+                    )
+                    self._pause_status_poll()
+                    self._hide_loading()
+                    self._show_timeout_decision_banner(elapsed_secs)
+                    return
 
                 self._status_poll_timer.start(_STATUS_POLL_INTERVAL_MS)
                 return

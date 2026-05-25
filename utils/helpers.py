@@ -347,7 +347,7 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
             if file_url and file_url.startswith("http"):
                 try:
                     from app.config import should_verify_ssl
-                    resp = _requests.get(file_url, headers=auth_headers, timeout=30, verify=should_verify_ssl(file_url))
+                    resp = _requests.get(file_url, headers=auth_headers, timeout=(api._CONNECT_TIMEOUT, api._DOWNLOAD_READ_TIMEOUT), verify=should_verify_ssl(file_url))
                     resp.raise_for_status()
                     with open(save_path, 'wb') as f:
                         f.write(resp.content)
@@ -365,7 +365,7 @@ def download_evidence_file(evidence_id: str, file_name: str) -> Optional[str]:
                     if static_url:
                         try:
                             from app.config import should_verify_ssl
-                            resp = _requests.get(static_url, headers=auth_headers, timeout=30, verify=should_verify_ssl(static_url))
+                            resp = _requests.get(static_url, headers=auth_headers, timeout=(api._CONNECT_TIMEOUT, api._DOWNLOAD_READ_TIMEOUT), verify=should_verify_ssl(static_url))
                             resp.raise_for_status()
                             with open(save_path, 'wb') as f:
                                 f.write(resp.content)

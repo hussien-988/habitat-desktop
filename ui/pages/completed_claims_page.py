@@ -426,6 +426,7 @@ class CompletedClaimsPage(QWidget):
         self._total_count = 0
         self._page_size = 20
         self._search_mode = False
+        self._claimtype_enrich_unavailable = False
         self._return_survey_id = ""  # Set when navigation came from a survey details page
 
         self._search_timer = QTimer(self)
@@ -891,19 +892,26 @@ class CompletedClaimsPage(QWidget):
         # enrich each one from /v1/Claims (joined by id). relationType in the
         # summary is written independently by the import pipeline and can
         # contradict claimType, so it is only a fallback.
-        try:
-            type_map = self._fetch_claim_types_map(api)
-            if type_map:
-                for s in items:
-                    key = s.get("claimId") or s.get("id")
-                    ct = type_map.get(key)
-                    if ct is not None:
-                        s["claimType"] = ct
-        except Exception as e:
-            logger.warning(
-                "claimType enrichment failed (%s); falling back to "
-                "relationType/caseStatus", e,
-            )
+        if not self._claimtype_enrich_unavailable:
+            try:
+                type_map = self._fetch_claim_types_map(api)
+                if type_map:
+                    for s in items:
+                        key = s.get("claimId") or s.get("id")
+                        ct = type_map.get(key)
+                        if ct is not None:
+                            s["claimType"] = ct
+            except Exception as e:
+                # /v1/Claims has a server-side duplicate-key bug (see
+                # docs/BACKEND_TEAM_ISSUES.md BE-002); a 400 will not clear
+                # without a backend fix, so stop retrying it this session.
+                # Transient (network) errors do not disable enrichment.
+                if getattr(e, "status_code", None) == 400:
+                    self._claimtype_enrich_unavailable = True
+                logger.warning(
+                    "claimType enrichment failed (%s); falling back to "
+                    "relationType/caseStatus", e,
+                )
 
         return items
 

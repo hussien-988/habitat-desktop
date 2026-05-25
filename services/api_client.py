@@ -478,14 +478,20 @@ class TRRCMSApiClient:
         return h
 
     _MAX_RETRIES = 1
-    _CONNECT_TIMEOUT = 5
-    _READ_TIMEOUT = 15
+    # One value set serves both local and internet/cloud deployments: a generous
+    # timeout is a safe superset — on a fast LAN the operation finishes well
+    # before the limit so it is never reached, while a tight value fails over the
+    # internet. What works against a remote server works against a local one.
+    _CONNECT_TIMEOUT = 10
+    _READ_TIMEOUT = 30
     _UPLOAD_READ_TIMEOUT = 60
     # urllib3 2.x sends the request body while the socket timeout is still the
     # connect timeout (read timeout is only applied right before reading the
     # response). So uploads write under the connect value, not _UPLOAD_READ_TIMEOUT.
-    # A 3MB package over a slow tunnel needs more than _CONNECT_TIMEOUT to push.
-    _UPLOAD_WRITE_TIMEOUT = 120
+    # A large package over a slow uplink needs more than _CONNECT_TIMEOUT to push.
+    _UPLOAD_WRITE_TIMEOUT = 180
+    # Large file downloads stream the body under the read timeout.
+    _DOWNLOAD_READ_TIMEOUT = 120
 
     _UPLOAD_PATTERNS = (
         "/identification-document",
@@ -506,6 +512,19 @@ class TRRCMSApiClient:
     def _timeout(self, method: str, endpoint: str, read_override: int):
         """Return (connect, read) timeout tuple — separates handshake from read."""
         return (self._CONNECT_TIMEOUT, self._endpoint_timeout(method, endpoint, read_override))
+
+    def _upload_timeout(self):
+        """Multipart file upload: the first element governs writing the body.
+
+        urllib3 2.x keeps the socket timeout at the connect value while the
+        request body is sent, so a file upload must use _UPLOAD_WRITE_TIMEOUT
+        (not _CONNECT_TIMEOUT) as the first element or large files fail to push.
+        """
+        return (self._UPLOAD_WRITE_TIMEOUT, self._UPLOAD_READ_TIMEOUT)
+
+    def _download_timeout(self):
+        """Large file download: extended read timeout for streaming the body."""
+        return (self._CONNECT_TIMEOUT, self._DOWNLOAD_READ_TIMEOUT)
 
     def _request(
         self,
@@ -1288,7 +1307,7 @@ class TRRCMSApiClient:
         try:
             with self._session.get(
                 url, headers=headers, stream=True,
-                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", endpoint, 0)), verify=self._verify_ssl(),
+                timeout=self._download_timeout(), verify=self._verify_ssl(),
             ) as resp:
                 if resp.status_code >= 400:
                     body_preview = ""
@@ -1606,7 +1625,7 @@ class TRRCMSApiClient:
             api_data['dateOfBirth'] = f"{birth_date}T00:00:00Z" if "T" not in str(birth_date) else str(birth_date)
 
         logger.info(f"Updating contact person {person_id} for survey {survey_id}")
-        result = self._request("PUT", f"/v1/Surveys/{survey_id}/contact-person/{person_id}", json_data=api_data)
+        result = self._request("PUT", f"/v1/Surveys/{survey_id}/contact-person/{person_id}", json_data=api_data, timeout_override=60)
         logger.info(f"Contact person {person_id} updated successfully")
         return result
 
@@ -2098,7 +2117,7 @@ class TRRCMSApiClient:
                     url,
                     files=files,
                     headers=headers,
-                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", endpoint, 0)),
+                    timeout=self._upload_timeout(),
                     verify=self._verify_ssl()
                 )
 
@@ -2198,7 +2217,7 @@ class TRRCMSApiClient:
                     url,
                     files=files,
                     headers=headers,
-                    timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", endpoint, 0)),
+                    timeout=self._upload_timeout(),
                     verify=self._verify_ssl()
                 )
 
@@ -2303,7 +2322,7 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = self._session.put(url, files=files, headers=headers,
-                                                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
+                                                timeout=self._upload_timeout(), verify=self._verify_ssl())
             else:
                 response = self._session.put(url, files=form_fields, headers=headers,
                                              timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
@@ -2390,7 +2409,7 @@ class TRRCMSApiClient:
         try:
             with self._session.get(
                 url, headers=headers, stream=True,
-                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", endpoint, 0)), verify=self._verify_ssl(),
+                timeout=self._download_timeout(), verify=self._verify_ssl(),
             ) as resp:
                 if resp.status_code >= 400:
                     body_preview = ""
@@ -2471,7 +2490,7 @@ class TRRCMSApiClient:
                     files = {"File": (file_name, f, mime_type)}
                     files.update(form_fields)
                     response = self._session.put(url, files=files, headers=headers,
-                                                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
+                                                timeout=self._upload_timeout(), verify=self._verify_ssl())
             else:
                 response = self._session.put(url, files=form_fields, headers=headers,
                                              timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("PUT", endpoint, 0)), verify=self._verify_ssl())
@@ -2633,11 +2652,13 @@ class TRRCMSApiClient:
         for url in urls:
             try:
                 logger.info(f"[API REQ] GET {url.replace(self.base_url, '')}")
-                response = self._session.get(url, headers=headers, timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", url.replace(self.base_url, ''), 0)), verify=self._verify_ssl())
-                response.raise_for_status()
-                os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                with open(save_path, 'wb') as f:
-                    f.write(response.content)
+                with self._session.get(url, headers=headers, stream=True, timeout=self._download_timeout(), verify=self._verify_ssl()) as response:
+                    response.raise_for_status()
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    with open(save_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
                 if os.path.getsize(save_path) > 0:
                     logger.info(f"Evidence downloaded: {evidence_id} -> {save_path}")
                     return save_path
@@ -2872,7 +2893,7 @@ class TRRCMSApiClient:
 
         endpoint = f"/v1/Surveys/{survey_id}/contact-person"
         logger.info(f"Setting contact person for survey {survey_id}")
-        result = self._request("POST", endpoint, json_data=api_data)
+        result = self._request("POST", endpoint, json_data=api_data, timeout_override=60)
         logger.info(f"Contact person set: {result.get('id', 'N/A')}")
         return result
 
@@ -3623,7 +3644,7 @@ class TRRCMSApiClient:
                 files = {"file": (file_name, f, mime_type)}
                 response = self._session.post(
                     url, files=files, headers=headers,
-                    timeout=(self._UPLOAD_WRITE_TIMEOUT, self._UPLOAD_READ_TIMEOUT), verify=self._verify_ssl()
+                    timeout=self._upload_timeout(), verify=self._verify_ssl()
                 )
             response.raise_for_status()
             result = response.json() if response.text else {}

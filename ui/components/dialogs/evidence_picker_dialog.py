@@ -6,10 +6,10 @@ Evidence Picker Dialog — select existing evidence documents to link to a claim
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QGraphicsDropShadowEffect,
-    QScrollArea, QWidget, QCheckBox
+    QScrollArea, QWidget, QCheckBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QColor, QIcon, QPixmap
+from PyQt5.QtGui import QColor, QIcon, QPixmap, QFontMetrics
 
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
@@ -17,6 +17,32 @@ from utils.logger import get_logger
 from services.translation_manager import tr, get_layout_direction
 
 logger = get_logger(__name__)
+
+
+class _ElidedLabel(QLabel):
+    """Single-line label that truncates long text with an ellipsis in the
+    middle (keeping the file extension visible) and shows the full text as a
+    tooltip. Prevents long file names from forcing a horizontal scrollbar."""
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(parent)
+        self._full_text = text
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setText(text)
+
+    def setText(self, text: str):
+        self._full_text = text or ""
+        self.setToolTip(self._full_text)
+        self._elide()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self):
+        fm = QFontMetrics(self.font())
+        elided = fm.elidedText(self._full_text, Qt.ElideMiddle, max(self.width(), 0))
+        super().setText(elided)
 
 
 class EvidencePickerDialog(QDialog):
@@ -113,9 +139,27 @@ class EvidencePickerDialog(QDialog):
             # Scrollable list
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             scroll.setStyleSheet("""
                 QScrollArea { border: none; background: transparent; }
                 QWidget { background: transparent; }
+                QScrollBar:vertical {
+                    background: transparent; width: 8px; margin: 2px 0;
+                }
+                QScrollBar::handle:vertical {
+                    background: rgba(56, 144, 223, 0.30);
+                    border-radius: 4px; min-height: 36px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: rgba(56, 144, 223, 0.55);
+                }
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                    height: 0px;
+                }
+                QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                    background: none;
+                }
             """)
 
             list_widget = QWidget()
@@ -193,10 +237,9 @@ class EvidencePickerDialog(QDialog):
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
 
-        name_label = QLabel(file_name)
+        name_label = _ElidedLabel(file_name)
         name_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_MEDIUM))
         name_label.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
-        name_label.setWordWrap(True)
         info_layout.addWidget(name_label)
 
         meta_parts = []

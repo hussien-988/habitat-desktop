@@ -113,6 +113,8 @@ class PersonDialog(QDialog):
         if self._initial_tab > 0:
             self.tab_widget.setCurrentIndex(self._initial_tab)
 
+        self._update_relation_docs_enabled()
+
     def _refresh_token(self):
         """Refresh auth token from parent wizard window before API calls."""
         parent = self.parent()
@@ -1039,17 +1041,31 @@ class PersonDialog(QDialog):
                 padding: 0px;
             }
             QPushButton:hover { color: rgba(130, 240, 180, 1.0); }
+            QPushButton:disabled { color: rgba(120, 140, 160, 0.4); text-decoration: none; }
         """)
         choose_btn.setCursor(Qt.PointingHandCursor)
         choose_btn.clicked.connect(self._choose_existing_document)
+        self._choose_existing_btn = choose_btn
         # Insert into the upload frame's row layout (before the trailing stretch)
         row_layout = getattr(self._rel_upload_frame, "_upload_row_layout", None)
         if row_layout is not None:
             row_layout.insertWidget(row_layout.count() - 1, choose_btn)
         grid.addWidget(self._rel_upload_frame, row, 0, 1, 2)
+        row += 1
+
+        # Hint shown when a document cannot be attached yet (no claim type set).
+        # A tenure document is evidence for a person↔property relation, and that
+        # relation is only created once a claim type is chosen; attaching before
+        # then would be silently dropped on save (no relation to link it to).
+        self._rel_docs_hint = QLabel(tr("wizard.person_dialog.claim_type_required_for_docs"))
+        self._rel_docs_hint.setWordWrap(True)
+        self._rel_docs_hint.setStyleSheet("color: #B45309; background: transparent; font-size: 11px;")
+        self._rel_docs_hint.setVisible(False)
+        grid.addWidget(self._rel_docs_hint, row, 0, 1, 2)
 
         # Toggle upload frame visibility based on radio
         self.rb_no_docs.toggled.connect(lambda checked: self._rel_upload_frame.setVisible(not checked))
+        self.rb_no_docs.toggled.connect(lambda *_: self._update_relation_docs_enabled())
 
         tab_layout.addLayout(grid)
 
@@ -1217,6 +1233,7 @@ class PersonDialog(QDialog):
                 padding: 0px;
             }
             QPushButton:hover { color: rgba(180, 210, 250, 1.0); }
+            QPushButton:disabled { color: rgba(120, 140, 160, 0.4); text-decoration: none; }
         """)
         text_btn.setCursor(Qt.PointingHandCursor)
         text_btn.clicked.connect(browse_callback)
@@ -1382,7 +1399,13 @@ class PersonDialog(QDialog):
             return
         if entry and entry.get("evidence_id") and self._survey_id:
             evidence_id = entry["evidence_id"]
-            if self.editing_mode:
+            if self._evidence_linked_to_other_relations(evidence_id):
+                # Shared with another relation: detach from this relation only
+                # so the evidence survives for the others (see _delete_relation_doc).
+                if evidence_id not in self._pending_rel_unlinks:
+                    self._pending_rel_unlinks.append(evidence_id)
+                logger.info(f"Tenure evidence {evidence_id} is shared; queued unlink instead of delete")
+            elif self.editing_mode:
                 self._pending_rel_replacements.append(evidence_id)
                 logger.info(f"Tenure evidence {evidence_id} queued for replacement")
             else:
@@ -1444,6 +1467,37 @@ class PersonDialog(QDialog):
                     Toast.ERROR
                 )
         self._pending_rel_unlinks.clear()
+
+    def _evidence_linked_to_other_relations(self, evidence_id: str) -> bool:
+        """True if this evidence is still linked to a relation other than this one.
+
+        An owned tenure document becomes shared when another relation picks it via
+        'choose existing' (a second evidenceRelations link to the same evidence).
+        Deleting it from here must then only detach it, never soft-delete the
+        evidence. The check reads _server_evidences, the snapshot fetched on dialog
+        open; because the dialog is modal no other relation can link the evidence
+        while it is open, so the snapshot is authoritative.
+        """
+        if not evidence_id:
+            return False
+        current_rel = self._api_relation_id or (
+            self.person_data.get('_relation_id') if self.person_data else None
+        )
+        for ev in (self._server_evidences or []):
+            eid = (ev.get('id') or ev.get('evidenceId')
+                   or ev.get('Id') or ev.get('EvidenceId') or '')
+            if eid != evidence_id:
+                continue
+            links = ev.get('evidenceRelations') or ev.get('EvidenceRelations') or []
+            for link in links:
+                if not isinstance(link, dict) or not link.get('isActive', True):
+                    continue
+                rel = (link.get('personPropertyRelationId')
+                       or link.get('PersonPropertyRelationId'))
+                if rel and rel != current_rel:
+                    return True
+            return False
+        return False
 
     # Editable combo + gender radio helpers
 
@@ -2045,7 +2099,7 @@ class PersonDialog(QDialog):
 
         try:
             self._refresh_token()
-            evidences = self._api_service.get_survey_evidences(self._survey_id, evidence_type="tenure")
+            evidences = self._api_service.get_survey_evidences(self._survey_id)
         except Exception as e:
             log_exception(e, logger, context="evidence.list")
             Toast.show_toast(self, humanize_exception(e, context="evidence.list"), Toast.ERROR)
@@ -2219,8 +2273,12 @@ class PersonDialog(QDialog):
         - existing/shared docs (linked via 'choose existing') are only unlinked
           locally — never deleted from the server, since they may belong to
           other relations;
-        - documents owned by this relation are deleted from the server (deferred
-          in edit mode so a follow-up attachment can replace them via PUT);
+        - documents owned by this relation but also linked to another relation
+          (picked elsewhere via 'choose existing') are likewise only unlinked,
+          so the shared evidence survives for the other relations;
+        - documents owned solely by this relation are deleted from the server
+          (deferred in edit mode so a follow-up attachment can replace them via
+          PUT);
         - brand-new attachments not yet uploaded are simply dropped.
         """
         evidence_id = entry.get("evidence_id")
@@ -2230,7 +2288,14 @@ class PersonDialog(QDialog):
             # persists across reopen; freshly picked docs are just dropped.
             self._queue_relation_unlink(entry)
         elif evidence_id and self._survey_id:
-            if self.editing_mode:
+            if self._evidence_linked_to_other_relations(evidence_id):
+                # Owned here but also shared with another relation: detach from
+                # this relation only. Soft-deleting the evidence would strip it
+                # from the other relations and empty the survey document pool.
+                if evidence_id not in self._pending_rel_unlinks:
+                    self._pending_rel_unlinks.append(evidence_id)
+                logger.info(f"Tenure evidence {evidence_id} is shared; queued unlink instead of delete")
+            elif self.editing_mode:
                 self._pending_rel_replacements.append(evidence_id)
                 logger.info(f"Tenure evidence {evidence_id} queued for deletion/replacement")
             else:
@@ -2873,6 +2938,40 @@ class PersonDialog(QDialog):
         if not is_owner:
             self.ownership_share.clear()
             self._clear_field_error(self.ownership_share, self._ownership_error)
+        self._update_relation_docs_enabled()
+
+    def _can_attach_documents(self) -> bool:
+        """Whether a tenure document can be attached to this person yet.
+
+        A tenure document is evidence for a person↔property relation. A new
+        person only gets that relation when a claim type is set (the save flow
+        calls link_person_to_unit, then link_evidence_to_relation); without one,
+        picking/uploading a document is silently dropped on save. An existing
+        relation (edit mode) can always hold documents.
+        """
+        if self.rel_type_combo.currentData() is not None:
+            return True
+        if self._api_relation_id:
+            return True
+        return bool((self.person_data or {}).get('_relation_id')) if self.person_data else False
+
+    def _update_relation_docs_enabled(self):
+        """Enable the attach/choose-existing actions only when a relation can
+        hold the document; show a hint otherwise. Read-only mode stays locked."""
+        frame = getattr(self, "_rel_upload_frame", None)
+        if frame is None:
+            return
+        can = (not self.read_only) and self._can_attach_documents()
+        row = getattr(frame, "_upload_row_layout", None)
+        if row is not None:
+            for i in range(row.count()):
+                item = row.itemAt(i)
+                widget = item.widget() if item else None
+                if widget is not None:
+                    widget.setEnabled(can)
+        hint = getattr(self, "_rel_docs_hint", None)
+        if hint is not None:
+            hint.setVisible(not can and not self.read_only and not self._no_documents_selected())
 
     def _clamp_ownership_share(self):
         """Clamp ownership share to 0-2400 range on focus out."""
@@ -3774,6 +3873,7 @@ class PersonDialog(QDialog):
         from services.exceptions import ApiException
 
         from services.api_worker import run_blocking_async
+        fail_count = 0
         for file_path in self.uploaded_files:
             try:
                 doc_type = self.id_doc_type_combo.currentData() if hasattr(self, 'id_doc_type_combo') else None
@@ -3792,8 +3892,15 @@ class PersonDialog(QDialog):
                         synced_ids.add(evidence_id)
                 logger.info(f"Identification uploaded: {file_path} (evidence_id={evidence_id})")
             except Exception as e:
+                fail_count += 1
                 logger.error(f"Failed to upload identification file {file_path}: {e}")
-                Toast.show_toast(self, map_exception(e), Toast.ERROR)
+
+        if fail_count:
+            Toast.show_toast(
+                self,
+                tr("wizard.person_dialog.id_upload_failed_person_saved"),
+                Toast.WARNING,
+            )
         return synced_ids
 
     def _persist_id_documents(self, person_id: str):

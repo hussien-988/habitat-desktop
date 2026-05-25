@@ -24,11 +24,24 @@ def initialize_vocabularies():
     Called once at app startup from main.py.
     """
     global _initialized
+    import time
     from app.config import Config, get_api_base_url, should_verify_ssl
     url = f"{get_api_base_url()}/v2/vocabularies"
     logger.info(f"Fetching vocabularies from: {url}")
     try:
-        response = requests.get(url, timeout=10, verify=should_verify_ssl(url))
+        # Bypass any HTTP/proxy/tunnel response caching so an on-demand refresh
+        # always reflects terms just edited on the Dashboard. Without this a
+        # cached 200 can make changes appear only after an app restart.
+        headers = {
+            "Cache-Control": "no-cache, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "ngrok-skip-browser-warning": "true",
+        }
+        params = {"_": int(time.time() * 1000)}
+        response = requests.get(
+            url, timeout=10, verify=should_verify_ssl(url),
+            headers=headers, params=params,
+        )
         response.raise_for_status()
         raw = response.json()
         data = raw.get("items", raw) if isinstance(raw, dict) else raw
@@ -51,15 +64,35 @@ def initialize_vocabularies():
 
 def refresh_vocabularies():
     """
-    Re-fetch vocabularies from backend API and rebuild cache.
-    Can be called at runtime without restarting the app.
+    Clear the vocabulary cache and re-fetch everything from the backend API.
+    Can be called at runtime (refresh button / login) without restarting.
+
+    The on-disk cache file is deleted up front so the refetch can never fall
+    back to stale data; the live fetch uses no-cache headers (see
+    initialize_vocabularies) to defeat any intermediary response caching.
+
+    The in-memory cache is NOT pre-cleared — _build_cache swaps the new data
+    in atomically on success, so readers on other threads never observe an
+    empty cache while the network call is in flight (refresh runs on a
+    background thread). If the fetch fails, the previous in-memory data is
+    retained instead of leaving the app with no vocabularies.
     """
-    global _initialized, _raw_vocabularies, _lookup, _options_cache
+    global _initialized
+    _delete_vocab_cache_file()
     _initialized = False
-    _raw_vocabularies = []
-    _lookup = {}
-    _options_cache = {}
     initialize_vocabularies()
+
+
+def _delete_vocab_cache_file():
+    """Delete the on-disk vocab cache so the next fetch is fully fresh."""
+    try:
+        from app.config import Config
+        cache_path = Config.DATA_DIR / "vocab_cache.json"
+        if cache_path.exists():
+            cache_path.unlink()
+            logger.info("Deleted vocab cache file before refresh")
+    except Exception as e:
+        logger.warning(f"Could not delete vocab cache file: {e}")
 
 
 def clear_vocab_cache():
@@ -263,11 +296,15 @@ def _get_current_language() -> str:
         return "ar"
 
 def _build_cache(api_data: List[Dict]):
-    """Build lookup dicts from API response."""
+    """Build lookup dicts from API response and swap them in atomically.
+
+    The new dicts are built into locals first, then assigned to the module
+    globals in one step, so readers on other threads never observe a
+    half-built or empty cache.
+    """
     global _raw_vocabularies, _lookup, _options_cache
-    _raw_vocabularies = api_data
-    _lookup = {}
-    _options_cache = {}
+    new_lookup: Dict[str, Dict[int, Dict[str, Any]]] = {}
+    new_options: Dict[str, List[Tuple[int, str, str, int]]] = {}
 
     for vocab in api_data:
         name = vocab.get("vocabularyName", "")
@@ -289,8 +326,8 @@ def _build_cache(api_data: List[Dict]):
 
         options_list.sort(key=lambda x: x[3])
 
-        _lookup[key] = code_map
-        _options_cache[key] = options_list
+        new_lookup[key] = code_map
+        new_options[key] = options_list
 
     # Add aliases for API vocab names that differ from our code's naming convention
     # e.g. API uses "tenure_contract_type" but our code calls it "ContractType"
@@ -301,9 +338,13 @@ def _build_cache(api_data: List[Dict]):
         "unitstatus": "propertyunitstatus",       # UnitStatus → property_unit_status
     }
     for alias, real_key in _ALIASES.items():
-        if real_key in _lookup and alias not in _lookup:
-            _lookup[alias] = _lookup[real_key]
-            _options_cache[alias] = _options_cache[real_key]
+        if real_key in new_lookup and alias not in new_lookup:
+            new_lookup[alias] = new_lookup[real_key]
+            new_options[alias] = new_options[real_key]
+
+    _raw_vocabularies = api_data
+    _lookup = new_lookup
+    _options_cache = new_options
 
 
 def _build_from_translation_keys():
