@@ -1316,23 +1316,14 @@ class MainWindow(QMainWindow):
         self._reload_vocab_consumers()
 
     def _reload_vocab_consumers(self):
-        """Make the live UI reflect refreshed vocabularies without an app restart.
-
-        refresh_vocabularies() updates the in-memory cache, but the UI built it
-        once: persistent combo boxes keep their old options, and table cells
-        keep the labels they resolved at render time. Pages live for the whole
-        session (cached in self.pages, reused across logout/login), so a full
-        app restart was the only thing that rebuilt them — which is exactly the
-        difference the user sees between "close the app" and "log out / refresh".
-
-        Two steps close that gap:
-          1) repopulate persistent vocab combos (pages opt in via
-             reload_vocabularies()); transient dialogs/forms already rebuild on
-             next open since they read the now-fresh cache.
-          2) re-render the visible page so table cells re-resolve their labels.
-        """
+        
         reloaded = 0
-        for page in self.pages.values():
+        consumers = list(self.pages.values())
+
+        if hasattr(self, "office_survey_wizard"):
+            consumers.append(self.office_survey_wizard)
+
+        for page in consumers:
             reload_fn = getattr(page, "reload_vocabularies", None)
             if callable(reload_fn):
                 try:

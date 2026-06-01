@@ -118,7 +118,39 @@ class AddBuildingPage(QWidget):
 
         if building:
             self._populate_data()
+    def reload_vocabularies(self):
+        """Repopulate vocabulary-backed combos after vocab refresh."""
+        if not hasattr(self, "status_combo") or not hasattr(self, "type_combo"):
+            return
 
+        self._reload_vocab_combo(
+            self.status_combo,
+            tr("page.buildings.select"),
+            vocab_get_options("BuildingStatus"),
+        )
+
+        self._reload_vocab_combo(
+            self.type_combo,
+            tr("page.buildings.select"),
+            vocab_get_options("BuildingType"),
+        )
+
+        self._on_building_type_changed()
+
+    @staticmethod
+    def _reload_vocab_combo(combo, placeholder, options):
+        current = combo.currentData()
+
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(placeholder)
+
+        for code, label in options:
+            combo.addItem(label, code)
+
+        idx = combo.findData(current)
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        combo.blockSignals(False)
     def _setup_ui(self):
         """Setup the add/edit building UI with 3 cards."""
         # Wrap content in scroll area to show all cards
@@ -3078,6 +3110,12 @@ class BuildingsPage(QWidget):
         logger.debug("Refreshing buildings page")
         self.list_page.refresh()
         self.stacked.setCurrentIndex(0)
+    def reload_vocabularies(self):
+        """Reload vocabularies in the open building form."""
+        if self.form_page and hasattr(self.form_page, "reload_vocabularies"):
+            self.form_page.reload_vocabularies()
+
+        self.list_page.refresh()
 
     def configure_for_role(self, role: str):
         """Delegate role configuration to inner list page."""
