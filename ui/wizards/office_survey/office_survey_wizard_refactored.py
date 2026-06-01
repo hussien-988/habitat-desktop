@@ -718,7 +718,26 @@ class OfficeSurveyWizard(BaseWizard):
                 except Exception:
                     pass
     # UI Overrides - Exact copy from old wizard
+    def reload_vocabularies(self):
+        """Refresh vocabulary-backed combos inside persistent wizard steps."""
+        from services.translation_manager import get_language
 
+        is_arabic = get_language() == "ar"
+
+        for step in self.steps:
+            reload_fn = getattr(step, "reload_vocabularies", None)
+            if callable(reload_fn):
+                reload_fn()
+                continue
+
+            update_fn = getattr(step, "update_language", None)
+            if callable(update_fn):
+                try:
+                    update_fn(is_arabic)
+                except Exception as e:
+                    logger.debug(
+                        f"Wizard vocab reload skipped for {type(step).__name__}: {e}"
+                    )
     def _setup_ui(self):
         """Setup wizard UI: DarkHeaderZone + AccentLine + content + footer."""
         from PyQt5.QtWidgets import QVBoxLayout, QStackedWidget

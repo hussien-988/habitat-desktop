@@ -628,7 +628,7 @@ class Navbar(QFrame):
         self._load_pill_icon(self._pill_vocab_btn, "data", tr("navbar.menu.refresh_vocab"))
         content_lay.addWidget(self._pill_vocab_btn)
         # Vocabulary refresh feature deferred; keep wired but hidden from the badge.
-        self._pill_vocab_btn.setVisible(False)
+        self._pill_vocab_btn.setVisible(True)
 
         content_lay.addSpacing(4)
         content_lay.addWidget(self._create_pill_separator())
