@@ -591,6 +591,7 @@ AR_TRANSLATIONS = {
     "wizard.review.survey_date": "تاريخ المسح",
     "wizard.review.priority": "الأولوية",
     "wizard.review.new_unit": "جديد",
+    "wizard.review.office_scope_backend_error": "تعذر إكمال معالجة المسح حالياً كون هذا النوع من المسوحات غير مدعوم .",
     "common.error": "خطأ",
     "common.success": "نجح",
     "wizard.person_dialog.title_add": "اضافة شخص جديد",

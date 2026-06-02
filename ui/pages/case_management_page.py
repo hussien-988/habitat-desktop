@@ -10,6 +10,7 @@ import math
 import random
 import time
 from typing import List, Dict, Optional
+from unittest import case
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -784,10 +785,47 @@ class CaseManagementPage(QWidget):
             items = []
             total_count = 0
 
+        def _enrich_case_claim_count(case: Case) -> Case:
+            """Fix card claim count when /v1/Cases list returns claimCount=0 but linked surveys contain claims."""
+            if case.claim_count > 0:
+                return case
+
+            survey_ids = list(case.survey_ids or [])
+            claim_ids = set(str(cid) for cid in (case.claim_ids or []) if cid)
+
+            # Some list responses do not include surveyIds/claimIds, so fetch the full case as fallback.
+            if not survey_ids and case.id:
+                try:
+                    full_case = api.get_case_by_id(case.id) or {}
+                    survey_ids = full_case.get("surveyIds") or []
+                    for cid in (full_case.get("claimIds") or []):
+                        if cid:
+                            claim_ids.add(str(cid))
+                except Exception as exc:
+                    logger.debug(f"Failed to enrich case {case.id} from full case detail: {exc}")
+
+            for sid in survey_ids:
+                try:
+                    survey_detail = api.get_office_survey_detail(sid) or {}
+                    for survey_claim in (survey_detail.get("claims") or []):
+                        claim_id = survey_claim.get("id") or survey_claim.get("claimId")
+                        if claim_id:
+                            claim_ids.add(str(claim_id))
+                except Exception as exc:
+                    logger.debug(f"Failed to enrich case {case.id} from survey {sid}: {exc}")
+
+            if claim_ids:
+                case.claim_count = len(claim_ids)
+                case.claim_ids = list(claim_ids)
+
+            return case
+
+
         cases = []
         for item in items:
             try:
-                cases.append(Case.from_api_dict(item))
+                case = Case.from_api_dict(item)
+                cases.append(_enrich_case_claim_count(case))
             except Exception as exc:
                 logger.debug(f"Skipping malformed case item: {exc}")
 

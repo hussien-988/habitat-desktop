@@ -157,7 +157,7 @@ class OfficeSurveyWizard(BaseWizard):
         try:
             # If ReviewStep.on_next() already finalized the survey on the backend,
             # skip all draft-save logic and show success directly
-            if self.context.status == "finalized":
+            if self.context.status == "finalized" and getattr(self.context, 'finalize_response', None):
                 finalize_resp = getattr(self.context, 'finalize_response', None) or {}
                 survey_data = finalize_resp.get("survey", {})
                 ref_code = survey_data.get("referenceCode", "") or self.context.reference_number
@@ -184,12 +184,56 @@ class OfficeSurveyWizard(BaseWizard):
                         logger.info(f"on_submit: Owner found in persons (role={role}), setting finalized")
                         break
 
+            survey_id = self.context.get_data("survey_id")
+
             if has_claim:
+                if not survey_id:
+                    ErrorHandler.show_error(
+                        self,
+                        tr("wizard.error.no_survey_id"),
+                        tr("common.error")
+                    )
+                    return False
+
+                from services.api_client import get_api_client
+                from services.api_worker import run_blocking_async
+
+                api_service = get_api_client()
+                main_window = self.window()
+                if main_window and hasattr(main_window, '_api_token') and main_window._api_token:
+                    api_service.set_access_token(main_window._api_token)
+
+                finalize_options = {
+                    "finalNotes": "Survey completed successfully",
+                    "durationMinutes": 10,
+                    "autoCreateClaim": True,
+                    "caseStatus": 2,
+                }
+
+                if not getattr(self.context, 'finalize_response', None):
+                    finalize_resp = run_blocking_async(
+                        #api_service.finalize_office_survey,
+                        survey_id,
+                        finalize_options,
+                    )
+                    self.context.finalize_response = finalize_resp or {}
+                    self.context.update_data("_survey_finalized_once", True)
+
+                run_blocking_async(api_service.finalize_survey_status, survey_id)
+
                 self.context.status = "finalized"
-                self.context.case_status = 2  # Closed
-            else:
-                self.context.status = "draft"
-                self.context.case_status = 1  # Open
+                self.context.case_status = 2
+                self._finalization_complete = True
+
+                finalize_resp = getattr(self.context, 'finalize_response', None) or {}
+                survey_data = finalize_resp.get("survey", {})
+                ref_code = survey_data.get("referenceCode", "") or self.context.reference_number
+                self._show_finalized_success_popup(ref_code)
+
+                return True
+
+            self.context.status = "draft"
+            self.context.case_status = 1
 
             draft_id = self.on_save_draft()
             if draft_id:

@@ -1152,22 +1152,37 @@ class CaseEntityDetailsPage(QWidget):
             api = get_api_client()
             surveys = []
             claims = []
+            seen_claim_ids = set()
 
             for sid in survey_ids:
                 try:
                     detail = api.get_office_survey_detail(sid)
                     surveys.append(detail)
+
+                    # Survey detail may already contain the claims linked to this case.
+                    # Use them as fallback/source of truth when CaseDto claimIds/claimCount are empty.
+                    for survey_claim in (detail.get("claims") or []):
+                        claim_id = survey_claim.get("id") or survey_claim.get("claimId")
+                        if claim_id and claim_id not in seen_claim_ids:
+                            claims.append(survey_claim)
+                            seen_claim_ids.add(claim_id)
+
                 except Exception as e:
                     logger.warning(f"Failed to fetch survey {sid}: {e}")
                     surveys.append({"id": sid, "referenceCode": sid[:12]})
 
             for cid in claim_ids:
+                if cid in seen_claim_ids:
+                    continue
+
                 try:
                     detail = api.get_claim_by_id(cid)
                     claims.append(detail)
+                    seen_claim_ids.add(cid)
                 except Exception as e:
                     logger.warning(f"Failed to fetch claim {cid}: {e}")
                     claims.append({"id": cid, "claimNumber": cid[:12]})
+                    seen_claim_ids.add(cid)
 
             unit_data = {}
             building_data = {}
@@ -1197,6 +1212,15 @@ class CaseEntityDetailsPage(QWidget):
         self._claim_details = data.get("claims", [])
         self._unit_details = data.get("unit", {})
         self._building_details = data.get("building", {})
+
+        if self._case:
+            if len(self._claim_details) > self._case.claim_count:
+                self._case.claim_count = len(self._claim_details)
+
+            if len(self._survey_details) > self._case.survey_count:
+                self._case.survey_count = len(self._survey_details)
+
+        self._populate_case_info()
         self._populate_surveys_section()
         self._populate_claims_section()
         self._populate_property_info()

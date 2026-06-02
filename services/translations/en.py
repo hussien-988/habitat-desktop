@@ -591,6 +591,7 @@ EN_TRANSLATIONS = {
     "wizard.review.survey_date": "Survey Date",
     "wizard.review.priority": "Priority",
     "wizard.review.new_unit": "New",
+    "wizard.review.office_scope_backend_error": "The survey could not be processed because the server does not currently support this survey type.",
     "common.error": "Error",
     "common.success": "Success",
     "wizard.person_dialog.title_add": "Add New Person",

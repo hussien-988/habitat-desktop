@@ -44,7 +44,26 @@ from ui.wizards.office_survey.wizard_styles import (
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+def _mobile_to_desktop_local(value):
+    """Convert valid Syrian mobile formats to the 8 digits shown after the fixed desktop 09 prefix."""
+    raw = str(value or "").strip()
 
+    if not raw:
+        return ""
+
+    if raw.isdigit() and len(raw) == 8:
+        return raw
+
+    if raw.startswith("09") and raw[2:].isdigit() and len(raw) == 10:
+        return raw[2:]
+
+    if raw.startswith("+9639") and raw[5:].isdigit() and len(raw) == 13:
+        return raw[5:]
+
+    if raw.startswith("9") and raw.isdigit() and len(raw) == 9:
+        return raw[1:]
+
+    return ""
 
 class PersonDialog(QDialog):
     """Dialog for creating or editing a person - 3 tabs."""
@@ -3040,15 +3059,9 @@ class PersonDialog(QDialog):
         return None
 
     def _format_phone(self, value: str):
-        """Format phone for API: adds 09 prefix to 8-digit raw input."""
-        if not value:
-            return None
-        digits = ''.join(c for c in value if c.isdigit())
-        if len(digits) == 8:
-            return f"09{digits}"
-        if len(digits) == 10 and digits.startswith("09"):
-            return digits
-        return None
+        """Format phone for API: stores all accepted mobile formats as 09xxxxxxxx."""
+        local_digits = _mobile_to_desktop_local(value)
+        return f"09{local_digits}" if local_digits else None
 
     def _validate_mobile(self, value: str) -> bool:
         """Validate mobile number: exactly 8 digits (prefix 09 is fixed in UI)."""
@@ -3058,11 +3071,10 @@ class PersonDialog(QDialog):
         return len(digits) == 8
 
     def _validate_landline(self, value: str) -> bool:
-        """Validate landline local digits: exactly 9 digits."""
+        """Validate landline local digits: 7 to 9 digits after the fixed 0 prefix."""
         if not value:
             return True
-        digits = ''.join(c for c in value if c.isdigit())
-        return len(digits) == 9
+        return value.isdigit() and 7 <= len(value) <= 9
 
     def _validate_national_id(self):
         """Validate national ID format only when provided. Returns (valid, error_key)."""
@@ -3115,10 +3127,7 @@ class PersonDialog(QDialog):
                 self.nationality.setCurrentIndex(idx)
 
         # Tab 2
-        phone_val = data.get('phone') or ''
-        if phone_val.startswith('09'):
-            phone_val = phone_val[2:]
-        self.phone.setText(phone_val)
+        self.phone.setText(_mobile_to_desktop_local(data.get('phone') or data.get('mobileNumber') or ''))
         self.email.setText(data.get('email') or '')
         _land_val = data.get('landline') or ''
         if _land_val.startswith('0'):
@@ -3829,6 +3838,8 @@ class PersonDialog(QDialog):
                     self.relation_uploaded_files = saved
 
                 for entry in self.relation_uploaded_files:
+                    if entry.get('_server_existing'):
+                        continue
                     if entry.get('_selected_existing') and entry.get('evidence_id'):
                         try:
                             from services.api_worker import run_blocking_async
