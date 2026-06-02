@@ -384,6 +384,9 @@ class OccupancyClaimsStep(BaseStep):
             try:
                 updated_data = dialog.get_person_data()
                 updated_data['person_id'] = person_id
+                is_household_member = person_data.get("_is_household_member", True)
+                updated_data["_is_household_member"] = is_household_member
+                updated_data["_person_source"] = person_data.get("_person_source")
 
                 rel_files = dialog.get_relation_uploaded_files()
                 if rel_files:
@@ -403,10 +406,15 @@ class OccupancyClaimsStep(BaseStep):
                                     self._api_service.update_contact_person,
                                     survey_id, person_id, updated_data,
                                 )
-                            elif survey_id and household_id:
+                            elif is_household_member and survey_id and household_id:
                                 run_blocking_async(
                                     self._api_service.update_person_in_survey,
                                     survey_id, household_id, person_id, updated_data,
+                                )
+                            elif not is_household_member:
+                                run_blocking_async(
+                                    self._api_service.update_person,
+                                    person_id, updated_data,
                                 )
                             else:
                                 logger.warning(f"Missing survey_id or household_id for person {person_id}")
@@ -598,11 +606,25 @@ class OccupancyClaimsStep(BaseStep):
         mother_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.mother_name"), mother_val), 1, 1)
 
-        # Row 2: phone | national_id
-        phone_val = QLabel(person.get('phone') or '-')
+        
+        # Row 2: mobile/phone | national_id
+        mobile_number = person.get('phone') or ''
+        landline_number = person.get('landline') or ''
+
+        if mobile_number:
+            contact_label = tr("wizard.person_dialog.mobile")
+            contact_value = mobile_number
+        elif landline_number:
+            contact_label = tr("wizard.person_dialog.phone")
+            contact_value = landline_number
+        else:
+            contact_label = tr("wizard.person_dialog.mobile")
+            contact_value = "-"
+
+        phone_val = QLabel(contact_value)
         phone_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
         phone_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
-        info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.phone"), phone_val), 2, 0)
+        info_grid.addWidget(_labeled_cell(contact_label, phone_val), 2, 0)
 
         nid_val = QLabel(person.get('national_id') or '-')
         nid_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))

@@ -194,7 +194,10 @@ class SurveyController:
             for person_dto in all_persons_list:
                 pid = person_dto.get("id", "")
                 rel = relation_by_person_id.get(pid, {})
-                persons.append(ClaimController._map_person_dto(person_dto, rel))
+                mapped_person = ClaimController._map_person_dto(person_dto, rel)
+                mapped_person["_is_household_member"] = True
+                mapped_person["_person_source"] = "household"
+                persons.append(mapped_person)
                 if pid:
                     seen_person_ids.add(pid)
                 if person_dto.get("isContactPerson") and not contact_person_dto:
@@ -217,7 +220,36 @@ class SurveyController:
             # survey detail referenced one, pick it up from person_map by id.
             if not contact_person_dto and contact_person_id:
                 contact_person_dto = person_map.get(contact_person_id)
+            # Add primary claimants returned in survey detail claims but missing
+            # from the household persons endpoint.
+            for survey_claim in (detail.get("claims") or []):
+                claimant_id = (
+                    survey_claim.get("primaryClaimantId")
+                    or survey_claim.get("personId")
+                    or ""
+                )
 
+                if not claimant_id or claimant_id in seen_person_ids:
+                    continue
+
+                claimant_dto = None
+                try:
+                    claimant_dto = api.get_person_by_id(claimant_id)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch claim primary claimant {claimant_id}: {e}")
+
+                if not claimant_dto:
+                    claimant_dto = {
+                        "id": claimant_id,
+                        "fullNameArabic": survey_claim.get("primaryClaimantName") or "",
+                    }
+
+                rel = relation_by_person_id.get(claimant_id, {})
+                mapped_person = ClaimController._map_person_dto(claimant_dto, rel)
+                mapped_person["_is_household_member"] = False
+                mapped_person["_person_source"] = "claim"
+                persons.append(mapped_person)
+                seen_person_ids.add(claimant_id)
             # Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
 

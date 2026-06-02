@@ -2974,7 +2974,8 @@ class TRRCMSApiClient:
                 api_data['durationMinutes'] = finalize_options['durationMinutes'] or 10
             if 'autoCreateClaim' in finalize_options:
                 api_data['autoCreateClaim'] = finalize_options['autoCreateClaim']
-
+            if 'caseStatus' in finalize_options:
+                api_data['caseStatus'] = finalize_options['caseStatus']
         logger.info(f"Processing claims for office survey {survey_id}")
         result = self._request("POST", f"/v1/Surveys/office/{survey_id}/process-claims", json_data=api_data)
         logger.info(f"Office survey claims processed successfully")

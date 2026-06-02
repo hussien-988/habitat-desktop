@@ -92,7 +92,10 @@ class StepNavigator(QObject):
                 # Call on_next() hook if the step has it
                 if hasattr(current_step, 'on_next') and callable(current_step.on_next):
                     logger.debug(f"Calling on_next() for step {self.current_index}")
-                    current_step.on_next()
+                    next_result = current_step.on_next()
+                    if next_result is False:
+                        logger.info(f"Step {self.current_index} on_next blocked navigation")
+                        return False
 
         # Move to next step
         result = self._navigate_to(self.current_index + 1)

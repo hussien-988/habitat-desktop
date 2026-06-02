@@ -10,7 +10,7 @@ collect_data() stores context.applicant with backward-compat "full_name" key.
 
 import os
 from typing import List
-
+from datetime import date
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QWidget, QComboBox,
@@ -39,6 +39,56 @@ from ui.components.loading_spinner import LoadingSpinnerOverlay
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+def _date_parts_from_value(value):
+    """Return (year, month, day) from API date strings such as ISO, date-only, or year-only."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None, None, None
+
+    raw = raw.split("T", 1)[0].split(" ", 1)[0].replace("/", "-")
+    parts = raw.split("-")
+
+    def _to_int(part, min_value=None, max_value=None):
+        if not str(part).isdigit():
+            return None
+        number = int(part)
+        if min_value is not None and number < min_value:
+            return None
+        if max_value is not None and number > max_value:
+            return None
+        return number
+
+    year = _to_int(parts[0], 1900, date.today().year) if parts else None
+    month = _to_int(parts[1], 1, 12) if len(parts) > 1 else None
+    day = _to_int(parts[2], 1, 31) if len(parts) > 2 else None
+
+    return year, month, day
+
+
+def _mobile_to_desktop_local(value):
+    """Convert valid Syrian mobile formats to the 8 digits shown after the fixed desktop 09 prefix."""
+    raw = str(value or "").strip()
+
+    if not raw:
+        return ""
+
+    # Desktop internal format: only the 8 digits after fixed 09 prefix.
+    if raw.isdigit() and len(raw) == 8:
+        return raw
+
+    # Local Syrian mobile format: 09xxxxxxxx
+    if raw.startswith("09") and raw[2:].isdigit() and len(raw) == 10:
+        return raw[2:]
+
+    # International Syrian mobile format: +9639xxxxxxxx
+    if raw.startswith("+9639") and raw[5:].isdigit() and len(raw) == 13:
+        return raw[5:]
+
+    # Sometimes imported DTO may contain 9xxxxxxxx without 0/+963.
+    if raw.startswith("9") and raw.isdigit() and len(raw) == 9:
+        return raw[1:]
+
+    return ""
 
 
 class ApplicantInfoStep(BaseStep):
@@ -250,7 +300,7 @@ class ApplicantInfoStep(BaseStep):
         self.birth_month_combo.setStyleSheet(birth_input_style)
 
         self.birth_year_combo = RtlCombo()
-        for y in range(2010, 1919, -1):
+        for y in range(date.today().year, 1919, -1):
             self.birth_year_combo.addItem(str(y), y)
         self.birth_year_combo.setCurrentIndex(-1)
         self.birth_year_combo.setStyleSheet(birth_input_style)
@@ -860,7 +910,7 @@ class ApplicantInfoStep(BaseStep):
             result.add_error(tr("wizard.applicant.mobile_8_digits"))
 
         landline_digits = self.landline_digits.text().strip()
-        if landline_digits and len(landline_digits) != 9:
+        if landline_digits and not (7 <= len(landline_digits) <= 9):
             self._set_err(self.landline_digits, self._landline_error)
             result.add_error(tr("wizard.applicant.landline_9_digits"))
 
@@ -1153,21 +1203,24 @@ class ApplicantInfoStep(BaseStep):
         self.mother_name.setText(a.get("mother_name_ar", ""))
         self.last_name.setText(a.get("last_name_ar", ""))
 
-        bd = a.get("birth_date") or ""
-        if bd:
-            parts = str(bd)[:10].split('-')
-            if len(parts) >= 1 and parts[0].isdigit():
-                idx = self.birth_year_combo.findData(int(parts[0]))
-                if idx >= 0:
-                    self.birth_year_combo.setCurrentIndex(idx)
-            if len(parts) >= 2 and parts[1].isdigit():
-                idx = self.birth_month_combo.findData(int(parts[1]))
+        bd = a.get("birth_date") or a.get("dateOfBirth") or a.get("date_of_birth") or ""
+        year, month, day = _date_parts_from_value(bd)
+
+        if year:
+            idx = self.birth_year_combo.findData(year)
+            if idx >= 0:
+                self.birth_year_combo.setCurrentIndex(idx)
+
+            if month:
+                idx = self.birth_month_combo.findData(month)
                 if idx >= 0:
                     self.birth_month_combo.setCurrentIndex(idx)
-            if len(parts) >= 3 and parts[2].isdigit():
-                idx = self.birth_day_combo.findData(int(parts[2]))
+
+            if day:
+                idx = self.birth_day_combo.findData(day)
                 if idx >= 0:
                     self.birth_day_combo.setCurrentIndex(idx)
+
         elif a.get("birth_year"):
             idx = self.birth_year_combo.findData(int(a["birth_year"]))
             if idx >= 0:
@@ -1182,12 +1235,7 @@ class ApplicantInfoStep(BaseStep):
                 break
 
         self.national_id.setText(a.get("national_id", ""))
-        phone_val = a.get("phone") or ""
-        if phone_val.startswith("09"):
-            phone_val = phone_val[2:]
-        elif phone_val.startswith("+963"):
-            phone_val = phone_val[4:]
-        self.phone.setText(phone_val)
+        self.phone.setText(_mobile_to_desktop_local(a.get("phone") or a.get("mobileNumber") or ""))
         _land_val = a.get("landline", "")
         if _land_val.startswith("0"):
             self.landline_digits.setText(_land_val[1:])

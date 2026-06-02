@@ -7,6 +7,8 @@ watermark scroll area, and animated accent decorations matching
 the CaseDetailsPage design language.
 """
 
+from logging import error
+from copy import error
 from typing import Dict, Any
 from datetime import datetime
 
@@ -16,7 +18,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QMenu, QSizePolicy, QGraphicsOpacityEffect,
 )
 from PyQt5.QtCore import (
-    Qt, pyqtSignal, pyqtProperty, QSize, QUrl,
+    Qt, pyqtSignal, pyqtProperty, QSize, QUrl,QTimer,
     QPropertyAnimation, QEasingCurve, QRectF,
 )
 from PyQt5.QtGui import (
@@ -1953,43 +1955,100 @@ class ReviewStep(BaseStep):
         return self.context.get_summary()
 
     def on_next(self):
-        """Called when user clicks Next/Submit button. Finalize the survey via API."""
+        """Called when user clicks Next from review.
+
+        Process claims and finalize through the existing office survey flow.
+        If the backend rejects this survey type, show a clear message and leave safely.
+        """
         if getattr(self, "_finalizing_in_progress", False):
             logger.debug("review_step: ignoring duplicate on_next while finalize in progress")
-            return
+            return False
+
         self._set_auth_token()
+
         survey_id = self.context.get_data("survey_id")
         if not survey_id:
-            logger.error("No survey_id found in context. Cannot finalize.")
+            logger.error("No survey_id found in context. Cannot continue.")
             ErrorHandler.show_error(self, tr("wizard.review.no_survey_id"), tr("common.error"))
-            return
+            return False
 
         self._finalizing_in_progress = True
-        self._spinner.show_loading(tr("component.loading.default"))
+
+        spinner = getattr(self, "_spinner", None)
+        if spinner:
+            spinner.show_loading(tr("component.loading.default"))
+
         try:
             # Save intervieweeName before finalizing
             try:
                 a = self.context.applicant or {}
-                parts = [a.get("first_name_ar", ""), a.get("father_name_ar", ""), a.get("last_name_ar", "")]
+                parts = [
+                    a.get("first_name_ar", ""),
+                    a.get("father_name_ar", ""),
+                    a.get("last_name_ar", ""),
+                ]
                 name = " ".join(p for p in parts if p) or a.get("full_name")
                 if name:
-                    self._api_service.save_draft_to_backend(survey_id, {"interviewee_name": name})
+                    self._api_service.save_draft_to_backend(
+                        survey_id,
+                        {"interviewee_name": name},
+                    )
             except Exception as e:
                 log_exception(e, logger, context="survey.save_draft")
                 Toast.show_toast(self, humanize_exception(e, context="survey.save_draft"), Toast.ERROR)
 
-            # Step 1: process-claims if not already done
-            if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
-                self._finalize_survey_via_api(survey_id)
-                if not (hasattr(self.context, 'finalize_response') and self.context.finalize_response):
-                    return
+            # Step 1: process claims if not already done
+            if not (hasattr(self.context, "finalize_response") and self.context.finalize_response):
+                if self._finalize_survey_via_api(survey_id) is False:
+                    return False
+
+                if not (hasattr(self.context, "finalize_response") and self.context.finalize_response):
+                    return False
 
             # Step 2: finalize survey status
-            self._call_finalize_endpoint(survey_id)
-        finally:
-            self._spinner.hide_loading()
-            self._finalizing_in_progress = False
+            if self._call_finalize_endpoint(survey_id) is False:
+                return False
 
+            return True
+
+        finally:
+            if spinner:
+                spinner.hide_loading()
+            self._finalizing_in_progress = False
+    def _is_office_scope_backend_error(self, error) -> bool:
+        """Detect backend limitation for imported/non-office survey processing."""
+        response_data = getattr(error, "response_data", {}) or {}
+        text = " ".join([
+            str(getattr(error, "message", "") or ""),
+            str(response_data.get("message") or ""),
+            str(response_data.get("detail") or ""),
+            str(error or ""),
+        ])
+        return "This endpoint is only for office surveys" in text
+
+
+    def _handle_office_scope_backend_error(self, survey_id: str, error) -> None:
+        """Show a clear message and leave the wizard safely as draft."""
+        logger.warning(
+            f"Backend rejected office processing/finalize for survey {survey_id}: {error}"
+        )
+
+        self.context.status = "draft"
+        self.context.update_data("_server_processing_blocked", True)
+
+        ErrorHandler.show_warning(
+            self,
+            tr("wizard.review.office_scope_backend_error"),
+            tr("common.warning")
+        )
+
+        wizard = self.parent()
+        if wizard is not None:
+            if hasattr(wizard, "_finalization_complete"):
+                wizard._finalization_complete = True
+
+            if hasattr(wizard, "survey_saved_draft"):
+                QTimer.singleShot(1200, lambda: wizard.survey_saved_draft.emit(survey_id))
     def _finalize_survey_via_api(self, survey_id: str):
         finalize_options = {
             "finalNotes": "Survey completed successfully",
@@ -2003,17 +2062,24 @@ class ReviewStep(BaseStep):
             )
             logger.info(f"Survey {survey_id} process-claims succeeded")
             self.context.finalize_response = response
+            return True
         except Exception as e:
             logger.error(f"Failed to process claims for survey {survey_id}: {e}")
+
+            if self._is_office_scope_backend_error(e):
+                self._handle_office_scope_backend_error(survey_id, e)
+                return False
+
             from services.error_mapper import map_exception
             ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-
+            return False
     def _call_finalize_endpoint(self, survey_id: str):
         try:
             from services.api_worker import run_blocking_async
             run_blocking_async(self._api_service.finalize_survey_status, survey_id)
             logger.info(f"Survey {survey_id} finalized successfully")
             self.context.status = "finalized"
+
             # Fetch updated survey to get the proper referenceCode
             try:
                 updated = self._api_service.get_office_survey(survey_id)
@@ -2026,11 +2092,19 @@ class ReviewStep(BaseStep):
                         self.context.finalize_response["survey"]["referenceCode"] = ref_code
             except Exception as e:
                 logger.debug(f"Could not refresh reference code: {e}")
+
+            return True
+
         except Exception as e:
             logger.error(f"Failed to finalize survey status {survey_id}: {e}")
+
+            if self._is_office_scope_backend_error(e):
+                self._handle_office_scope_backend_error(survey_id, e)
+                return False
+
             from services.error_mapper import map_exception
             ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
-
+            return False
     def on_show(self):
         super().on_show()
         self._populate_review()
