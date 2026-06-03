@@ -437,6 +437,9 @@ class MainWindow(QMainWindow):
         self.pages[Pages.IMPORT_PACKAGES].view_package.connect(
             self._on_view_import_package
         )
+        self.pages[Pages.IMPORT_PACKAGES].view_duplicate_package.connect(
+            self._on_view_duplicate_import_package
+        )
         self.pages[Pages.IMPORT_WIZARD].completed.connect(
             self._on_import_completed_silent_refresh
         )
@@ -1363,6 +1366,12 @@ class MainWindow(QMainWindow):
         set_package_id eagerly here would race the navigate_to refresh.
         """
         self.navigate_to(Pages.IMPORT_WIZARD, str(pkg_id) if pkg_id else None)
+    def _on_view_duplicate_import_package(self, pkg_id: str, message: str):
+        """Open existing package after duplicate upload and show an inline notice."""
+        self.navigate_to(Pages.IMPORT_WIZARD, {
+            "package_id": str(pkg_id) if pkg_id else "",
+            "duplicate_notice": message or "",
+        })
 
     def _on_import_completed_silent_refresh(self, _data):
         """Refresh the packages list in the background without leaving the report.

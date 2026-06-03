@@ -162,6 +162,7 @@ class ImportPackagesPage(QWidget):
     """Import Packages page with dark header, animated cards, pagination, spinner overlay."""
 
     view_package = pyqtSignal(str)
+    view_duplicate_package = pyqtSignal(str, str)
 
     def __init__(self, db=None, i18n=None, parent=None, **kwargs):
         super().__init__(parent)
@@ -1032,12 +1033,12 @@ class ImportPackagesPage(QWidget):
             if dup.get("isDuplicatePackage"):
                 existing = dup.get("package") or {}
                 existing_id = str(existing.get("id") or existing.get("packageId") or "")
-                ErrorHandler.show_info(
-                    self, self._duplicate_package_message(existing, existing_id)
-                )
+                duplicate_message = self._duplicate_package_message(existing, existing_id)
+
                 if existing_id:
-                    self.view_package.emit(existing_id)
+                    self.view_duplicate_package.emit(existing_id, duplicate_message)
                 else:
+                    ErrorHandler.show_info(self, duplicate_message)
                     self._load_packages()
                 return
             ErrorHandler.show_error(

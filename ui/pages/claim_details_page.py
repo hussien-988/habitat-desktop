@@ -34,6 +34,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import (
     get_unit_type_display, get_unit_status_display,
     get_claim_type_display, get_source_display, get_claim_status_display,
+    get_evidence_type_options,
 )
 from services.api_worker import ApiWorker
 
@@ -1264,10 +1265,28 @@ class ClaimDetailsPage(QWidget):
         self._set_file_type_icon(icon_lbl, file_name)
         content_lay.addWidget(icon_lbl, 0, Qt.AlignVCenter)
 
-        name_lbl = QLabel(file_name)
+        display_file_name = file_name
+        if len(display_file_name) > 35:
+            display_file_name = display_file_name[:16] + "..." + display_file_name[-16:]
+
+        name_lbl = QLabel(display_file_name)
         name_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
-        name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; border: none; background: transparent;")
+        name_lbl.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                border: none;
+                background: transparent;
+            }}
+            QToolTip {{
+                color: #FFFFFF;
+                background-color: #1F2937;
+                border: 1px solid #4B5563;
+                padding: 6px;
+                border-radius: 4px;
+            }}
+        """)
         name_lbl.setToolTip(file_name)
+        name_lbl.setMaximumWidth(ScreenScale.w(260))
         content_lay.addWidget(name_lbl, 0, Qt.AlignVCenter)
 
         if issue_date:
@@ -1370,9 +1389,11 @@ class ClaimDetailsPage(QWidget):
 
         return card
 
-    def _create_pending_upload_card(self, file_path):
+    def _create_pending_upload_card(self, upload_data):
         import os
         from PyQt5.QtGui import QPixmap
+
+        file_path = upload_data.get("path") if isinstance(upload_data, dict) else upload_data
         file_name = os.path.basename(file_path)
 
         card = QFrame()
@@ -1685,22 +1706,316 @@ class ClaimDetailsPage(QWidget):
         self._populate_relation_card()
 
     def _on_upload_evidence(self):
+        import os
+
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, tr("page.claim_details.select_documents"), "",
-            "Images & PDF (*.png *.jpg *.jpeg *.pdf)")
+            "Images & PDF (*.png *.jpg *.jpeg *.pdf)"
+        )
         if not file_paths:
             return
-        self._pending_uploads.extend(file_paths)
-        self._populate_relation_card()
 
+        new_uploads = []
+
+        for fp in file_paths:
+            meta = self._show_upload_evidence_metadata_dialog(os.path.basename(fp))
+            if meta is None:
+                continue
+
+            new_uploads.append({
+                "path": fp,
+                "evidence_type": meta.get("evidence_type"),
+                "issue_date": meta.get("issue_date", ""),
+                "reference_number": meta.get("reference_number", ""),
+            })
+
+        if not new_uploads:
+            return
+
+        self._pending_uploads.extend(new_uploads)
+        self._populate_relation_card()
+    
+    def _show_upload_evidence_metadata_dialog(self, filename: str = None):
+        """Show metadata dialog for a newly uploaded claim evidence.
+
+        Matches the tenure document popup behavior:
+        required evidence type, optional reference number, optional issue date.
+        """
+        from datetime import date as _date
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+            QComboBox, QLineEdit, QWidget, QGraphicsDropShadowEffect
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setAttribute(Qt.WA_TranslucentBackground)
+        dlg.setLayoutDirection(get_layout_direction())
+        dlg.setMinimumWidth(ScreenScale.w(440))
+        dlg.setMaximumWidth(ScreenScale.w(560))
+
+        container = QWidget(dlg)
+        container.setObjectName("claim_evidence_meta_container")
+        container.setStyleSheet("""
+            QWidget#claim_evidence_meta_container {
+                background-color: #FFFFFF;
+                border-radius: 12px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(30)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 6)
+        container.setGraphicsEffect(shadow)
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(24, 22, 24, 18)
+        layout.setSpacing(14)
+
+        title_lbl = QLabel(tr("wizard.person_dialog.add_tenure_doc_title"))
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_SEMIBOLD))
+        title_lbl.setStyleSheet("color: #1F2937; background: transparent;")
+        layout.addWidget(title_lbl)
+
+        if filename:
+            file_lbl = QLabel(filename)
+            file_lbl.setAlignment(Qt.AlignCenter)
+            file_lbl.setFont(create_font(size=9))
+            file_lbl.setStyleSheet("color: #6B7280; background: transparent; padding: 4px 8px;")
+            file_lbl.setWordWrap(True)
+            layout.addWidget(file_lbl)
+
+        combo_style = """
+            QComboBox {
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #F9FAFB;
+                font-size: 13px;
+                min-height: 24px;
+            }
+            QComboBox:focus { border-color: #3B82F6; }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: center left;
+                width: 22px;
+                border: none;
+        }
+        """
+
+        input_style = """
+            QLineEdit {
+                border: 1px solid #D1D5DB;
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #F9FAFB;
+                font-size: 13px;
+                min-height: 24px;
+            }
+            QLineEdit:focus { border-color: #3B82F6; }
+        """
+
+        def _make_section(label_html: str):
+            wrap = QVBoxLayout()
+            wrap.setSpacing(6)
+            wrap.setContentsMargins(0, 0, 0, 0)
+            lbl = QLabel(label_html)
+            lbl.setStyleSheet("background: transparent;")
+            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+            wrap.addWidget(lbl)
+            return wrap
+
+        ev_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.supporting_documents")}</span>'
+            f' <span style="color: #DC2626;">*</span>'
+        )
+
+        ev_type_combo = QComboBox()
+        ev_type_combo.setStyleSheet(combo_style)
+        ev_type_combo.setLayoutDirection(get_layout_direction())
+        ev_type_combo.addItem(tr("wizard.person_dialog.select"), None)
+
+        for code, display_name in get_evidence_type_options():
+            if code == 0:
+                continue
+            ev_type_combo.addItem(display_name, code)
+
+        ev_section.addWidget(ev_type_combo)
+
+        ev_type_error = QLabel("")
+        ev_type_error.setStyleSheet("color: #DC2626; font-size: 10px; background: transparent;")
+        ev_type_error.setVisible(False)
+        ev_section.addWidget(ev_type_error)
+        layout.addLayout(ev_section)
+
+        ref_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.document_reference_number")}</span>'
+        )
+
+        ref_input = QLineEdit()
+        ref_input.setPlaceholderText(tr("wizard.person_dialog.document_reference_placeholder"))
+        ref_input.setStyleSheet(input_style)
+        ref_section.addWidget(ref_input)
+        layout.addLayout(ref_section)
+
+        date_section = _make_section(
+            f'<span style="color: #1F2937;">{tr("wizard.person_dialog.document_issue_date")}</span>'
+        )
+
+        sub_label_style = "color: #6B7280; font-size: 10px; font-weight: 600; background: transparent;"
+
+        labels_row = QHBoxLayout()
+        labels_row.setSpacing(8)
+
+        for label_key in (
+            "wizard.person_dialog.year",
+            "wizard.person_dialog.month",
+            "wizard.person_dialog.day",
+        ):
+            lbl = QLabel(tr(label_key))
+            lbl.setStyleSheet(sub_label_style)
+            lbl.setAlignment(Qt.AlignCenter)
+            labels_row.addWidget(lbl, 1)
+
+        date_section.addLayout(labels_row)
+
+        date_row = QHBoxLayout()
+        date_row.setSpacing(8)
+
+        current_year = _date.today().year
+
+        year_combo = QComboBox()
+        year_combo.setStyleSheet(combo_style)
+        year_combo.setLayoutDirection(Qt.LeftToRight)
+        year_combo.addItem("--", None)
+        for y in range(current_year, 1949, -1):
+            year_combo.addItem(str(y), y)
+
+        month_combo = QComboBox()
+        month_combo.setStyleSheet(combo_style)
+        month_combo.setLayoutDirection(Qt.LeftToRight)
+        month_combo.addItem("--", None)
+        for m in range(1, 13):
+            month_combo.addItem(str(m), m)
+
+        day_combo = QComboBox()
+        day_combo.setStyleSheet(combo_style)
+        day_combo.setLayoutDirection(Qt.LeftToRight)
+        day_combo.addItem("--", None)
+        for d in range(1, 32):
+            day_combo.addItem(str(d), d)
+
+        date_row.addWidget(year_combo, 1)
+        date_row.addWidget(month_combo, 1)
+        date_row.addWidget(day_combo, 1)
+        date_section.addLayout(date_row)
+        layout.addLayout(date_section)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(ScreenScale.w(10))
+        btn_row.setContentsMargins(0, ScreenScale.h(6), 0, 0)
+
+        cancel_btn = QPushButton(tr("common.cancel"))
+        cancel_btn.setMinimumHeight(ScreenScale.h(40))
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #F3F4F6;
+                color: #4B5563;
+                border: none;
+                border-radius: {ScreenScale.w(8)}px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{ background-color: #E5E7EB; }}
+        """)
+        cancel_btn.clicked.connect(dlg.reject)
+
+        confirm_btn = QPushButton(tr("common.confirm"))
+        confirm_btn.setMinimumHeight(ScreenScale.h(40))
+        confirm_btn.setCursor(Qt.PointingHandCursor)
+        confirm_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        confirm_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #3B82F6;
+                color: white;
+                border: none;
+                border-radius: {ScreenScale.w(8)}px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{ background-color: #2563EB; }}
+        """)
+
+        def _on_confirm():
+            ev_type_value = ev_type_combo.currentData()
+            if ev_type_value is None:
+                ev_type_error.setText(tr("wizard.person_dialog.supporting_documents_required"))
+                ev_type_error.setVisible(True)
+                ev_type_combo.setStyleSheet(combo_style + " QComboBox { border-color: #DC2626; }")
+                return
+
+            ev_type_error.setVisible(False)
+            ev_type_combo.setStyleSheet(combo_style)
+
+            y = year_combo.currentData()
+            m = month_combo.currentData()
+            d = day_combo.currentData()
+
+            if any((y, m, d)) and not all((y, m, d)):
+                Toast.show_toast(self, tr("wizard.person_dialog.issue_date_incomplete"), Toast.ERROR)
+                return
+
+            if y and m and d:
+                try:
+                    issued = _date(y, m, d)
+                    if issued > _date.today():
+                        Toast.show_toast(self, tr("wizard.person_dialog.issue_date_future"), Toast.ERROR)
+                        return
+                except ValueError:
+                    Toast.show_toast(self, tr("wizard.person_dialog.issue_date_invalid"), Toast.ERROR)
+                    return
+
+            dlg.accept()
+
+        confirm_btn.clicked.connect(_on_confirm)
+
+        btn_row.addWidget(cancel_btn, 1)
+        btn_row.addWidget(confirm_btn, 1)
+        layout.addLayout(btn_row)
+
+        main_layout = QVBoxLayout(dlg)
+        outer_margin = ScreenScale.w(12)
+        main_layout.setContentsMargins(outer_margin, outer_margin, outer_margin, outer_margin)
+        main_layout.addWidget(container)
+
+        if dlg.exec_() != QDialog.Accepted:
+            return None
+
+        y = year_combo.currentData()
+        m = month_combo.currentData()
+        d = day_combo.currentData()
+
+        issue_date = ""
+        if y and m and d:
+            issue_date = f"{y:04d}-{m:02d}-{d:02d}T00:00:00Z"
+
+        return {
+            "evidence_type": ev_type_combo.currentData(),
+            "issue_date": issue_date,
+            "reference_number": ref_input.text().strip(),
+        }
     def _on_delete_evidence(self, evidence_id):
         if evidence_id not in self._pending_deletes:
             self._pending_deletes.append(evidence_id)
         self._populate_relation_card()
 
     def _on_remove_pending_upload(self, file_path):
-        if file_path in self._pending_uploads:
-            self._pending_uploads.remove(file_path)
+        self._pending_uploads = [
+            item for item in self._pending_uploads
+            if (item.get("path") if isinstance(item, dict) else item) != file_path
+        ]
         self._populate_relation_card()
 
     def _on_pick_existing_evidence(self):
@@ -1820,27 +2135,47 @@ class ClaimDetailsPage(QWidget):
 
         if self._pending_uploads:
             new_evidence = []
-            for fp in self._pending_uploads:
+            for upload_data in self._pending_uploads:
                 try:
+                    fp = upload_data.get("path") if isinstance(upload_data, dict) else upload_data
+                    evidence_type = upload_data.get("evidence_type") if isinstance(upload_data, dict) else 2
+                    issue_date = upload_data.get("issue_date", "") if isinstance(upload_data, dict) else ""
+                    reference_number = upload_data.get("reference_number", "") if isinstance(upload_data, dict) else ""
+
                     file_size = os.path.getsize(fp)
                     file_name = os.path.basename(fp)
                     ext = os.path.splitext(file_name)[1].lower()
-                    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                                ".png": "image/png", ".pdf": "application/pdf"}
+                    mime_map = {
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".png": "image/png",
+                        ".pdf": "application/pdf",
+                    }
                     mime_type = mime_map.get(ext, "application/octet-stream")
+
                     with open(fp, "rb") as f:
                         file_hash = hashlib.sha256(f.read()).hexdigest()
-                    new_evidence.append({
-                        "evidenceType": 2,
+
+                    evidence_payload = {
+                        "evidenceType": evidence_type,
                         "description": file_name,
                         "originalFileName": file_name,
                         "filePath": fp,
                         "fileSizeBytes": file_size,
                         "mimeType": mime_type,
                         "fileHash": file_hash,
-                    })
+                    }
+
+                    if issue_date:
+                        evidence_payload["documentIssuedDate"] = issue_date
+
+                    if reference_number:
+                        evidence_payload["documentReferenceNumber"] = reference_number
+
+                    new_evidence.append(evidence_payload)
+
                 except Exception as e:
-                    logger.error(f"Failed to read file {fp}: {e}")
+                    logger.error(f"Failed to read file {upload_data}: {e}")
             if new_evidence:
                 update_data["newEvidence"] = new_evidence
 

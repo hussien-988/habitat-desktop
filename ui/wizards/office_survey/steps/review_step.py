@@ -915,9 +915,9 @@ class ReviewStep(BaseStep):
 
         sv.addWidget(self._build_review_personal_section(person))
 
-        sv.addWidget(self._build_review_claims_section(
-            person, get_evidence_type_display, get_relation_type_display, get_claim_type_display,
-        ))
+        #sv.addWidget(self._build_review_claims_section(
+            #person, get_evidence_type_display, get_relation_type_display, get_claim_type_display,
+        #))
 
         sv.addStretch(1)
         scroll.setWidget(scroll_content)

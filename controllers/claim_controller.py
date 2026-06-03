@@ -438,6 +438,7 @@ class ClaimController(BaseController):
             if evidence_ids and survey_id:
                 try:
                     all_ev = self._api.get_survey_evidences(survey_id)
+                    import json
                     result["evidences"] = [
                         ev for ev in all_ev
                         if str(ev.get("id") or ev.get("evidenceId") or "") in evidence_ids
