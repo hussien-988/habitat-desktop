@@ -197,6 +197,7 @@ class ImportWizardPage(QWidget):
         self._current_package_id = None
         self._current_package_status = 0
         self._status_poll_timer = None
+        self._pending_duplicate_notice = ""
         self._poll_count = 0
         self._poll_last_status = None
         self._poll_unchanged_count = 0
@@ -2438,20 +2439,14 @@ class ImportWizardPage(QWidget):
 
     def refresh(self, data=None):
         """Refresh hook called by main_window when this page becomes visible.
-
-        Behavior:
-          • If `data` is a non-empty package id (string), route the wizard to
-            the right step for that package. This is the normal entry path:
-            the user clicked a package in ImportPackagesPage and main_window
-            forwarded the id via `navigate_to(IMPORT_WIZARD, pkg_id)`.
-          • If `data` is None and a package is already loaded/in-flight, do
-            nothing — never tear down a routed sub-step a moment after it was
-            set (would race the async status fetch).
-          • Otherwise reset the wizard to a clean idle state. The legacy
-            step1 package list is no longer the production entry point; we
-            keep the reset path only for explicit "new import" scenarios.
         """
         # Case 1: data carries a package id → route to the right step.
+        if isinstance(data, dict):
+            package_id = str(data.get("package_id") or "")
+            self._pending_duplicate_notice = str(data.get("duplicate_notice") or "")
+            if package_id:
+                self.set_package_id(package_id)
+                return
         if isinstance(data, str) and data:
             self.set_package_id(data)
             return
@@ -2565,14 +2560,10 @@ class ImportWizardPage(QWidget):
             if isinstance(status, str) and status.isdigit():
                 status = int(status)
             self._route_by_status(status)
-            # Defensive: if routing failed to put SOMETHING on screen
-            # (no widget added to the stack), at least show the processing
-            # widget so the user isn't stuck on a blank pane.
-            #
-            # Skip the fallback for terminal/non-actionable statuses whose
-            # handlers intentionally bounce back to the packages list via
-            # cancelled.emit(). Drawing a processing widget after the bounce
-            # creates a confusing flash and the empty-stack warning.
+            if self._pending_duplicate_notice:
+                self._show_warning_banner(self._pending_duplicate_notice)
+                self._pending_duplicate_notice = ""
+            
             from services.import_status_map import is_actionable_status
             if (
                 self.step_container.count() == 0

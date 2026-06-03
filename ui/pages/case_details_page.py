@@ -1068,7 +1068,7 @@ class CaseDetailsPage(QWidget):
         # Claims section — hidden entirely for finalized surveys (the case
         # is already closed; the active-claim registration UI is irrelevant
         # there and only adds noise).
-        status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
+        '''status = getattr(ctx, 'status', '') or ctx.get_data("status") or ""
         status_lower = str(status).lower()
         is_draft_or_open = status_lower in ("draft", "1", "", "obstructed", "4")
         if is_draft_or_open:
@@ -1087,7 +1087,7 @@ class CaseDetailsPage(QWidget):
                 self._unit_content.addWidget(self._create_divider())
                 self._unit_content.addWidget(
                     self._create_empty_state(tr("page.case_details.no_claims"))
-                )
+                )'''
 
     def _add_claim_mini_card(self, claim):
         card = QFrame()
