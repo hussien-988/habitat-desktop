@@ -1366,11 +1366,11 @@ class MainWindow(QMainWindow):
         set_package_id eagerly here would race the navigate_to refresh.
         """
         self.navigate_to(Pages.IMPORT_WIZARD, str(pkg_id) if pkg_id else None)
-    def _on_view_duplicate_import_package(self, pkg_id: str, message: str):
+    def _on_view_duplicate_import_package(self, pkg_id: str, notice_payload: dict):
         """Open existing package after duplicate upload and show an inline notice."""
         self.navigate_to(Pages.IMPORT_WIZARD, {
             "package_id": str(pkg_id) if pkg_id else "",
-            "duplicate_notice": message or "",
+            "duplicate_notice_payload": notice_payload or {},
         })
 
     def _on_import_completed_silent_refresh(self, _data):

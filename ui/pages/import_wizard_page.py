@@ -16,6 +16,7 @@ from ui.style_manager import StyleManager
 from services.exceptions import NetworkException, ApiException
 from ui.components.toast import Toast
 from services.translation_manager import tr, get_layout_direction
+from services.vocab_service import get_label as vocab_get_label
 from utils.logger import get_logger
 from ui.design_system import ScreenScale
 
@@ -69,6 +70,7 @@ from services.import_status_map import (
     TRANSIENT as _IMPORT_TRANSIENT,
     HISTORY as _IMPORT_HISTORY,
     target_wizard_step,
+    status_meta,
 )
 
 # Visible wizard pills are now 3; internal QStackedWidget still has 5 panels
@@ -198,6 +200,7 @@ class ImportWizardPage(QWidget):
         self._current_package_status = 0
         self._status_poll_timer = None
         self._pending_duplicate_notice = ""
+        self._pending_duplicate_notice_payload = {}
         self._poll_count = 0
         self._poll_last_status = None
         self._poll_unchanged_count = 0
@@ -446,6 +449,42 @@ class ImportWizardPage(QWidget):
         self._error_trace.setVisible(False)
         self._error_banner.setVisible(True)
         self._active_banner_refresh = lambda: self._show_warning_banner(message)
+    def _duplicate_package_message_from_payload(self, payload: dict) -> str:
+        """Build duplicate-upload warning using the current language."""
+        payload = payload or {}
+        status_raw = payload.get("status", 0)
+
+        if isinstance(status_raw, str) and status_raw.isdigit():
+            status_raw = int(status_raw)
+
+        meta = status_meta(status_raw) if status_raw else None
+        if meta:
+            status_label = tr(meta["label_key"])
+        else:
+            status_label = vocab_get_label("import_status", status_raw) or "—"
+
+        return tr(
+            "import.error.duplicate_package_detailed",
+            name=payload.get("name") or "—",
+            status=status_label,
+            date=payload.get("date") or "—",
+            pkg_id=payload.get("pkg_id") or "—",
+        )
+
+
+    def _show_duplicate_notice_banner(self, payload: dict):
+        """Show duplicate-package notice and allow it to refresh on language change."""
+        payload = payload or {}
+
+        self._clear_banner_action()
+        self._apply_banner_severity("warning")
+        self._error_title.setText(tr("wizard.import.warning_title"))
+        self._error_message.setText(self._duplicate_package_message_from_payload(payload))
+        self._error_trace.clear()
+        self._error_trace.setVisible(False)
+        self._error_banner.setVisible(True)
+
+        self._active_banner_refresh = lambda: self._show_duplicate_notice_banner(payload)
 
 
     def _show_stuck_banner(self, elapsed_secs: int):
@@ -2444,6 +2483,7 @@ class ImportWizardPage(QWidget):
         if isinstance(data, dict):
             package_id = str(data.get("package_id") or "")
             self._pending_duplicate_notice = str(data.get("duplicate_notice") or "")
+            self._pending_duplicate_notice_payload = data.get("duplicate_notice_payload") or {}
             if package_id:
                 self.set_package_id(package_id)
                 return
@@ -2560,7 +2600,10 @@ class ImportWizardPage(QWidget):
             if isinstance(status, str) and status.isdigit():
                 status = int(status)
             self._route_by_status(status)
-            if self._pending_duplicate_notice:
+            if self._pending_duplicate_notice_payload:
+                self._show_duplicate_notice_banner(self._pending_duplicate_notice_payload)
+                self._pending_duplicate_notice_payload = {}
+            elif self._pending_duplicate_notice:
                 self._show_warning_banner(self._pending_duplicate_notice)
                 self._pending_duplicate_notice = ""
             
