@@ -892,6 +892,8 @@ class UnitSelectionStep(BaseStep):
         if not self.context.building:
             result.add_error(tr("wizard.unit.no_building_error"))
             return result
+        if not self.selected_unit and self.context.unit:
+            self.selected_unit = self.context.unit
 
         if not self.selected_unit and not self.context.is_new_unit:
             result.add_error(tr("wizard.unit.select_or_create_error"))
