@@ -162,7 +162,7 @@ class ImportPackagesPage(QWidget):
     """Import Packages page with dark header, animated cards, pagination, spinner overlay."""
 
     view_package = pyqtSignal(str)
-    view_duplicate_package = pyqtSignal(str, str)
+    view_duplicate_package = pyqtSignal(str, dict)
 
     def __init__(self, db=None, i18n=None, parent=None, **kwargs):
         super().__init__(parent)
@@ -1033,12 +1033,12 @@ class ImportPackagesPage(QWidget):
             if dup.get("isDuplicatePackage"):
                 existing = dup.get("package") or {}
                 existing_id = str(existing.get("id") or existing.get("packageId") or "")
-                duplicate_message = self._duplicate_package_message(existing, existing_id)
+                duplicate_payload = self._duplicate_package_notice_payload(existing, existing_id)
 
                 if existing_id:
-                    self.view_duplicate_package.emit(existing_id, duplicate_message)
+                    self.view_duplicate_package.emit(existing_id, duplicate_payload)
                 else:
-                    ErrorHandler.show_info(self, duplicate_message)
+                    ErrorHandler.show_info(self, self._duplicate_package_message_from_payload(duplicate_payload))
                     self._load_packages()
                 return
             ErrorHandler.show_error(
@@ -1073,28 +1073,45 @@ class ImportPackagesPage(QWidget):
             # list so the user can pick the new package manually.
             self._load_packages()
 
-    def _duplicate_package_message(self, existing: dict, existing_id: str) -> str:
-        """Build the 'already uploaded' message from the 409 body.
+    def _duplicate_package_notice_payload(self, existing: dict, existing_id: str) -> dict:
+        """Keep duplicate-upload notice data untranslated.
 
-        Display-only: the duplicate-upload flow (open the existing package)
-        is unchanged. Absent fields are shown as "—".
+        The Wizard will translate it at render time so the message updates
+        correctly when the app language changes.
         """
         status_raw = existing.get("status", 0)
         if isinstance(status_raw, str) and status_raw.isdigit():
             status_raw = int(status_raw)
+
+        date_raw = existing.get("packageCreatedDate") or existing.get("createdAtUtc") or ""
+
+        return {
+            "name": existing.get("fileName") or "—",
+            "status": status_raw,
+            "date": str(date_raw)[:10] or "—",
+            "pkg_id": existing_id or "—",
+        }
+
+
+    def _duplicate_package_message_from_payload(self, payload: dict) -> str:
+        """Build the duplicate-upload message using the current language."""
+        status_raw = payload.get("status", 0)
+
+        if isinstance(status_raw, str) and status_raw.isdigit():
+            status_raw = int(status_raw)
+
         meta = status_meta(status_raw) if status_raw else None
         if meta:
             status_label = tr(meta["label_key"])
         else:
             status_label = vocab_get_label("import_status", status_raw) or "—"
 
-        date_raw = existing.get("packageCreatedDate") or existing.get("createdAtUtc") or ""
         return tr(
             "import.error.duplicate_package_detailed",
-            name=existing.get("fileName") or "—",
+            name=payload.get("name") or "—",
             status=status_label,
-            date=str(date_raw)[:10] or "—",
-            pkg_id=existing_id or "—",
+            date=payload.get("date") or "—",
+            pkg_id=payload.get("pkg_id") or "—",
         )
 
     # -- Package actions ---------------------------------------------------

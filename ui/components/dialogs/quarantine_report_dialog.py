@@ -281,8 +281,13 @@ class QuarantineReportDialog(QDialog):
         self._file_name_value_lbl.setText(str(r.get("fileName") or "-"))
         self._schema_label_lbl.setText(tr("quarantine_dialog.schema_version"))
         self._schema_value_lbl.setText(str(r.get("schemaVersion") or "-"))
+        # Hide the raw backend exception/reason text because it may contain
+        # untranslated English diagnostics. The localized guidance below is the
+        # user-facing reason message.
         self._reason_label_lbl.setText(tr("quarantine_dialog.reason_label"))
-        self._reason_value_lbl.setText(str(r.get("quarantineReason") or "-"))
+        self._reason_value_lbl.setText("")
+        self._reason_label_lbl.setVisible(False)
+        self._reason_value_lbl.setVisible(False)
 
         # Category guidance
         category = str(r.get("quarantineCategory") or "")
@@ -306,14 +311,13 @@ class QuarantineReportDialog(QDialog):
         self._integrity_title_lbl.setVisible(any_check)
         self._checklist_container.setVisible(any_check)
 
-        # Vocabulary compatibility issues
+        # Vocabulary compatibility issues returned by the backend are diagnostic
+        # strings and are not localized. Hide this section to avoid showing
+        # untranslated exception messages in the UI.
         self._clear_layout(self._issues_layout)
-        issues = _parse_vocab_issues(r.get("vocabularyCompatibilityIssues"))
         self._issues_title_lbl.setText(tr("quarantine_dialog.issues_title"))
-        for issue in issues:
-            self._add_issue_row(issue)
-        self._issues_title_lbl.setVisible(bool(issues))
-        self._issues_scroll.setVisible(bool(issues))
+        self._issues_title_lbl.setVisible(False)
+        self._issues_scroll.setVisible(False)
 
         self._close_btn.setText(tr("quarantine_dialog.close"))
         self._close_btn.adjustSize()
