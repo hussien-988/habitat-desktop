@@ -10,10 +10,12 @@ Reuses BuildingController for building mapping (with admin name resolution)
 and ClaimController's static methods for unit/person/household mapping.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from controllers.base_controller import OperationResult
+from controllers.claim_controller import ClaimController
 from services.error_mapper import map_exception
 from utils.logger import get_logger
 
@@ -95,24 +97,144 @@ class SurveyController:
             households = []
             try:
                 survey_households = api.get_households_for_survey(survey_id) or []
+
                 if survey_households:
-                    def _sort_key(h):
-                        return (
-                            h.get("lastModifiedAtUtc")
-                            or h.get("createdAtUtc")
+                    # Prefer the household that belongs to the survey's claim/contact person.
+                    # Do not blindly use the latest household on the same property unit,
+                    # because imported packages can add newer households to old surveys' unit.
+                    target_person_ids = []
+
+                    if contact_person_id:
+                        target_person_ids.append(contact_person_id)
+
+                    for survey_claim in (detail.get("claims") or []):
+                        claimant_id = (
+                            survey_claim.get("primaryClaimantId")
+                            or survey_claim.get("personId")
                             or ""
                         )
-                    survey_households.sort(key=_sort_key, reverse=True)
-                    latest = survey_households[0]
-                    households = [ClaimController._map_household_dto(latest)]
-                    logger.warning(
-                        f"[HOUSEHOLD] survey {survey_id} has {len(survey_households)} "
-                        f"household(s); using latest id={latest.get('id', '')}"
-                    )
+                        if claimant_id and claimant_id not in target_person_ids:
+                            target_person_ids.append(claimant_id)
+
+                    target_household_id = ""
+                    for target_person_id in target_person_ids:
+                        try:
+                            target_person_dto = api.get_person_by_id(target_person_id)
+                            target_household_id = target_person_dto.get("householdId") or ""
+                            if target_household_id:
+                                break
+                        except Exception as e:
+                            logger.warning(
+                                f"[HOUSEHOLD] Could not resolve household for person "
+                                f"{target_person_id}: {e}"
+                            )
+                    skip_household_persons = False
+                    selected_household = None
+
+                    if target_household_id:
+                        selected_household = next(
+                            (
+                                h for h in survey_households
+                                if h.get("id") == target_household_id
+                            ),
+                            None
+                        )
+
+                    if not selected_household:
+                        has_claim_primary_claimant = bool(
+                            (claim_id and detail.get("claimId"))
+                            or any(
+                                survey_claim.get("primaryClaimantId")
+                                for survey_claim in (detail.get("claims") or [])
+                            )
+                        )
+
+                        if has_claim_primary_claimant:
+                            # The primary claimant has no householdId, so we must not fall back to the
+                            # latest household on the property unit. Instead, choose the household whose
+                            # creation/modification time is closest to this survey/claim time, and use it
+                            # for household data only. Do not load its persons.
+                            from datetime import datetime, timezone
+
+                            def _parse_dt(value):
+                                if not value:
+                                    return None
+                                try:
+                                    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                                except Exception:
+                                    return None
+
+                            reference_dt = (
+                                _parse_dt(detail.get("claimCreatedDate"))
+                                or _parse_dt(detail.get("surveyDate"))
+                                or _parse_dt(detail.get("createdAtUtc"))
+                            )
+
+                            if not reference_dt:
+                                for survey_claim in (detail.get("claims") or []):
+                                    reference_dt = (
+                                        _parse_dt(survey_claim.get("createdAtUtc"))
+                                        or _parse_dt(survey_claim.get("submittedDate"))
+                                    )
+                                    if reference_dt:
+                                        break
+
+                            def _household_dt(h):
+                                # Use createdAtUtc only for matching the household to the survey/claim.
+                                # lastModifiedAtUtc changes when household counts are edited, and that can
+                                # make an old survey suddenly match a different household.
+                                return (
+                                    _parse_dt(h.get("createdAtUtc"))
+                                    or datetime.min.replace(tzinfo=timezone.utc)
+                                )
+
+                            if reference_dt:
+                                selected_household = min(
+                                    survey_households,
+                                    key=lambda h: abs((_household_dt(h) - reference_dt).total_seconds())
+                                )
+                            else:
+                                selected_household = survey_households[0]
+
+                            skip_household_persons = True
+
+                            logger.warning(
+                                f"[HOUSEHOLD] survey {survey_id} has {len(survey_households)} "
+                                f"household(s); claim primary claimant has no matching household; "
+                                f"using nearest household for household data only "
+                                f"id={selected_household.get('id', '')}"
+                            )
+                        else:
+                            def _sort_key(h):
+                                return (
+                                    h.get("lastModifiedAtUtc")
+                                    or h.get("createdAtUtc")
+                                    or ""
+                                )
+
+                            survey_households.sort(key=_sort_key, reverse=True)
+                            selected_household = survey_households[0]
+
+                            logger.warning(
+                                f"[HOUSEHOLD] survey {survey_id} has {len(survey_households)} "
+                                f"household(s); no target household match found; "
+                                f"fallback to latest id={selected_household.get('id', '')}"
+                            )
+                    else:
+                        logger.warning(
+                            f"[HOUSEHOLD] survey {survey_id} has {len(survey_households)} "
+                            f"household(s); selected target household "
+                            f"id={selected_household.get('id', '')}"
+                        )
+
+                    if selected_household:
+                        households = [ClaimController._map_household_dto(selected_household)]
+
             except Exception as e:
                 logger.warning(
                     f"Failed to fetch households for survey {survey_id}: {e}"
                 )
+
             hh_id = households[0].get("household_id", "") if households else ""
 
             # Step 2: Parallel enrichment — building, unit, persons, claim, contact
@@ -129,7 +251,7 @@ class SurveyController:
                     futures['building'] = executor.submit(api.get_building_by_id, building_id)
                 if unit_id:
                     futures['unit'] = executor.submit(api._request, "GET", f"/v1/PropertyUnits/{unit_id}")
-                if hh_id:
+                if hh_id and not skip_household_persons:
                     futures['persons'] = executor.submit(api.get_persons_for_household, survey_id, hh_id)
                 if claim_id:
                     futures['claim'] = executor.submit(api.get_claim_by_id, claim_id)
@@ -207,14 +329,27 @@ class SurveyController:
             # where the detail response omits contactPersonId, and for contact
             # persons that aren't household members).
             if survey_contact_person_dto:
-                contact_person_dto = survey_contact_person_dto
                 cp_id = survey_contact_person_dto.get("id", "")
-                if cp_id and cp_id not in seen_person_ids:
-                    rel = relation_by_person_id.get(cp_id, {})
-                    persons.append(
-                        ClaimController._map_person_dto(survey_contact_person_dto, rel)
+                cp_household_id = survey_contact_person_dto.get("householdId") or ""
+
+                can_use_survey_contact = (
+                    not contact_person_dto
+                    and (
+                        not hh_id
+                        or not all_persons_list
+                        or cp_household_id == hh_id
                     )
-                    seen_person_ids.add(cp_id)
+                )
+
+                if can_use_survey_contact:
+                    contact_person_dto = survey_contact_person_dto
+
+                    if cp_id and cp_id not in seen_person_ids:
+                        rel = relation_by_person_id.get(cp_id, {})
+                        persons.append(
+                            ClaimController._map_person_dto(survey_contact_person_dto, rel)
+                        )
+                        seen_person_ids.add(cp_id)
 
             # Fallback: if neither source returned the contact person but the
             # survey detail referenced one, pick it up from person_map by id.
@@ -252,6 +387,39 @@ class SurveyController:
                 seen_person_ids.add(claimant_id)
             # Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
+            # Prefer the claim primary claimant as applicant for claim-based survey details.
+            # This prevents the survey contact person from overriding the actual claimant
+            # when old surveys share the same property unit with newer imported packages.
+            primary_claimant_id = ""
+
+            if claim_dto:
+                primary_claimant_id = claim_dto.get("primaryClaimantId") or ""
+
+            if not primary_claimant_id:
+                for survey_claim in (detail.get("claims") or []):
+                    primary_claimant_id = survey_claim.get("primaryClaimantId") or ""
+                    if primary_claimant_id:
+                        break
+
+            if primary_claimant_id:
+                matched_claimant = next(
+                    (
+                        p for p in all_persons_list
+                        if p.get("id") == primary_claimant_id
+                    ),
+                    None,
+                )
+
+                if matched_claimant:
+                    contact_person_dto = matched_claimant
+                else:
+                    try:
+                        contact_person_dto = api.get_person_by_id(primary_claimant_id)
+                    except Exception as e:
+                        logger.warning(
+                            f"[APPLICANT] Could not fetch primary claimant "
+                            f"{primary_claimant_id}: {e}"
+                        )
 
             applicant = None
             if contact_person_dto:
@@ -271,7 +439,7 @@ class SurveyController:
                 }
                 # Save identification document metadata (download on demand)
                 # Identification documents belong to the person, not the survey
-                target_person_id = contact_person_id or contact_person_dto.get("id", "")
+                target_person_id = contact_person_dto.get("id", "") or contact_person_id
                 logger.warning(f"[ID-DOCS] Fetching identification documents for person={target_person_id}")
                 if target_person_id:
                     try:
