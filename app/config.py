@@ -552,6 +552,12 @@ def save_language(lang_code: str):
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
+# TEMP: internal LAN servers whose TLS cert is self-signed / not yet installed
+# on every client PC. Skip cert verification for these specific hosts until the
+# proper cert is in the Windows Trusted Root store on all clients. Remove the
+# entry once the cert is rolled out.
+_INSECURE_TLS_HOSTS = {"10.100.0.20"}
+
 
 def should_verify_ssl(url: str) -> bool:
     """Decide whether to verify TLS for a given URL.
@@ -565,6 +571,8 @@ def should_verify_ssl(url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
     except Exception:
         return True
+    if host in _INSECURE_TLS_HOSTS:
+        return False
     if host in _LOCAL_HOSTS:
         return Config.VERIFY_SSL
     return True
