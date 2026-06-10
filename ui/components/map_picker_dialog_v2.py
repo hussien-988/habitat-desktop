@@ -11,6 +11,7 @@ from PyQt5.QtCore import pyqtSlot
 from ui.components.base_map_dialog import BaseMapDialog
 from services.leaflet_html_generator import generate_leaflet_html
 from services.api_worker import ApiWorker
+from ui.constants.map_constants import MapConstants
 from utils.logger import get_logger
 from services.translation_manager import tr
 
@@ -114,7 +115,7 @@ class MapPickerDialog(BaseMapDialog):
                 center_lon=self.initial_lon,
                 zoom=self.initial_zoom,
                 min_zoom=15,
-                max_zoom=20,
+                max_zoom=MapConstants.MAX_ZOOM,
                 show_legend=True,
                 show_layer_control=False,
                 enable_selection=False,

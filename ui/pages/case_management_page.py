@@ -786,41 +786,67 @@ class CaseManagementPage(QWidget):
             total_count = 0
 
         def _enrich_case_claim_count(case: Case) -> Case:
-            """Fix card claim count when /v1/Cases list returns claimCount=0 but linked surveys contain claims."""
-            if case.claim_count > 0:
-                return case
+            """
+            Recalculate card claim/survey counts using only active surveys.
 
+            Backend CaseDto may include cancelled surveys/status=8 in claimCount/surveyCount.
+            The details page filters them out, so the card must use the same rule.
+            """
             survey_ids = list(case.survey_ids or [])
-            claim_ids = set(str(cid) for cid in (case.claim_ids or []) if cid)
+            raw_claim_ids = set(str(cid) for cid in (case.claim_ids or []) if cid)
+
+            def _is_cancelled_survey(survey: dict) -> bool:
+                status = survey.get("status") or survey.get("surveyStatus")
+                status_text = str(status).strip().lower()
+                return status_text in ("8", "cancelled")
+
+            active_survey_ids = []
+            active_claim_ids = set()
 
             # Some list responses do not include surveyIds/claimIds, so fetch the full case as fallback.
-            if not survey_ids and case.id:
+            if case.id:
                 try:
                     full_case = api.get_case_by_id(case.id) or {}
-                    survey_ids = full_case.get("surveyIds") or []
+
+                    if not survey_ids:
+                        survey_ids = full_case.get("surveyIds") or []
+
                     for cid in (full_case.get("claimIds") or []):
                         if cid:
-                            claim_ids.add(str(cid))
+                            raw_claim_ids.add(str(cid))
+
                 except Exception as exc:
                     logger.debug(f"Failed to enrich case {case.id} from full case detail: {exc}")
 
             for sid in survey_ids:
                 try:
                     survey_detail = api.get_office_survey_detail(sid) or {}
+
+                    if _is_cancelled_survey(survey_detail):
+                        continue
+
+                    active_survey_ids.append(str(sid))
+
                     for survey_claim in (survey_detail.get("claims") or []):
                         claim_id = survey_claim.get("id") or survey_claim.get("claimId")
                         if claim_id:
-                            claim_ids.add(str(claim_id))
+                            active_claim_ids.add(str(claim_id))
+
                 except Exception as exc:
                     logger.debug(f"Failed to enrich case {case.id} from survey {sid}: {exc}")
 
-            if claim_ids:
-                case.claim_count = len(claim_ids)
-                case.claim_ids = list(claim_ids)
+            # Match details page:
+            # Count direct case claimIds + claims found inside active surveys.
+            # Do not filter claims themselves.
+            final_claim_ids = set(raw_claim_ids)
+            final_claim_ids.update(active_claim_ids)
+
+            case.survey_ids = active_survey_ids
+            case.survey_count = len(active_survey_ids)
+            case.claim_ids = list(final_claim_ids)
+            case.claim_count = len(final_claim_ids)
 
             return case
-
-
         cases = []
         for item in items:
             try:

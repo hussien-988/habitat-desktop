@@ -775,10 +775,19 @@ class CompletedClaimsPage(QWidget):
                 else:
                     surveys = raw_surveys if isinstance(raw_surveys, list) else []
 
+                def _is_cancelled_survey(survey: dict) -> bool:
+                    status = survey.get("status") or survey.get("surveyStatus")
+                    status_text = str(status).strip().lower()
+                    return status_text in ("8", "cancelled")
+
                 survey_ids = []
                 for survey in surveys:
                     if not isinstance(survey, dict):
                         continue
+
+                    if _is_cancelled_survey(survey):
+                        continue
+
                     survey_id = (
                         survey.get("id")
                         or survey.get("surveyVisitId")

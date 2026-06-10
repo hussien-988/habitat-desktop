@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QTimer, QRectF
 from PyQt5.QtGui import QColor, QPainter, QPen
 
 from ui.components.icon import Icon
+from ui.constants.map_constants import MapConstants
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from services.translation_manager import tr
@@ -318,7 +319,7 @@ class BuildingLocationMapPreview(QFrame):
             center_lat=center_lat,
             center_lon=center_lon,
             zoom=18,
-            max_zoom=20,
+            max_zoom=MapConstants.MAX_ZOOM,
             building_label=label,
         )
 

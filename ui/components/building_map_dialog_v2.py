@@ -550,7 +550,7 @@ class BuildingMapDialog(BaseMapDialog):
                     center_lat=center_lat,
                     center_lon=center_lon,
                     zoom=zoom,
-                    max_zoom=20,
+                    max_zoom=MapConstants.MAX_ZOOM,
                     show_legend=False,
                     show_layer_control=False,
                     enable_selection=(not self._is_view_only),
