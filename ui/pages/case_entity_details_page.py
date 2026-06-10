@@ -23,6 +23,7 @@ from PyQt5.QtGui import (
     QColor, QPainter, QLinearGradient, QRadialGradient, QPen, QFont,
     QPainterPath, QCursor, QIcon,
 )
+from requests import api
 
 from ui.design_system import Colors, PageDimensions, ScreenScale
 from ui.font_utils import create_font, FontManager
@@ -1153,10 +1154,21 @@ class CaseEntityDetailsPage(QWidget):
             surveys = []
             claims = []
             seen_claim_ids = set()
+            cancelled_survey_ids = set()
+
+            def _is_cancelled_survey(survey: dict) -> bool:
+                status = survey.get("status") or survey.get("surveyStatus")
+                status_text = str(status).strip().lower()
+                return status_text in ("8", "cancelled")
 
             for sid in survey_ids:
                 try:
                     detail = api.get_office_survey_detail(sid)
+
+                    if _is_cancelled_survey(detail):
+                        cancelled_survey_ids.add(str(sid))
+                        continue
+
                     surveys.append(detail)
 
                     # Survey detail may already contain the claims linked to this case.
@@ -1177,8 +1189,22 @@ class CaseEntityDetailsPage(QWidget):
 
                 try:
                     detail = api.get_claim_by_id(cid)
+
+                    claim_survey_id = (
+                        detail.get("surveyVisitId")
+                        or detail.get("surveyId")
+                        or detail.get("officeSurveyId")
+                    )
+
+                    if claim_survey_id and str(claim_survey_id) in cancelled_survey_ids:
+                        continue
+
+                    if _is_cancelled_survey(detail):
+                        continue
+
                     claims.append(detail)
                     seen_claim_ids.add(cid)
+
                 except Exception as e:
                     logger.warning(f"Failed to fetch claim {cid}: {e}")
                     claims.append({"id": cid, "claimNumber": cid[:12]})
@@ -1214,11 +1240,8 @@ class CaseEntityDetailsPage(QWidget):
         self._building_details = data.get("building", {})
 
         if self._case:
-            if len(self._claim_details) > self._case.claim_count:
-                self._case.claim_count = len(self._claim_details)
-
-            if len(self._survey_details) > self._case.survey_count:
-                self._case.survey_count = len(self._survey_details)
+            self._case.claim_count = len(self._claim_details)
+            self._case.survey_count = len(self._survey_details)
 
         self._populate_case_info()
         self._populate_surveys_section()

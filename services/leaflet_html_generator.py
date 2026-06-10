@@ -978,6 +978,7 @@ class LeafletHTMLGenerator:
         // Add tile layer
         var tileLayer = L.tileLayer({tile_layer_url_js}, {{
             maxZoom: {effective_max_zoom},
+            maxNativeZoom: {effective_max_zoom},
             minZoom: {effective_min_zoom},
             noWrap: true,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
@@ -2156,7 +2157,7 @@ def generate_leaflet_preview_html(
     center_lat: float,
     center_lon: float,
     zoom: int = 18,
-    max_zoom: int = 20,
+    max_zoom: int = MapConstants.MAX_ZOOM,
     building_label: str = "",
 ) -> str:
     """Minimal Leaflet HTML for a single-building preview.
@@ -2197,7 +2198,12 @@ def generate_leaflet_preview_html(
         worldCopyJump: false,
         minZoom: 6
     }}).setView([{center_lat}, {center_lon}], {zoom});
-    L.tileLayer({safe_tile_url}, {{maxZoom: {max_zoom}, noWrap: true}}).addTo(map);
+    L.tileLayer({safe_tile_url}, {{
+        maxZoom: {max_zoom},
+        maxNativeZoom: {max_zoom},
+        noWrap: true,
+        attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria'
+    }}).addTo(map);
     var label = {safe_label_js};
     var labelHtml = label
       ? '<div style="position:absolute;left:12px;bottom:40px;transform:translateX(-50%);'
