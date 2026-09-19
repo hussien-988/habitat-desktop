@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
 
         # Initialize scaling from actual window size (not screen size)
         ScreenScale.initialize_from_size(window_width, window_height)
-        self.setFixedSize(window_width, window_height)
+        self.resize(window_width, window_height)
 
         # Center on screen (use screen.x/y to handle multi-monitor and top taskbar)
         x = screen.x() + (screen.width() - window_width) // 2
@@ -2367,7 +2367,7 @@ class MainWindow(QMainWindow):
         w = min(1512, int(screen.width() * 0.95))
         h = min(982, int(screen.height() * 0.95))
         ScreenScale.initialize_from_size(w, h)
-        self.setFixedSize(w, h)
+        self.resize(w, h)
         x = screen.x() + (screen.width() - w) // 2
         y = screen.y() + (screen.height() - h) // 2
         self.move(x, y)
@@ -2421,8 +2421,7 @@ class MainWindow(QMainWindow):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         """Handle mouse move for window dragging."""
-        if event.buttons() == Qt.LeftButton:
-            # Move window to new position
+        if event.buttons() == Qt.LeftButton and not self.isMaximized():
             self.move(event.globalPos() - self._drag_position)
             event.accept()
 

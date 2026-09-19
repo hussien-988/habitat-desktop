@@ -435,6 +435,7 @@ class Navbar(QFrame):
         btn_close.clicked.connect(lambda: self.window().close())
 
         lay.addWidget(btn_min)
+        lay.addWidget(btn_max)
         lay.addWidget(btn_close)
 
         return box
