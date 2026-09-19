@@ -846,9 +846,9 @@ EN_TRANSLATIONS = {
     "page.buildings.delete_confirm": "Are you sure you want to delete this building?",
     "page.buildings.units_count": "Units Count",
     "page.buildings.floors_count": "Floors Count",
-    "navbar.tab.completed_claims": "Claims",
+    "navbar.tab.completed_claims": "Field Surveys",
     "navbar.tab.claims": "Claims",
-    "navbar.tab.cases": "Surveys",
+    "navbar.tab.cases": "Office Surveys",
     "navbar.tab.drafts": "Add a claim",
     "cases.tab.drafts": "Drafts",
     "cases.tab.finalized": "Finalized",
@@ -866,7 +866,7 @@ EN_TRANSLATIONS = {
     "navbar.tab.user_management": "User Management",
     "navbar.tab.map": "Map",
     "navbar.tab.field_assignment": "Field Work Preparation",
-    "navbar.tab.case_management": "Case Management",
+    "navbar.tab.case_management": "Property Unit Management",
 
     # Case Management Page
     "page.case_management.no_surveys": "No surveys linked to this case",
