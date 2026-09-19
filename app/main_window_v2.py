@@ -396,10 +396,8 @@ class MainWindow(QMainWindow):
             1: Pages.SURVEYS,
             2: Pages.CASE_MANAGEMENT,
             3: Pages.IMPORT_PACKAGES,
-            4: Pages.DUPLICATES,
-            5: Pages.FIELD_ASSIGNMENT,
-            6: Pages.BUILDINGS,
-        }
+            4: Pages.FIELD_ASSIGNMENT,
+            }
 
     def _setup_layout(self):
     # لاي اوت خارجي: بدون فراغ شفاف (حسب طلب المستخدم)
@@ -430,7 +428,6 @@ class MainWindow(QMainWindow):
         self.navbar.password_change_requested.connect(self._on_voluntary_password_change)
         self.navbar.import_requested.connect(self._on_import_requested)
         self.navbar.vocab_refresh_requested.connect(self._on_vocab_refresh_requested)
-
         # Import pages signals. The wizard is always entered with a specific
         # package id via `view_package`; there is no package-less entry point.
         # Upload flows emit `view_package` with the new id after success.
@@ -508,8 +505,6 @@ class MainWindow(QMainWindow):
             lambda _: self.navigate_to(Pages.SURVEYS)
         )
 
-        # Completed Claims - view claim details
-        self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
         # Add Claim button - start new office survey
         self.pages[Pages.SURVEYS].add_claim_clicked.connect(self._start_new_office_survey)
@@ -1459,7 +1454,7 @@ class MainWindow(QMainWindow):
         else:
             dup_page.set_return_to_import(True)
             dup_page.refresh()
-        self.navbar.set_current_tab(4)
+        self.navbar.set_current_tab(3)
         self.stack.setCurrentWidget(dup_page)
 
     def _on_package_status_changed_after_approve(self, package_id: str):
@@ -2195,6 +2190,7 @@ class MainWindow(QMainWindow):
         self.pages[Pages.SURVEYS].refresh()
         self.navbar.set_current_tab(1)
         self._on_tab_changed(1)
+
 
     def _on_survey_cancelled(self):
         """Handle survey cancellation from wizard."""
