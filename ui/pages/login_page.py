@@ -813,6 +813,7 @@ class LoginPage(QWidget):
             b.setFocusPolicy(Qt.NoFocus)
 
         btn_min.clicked.connect(lambda: self.window().showMinimized())
+        btn_max.clicked.connect(self._toggle_maximize)
         btn_close.clicked.connect(lambda: self.window().close())
 
         lay.addWidget(btn_min)
@@ -895,7 +896,13 @@ class LoginPage(QWidget):
             self.login_btn.setText(tr("page.login.signing_in"))
         else:
             self.login_btn.setText(getattr(self, '_original_btn_text', tr("page.login.sign_in")))
+    def _toggle_maximize(self):
+        win = self.window()
 
+        if win.isMaximized():
+            win.showNormal()
+        else:
+            win.showMaximized()
     def _show_error(self, message: str):
         """Show a raw API/server error message.
 
