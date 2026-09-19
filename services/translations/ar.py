@@ -846,9 +846,9 @@ AR_TRANSLATIONS = {
     "page.buildings.delete_confirm": "هل أنت متأكد من حذف هذا المبنى؟",
     "page.buildings.units_count": "عدد الوحدات",
     "page.buildings.floors_count": "عدد الطوابق",
-    "navbar.tab.completed_claims": "المطالبات",
+    "navbar.tab.completed_claims": "المسوح الحقلية",
     "navbar.tab.claims": "المطالبات",
-    "navbar.tab.cases": "الادعاءات",
+    "navbar.tab.cases": "المسوح المكتبية",
     "navbar.tab.drafts": "إضافة ادعاء",
     "cases.tab.drafts": "مسودات",
     "cases.tab.finalized": "تمت المعالجة",
@@ -866,7 +866,7 @@ AR_TRANSLATIONS = {
     "navbar.tab.user_management": "إدارة المستخدمين",
     "navbar.tab.map": "الخريطة",
     "navbar.tab.field_assignment": "تجهيز العمل الميداني",
-    "navbar.tab.case_management": "إدارة الحالات",
+    "navbar.tab.case_management": "إدارة وحدات الملكية",
 
     # Case Management Page
     "page.case_management.no_surveys": "لا توجد ادعاءات مرتبطة بهذه الحالة",
