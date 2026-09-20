@@ -134,11 +134,14 @@ WIZARD_TABLE_STYLE = """
 """
 
 # -- Section header text --
-SECTION_HEADER_STYLE = "color: #1A2B3D; font-weight: 600; background: transparent; border: none;"
+SECTION_HEADER_STYLE = (
+    f"color: {Colors.WIZARD_TITLE}; "
+    "font-weight: 600; background: transparent; border: none;"
+)
 
 # -- Section subtitle text --
 SECTION_SUBTITLE_STYLE = (
-    f"color: {Colors.TEXT_MUTED}; "
+    f"color: {Colors.WIZARD_SUBTITLE}; "
     "background: transparent; border: none;"
 )
 
@@ -533,13 +536,13 @@ def make_icon_header(
     col.setAlignment(Qt.AlignVCenter)
 
     t = QLabel(title)
-    t.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+    t.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
     t.setStyleSheet(SECTION_HEADER_STYLE)
     t.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     t.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
 
     s = QLabel(subtitle)
-    s.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+    s.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
     s.setStyleSheet(SECTION_SUBTITLE_STYLE)
     s.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     s.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
