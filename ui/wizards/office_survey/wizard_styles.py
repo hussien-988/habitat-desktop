@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QRegExp as _QtRegExp
 from PyQt5.QtGui import QColor, QRegExpValidator as _QRegExpValidator
-from ui.design_system import ScreenScale
+from ui.design_system import ScreenScale, Colors
 
 
 # -- Step card (white rounded container with blue accent border) --
@@ -92,14 +92,14 @@ def _form_field_style() -> str:
 FORM_FIELD_STYLE = _form_field_style()
 
 # -- Read-only fields --
-READONLY_FIELD_STYLE = """
-    QLineEdit {
+READONLY_FIELD_STYLE = f"""
+    QLineEdit {{
         background-color: #F8FAFF;
         border: 1px solid #dcdfe6;
         border-radius: 10px;
         padding: 4px 14px;
-        color: #606266;
-    }
+        color: {Colors.TEXT_PRIMARY};
+    }}
 """
 
 # -- Table --
@@ -137,7 +137,10 @@ WIZARD_TABLE_STYLE = """
 SECTION_HEADER_STYLE = "color: #1A2B3D; font-weight: 600; background: transparent; border: none;"
 
 # -- Section subtitle text --
-SECTION_SUBTITLE_STYLE = "color: #8896A6; background: transparent; border: none;"
+SECTION_SUBTITLE_STYLE = (
+    f"color: {Colors.TEXT_MUTED}; "
+    "background: transparent; border: none;"
+)
 
 # -- Card title text --
 CARD_TITLE_STYLE = "color: #212B36; font-weight: bold; background: transparent; border: none;"
