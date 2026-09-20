@@ -275,9 +275,15 @@ class _DuplicateCard(AnimatedCard):
             else:
                 fields_text = str(match_fields)
             fields_label = QLabel(fields_text)
-            fields_label.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+            fields_label.setFont(
+                create_font(
+                    size=FontManager.SIZE_SMALL,
+                    weight=FontManager.WEIGHT_REGULAR
+                )
+            )
             fields_label.setStyleSheet(
-                "color: #9CA3AF; background: transparent; border: none;"
+                f"color: {Colors.TEXT_MUTED}; "
+                "background: transparent; border: none;"
             )
             row3.addWidget(fields_label)
 

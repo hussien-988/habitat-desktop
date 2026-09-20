@@ -113,18 +113,18 @@ class Colors:
 
     # Text Colors
     TEXT_PRIMARY = "#2C3E50"  # Dark gray for main text
-    TEXT_SECONDARY = "#7F8C9B"  # Medium gray for secondary text
+    TEXT_SECONDARY = "#5F6B7A"  # Medium gray for secondary text
     TEXT_DISABLED = "#BDC3C7"  # Light gray for disabled state
     TEXT_ON_DARK = "#FFFFFF"  # White text on dark backgrounds
     TEXT_ON_PRIMARY = "#FFFFFF"  # White text on primary blue
-
+    TEXT_MUTED = "#667085"
     # Page Title Colors (Unified across all pages)
-    PAGE_TITLE = "#212B36"  # Unified color for all page titles (24px/18pt, SemiBold)
-    PAGE_SUBTITLE = "#7F8C9B"  # Unified color for all page subtitles (14px/10pt, SemiBold)
+    PAGE_TITLE = "#212B36"
+    PAGE_SUBTITLE = TEXT_SECONDARY  # Unified color for all page subtitles (14px/10pt, SemiBold)
 
     # Wizard-specific text colors
     WIZARD_TITLE = "#1A1F1D"  # Card titles, labels (14px, weight:600)
-    WIZARD_SUBTITLE = "#86909B"  # Card subtitles (14px, weight:400)
+    WIZARD_SUBTITLE = TEXT_MUTED  # Card subtitles (14px, weight:400)
 
     # Border & Divider Colors
     BORDER_DEFAULT = "#E1E8ED"  # Light border
@@ -150,7 +150,7 @@ class Colors:
     INPUT_BORDER = "#E1E8ED"
     INPUT_BORDER_FOCUS = "#00B2E3"
     INPUT_BORDER_ERROR = "#E74C3C"
-    INPUT_PLACEHOLDER = "#95A5A6"
+    INPUT_PLACEHOLDER = "#6B7280"
 
     # Wizard Search Bar
     SEARCH_BAR_BG = "#F8FAFF"  # Search bar background

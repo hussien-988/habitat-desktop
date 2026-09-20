@@ -410,12 +410,12 @@ class HouseholdStep(BaseStep):
 
         label = QLabel(label_text)
         label.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_REGULAR))
-        label.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
+        label.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
         label.setAlignment(_align)
 
         value = QLabel(value_text)
         value.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_SEMIBOLD))
-        value.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        value.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent;")
         value.setAlignment(_align)
 
         hl.addWidget(label, 0, Qt.AlignVCenter)

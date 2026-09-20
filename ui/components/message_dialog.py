@@ -94,7 +94,9 @@ class MessageDialog(QDialog):
         message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
         message_label.setFont(create_font(size=12, weight=FontManager.WEIGHT_REGULAR))
-        message_label.setStyleSheet("color: #7F8C9B; background: transparent;")
+        message_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent;"
+        )
         layout.addWidget(message_label)
         layout.addSpacing(28)
 

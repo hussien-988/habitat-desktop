@@ -183,7 +183,9 @@ class UnitDetailsPage(QWidget):
 
         subtitle = QLabel(tr("page.unit_details.units_info"))
         subtitle.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
-        subtitle.setStyleSheet("color: #86909B; border: none; background: transparent;")
+        subtitle.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; border: none; background: transparent;"
+        )
         subtitle.setAlignment(Qt.AlignRight)
         title_subtitle_layout.addWidget(subtitle)
 
@@ -259,7 +261,9 @@ class UnitDetailsPage(QWidget):
 
             lbl_val = QLabel(str(value_text))
             lbl_val.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-            lbl_val.setStyleSheet("color: #86909B;")
+            lbl_val.setStyleSheet(
+                f"color: {Colors.TEXT_SECONDARY};"
+            )
             lbl_val.setAlignment(Qt.AlignCenter)
 
             col.addWidget(lbl_title)
@@ -294,7 +298,9 @@ class UnitDetailsPage(QWidget):
         desc_text_content = unit.property_description if unit.property_description else tr("wizard.unit.property_description_placeholder")
         desc_text = QLabel(desc_text_content)
         desc_text.setFont(create_font(size=FontManager.WIZARD_FIELD_VALUE, weight=FontManager.WEIGHT_REGULAR))
-        desc_text.setStyleSheet("color: #86909B;")
+        desc_text.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY};"
+        )
         desc_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         desc_text.setWordWrap(True)
         desc_text.setMaximumHeight(ScreenScale.h(40))

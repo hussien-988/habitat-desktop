@@ -561,8 +561,17 @@ class OccupancyClaimsStep(BaseStep):
             vl.setContentsMargins(0, 0, 0, 0)
             vl.setSpacing(3)
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            lbl.setStyleSheet("color: #64748B; background: transparent; border: none;")
+            lbl.setFont(
+                create_font(
+                    size=FontManager.WIZARD_FIELD_LABEL,
+                    weight=FontManager.WEIGHT_SEMIBOLD
+                )
+            )
+
+            lbl.setStyleSheet(
+                f"color: {Colors.WIZARD_TITLE}; "
+                "background: transparent; border: none;"
+            )
             lbl.setAlignment(cell_align)
             if isinstance(value_widget, QLabel):
                 value_widget.setAlignment(cell_align)
@@ -598,12 +607,18 @@ class OccupancyClaimsStep(BaseStep):
         # Row 1: father_name | mother_name
         father_val = QLabel(person.get('father_name') or '-')
         father_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        father_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        father_val.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.father_name"), father_val), 1, 0)
 
         mother_val = QLabel(person.get('mother_name') or '-')
         mother_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        mother_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        mother_val.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.mother_name"), mother_val), 1, 1)
 
         
@@ -623,12 +638,18 @@ class OccupancyClaimsStep(BaseStep):
 
         phone_val = QLabel(contact_value)
         phone_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        phone_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        phone_val.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(contact_label, phone_val), 2, 0)
 
         nid_val = QLabel(person.get('national_id') or '-')
         nid_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-        nid_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+        nid_val.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.national_id"), nid_val), 2, 1)
 
         layout.addLayout(info_grid)
@@ -652,7 +673,10 @@ class OccupancyClaimsStep(BaseStep):
             if rel_display:
                 rel_val = QLabel(rel_display)
                 rel_val.setFont(create_font(size=12, weight=FontManager.WEIGHT_SEMIBOLD))
-                rel_val.setStyleSheet("color: #1E293B; background: transparent; border: none;")
+                rel_val.setStyleSheet(
+                    f"color: {Colors.TEXT_SECONDARY}; "
+                    "background: transparent; border: none;"
+                )
                 bottom_row.addWidget(
                     _labeled_cell(tr("wizard.occupancy_claims.rel_type_label"), rel_val), 1
                 )

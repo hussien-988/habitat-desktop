@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QRegExp as _QtRegExp
 from PyQt5.QtGui import QColor, QRegExpValidator as _QRegExpValidator
-from ui.design_system import ScreenScale
+from ui.design_system import ScreenScale, Colors
 
 
 # -- Step card (white rounded container with blue accent border) --
@@ -92,14 +92,14 @@ def _form_field_style() -> str:
 FORM_FIELD_STYLE = _form_field_style()
 
 # -- Read-only fields --
-READONLY_FIELD_STYLE = """
-    QLineEdit {
+READONLY_FIELD_STYLE = f"""
+    QLineEdit {{
         background-color: #F8FAFF;
         border: 1px solid #dcdfe6;
         border-radius: 10px;
         padding: 4px 14px;
-        color: #606266;
-    }
+        color: {Colors.TEXT_PRIMARY};
+    }}
 """
 
 # -- Table --
@@ -134,10 +134,16 @@ WIZARD_TABLE_STYLE = """
 """
 
 # -- Section header text --
-SECTION_HEADER_STYLE = "color: #1A2B3D; font-weight: 600; background: transparent; border: none;"
+SECTION_HEADER_STYLE = (
+    f"color: {Colors.WIZARD_TITLE}; "
+    "font-weight: 600; background: transparent; border: none;"
+)
 
 # -- Section subtitle text --
-SECTION_SUBTITLE_STYLE = "color: #8896A6; background: transparent; border: none;"
+SECTION_SUBTITLE_STYLE = (
+    f"color: {Colors.WIZARD_SUBTITLE}; "
+    "background: transparent; border: none;"
+)
 
 # -- Card title text --
 CARD_TITLE_STYLE = "color: #212B36; font-weight: bold; background: transparent; border: none;"
@@ -530,13 +536,13 @@ def make_icon_header(
     col.setAlignment(Qt.AlignVCenter)
 
     t = QLabel(title)
-    t.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+    t.setFont(create_font(size=FontManager.WIZARD_STEP_TITLE, weight=FontManager.WEIGHT_SEMIBOLD))
     t.setStyleSheet(SECTION_HEADER_STYLE)
     t.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     t.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
 
     s = QLabel(subtitle)
-    s.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
+    s.setFont(create_font(size=FontManager.WIZARD_STEP_SUBTITLE, weight=FontManager.WEIGHT_REGULAR))
     s.setStyleSheet(SECTION_SUBTITLE_STYLE)
     s.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     s.setAlignment(Qt.AlignLeading | Qt.AlignVCenter)
@@ -663,7 +669,10 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
     if subtitle:
         s = QLabel(subtitle)
         s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet("color: #94A3B8; background: transparent; border: none;")
+        s.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; "
+            "background: transparent; border: none;"
+        )
         s.setAlignment(Qt.AlignCenter)
         s.setWordWrap(True)
         s.setMaximumWidth(ScreenScale.w(320))

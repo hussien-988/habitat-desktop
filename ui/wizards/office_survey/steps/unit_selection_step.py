@@ -146,12 +146,28 @@ class UnitSelectionStep(BaseStep):
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
             lbl = QLabel(tr(lbl_key))
-            lbl.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
-            lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+            lbl.setFont(
+                create_font(
+                    size=FontManager.WIZARD_FIELD_LABEL,
+                    weight=FontManager.WEIGHT_SEMIBOLD
+            )
+)
+            lbl.setStyleSheet(
+                f"color: {Colors.WIZARD_TITLE}; "
+                "background: transparent; border: none;"
+            )
             lbl.setAlignment(_bld_align)
             v = QLabel(val)
-            v.setFont(create_font(size=11, weight=FontManager.WEIGHT_BOLD))
-            v.setStyleSheet(f"color: {Colors.WIZARD_SUBTITLE}; background: transparent; border: none;")
+            v.setFont(
+                create_font(
+                    size=FontManager.WIZARD_FIELD_VALUE,
+                    weight=FontManager.WEIGHT_SEMIBOLD
+                )
+            )
+            v.setStyleSheet(
+                f"color: {Colors.TEXT_SECONDARY}; "
+                "background: transparent; border: none;"
+            )
             v.setAlignment(_bld_align)
             row.addWidget(lbl, 0, Qt.AlignVCenter)
             row.addStretch(1)
@@ -574,8 +590,11 @@ class UnitSelectionStep(BaseStep):
             vl.setContentsMargins(0, 0, 0, 0)
             vl.setSpacing(3)
             lbl = QLabel(label_text)
-            lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_SEMIBOLD))
-            lbl.setStyleSheet("color: #94A3B8; background: transparent; border: none;")
+            lbl.setFont(create_font(size=FontManager.WIZARD_FIELD_LABEL, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet(
+                f"color: {Colors.WIZARD_TITLE}; "
+                "background: transparent; border: none;"
+            )
             lbl.setAlignment(cell_align)
             if isinstance(value_widget, QLabel):
                 value_widget.setAlignment(cell_align)
@@ -631,18 +650,25 @@ class UnitSelectionStep(BaseStep):
         # Row 0: Unit number | Floor number
         num_val_lbl = QLabel(str(unit_display_num))
         num_val_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
-        num_val_lbl.setStyleSheet("color: #0F172A; background: transparent; border: none;")
+        num_val_lbl.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.unit.unit_number"), num_val_lbl), 0, 0)
 
         floor_val_lbl = QLabel(floor_val)
         floor_val_lbl.setFont(create_font(size=13, weight=FontManager.WEIGHT_BOLD))
-        floor_val_lbl.setStyleSheet("color: #0F172A; background: transparent; border: none;")
+        floor_val_lbl.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.unit.floor_number"), floor_val_lbl), 0, 1)
 
         # Row 1: Type | Status (colored pill)
         type_val_lbl = QLabel(unit_type_val)
         type_val_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        type_val_lbl.setStyleSheet("color: #334155; background: transparent; border: none;")
+        type_val_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; "
+                    "background: transparent; border: none;")
         type_val_lbl.setWordWrap(True)
         info_grid.addWidget(_labeled_cell(tr("wizard.unit.unit_type"), type_val_lbl), 1, 0)
 
@@ -670,7 +696,10 @@ class UnitSelectionStep(BaseStep):
         # Row 2: Area | Rooms
         area_val_lbl = QLabel(area_val)
         area_val_lbl.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-        area_val_lbl.setStyleSheet("color: #334155; background: transparent; border: none;")
+        area_val_lbl.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         info_grid.addWidget(_labeled_cell(tr("wizard.unit.unit_area"), area_val_lbl), 2, 0)
 
         rooms_val_lbl = QLabel(rooms_val)

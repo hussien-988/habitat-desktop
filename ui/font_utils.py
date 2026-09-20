@@ -42,8 +42,8 @@ class FontManager:
     FALLBACK_FONT_FAMILY = "Calibri"
 
     # Default sizes (in points)
-    SIZE_SMALL = 8
-    SIZE_CAPTION = 9
+    SIZE_SMALL = 9
+    SIZE_CAPTION = 10
     SIZE_BODY = 10
     SIZE_SUBHEADING = 12
     SIZE_HEADING = 14
@@ -55,8 +55,8 @@ class FontManager:
     WIZARD_STEP_SUBTITLE = 10      # Step subtitle description
     WIZARD_CARD_LABEL = 10         # Card info labels: "حالة البناء", "نوع البناء"
     WIZARD_CARD_VALUE = 10         # Card info values
-    WIZARD_FIELD_LABEL = 9         # Form field labels (smaller)
-    WIZARD_FIELD_VALUE = 9         # Form field values
+    WIZARD_FIELD_LABEL = 10         # Form field labels (smaller)
+    WIZARD_FIELD_VALUE = 10         # Form field values
     WIZARD_EMPTY_TITLE = 14        # Empty state title: "لا توجد مقاسم"
     WIZARD_EMPTY_DESC = 11         # Empty state description
     WIZARD_BADGE = 11              # Status badges: "الأدلة متوفرة"
@@ -98,7 +98,7 @@ class FontManager:
         pass
 
     # Minimum point size to keep Arabic text legible on small screens
-    _MIN_SCALED_POINT_SIZE = 7
+    _MIN_SCALED_POINT_SIZE = 9
 
     @staticmethod
     def _scaled_point_size(size: int) -> int:

@@ -10,6 +10,8 @@ to center text on all Qt5 versions.
 from PyQt5.QtWidgets import QTextEdit, QLabel
 from PyQt5.QtCore import Qt
 
+from ui.design_system import Colors
+
 
 class CenteredTextEdit(QTextEdit):
     """QTextEdit whose placeholder text is always visually centered."""
@@ -20,7 +22,9 @@ class CenteredTextEdit(QTextEdit):
         self._ph_label.setAlignment(Qt.AlignCenter)
         self._ph_label.setWordWrap(True)
         self._ph_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._ph_label.setStyleSheet("color: #9CA3AF; background: transparent;")
+        self._ph_label.setStyleSheet(
+            f"color: {Colors.INPUT_PLACEHOLDER}; background: transparent;"
+        )
         self.textChanged.connect(self._toggle_placeholder)
 
     def setPlaceholderText(self, text: str):
