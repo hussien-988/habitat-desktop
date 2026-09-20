@@ -20,21 +20,21 @@ from services.translation_manager import tr, get_layout_direction
 
 
 # Input field stylesheet (shared with PasswordDialog)
-_INPUT_STYLE = """
-    QLineEdit {
+_INPUT_STYLE = f"""
+    QLineEdit {{
         background-color: #f0f7ff;
         border: 1px solid #E1E8ED;
         border-radius: 8px;
         padding: 0 14px;
         color: #2C3E50;
-    }
-    QLineEdit:focus {
+    }}
+    QLineEdit:focus {{
         border: 2px solid #3890DF;
         padding: 0 13px;
-    }
-    QLineEdit::placeholder {
-        color: #9CA3AF;
-    }
+    }}
+    QLineEdit::placeholder {{
+    color: {Colors.INPUT_PLACEHOLDER};
+}}
 """
 
 _COMBO_STYLE = f"""

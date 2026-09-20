@@ -150,7 +150,7 @@ class Colors:
     INPUT_BORDER = "#E1E8ED"
     INPUT_BORDER_FOCUS = "#00B2E3"
     INPUT_BORDER_ERROR = "#E74C3C"
-    INPUT_PLACEHOLDER = "#95A5A6"
+    INPUT_PLACEHOLDER = "#6B7280"
 
     # Wizard Search Bar
     SEARCH_BAR_BG = "#F8FAFF"  # Search bar background

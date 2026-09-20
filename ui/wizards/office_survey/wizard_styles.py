@@ -666,7 +666,10 @@ def make_empty_state(icon_name: str, title: str, subtitle: str = "") -> QWidget:
     if subtitle:
         s = QLabel(subtitle)
         s.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        s.setStyleSheet("color: #94A3B8; background: transparent; border: none;")
+        s.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; "
+            "background: transparent; border: none;"
+        )
         s.setAlignment(Qt.AlignCenter)
         s.setWordWrap(True)
         s.setMaximumWidth(ScreenScale.w(320))

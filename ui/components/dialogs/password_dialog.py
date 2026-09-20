@@ -26,21 +26,21 @@ logger = get_logger(__name__)
 
 
 # Light theme input style (SET mode only)
-_INPUT_STYLE_LIGHT = """
-    QLineEdit {
+_INPUT_STYLE_LIGHT = f"""
+    QLineEdit {{
         background-color: #f0f7ff;
         border: 1px solid #E1E8ED;
         border-radius: 8px;
         padding: 0 14px;
         color: #2C3E50;
-    }
-    QLineEdit:focus {
+    }}
+    QLineEdit:focus {{
         border: 2px solid #3890DF;
         padding: 0 13px;
-    }
-    QLineEdit::placeholder {
-        color: #9CA3AF;
-    }
+    }}
+    QLineEdit::placeholder {{
+    color: {Colors.INPUT_PLACEHOLDER};
+}}
 """
 
 # Dark theme input style (CHANGE / FORCED modes — matches login page)
@@ -732,15 +732,17 @@ class PasswordDialog(QDialog):
         field.setStyleSheet(_INPUT_STYLE_LIGHT if not self._is_dark else _INPUT_STYLE_LIGHT)
 
     def _highlight_error(self, field: QLineEdit):
-        field.setStyleSheet("""
-            QLineEdit {
+        field.setStyleSheet(f"""
+            QLineEdit {{
                 background-color: #f0f7ff;
                 border: 2px solid #E74C3C;
                 border-radius: 8px;
                 padding: 0 13px;
                 color: #2C3E50;
-            }
-            QLineEdit::placeholder { color: #9CA3AF; }
+            }}
+            QLineEdit::placeholder {{
+                color: {Colors.INPUT_PLACEHOLDER};
+            }}
         """)
 
     # ------------------------------------------------------------------ #
