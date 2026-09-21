@@ -69,13 +69,15 @@ class PersonDialog(QDialog):
     """Dialog for creating or editing a person - 3 tabs."""
 
     def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None,
-                 auth_token: Optional[str] = None, survey_id: Optional[str] = None,
-                 household_id: Optional[str] = None, unit_id: Optional[str] = None,
-                 read_only: bool = False, existing_person_mode: bool = False,
-                 initial_tab: int = 0):
+                auth_token: Optional[str] = None, survey_id: Optional[str] = None,
+                household_id: Optional[str] = None, unit_id: Optional[str] = None,
+                read_only: bool = False, existing_person_mode: bool = False,
+                initial_tab: int = 0, claim_only_mode: bool = False, add_claim_mode: bool = False):
         super().__init__(parent)
         self._existing_person_mode = existing_person_mode
         self._initial_tab = initial_tab
+        self._claim_only_mode = claim_only_mode
+        self._add_claim_mode = add_claim_mode
         self.person_data = person_data
         self.existing_persons = existing_persons or []
         self.editing_mode = person_data is not None and not existing_person_mode
@@ -254,11 +256,13 @@ class PersonDialog(QDialog):
         header_layout.addWidget(close_btn)
 
         # Title in dark header
-        if self.read_only:
+        if self.read_only:      
             title_text = tr("wizard.person_dialog.title_view")
-        elif getattr(self, '_existing_person_mode', False):
+        elif self._add_claim_mode:      
+            title_text = tr("wizard.person_dialog.title_add_claim")
+        elif getattr(self, '_existing_person_mode', False):     
             title_text = tr("wizard.person_dialog.title_link_existing")
-        elif self.editing_mode:
+        elif self.editing_mode:     
             title_text = tr("wizard.person_dialog.title_edit")
         else:
             title_text = tr("wizard.person_dialog.title_add")
@@ -387,8 +391,24 @@ class PersonDialog(QDialog):
         bar3_layout = QHBoxLayout(bar3)
         bar3_layout.setContentsMargins(24, 10, 24, 14)
         bar3_layout.setSpacing(8)
-        bar3_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
-        bar3_layout.addWidget(self._create_btn(tr("common.save"), primary=True, callback=self._on_final_save))
+
+        if not self._claim_only_mode:
+            bar3_layout.addWidget(
+                self._create_btn(
+                    tr("wizard.person_dialog.previous"),
+                    primary=False,
+                    callback=self._go_to_tab2_back,
+                )
+            )
+
+        bar3_layout.addWidget(
+            self._create_btn(
+                tr("common.save"),
+                primary=True,
+                callback=self._on_final_save,
+            )
+        )
+
         self._btn_stack.addWidget(bar3)
 
         self.tab_widget.currentChanged.connect(self._btn_stack.setCurrentIndex)
@@ -1992,6 +2012,9 @@ class PersonDialog(QDialog):
 
     def _go_to_tab2_back(self):
         """Tab 3 → Tab 2."""
+        if self._claim_only_mode:
+            return
+
         self.tab_widget.setCurrentIndex(1)
 
     # Keep legacy method name for backward compatibility

@@ -597,6 +597,7 @@ EN_TRANSLATIONS = {
     "common.success": "Success",
     "wizard.person_dialog.title_add": "Add New Person",
     "wizard.person_dialog.title_edit": "Edit Person Data",
+    "wizard.person_dialog.title_add_claim": "Add Claim",
     "wizard.person_dialog.title_view": "View Person Data",
     "wizard.person_dialog.title_link_existing": "Set Relation — Contact Person",
     "wizard.person_dialog.first_name": "First Name",

@@ -597,6 +597,7 @@ AR_TRANSLATIONS = {
     "common.success": "نجح",
     "wizard.person_dialog.title_add": "اضافة شخص جديد",
     "wizard.person_dialog.title_edit": "تعديل بيانات الشخص",
+    "wizard.person_dialog.title_add_claim": "إضافة ادعاء",
     "wizard.person_dialog.title_view": "عرض بيانات الفرد",
     "wizard.person_dialog.title_link_existing": "تحديد العلاقة - مقدم الطلب",
     "wizard.person_dialog.first_name": "الاسم الأول",
