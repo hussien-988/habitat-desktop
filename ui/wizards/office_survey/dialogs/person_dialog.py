@@ -28,7 +28,8 @@ from services.translation_manager import tr, get_layout_direction, get_language
 from services.error_mapper import map_exception
 from services.exceptions import humanize_exception, log_exception
 from services.display_mappings import (
-    get_relation_type_options, get_relationship_to_head_options,
+    get_relation_type_options, get_claim_type_options,
+    get_relationship_to_head_options,
     get_evidence_type_options,
     get_gender_options, get_nationality_options
 )
@@ -964,7 +965,7 @@ class PersonDialog(QDialog):
         row += 1
         self.rel_type_combo = RtlCombo()
         self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_relation_type_options():
+        for code, display_name in get_claim_type_options():
             self.rel_type_combo.addItem(display_name, code)
         self.rel_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.rel_type_combo, row, 0)
@@ -3169,9 +3170,15 @@ class PersonDialog(QDialog):
         rel = data.get('relation_data', {})
 
         rel_type = rel.get('rel_type')
-        if rel_type:
+
+        claim_type = rel.get('claim_type')
+
+        if claim_type is None and rel_type is not None:
+            claim_type = 1 if rel_type in (1, 5) else 2
+
+        if claim_type is not None:
             for i in range(self.rel_type_combo.count()):
-                if self.rel_type_combo.itemData(i) == rel_type:
+                if self.rel_type_combo.itemData(i) == claim_type:
                     self.rel_type_combo.setCurrentIndex(i)
                     break
 
@@ -3351,6 +3358,26 @@ class PersonDialog(QDialog):
         self._id_doc_download_worker.finished.connect(_on_done)
         self._id_doc_download_worker.error.connect(_on_error)
         self._id_doc_download_worker.start()
+    def _resolved_relation_type(self):
+        claim_type = self.rel_type_combo.currentData()
+
+        existing_rel_type = None
+        if self.person_data:
+            existing_rel_type = (
+                self.person_data.get('relation_data', {}) or {}
+            ).get('rel_type')
+
+        if claim_type == 1:
+            if existing_rel_type in (1, 5):
+                return existing_rel_type
+            return 1
+
+        if claim_type == 2:
+            if existing_rel_type in (2, 3, 4, 99):
+                return existing_rel_type
+            return 2
+
+        return None
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get all person data from all 3 tabs."""
@@ -3380,7 +3407,8 @@ class PersonDialog(QDialog):
             'is_contact_person': False,
             # Tab 3
             'relation_data': {
-                'rel_type': self.rel_type_combo.currentData(),
+                'claim_type': self.rel_type_combo.currentData(),
+                'rel_type': self._resolved_relation_type(),
                 'start_date': self._build_start_date_iso(),
                 'ownership_share': int(float(self.ownership_share.text() or 0)),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
@@ -3560,7 +3588,7 @@ class PersonDialog(QDialog):
 
         # Ownership share: required and must be > 0 when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
-        is_owner = self.rel_type_combo.currentData() == 1
+        is_owner = self._resolved_relation_type() == 1
         try:
             ownership_val = int(ownership_text) if ownership_text else 0
         except ValueError:

@@ -196,7 +196,7 @@ class ApiConfig:
                 self.timeout = Config.API_TIMEOUT
 
 
-class TRRCMSApiClient:
+class TRRCMSApiClient:      
     """API client for TRRCMS Backend."""
 
     def __init__(self, config: ApiConfig):
@@ -2027,9 +2027,14 @@ class TRRCMSApiClient:
         # fall back to relationship_type: that is RelationshipToHead and the
         # enum codes collide (head=1 == Owner=1), which would silently change
         # the claim to Owner.
-        rel_type_val = relation_data.get('rel_type')
-        if rel_type_val is not None:
-            api_data["relationType"] = int(rel_type_val)
+        claim_type_val = relation_data.get('claim_type')
+
+        if claim_type_val is not None:
+            api_data["claimType"] = int(claim_type_val)
+        else:
+            rel_type_val = relation_data.get('rel_type')
+            if rel_type_val is not None:
+                api_data["relationType"] = int(rel_type_val)
         occ_val = relation_data.get('contract_type') or relation_data.get('occupancy_type')
         if occ_val:
             api_data["occupancyType"] = int(occ_val)
@@ -2732,30 +2737,44 @@ class TRRCMSApiClient:
         }
         return {k: v for k, v in api_data.items() if v is not None}
 
-    def _convert_relation_to_api_format(self, relation_data: Dict[str, Any], survey_id: str, unit_id: str) -> Dict[str, Any]:
+    def _convert_relation_to_api_format(
+        self,
+        relation_data: Dict[str, Any],
+        survey_id: str,
+        unit_id: str
+    ) -> Dict[str, Any]:
         """Convert relation data to API format (LinkPersonToPropertyUnitCommand).
 
-        rel_type must be a RelationType enum (Owner/Tenant/Heir/...). Callers
-        must NOT pass RelationshipToHead codes (head/spouse/child) here — the
-        enum codes collide (head=1 == Owner=1) and would silently register
-        the person as Owner.
+        New claim flows should provide claim_type. Legacy callers may still
+        provide rel_type for backward compatibility.
         """
+        claim_type = relation_data.get('claim_type')
         rel_type = relation_data.get('rel_type')
-        if isinstance(rel_type, int):
+
+        claim_type_int = None
+        relation_type_int = None
+
+        if isinstance(claim_type, int):
+            claim_type_int = claim_type
+        elif isinstance(rel_type, int):
             relation_type_int = rel_type
         else:
             raise ValueError(
-                f"link_person_to_unit requires an integer rel_type "
-                f"(RelationType enum), got {rel_type!r}"
+                "link_person_to_unit requires claim_type or rel_type"
             )
 
-        occupancy_type = relation_data.get('contract_type') or relation_data.get('occupancy_type', None)
+        occupancy_type = (
+            relation_data.get('contract_type')
+            or relation_data.get('occupancy_type', None)
+        )
+
         if isinstance(occupancy_type, int) and occupancy_type > 0:
             occupancy_type_int = occupancy_type
         else:
             occupancy_type_int = None
 
         ownership_share_raw = relation_data.get('ownership_share', None)
+
         if ownership_share_raw is not None and ownership_share_raw > 0:
             ownership_share_value = ownership_share_raw
         else:
@@ -2767,20 +2786,30 @@ class TRRCMSApiClient:
             "surveyId": survey_id,
             "personId": relation_data.get('person_id', ''),
             "propertyUnitId": unit_id,
-            "relationType": relation_type_int,
             "hasEvidence": has_evidence,
         }
 
+        if claim_type_int is not None:
+            api_data["claimType"] = claim_type_int
+        else:
+            api_data["relationType"] = relation_type_int
+
         if occupancy_type_int:
             api_data["occupancyType"] = occupancy_type_int
+
         if ownership_share_value is not None:
             api_data["ownershipShare"] = ownership_share_value
 
-        contract_details = relation_data.get('evidence_desc', '') or relation_data.get('contract_details', '')
+        contract_details = (
+            relation_data.get('evidence_desc', '')
+            or relation_data.get('contract_details', '')
+        )
+
         if contract_details:
             api_data["contractDetails"] = contract_details
 
         notes = relation_data.get('notes', '')
+
         if notes:
             api_data["notes"] = notes
 
@@ -2788,7 +2817,6 @@ class TRRCMSApiClient:
             api_data["isContact"] = True
 
         return api_data
-
     def _convert_person_to_api_format(self, person_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert person data to API format matching CreatePersonCommand schema."""
         def get_value(snake_key: str, camel_key: str, default=None):

@@ -436,7 +436,6 @@ def _build_from_translation_keys():
         "claimtype": [
             (1, "mapping.claim_type.ownership"),
             (2, "mapping.claim_type.occupancy"),
-            (3, "mapping.claim_type.tenancy"),
         ],
         "claimstatus": [
             (1, "mapping.claim_status.new"),
