@@ -350,6 +350,7 @@ EN_TRANSLATIONS = {
     "wizard.button.save": "Save",
     "wizard.button.save_changes": "Save Changes",
     "wizard.button.cancel_edit": "Cancel",
+    "wizard.button.exit_cancel": "Exit / Cancel",
     "wizard.button.add_case": "Add a Claim",
     "wizard.button.previous": "Previous",
     "wizard.button.next": "Next",

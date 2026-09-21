@@ -350,6 +350,7 @@ AR_TRANSLATIONS = {
     "wizard.button.save": "حفظ",
     "wizard.button.save_changes": "حفظ التعديلات",
     "wizard.button.cancel_edit": "إلغاء",
+    "wizard.button.exit_cancel": "خروج / إلغاء",
     "wizard.button.add_case": "إضافة ادعاء",
     "wizard.button.previous": "السابق",
     "wizard.button.next": "التالي",
