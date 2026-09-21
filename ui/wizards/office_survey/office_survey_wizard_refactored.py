@@ -745,6 +745,9 @@ class OfficeSurveyWizard(BaseWizard):
                 self.step_labels[i].set_text(name)
 
         # Footer buttons
+        self.btn_exit_cancel.setText(
+            tr("wizard.button.exit_cancel")
+        )
         self.btn_previous.setText(f"\u276E   {tr('wizard.button.previous')}")
         self.btn_next.setText(f"{tr('wizard.button.next')}   \u276F")
         self.btn_final_save.setText(tr("wizard.button.save"))
@@ -944,7 +947,24 @@ class OfficeSurveyWizard(BaseWizard):
         layout.setSpacing(0)
 
         nav_btn_font = create_font(size=ButtonDimensions.NAV_BUTTON_FONT_SIZE, weight=QFont.DemiBold)
+        self.btn_exit_cancel = QPushButton(
+            tr("wizard.button.exit_cancel")
+        )
+        self.btn_exit_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_exit_cancel.setFixedSize(
+            ScreenScale.w(170),
+            ButtonDimensions.NAV_BUTTON_HEIGHT,
+        )
+        self.btn_exit_cancel.setFont(nav_btn_font)
+        self.btn_exit_cancel.setFocusPolicy(Qt.NoFocus)
+        self.btn_exit_cancel.setStyleSheet(FOOTER_SECONDARY_STYLE)
 
+        self.btn_exit_cancel.clicked.connect(
+            self._handle_close
+        )
+
+        layout.addWidget(self.btn_exit_cancel)
+        layout.addSpacing(ScreenScale.w(12))
         # Previous button (transparent state to maintain layout)
         self.btn_previous = QPushButton(f"\u276E   {tr('wizard.button.previous')}")
         self.btn_previous.setCursor(Qt.PointingHandCursor)
