@@ -1390,18 +1390,22 @@ class CaseEntityDetailsPage(QWidget):
         unit_type_raw = ud.get("unitType")
         unit_type_display = get_unit_type_display(unit_type_raw) if unit_type_raw else "-"
 
-        # Location from building
-        gov_name = bd.get("governorateNameArabic") or bd.get("governorate_name_ar") or bd.get("governorateName") or ""
-        sub_name = bd.get("subdistrictNameArabic") or bd.get("subdistrict_name_ar") or bd.get("subdistrictName") or ""
-        location_parts = [p for p in (sub_name, gov_name) if p]
-        location = " - ".join(location_parts) if location_parts else "-"
+        # Neighborhood from building
+        neighborhood = (
+            bd.get("neighborhoodName")
+            or bd.get("neighborhoodNameAr")
+            or bd.get("neighborhoodNameArabic")
+            or bd.get("neighborhood_name_ar")
+            or bd.get("neighborhoodCode")
+            or "-"
+        )
 
         fields = [
             (tr("page.case_entity.field_building_code"), building_code),
             (tr("page.case_entity.field_unit_number"), unit_number),
             (tr("page.case_entity.field_floor"), floor_display),
             (tr("page.case_entity.field_unit_type"), unit_type_display),
-            (tr("page.case_entity.field_location"), location),
+            (tr("page.case_entity.field_location"), neighborhood),
             (tr("page.case_entity.field_relations_count"),
              str(self._case.person_property_relation_count)),
         ]
