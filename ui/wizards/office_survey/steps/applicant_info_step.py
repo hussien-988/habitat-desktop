@@ -12,7 +12,7 @@ import os
 from typing import List
 from datetime import date
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QCompleter, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QWidget, QComboBox,
     QGridLayout, QCheckBox, QSizePolicy, QRadioButton, QButtonGroup,
     QScrollArea, QFileDialog, QGraphicsDropShadowEffect,
@@ -25,7 +25,7 @@ from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
-    make_step_card, make_icon_header, make_divider, make_sub_section_header,
+    make_step_card, make_icon_header, make_divider, make_sub_section_header,make_editable_date_combo,
     read_int_from_combo,
 )
 from ui.design_system import Colors, ScreenScale
@@ -91,7 +91,7 @@ def _mobile_to_desktop_local(value):
     return ""
 
 
-class ApplicantInfoStep(BaseStep):
+class ApplicantInfoStep(BaseStep):      
     """Step 1: Applicant (Visitor) Information — grouped-section form."""
 
     def __init__(self, context: SurveyContext, parent=None):
@@ -100,6 +100,8 @@ class ApplicantInfoStep(BaseStep):
         self._field_styles: dict = {}
         self._evidence_ids: dict = {}
         self._pending_id_replacements: list = []
+        self._id_doc_types: dict = {}
+        self._loaded_id_doc_types: dict = {}
         self._saving_in_progress: bool = False
         from services.api_client import get_api_client
         self._api_client = get_api_client()
@@ -178,64 +180,109 @@ class ApplicantInfoStep(BaseStep):
         card_layout.addSpacing(ScreenScale.h(4))
         card_layout.addWidget(make_divider())
 
-        self.section_id_header = make_sub_section_header(tr("wizard.section.id_photos"))
+        self.section_id_header = make_sub_section_header(
+            tr("wizard.section.id_photos")
+        )
         card_layout.addWidget(self.section_id_header)
 
-        doc_type_row = QHBoxLayout()
-        doc_type_row.setContentsMargins(0, 0, 0, 4)
-        self.lbl_id_doc_type = QLabel(tr("wizard.person_dialog.id_document_type"))
-        self.lbl_id_doc_type.setStyleSheet("color: #5A6B7F; font-weight: 600; font-size: 12px;")
+        picker_row = QHBoxLayout()
+        picker_row.setContentsMargins(0, 0, 0, 0)
+        picker_row.setSpacing(ScreenScale.w(8))
+
+        self.lbl_id_doc_type = QLabel(      
+            tr("wizard.person_dialog.id_document_type")
+        )
+        self.lbl_id_doc_type.setStyleSheet(
+            "color: #5A6B7F;"
+            "font-weight: 600;"
+            "font-size: 12px;"
+            "background: transparent;"
+            "border: none;"
+        )
+
         self._id_doc_type_combo = RtlCombo()
         self._id_doc_type_combo.setFocusPolicy(Qt.ClickFocus)
+        self._id_doc_type_combo.setMinimumWidth(ScreenScale.w(170))
+        self._id_doc_type_combo.setMaximumWidth(ScreenScale.w(230))
+        self._id_doc_type_combo.setFixedHeight(ScreenScale.h(38))
 
-        from services.display_mappings import get_identification_document_type_options
-        for code, label in get_identification_document_type_options():
-            if code == 0:
-                continue
-            self._id_doc_type_combo.addItem(label, code)
-
-        down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
-        self._id_doc_type_combo.setStyleSheet(f"""
-            QComboBox {{
+        self._id_doc_type_combo.setStyleSheet("""
+            QComboBox {
                 border: 1px solid #D0D7E2;
                 border-radius: 8px;
-                padding: 6px 10px;
-                background: #F8FAFF;
+                padding: 4px 10px;
+                background: #FFFFFF;
                 color: #2C3E50;
-                font-size: 13px;
-                min-height: 28px;
-                outline: none;
-            }}
-            QComboBox QLineEdit {{
-                border: none;
-                background: transparent;
-                color: #2C3E50;
-                padding: 0px 24px 0px 24px;
-                selection-background-color: transparent;
-            }}
-            QComboBox:focus {{
-                border: 1.5px solid #3890DF;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 28px;
-                subcontrol-position: right center;
-            }}
-            QComboBox::down-arrow {{
-                image: url({down_img});
-                width: 12px;
-                height: 12px;
-            }}
-        """)
-        doc_type_row.addWidget(self.lbl_id_doc_type)
-        doc_type_row.addWidget(self._id_doc_type_combo, 1)
-        card_layout.addLayout(doc_type_row)
+                font-size: 10pt;
+            }
 
-        self._id_upload_frame = self._create_upload_frame(
-            self._browse_files, "id_upload",
-            button_text=tr("wizard.person_dialog.attach_id_photos"),
+            QComboBox:focus {
+                border: 1.5px solid #3890DF;
+            }
+
+            QComboBox::drop-down {
+                border: none;
+                width: 26px;
+            }
+        """)
+
+
+        self._id_choose_file_btn = QPushButton(
+            tr("wizard.person_dialog.choose_id_document_file")
         )
-        card_layout.addWidget(self._id_upload_frame)
+        self._id_choose_file_btn.setFixedHeight(ScreenScale.h(38))
+        self._id_choose_file_btn.setMinimumWidth(ScreenScale.w(115))
+        self._id_choose_file_btn.setEnabled(False)
+
+        self._id_choose_file_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3890DF;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 8px;
+                padding: 5px 14px;
+                font-size: 10pt;
+                font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #2E7BD6;
+            }
+
+            QPushButton:disabled {
+                background-color: #D5DCE5;
+                color: #8A98A8;
+            }
+        """)
+
+        self._id_doc_type_combo.currentIndexChanged.connect(
+            self._on_id_document_type_changed
+        )
+        self._id_choose_file_btn.clicked.connect(
+            self._browse_files
+        )
+        self._refill_id_document_type_combo()
+
+        picker_row.addWidget(self.lbl_id_doc_type)
+        picker_row.addWidget(self._id_doc_type_combo)
+        picker_row.addWidget(self._id_choose_file_btn)
+        picker_row.addStretch()
+
+        card_layout.addLayout(picker_row)
+
+        self._id_documents_container = QWidget()
+        self._id_documents_container.setStyleSheet(
+            "background: transparent; border: none;"
+        )
+
+        self._id_documents_layout = QVBoxLayout(
+            self._id_documents_container
+        )
+        self._id_documents_layout.setContentsMargins(0, 4, 0, 0)
+        self._id_documents_layout.setSpacing(ScreenScale.h(5))
+
+        card_layout.addWidget(self._id_documents_container)
+
         card_layout.addStretch()
 
         return card
@@ -285,25 +332,23 @@ class ApplicantInfoStep(BaseStep):
         birth_layout = QHBoxLayout()
         birth_layout.setSpacing(6)
         birth_layout.setContentsMargins(0, 0, 0, 0)
-        birth_input_style = self._input_style()
+        self.birth_day_combo = make_editable_date_combo(
+            [(f"{d:02d}", d) for d in range(1, 32)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.day_placeholder"),
+        )
 
-        self.birth_day_combo = RtlCombo()
-        for d in range(1, 32):
-            self.birth_day_combo.addItem(f"{d:02d}", d)
-        self.birth_day_combo.setCurrentIndex(-1)
-        self.birth_day_combo.setStyleSheet(birth_input_style)
+        self.birth_month_combo = make_editable_date_combo(
+            [(f"{m:02d}", m) for m in range(1, 13)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.month_placeholder"),
+        )
 
-        self.birth_month_combo = RtlCombo()
-        for m in range(1, 13):
-            self.birth_month_combo.addItem(f"{m:02d}", m)
-        self.birth_month_combo.setCurrentIndex(-1)
-        self.birth_month_combo.setStyleSheet(birth_input_style)
-
-        self.birth_year_combo = RtlCombo()
-        for y in range(date.today().year, 1919, -1):
-            self.birth_year_combo.addItem(str(y), y)
-        self.birth_year_combo.setCurrentIndex(-1)
-        self.birth_year_combo.setStyleSheet(birth_input_style)
+        self.birth_year_combo = make_editable_date_combo(
+            [(str(y), y) for y in range(date.today().year, 1919, -1)],
+            max_digits=4,
+            placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
         birth_layout.addWidget(self.birth_day_combo, 1)
         birth_layout.addWidget(self.birth_month_combo, 1)
         birth_layout.addWidget(self.birth_year_combo, 2)
@@ -323,11 +368,35 @@ class ApplicantInfoStep(BaseStep):
         row += 1
 
         self.nationality = RtlCombo()
-        self.nationality.setFocusPolicy(Qt.ClickFocus)
+        self.nationality.setFocusPolicy(Qt.StrongFocus)
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
 
-        for code, display_name in get_nationality_options():
+        for code, display_name in get_nationality_options():        
             self.nationality.addItem(display_name, code)
+
+        self.nationality.lineEdit().setReadOnly(False)
+        self.nationality.setInsertPolicy(QComboBox.NoInsert)
+
+        self._nationality_completer = QCompleter(
+            self.nationality.model(),
+            self.nationality,
+        )
+        self._nationality_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._nationality_completer.setFilterMode(Qt.MatchContains)
+        self._nationality_completer.setCompletionMode(QCompleter.PopupCompletion)
+
+        self.nationality.setCompleter(self._nationality_completer)
+
+        self._nationality_completer.activated[str].connect(
+            self._select_nationality_text
+        )
+
+        self.nationality.lineEdit().editingFinished.connect(
+            lambda: self._select_nationality_text(
+                self.nationality.currentText()
+            )
+        )
+
         self.nationality.setStyleSheet(self._input_style())
         grid.addWidget(self.nationality, row, 0)
 
@@ -347,7 +416,15 @@ class ApplicantInfoStep(BaseStep):
         self._gender_group.buttonClicked.connect(lambda *_: self._clear_gender_err())
 
         return grid
+    def _select_nationality_text(self, text):
+        text = str(text or "").strip()
 
+        for index in range(self.nationality.count()):
+            if self.nationality.itemText(index).strip().casefold() == text.casefold():
+                self.nationality.setCurrentIndex(index)
+                return
+
+        self.nationality.setCurrentIndex(0)
 
     def _build_contact_section(self) -> QVBoxLayout:
         layout = QVBoxLayout()
@@ -473,32 +550,133 @@ class ApplicantInfoStep(BaseStep):
         return layout
 
     # File upload helpers
+    def _refill_id_document_type_combo(self):
+        current_type = self._id_doc_type_combo.currentData()
 
-    def _browse_files(self):
-        file_paths, _ = QFileDialog.getOpenFileNames(
-            self, tr("wizard.person_dialog.choose_files"), "",
-            "Images (*.png *.jpg *.jpeg *.pdf)"
+        self._id_doc_type_combo.blockSignals(True)
+        self._id_doc_type_combo.clear()
+
+        from services.display_mappings import (
+            get_identification_document_type_options,
         )
-        if file_paths:
-            existing = {os.path.normpath(f) for f in self.uploaded_files}
-            for fp in file_paths:
-                if os.path.normpath(fp) not in existing:
-                    self.uploaded_files.append(fp)
-                    existing.add(os.path.normpath(fp))
-            self._update_upload_thumbnails("id_upload", self.uploaded_files)
+
+        for code, label in get_identification_document_type_options():
+            if code == 0:
+                continue
+
+            self._id_doc_type_combo.addItem(
+                label,
+                code,
+            )
+
+        if current_type is not None:
+            index = self._id_doc_type_combo.findData(current_type)
+
+            if index >= 0:
+                self._id_doc_type_combo.setCurrentIndex(index)
+            else:
+                self._id_doc_type_combo.setCurrentIndex(-1)
+        else:
+            self._id_doc_type_combo.setCurrentIndex(-1)
+
+        line_edit = self._id_doc_type_combo.lineEdit()
+
+        if line_edit is not None:
+            line_edit.setPlaceholderText(
+                tr("wizard.person_dialog.select_id_document_type")
+            )
+
+        self._id_doc_type_combo.blockSignals(False)
+
+        self._on_id_document_type_changed(
+            self._id_doc_type_combo.currentIndex()
+        )
+    def _on_id_document_type_changed(self, _index):
+        document_type = self._id_doc_type_combo.currentData()
+
+        self._id_choose_file_btn.setEnabled(
+            document_type is not None
+        )
+    def _reset_id_document_picker(self):
+        self._id_doc_type_combo.setCurrentIndex(-1)
+
+        line_edit = self._id_doc_type_combo.lineEdit()
+
+        if line_edit is not None:
+            line_edit.clear()
+            line_edit.setPlaceholderText(
+                tr("wizard.person_dialog.select_id_document_type")
+            )
+
+        self._id_choose_file_btn.setEnabled(False)
+    def _browse_files(self):
+        document_type = self._id_doc_type_combo.currentData()
+
+        if document_type is None:
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("wizard.person_dialog.choose_id_document_file"),
+            "",
+            "Images and PDF (*.png *.jpg *.jpeg *.pdf)",
+        )
+
+        if not file_path:
+            return
+
+        norm = os.path.normpath(file_path)
+
+        existing_file = next(
+            (
+                path
+                for path in self.uploaded_files
+                if os.path.normpath(path) == norm
+            ),
+            None,
+        )
+
+        if existing_file is None:
+            self.uploaded_files.append(file_path)
+
+        self._id_doc_types[norm] = document_type
+
+        self._update_upload_thumbnails(
+            "id_upload",
+            self.uploaded_files,
+        )
+
+        self._reset_id_document_picker()
 
     def _remove_uploaded_file(self, file_path: str):
         norm = os.path.normpath(file_path)
+
+        self._id_doc_types.pop(norm, None)
+        self._loaded_id_doc_types.pop(norm, None)
+
         if norm in self._evidence_ids:
             evidence_id = self._evidence_ids.pop(norm)
-            self._pending_id_replacements.append(evidence_id)
+
+            self._pending_id_replacements.append(
+                evidence_id
+            )
+
             logger.warning(
-                f"[ID-DOCS] queued for replacement: ev_id={evidence_id} "
+                f"[ID-DOCS] queued for replacement: "
+                f"ev_id={evidence_id} "
                 f"file={os.path.basename(file_path)}"
             )
-        if file_path in self.uploaded_files:
-            self.uploaded_files.remove(file_path)
-        self._update_upload_thumbnails("id_upload", self.uploaded_files)
+
+        self.uploaded_files = [
+            path
+            for path in self.uploaded_files
+            if os.path.normpath(path) != norm
+        ]
+
+        self._update_upload_thumbnails(
+            "id_upload",
+            self.uploaded_files,
+        )
     def _thumbnail_columns_for_frame(self, frame: QFrame) -> int:
         """Calculate thumbnail columns based on the actual available width."""
         available_width = frame.width() - ScreenScale.w(48)
@@ -522,7 +700,7 @@ class ApplicantInfoStep(BaseStep):
         rows = (file_count + columns - 1) // columns
         visible_rows = min(rows, 2)
 
-        row_height = ScreenScale.h(58)
+        row_height = ScreenScale.h(68)
         spacing = ScreenScale.h(6)
         vertical_padding = ScreenScale.h(4)
 
@@ -534,33 +712,187 @@ class ApplicantInfoStep(BaseStep):
         frame._thumbnails_scroll.setFixedHeight(height)
         frame._thumbnails_scroll.setVisible(True)
 
-    def _update_upload_thumbnails(self, obj_name: str, file_paths: list):
-        frame = self.findChild(QFrame, obj_name)
-        if not frame or not hasattr(frame, "_thumbnails_layout"):
+    def _update_upload_thumbnails(
+        self,
+        obj_name: str,
+        file_paths: list,
+    ):
+        if not hasattr(self, "_id_documents_layout"):
             return
 
-        layout = frame._thumbnails_layout
+        layout = self._id_documents_layout
 
         while layout.count():
             item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
 
-        columns = self._thumbnail_columns_for_frame(frame)
-        self._sync_upload_scroll_height(frame, len(file_paths), columns)
+            widget = item.widget()
 
-        if not file_paths:
-            return
+            if widget is not None:
+                widget.deleteLater()
 
-        for index, fp in enumerate(file_paths):
-            row = index // columns
-            col = index % columns
+        for file_path in file_paths:
             layout.addWidget(
-                self._create_thumbnail_widget(fp, self._remove_uploaded_file),
-                row,
-                col,
-                Qt.AlignRight | Qt.AlignTop,
+                self._create_id_document_row(file_path)
+            ) 
+    def _open_id_document(self, file_path: str):
+        QDesktopServices.openUrl(
+            QUrl.fromLocalFile(file_path)
+        )
+    def _create_id_document_row(
+        self,
+        file_path: str,
+    ) -> QWidget:
+        norm = os.path.normpath(file_path)
+        document_type = self._id_doc_types.get(norm)
+
+        from services.display_mappings import (
+            get_identification_document_type_display,
+        )
+
+        type_text = (
+            get_identification_document_type_display(
+                document_type
             )
+            if document_type is not None
+            else "-"
+        )
+
+        row = QFrame()
+        row.setMinimumHeight(ScreenScale.h(42))
+        row.setMaximumHeight(ScreenScale.h(46))
+        row.setLayoutDirection(
+            get_layout_direction()
+        )
+
+        row.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFF;
+                border: 1px solid #DCE4EE;
+                border-radius: 8px;
+            }
+        """)
+
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(8, 4, 8, 4)
+        row_layout.setSpacing(ScreenScale.w(8))
+
+        file_info = QWidget()
+        file_info.setStyleSheet(
+            "background: transparent; border: none;"
+        )
+
+        file_layout = QHBoxLayout(file_info)
+        file_layout.setContentsMargins(0, 0, 0, 0)
+        file_layout.setSpacing(ScreenScale.w(6))
+
+        preview = QLabel()
+        preview.setFixedSize(
+            ScreenScale.w(30),
+            ScreenScale.h(30),
+        )
+        preview.setAlignment(Qt.AlignCenter)
+        preview.setStyleSheet("""
+            QLabel {
+                background-color: #FFFFFF;
+                border: 1px solid #DBEAFE;
+                border-radius: 6px;
+                color: #64748B;
+                font-size: 8pt;
+            }
+        """)
+
+        pixmap = QPixmap(file_path)
+
+        if not pixmap.isNull():
+            preview.setPixmap(
+                pixmap.scaled(
+                    ScreenScale.w(26),
+                    ScreenScale.h(26),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
+        else:
+            preview.setText("PDF")
+
+        preview.setCursor(Qt.PointingHandCursor)
+        preview.mousePressEvent = (
+            lambda event, fp=file_path:
+            self._open_id_document(fp)
+        )
+
+        file_name = QLabel(
+            os.path.basename(file_path)
+        )
+        file_name.setToolTip(file_path)
+        file_name.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                border: none;
+                color: #475569;
+                font-size: 9pt;
+            }
+        """)
+        file_name.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Preferred,
+        )
+
+        file_layout.addWidget(preview)
+        file_layout.addWidget(file_name, 1)
+
+        type_label = QLabel(type_text)
+        type_label.setAlignment(Qt.AlignCenter)
+        type_label.setMinimumWidth(
+            ScreenScale.w(115)
+        )
+        type_label.setMaximumWidth(
+            ScreenScale.w(170)
+        )
+        type_label.setStyleSheet("""
+            QLabel {
+                background-color: #EEF6FF;
+                color: #2E6FAE;
+                border: none;
+                border-radius: 6px;
+                padding: 5px 8px;
+                font-size: 9pt;
+                font-weight: 600;
+            }
+        """)
+
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedSize(
+            ScreenScale.w(26),
+            ScreenScale.h(26),
+        )
+        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #7B8794;
+                border: none;
+                font-size: 15px;
+                font-weight: bold;
+            }
+
+            QPushButton:hover {
+                color: #D64545;
+                background-color: #FDECEC;
+                border-radius: 6px;
+            }
+        """)
+
+        remove_btn.clicked.connect(
+            lambda _checked=False, fp=file_path:
+            self._remove_uploaded_file(fp)
+        )
+
+        row_layout.addWidget(file_info, 1)
+        row_layout.addWidget(type_label)
+        row_layout.addWidget(remove_btn)
+
+        return row  
     def _create_thumbnail_widget(self, file_path: str, remove_callback) -> QWidget:
         container = QWidget()
         container.setFixedSize(ScreenScale.w(52), ScreenScale.h(52))
@@ -676,7 +1008,7 @@ class ApplicantInfoStep(BaseStep):
         thumbnails_layout.setHorizontalSpacing(ScreenScale.w(6))
         thumbnails_layout.setVerticalSpacing(ScreenScale.h(6))
         thumbnails_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
+        thumbnails_layout.setColumnStretch(0, 1)
         thumbnails_scroll.setWidget(thumbnails_container)
         frame_layout.addWidget(thumbnails_scroll)
 
@@ -936,7 +1268,17 @@ class ApplicantInfoStep(BaseStep):
                     result.add_error(tr("wizard.applicant.birth_date_future"))
             except ValueError:
                 result.add_error(tr("wizard.applicant.birth_date_invalid"))
+        for file_path in self.uploaded_files:
+            norm = os.path.normpath(file_path)
 
+            if (
+                norm not in self._evidence_ids
+                and self._id_doc_types.get(norm) is None
+            ):
+                result.add_error(
+                    tr("wizard.person_dialog.select_id_document_type")
+                )
+                break
         if not result.is_valid:
             return result
 
@@ -1007,114 +1349,217 @@ class ApplicantInfoStep(BaseStep):
                         Toast.show_toast(self.window(), msg, Toast.ERROR)
                         result.add_error(msg)
 
-            # 6. ID photo replacement / upload / deletion
+            # 6. Proof of identity documents: replacement / upload / deletion
             person_id = self.context.get_data("contact_person_id")
+
             if person_id:
-                doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
-                already_uploaded = set(self.context.get_data("uploaded_id_photos") or [])
-                new_files = [f for f in self.uploaded_files
-                             if f not in already_uploaded
-                             and os.path.normpath(f) not in self._evidence_ids]
-                doc_type_synced_ids: set = set()
+                current_paths = {
+                    os.path.normpath(path)
+                    for path in self.uploaded_files
+                }
+
+                already_uploaded = {
+                    path
+                    for path in (
+                        self.context.get_data("uploaded_id_photos") or []
+                    )
+                    if os.path.normpath(path) in current_paths
+                }
+
+                new_files = [
+                    file_path
+                    for file_path in self.uploaded_files
+                    if file_path not in already_uploaded
+                    and os.path.normpath(file_path) not in self._evidence_ids
+                ]
 
                 logger.warning(
-                    f"[ID-DOCS FLOW] applicant_step: new_files={len(new_files)} "
+                    f"[ID-DOCS FLOW] applicant_step: "
+                    f"new_files={len(new_files)} "
                     f"pending_replacements={list(self._pending_id_replacements)}"
                 )
 
-                for fp in list(new_files):
+                # Replace previously removed server documents first.
+                for file_path in list(new_files):
                     if not self._pending_id_replacements:
                         break
-                    old_ev_id = self._pending_id_replacements.pop(0)
+
+                    norm = os.path.normpath(file_path)
+                    document_type = self._id_doc_types.get(norm)
+
+                    if document_type is None:
+                        logger.warning(
+                            f"[ID-DOCS] No document type for "
+                            f"{os.path.basename(file_path)}"
+                        )
+                        continue
+
+                    old_document_id = self._pending_id_replacements.pop(0)
+
                     try:
                         logger.warning(
-                            f"[ID-DOCS FLOW] PUT replace: old_id={old_ev_id} "
-                            f"new_file={os.path.basename(fp)}"
+                            f"[ID-DOCS FLOW] PUT replace: "
+                            f"old_id={old_document_id} "
+                            f"new_file={os.path.basename(file_path)} "
+                            f"document_type={document_type}"
                         )
+
                         response = run_blocking_async(
                             self._api_client.update_identification_document,
                             survey_id=survey_id,
-                            document_id=old_ev_id,
+                            document_id=old_document_id,
                             person_id=person_id,
-                            file_path=fp,
-                            document_type=doc_type,
+                            file_path=file_path,
+                            document_type=document_type,
                         )
-                        new_eid = (response.get("id") or response.get("evidenceId")
-                                   or response.get("Id") or old_ev_id)
-                        self._evidence_ids[os.path.normpath(fp)] = new_eid
-                        if doc_type is not None:
-                            doc_type_synced_ids.add(new_eid)
-                        new_files.remove(fp)
-                        already_uploaded.add(fp)
-                        logger.info(f"ID evidence replaced: {old_ev_id} -> {new_eid}")
+
+                        new_document_id = (
+                            response.get("id")
+                            or response.get("evidenceId")
+                            or response.get("Id")
+                            or old_document_id
+                        )
+
+                        self._evidence_ids[norm] = new_document_id
+
+                        new_files.remove(file_path)
+                        already_uploaded.add(file_path)
+
+                        logger.info(
+                            f"ID evidence replaced: "
+                            f"{old_document_id} -> {new_document_id}"
+                        )
+
                     except Exception as e:
-                        logger.error(f"Failed to PUT replace {old_ev_id}: {e}")
-                        self._pending_id_replacements.insert(0, old_ev_id)
-                        Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
+                        logger.error(
+                            f"Failed to replace ID document "
+                            f"{old_document_id}: {e}"
+                        )
+
+                        self._pending_id_replacements.insert(
+                            0,
+                            old_document_id,
+                        )
+
+                        Toast.show_toast(
+                            self.window(),
+                            map_exception(e),
+                            Toast.ERROR,
+                     )
+
                         break
 
-                for fp in new_files:
+                # Upload documents that are completely new.
+                for file_path in new_files:
+                    norm = os.path.normpath(file_path)
+                    document_type = self._id_doc_types.get(norm)
+
+                    if document_type is None:
+                        logger.warning(
+                            f"[ID-DOCS] Skipping upload without "
+                            f"document type: {os.path.basename(file_path)}"
+                        )
+                        continue
+
                     try:
+                        logger.warning(
+                            f"[ID-DOCS FLOW] POST new: "
+                            f"file={os.path.basename(file_path)} "
+                            f"document_type={document_type}"
+                        )
+
                         response = run_blocking_async(
                             self._api_client.upload_identification_document,
                             survey_id=survey_id,
                             person_id=person_id,
-                            file_path=fp,
-                            document_type=doc_type,
+                            file_path=file_path,
+                            document_type=document_type,
                         )
-                        ev_id = (response.get("id") or response.get("evidenceId")
-                                 or response.get("Id"))
-                        if ev_id:
-                            self._evidence_ids[os.path.normpath(fp)] = ev_id
-                            if doc_type is not None:
-                                doc_type_synced_ids.add(ev_id)
-                        already_uploaded.add(fp)
-                        logger.info(f"ID photo uploaded: {os.path.basename(fp)}")
-                    except Exception as e:
-                        logger.error(f"Failed to upload ID photo {fp}: {e}")
-                        Toast.show_toast(self.window(), map_exception(e), Toast.ERROR)
 
-                for old_id in list(self._pending_id_replacements):
+                        document_id = (
+                            response.get("id")
+                            or response.get("evidenceId")
+                            or response.get("Id")
+                        )
+
+                        if document_id:
+                            self._evidence_ids[norm] = document_id
+
+                        already_uploaded.add(file_path)
+
+                        logger.info(
+                            f"Identification document uploaded: "
+                            f"{os.path.basename(file_path)} "
+                            f"type={document_type}"
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to upload identification document "
+                            f"{file_path}: {e}"
+                        )
+
+                        Toast.show_toast(
+                            self.window(),
+                            map_exception(e),
+                            Toast.ERROR,
+                        )
+
+                # Anything removed and not reused as a replacement
+                # should now be deleted from the server.
+                for old_document_id in list(
+                    self._pending_id_replacements
+                ):
                     try:
                         run_blocking_async(
                             self._api_client.delete_identification_document,
-                            survey_id, old_id,
+                            survey_id,
+                            old_document_id,
                         )
-                        logger.info(f"Orphaned ID evidence deleted: {old_id}")
+
+                        logger.info(
+                            f"Identification document deleted: "
+                            f"{old_document_id}"
+                        )
+
                     except Exception as e:
-                        if isinstance(e, ApiException) and e.status_code == 404:
-                            logger.info(f"ID evidence {old_id} already gone (404 treated as success)")
+                        if (
+                            isinstance(e, ApiException)
+                            and e.status_code == 404
+                        ):
+                            logger.info(
+                                f"Identification document "
+                                f"{old_document_id} already deleted"
+                            )
                         else:
-                            logger.error(f"Failed to delete orphaned ID evidence {old_id}: {e}")
+                            logger.error(
+                                f"Failed to delete identification "
+                                f"document {old_document_id}: {e}"
+                            )
+
                 self._pending_id_replacements.clear()
 
-                current_doc_type = self._id_doc_type_combo.currentData() if hasattr(self, '_id_doc_type_combo') else None
-                loaded_doc_type = getattr(self, '_loaded_id_doc_type', None)
-                if current_doc_type is not None and current_doc_type != loaded_doc_type:
-                    server_ev_ids = list(getattr(self, '_server_id_evidence_ids', []) or [])
-                    local_ev_ids = [ev for ev in self._evidence_ids.values() if ev]
-                    seen = set()
-                    target_ids = []
-                    for ev in server_ev_ids + local_ev_ids:
-                        if ev and ev not in seen and ev not in doc_type_synced_ids:
-                            seen.add(ev)
-                            target_ids.append(ev)
-                    for ev_id in target_ids:
-                        try:
-                            run_blocking_async(
-                                self._api_client.update_identification_document,
-                                survey_id, ev_id, person_id,
-                                document_type=current_doc_type,
-                            )
-                            logger.info(f"ID doc_type updated to {current_doc_type} for evidence {ev_id}")
-                        except Exception as e:
-                            logger.error(f"Failed to update doc_type for evidence {ev_id}: {e}")
-                    self._loaded_id_doc_type = current_doc_type
+                self.context.update_data(
+                    "uploaded_id_photos",
+                    list(already_uploaded),
+                )
 
-                self.context.update_data("uploaded_id_photos", list(already_uploaded))
                 if self.context.applicant is None:
                     self.context.applicant = {}
-                self.context.applicant["id_evidence_map"] = dict(self._evidence_ids)
+
+                self.context.applicant["id_evidence_map"] = dict(
+                    self._evidence_ids
+                )
+
+                self.context.applicant["id_document_types"] = {
+                    os.path.normpath(path): self._id_doc_types.get(
+                        os.path.normpath(path)
+                    )
+                    for path in self.uploaded_files
+                    if self._id_doc_types.get(
+                        os.path.normpath(path)
+                    ) is not None
+                }
         finally:
             self._saving_in_progress = False
             self._spinner.hide_loading()
@@ -1145,6 +1590,20 @@ class ApplicantInfoStep(BaseStep):
         # has — guards against an async ID-photo download finishing after this
         # call (which would leave self.uploaded_files empty momentarily).
         photo_paths = list(self.uploaded_files) or list(existing.get("id_photo_paths", []))
+        existing_doc_types = existing.get("id_document_types") or {}
+
+        id_document_types = {}
+
+        for path in photo_paths:
+            norm = os.path.normpath(path)
+
+            document_type = self._id_doc_types.get(
+                norm,
+                existing_doc_types.get(norm),
+            )
+
+            if document_type is not None:
+                id_document_types[norm] = document_type
         data = {
             "first_name_ar":  fn,
             "father_name_ar": fat,
@@ -1161,6 +1620,7 @@ class ApplicantInfoStep(BaseStep):
 
             "in_person":      self.in_person_check.isChecked(),
             "id_photo_paths": photo_paths,
+            "id_document_types": id_document_types,
             "full_name": " ".join(p for p in [fn, fat, ln] if p),
         }
         # Carry server-side evidence metadata across so populate_data can still
@@ -1185,7 +1645,10 @@ class ApplicantInfoStep(BaseStep):
         self.nationality.setCurrentIndex(0)
         self.in_person_check.setChecked(True)
         self.uploaded_files.clear()
+        self._id_doc_types.clear()
+        self._loaded_id_doc_types.clear()       
         self._update_upload_thumbnails("id_upload", [])
+        self._reset_id_document_picker()
         for err_lbl in [self._first_name_error, self._last_name_error,
                         self._father_name_error, self._mother_name_error,
                         self._mobile_error, self._landline_error]:
@@ -1246,21 +1709,35 @@ class ApplicantInfoStep(BaseStep):
         import os as _os
         person_id = self.context.get_data("contact_person_id")
         if person_id:
-            # Once the contact person exists on the server, the server owns its
-            # ID photos. Re-fetch them every time the step is shown so deletions
-            # or additions made elsewhere (e.g. the claims-step person dialog)
-            # are reflected. Local id_photo_paths are a cache only, never the
-            # source of truth. Doc type and server evidence ids are refreshed
-            # from the authoritative list inside the download callback.
             self.uploaded_files = []
             self._evidence_ids = {}
+            self._id_doc_types = {}
+            self._loaded_id_doc_types = {}
+
             self._update_upload_thumbnails("id_upload", [])
+            self._reset_id_document_picker()
+
             self._download_id_photos_from_api(force_server=True)
         else:
             # Not yet persisted — the in-progress form upload is the only state.
             photos = a.get("id_photo_paths", [])
             valid_photos = [p for p in photos if p and _os.path.exists(p)]
             self.uploaded_files = list(valid_photos)
+            saved_doc_types = a.get("id_document_types") or {}
+
+            self._id_doc_types = {
+                _os.path.normpath(path): saved_doc_types.get(
+                    _os.path.normpath(path)
+                )
+                for path in valid_photos
+                if saved_doc_types.get(
+                    _os.path.normpath(path)
+                ) is not None
+            }
+
+            self._loaded_id_doc_types = dict(
+                self._id_doc_types
+            )
             saved_ev_map = a.get("id_evidence_map") or {}
             if saved_ev_map:
                 self._evidence_ids = {
@@ -1274,13 +1751,7 @@ class ApplicantInfoStep(BaseStep):
                 d.get('id') or d.get('evidenceId') or d.get('Id')
                 for d in id_evidences if (d.get('id') or d.get('evidenceId') or d.get('Id'))
             ]
-            if id_evidences and hasattr(self, '_id_doc_type_combo'):
-                server_doc_type = id_evidences[0].get('documentType')
-                if server_doc_type is not None:
-                    idx = self._id_doc_type_combo.findData(server_doc_type)
-                    if idx >= 0:
-                        self._id_doc_type_combo.setCurrentIndex(idx)
-                    self._loaded_id_doc_type = server_doc_type
+            
 
         self._loaded_applicant_snapshot = self._applicant_snapshot(a)
 
@@ -1375,7 +1846,13 @@ class ApplicantInfoStep(BaseStep):
                     if not result_path and ev_id:
                         result_path = download_evidence_file(ev_id, file_name)
                     if result_path:
-                        downloaded_with_ids.append((result_path, ev_id))
+                        downloaded_with_ids.append(
+                            (
+                                result_path,
+                                ev_id,
+                                doc.get("documentType"),
+                            )
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to download ID photo {ev_id}: {e}")
             return downloaded_with_ids, docs, list_ok
@@ -1387,20 +1864,50 @@ class ApplicantInfoStep(BaseStep):
                 # current display rather than wiping photos on an incomplete read.
                 return
 
-            downloaded = [p for p, _ in downloaded_with_ids]
+            downloaded = [
+                path
+                for path, _document_id, _document_type
+                in downloaded_with_ids
+            ]
             self.uploaded_files = downloaded
-            self.context.update_data("uploaded_id_photos", list(set(downloaded)))
-            self._update_upload_thumbnails("id_upload", downloaded)
+
+            self.context.update_data(
+                "uploaded_id_photos",
+                list(downloaded),
+            )
+            ##self._update_upload_thumbnails("id_upload", downloaded)
             if self.context.applicant is None:
                 self.context.applicant = {}
             self.context.applicant["id_photo_paths"] = list(downloaded)
             id_evidence_map = {
-                os.path.normpath(p): ev_id
-                for p, ev_id in downloaded_with_ids if ev_id
+                os.path.normpath(path): document_id
+                for path, document_id, _document_type
+                in downloaded_with_ids
+                if document_id
             }
             self._evidence_ids = id_evidence_map
             self.context.applicant["id_evidence_map"] = dict(id_evidence_map)
+            id_document_types = {
+                os.path.normpath(path): document_type
+                for path, _document_id, document_type
+                in downloaded_with_ids
+                if document_type is not None
+            }
 
+            self._id_doc_types = id_document_types
+            self._loaded_id_doc_types = dict(
+                id_document_types
+            )
+
+            self.context.applicant["id_document_types"] = dict(
+                id_document_types
+            )
+            self._update_upload_thumbnails(
+                "id_upload",
+                downloaded,
+            )
+
+            self._reset_id_document_picker()
             # Refresh server-side evidence metadata + doc type from the list we
             # just read, so the cached context matches the server exactly.
             normalized = [
@@ -1416,13 +1923,6 @@ class ApplicantInfoStep(BaseStep):
             ]
             self.context.applicant["id_photo_evidences"] = normalized
             self._server_id_evidence_ids = [e["id"] for e in normalized if e["id"]]
-            if normalized and hasattr(self, '_id_doc_type_combo'):
-                server_doc_type = normalized[0].get('documentType')
-                if server_doc_type is not None:
-                    idx = self._id_doc_type_combo.findData(server_doc_type)
-                    if idx >= 0:
-                        self._id_doc_type_combo.setCurrentIndex(idx)
-                    self._loaded_id_doc_type = server_doc_type
             logger.info(
                 f"Synced {len(downloaded)} ID photo(s) from server (force_server={force_server})"
             )
@@ -1494,21 +1994,27 @@ class ApplicantInfoStep(BaseStep):
         self.section_visit_header.setText(tr("wizard.section.visit_type"))
         self.in_person_check.setText(tr("wizard.applicant.in_person"))
 
-    # ID Photos section
-        
-        self.section_id_header.setText(tr("wizard.section.id_photos"))
-        self.lbl_id_doc_type.setText(tr("wizard.person_dialog.id_document_type"))
-        self._id_upload_frame._text_btn.setText(tr("wizard.person_dialog.attach_id_photos"))
+    # ID / Proof of Identity section
 
-    # Refill ID document type combo
-        self._id_doc_type_combo.clear()
+        self.section_id_header.setText(
+            tr("wizard.section.id_photos")
+        )
 
-        from services.display_mappings import get_identification_document_type_options
-        for code, label in get_identification_document_type_options():
-            if code == 0:
-                continue
-            self._id_doc_type_combo.addItem(label, code)
-    # Refill gender radio buttons
+        self.lbl_id_doc_type.setText(
+            tr("wizard.person_dialog.id_document_type")
+        )
+
+        self._id_choose_file_btn.setText(
+            tr("wizard.person_dialog.choose_id_document_file")
+        )
+
+        self._refill_id_document_type_combo()
+
+        self._update_upload_thumbnails(
+            "id_upload",
+            self.uploaded_files,
+        )
+        # Refill gender radio buttons
         self._refill_gender_radios()
         # Refill nationality combo
         current_nat = self.nationality.currentData()
