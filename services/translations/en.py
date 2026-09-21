@@ -1043,7 +1043,7 @@ EN_TRANSLATIONS = {
     "page.case_entity.field_unit_number": "Unit Number",
     "page.case_entity.field_floor": "Floor",
     "page.case_entity.field_unit_type": "Unit Type",
-    "page.case_entity.field_location": "Location",
+    "page.case_entity.field_location": "Neighborhood",
     "page.case_entity.field_relations_count": "Relations Count",
     "page.case_entity.floor_ground": "Ground Floor",
     "page.case_entity.floor_basement": "Basement {n}",

@@ -1043,7 +1043,7 @@ AR_TRANSLATIONS = {
     "page.case_entity.field_unit_number": "رقم المقسم",
     "page.case_entity.field_floor": "الطابق",
     "page.case_entity.field_unit_type": "نوع المقسم",
-    "page.case_entity.field_location": "الموقع",
+    "page.case_entity.field_location": "الحي",
     "page.case_entity.field_relations_count": "عدد العلاقات",
     "page.case_entity.floor_ground": "الطابق الأرضي",
     "page.case_entity.floor_basement": "قبو {n}",
