@@ -241,6 +241,10 @@ class HouseholdStep(BaseStep):
         self.hh_total_members.setSpecialValueText("")
         members_widget = self._create_spinbox_with_arrows(self.hh_total_members)
         members_widget.setFixedHeight(ScreenScale.h(45))
+
+        self._total_members_input_frame = members_widget
+        self._total_members_default_style = members_widget.styleSheet()
+
         total_members_col.addWidget(members_widget)
         row1.addLayout(total_members_col, 1)
 
@@ -341,6 +345,8 @@ class HouseholdStep(BaseStep):
             (2, 1, "wizard.household.disabled", "hh_disabled_count"),
         ]
         self._demo_labels = {}
+        self._demo_input_frames = {}
+        self._demo_input_default_styles = {}
 
         for _row, _col, _lkey, _attr in _demo_fields:
             _lbl = QLabel(tr(_lkey))
@@ -369,10 +375,62 @@ class HouseholdStep(BaseStep):
             _cell_layout.setContentsMargins(0, 0, 0, 0)
             _cell_layout.setSpacing(4)
             _cell_layout.addWidget(_lbl)
-            _cell_layout.addWidget(self._create_composition_spinbox(_spin))
+
+            spinbox_widget = self._create_composition_spinbox(_spin)
+            self._demo_input_frames[_attr] = spinbox_widget
+            self._demo_input_default_styles[_attr] = spinbox_widget.styleSheet()
+
+            _cell_layout.addWidget(spinbox_widget)
             comp_grid.addWidget(_cell_w, _row, _col)
 
         composition_layout.addLayout(comp_grid)
+
+        self._gender_validation_label = QLabel()
+        self._gender_validation_label.setWordWrap(True)
+        self._gender_validation_label.setVisible(False)
+        self._gender_validation_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.ERROR};
+                background: transparent;
+                border: none;
+                font-size: 9pt;
+                font-weight: 600;
+                padding: 3px 2px;
+            }}
+        """)
+
+        self._age_validation_label = QLabel()
+        self._age_validation_label.setWordWrap(True)
+        self._age_validation_label.setVisible(False)
+        self._age_validation_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.ERROR};
+                background: transparent;
+                border: none;
+                font-size: 9pt;
+                font-weight: 600;
+                padding: 3px 2px;
+            }}
+        """)
+
+        composition_layout.addWidget(self._gender_validation_label)
+        composition_layout.addWidget(self._age_validation_label)
+
+        self._gender_validation_active = False
+        self._age_validation_active = False
+
+        for spinbox in (
+            self.hh_total_members,
+            self.hh_male_count,
+            self.hh_female_count,
+            self.hh_adult_count,
+            self.hh_child_count,
+            self.hh_elderly_count,
+        ):
+            spinbox.valueChanged.connect(
+                self._refresh_composition_validation_feedback
+            )
+
         composition_layout.addStretch(1)
 
         three_col.addWidget(self._composition_frame, 1)
@@ -640,6 +698,121 @@ class HouseholdStep(BaseStep):
         """
         return self._create_spinbox_with_arrows(spinbox, bg_color="#FFFFFF")
 
+    def _set_validation_frame_error(
+        self,
+        frame: QFrame,
+        default_style: str,
+        has_error: bool,
+        background_color: str,
+    ):
+        """Apply or clear the visual error state for a numeric input frame."""
+        if has_error:
+            frame.setObjectName("householdValidationInput")
+            frame.setStyleSheet(f"""
+                QFrame#householdValidationInput {{
+                    border: 2px solid {Colors.INPUT_BORDER_ERROR};
+                    border-radius: 8px;
+                    background-color: {background_color};
+                }}
+            """)
+        else:
+            frame.setObjectName("")
+            frame.setStyleSheet(default_style)
+
+    def _set_demo_field_error(self, attr: str, has_error: bool):
+        """Apply or clear the error state for one demographic field."""
+        frame = self._demo_input_frames.get(attr)
+        if frame is None:
+            return
+
+        default_style = self._demo_input_default_styles.get(attr, "")
+        self._set_validation_frame_error(
+            frame,
+            default_style,
+            has_error,
+            "#FFFFFF",
+        )
+
+    def _render_composition_validation_feedback(
+        self,
+        gender_invalid: bool,
+        age_invalid: bool,
+    ):
+        """Render inline validation messages and borders for household composition."""
+        total_invalid = gender_invalid or age_invalid
+
+        self._set_validation_frame_error(
+            self._total_members_input_frame,
+            self._total_members_default_style,
+            total_invalid,
+            "#F8FAFF",
+        )
+
+        for attr in ("hh_male_count", "hh_female_count"):
+            self._set_demo_field_error(attr, gender_invalid)
+
+        for attr in (
+            "hh_adult_count",
+            "hh_child_count",
+            "hh_elderly_count",
+        ):
+            self._set_demo_field_error(attr, age_invalid)
+
+        if gender_invalid:
+            self._gender_validation_label.setText(
+                tr("wizard.household.gender_must_equal_total")
+            )
+            self._gender_validation_label.setVisible(True)
+        else:
+            self._gender_validation_label.clear()
+            self._gender_validation_label.setVisible(False)
+
+        if age_invalid:
+            self._age_validation_label.setText(
+                tr("wizard.household.age_must_equal_total")
+            )
+            self._age_validation_label.setVisible(True)
+        else:
+            self._age_validation_label.clear()
+            self._age_validation_label.setVisible(False)
+
+    def _clear_composition_validation_feedback(self):
+        """Clear all inline demographic validation feedback."""
+        self._gender_validation_active = False
+        self._age_validation_active = False
+        self._render_composition_validation_feedback(False, False)
+
+    def _refresh_composition_validation_feedback(self, _value=None):
+        """Refresh visible validation feedback while the user edits values."""
+        if not (
+            self._gender_validation_active
+            or self._age_validation_active
+        ):
+            return
+
+        total = self.hh_total_members.value()
+        if total <= 0:
+            self._clear_composition_validation_feedback()
+            return
+
+        gender_sum = (
+            self.hh_male_count.value()
+            + self.hh_female_count.value()
+        )
+        age_sum = (
+            self.hh_adult_count.value()
+            + self.hh_child_count.value()
+            + self.hh_elderly_count.value()
+        )
+
+        self._gender_validation_active = gender_sum != total
+        self._age_validation_active = age_sum != total
+
+        self._render_composition_validation_feedback(
+            self._gender_validation_active,
+            self._age_validation_active,
+        )
+
     # _make_icon_header is now shared via wizard_styles.make_icon_header
 
     def update_language(self, is_arabic: bool):
@@ -711,6 +884,15 @@ class HouseholdStep(BaseStep):
         for _attr, (_lbl, _key) in self._demo_labels.items():
             _lbl.setText(tr(_key))
 
+        if (
+            self._gender_validation_active
+            or self._age_validation_active
+        ):
+            self._render_composition_validation_feedback(
+                self._gender_validation_active,
+                self._age_validation_active,
+            )
+
         _cur_nature = self.hh_occupancy_nature.currentData()
         self.hh_occupancy_nature.clear()
         self.hh_occupancy_nature.addItem(tr("wizard.household.select"), None)
@@ -745,19 +927,44 @@ class HouseholdStep(BaseStep):
         # Validate: total members must be > 0
         total_entered = self.hh_total_members.value()
         if total_entered <= 0:
+            self._clear_composition_validation_feedback()
             result.add_error(tr("wizard.household.members_required"))
             return result
 
-        # Validate: gender sum must equal householdSize (backend rule)
-        gender_sum = self.hh_male_count.value() + self.hh_female_count.value()
-        if gender_sum != total_entered:
-            result.add_error(tr("wizard.household.gender_must_equal_total"))
-            return result
+        # Validate demographic composition against household size.
+        # Gender: male + female must equal total.
+        # Age: adults + minors + elderly must equal total.
+        gender_sum = (
+            self.hh_male_count.value()
+            + self.hh_female_count.value()
+        )
+        age_sum = (
+            self.hh_adult_count.value()
+            + self.hh_child_count.value()
+            + self.hh_elderly_count.value()
+        )
 
-        # Validate: age sum must equal householdSize (backend rule)
-        age_sum = self.hh_adult_count.value() + self.hh_child_count.value() + self.hh_elderly_count.value()
-        if age_sum != total_entered:
-            result.add_error(tr("wizard.household.age_must_equal_total"))
+        gender_invalid = gender_sum != total_entered
+        age_invalid = age_sum != total_entered
+
+        self._gender_validation_active = gender_invalid
+        self._age_validation_active = age_invalid
+        self._render_composition_validation_feedback(
+            gender_invalid,
+            age_invalid,
+        )
+
+        if gender_invalid:
+            result.add_error(
+                tr("wizard.household.gender_must_equal_total")
+            )
+
+        if age_invalid:
+            result.add_error(
+                tr("wizard.household.age_must_equal_total")
+            )
+
+        if not result.is_valid:
             return result
 
         # Validate: disabled count must not exceed total members
@@ -901,9 +1108,12 @@ class HouseholdStep(BaseStep):
         self.hh_occupancy_nature.setCurrentIndex(0)
         self.hh_start_year.setCurrentIndex(-1)
         self.hh_notes.clear()
+        self._clear_composition_validation_feedback()
 
     def populate_data(self):
         """Populate the step with data from context."""
+        self._clear_composition_validation_feedback()
+
         # Update building address and stats
         if self.context.building:
             from utils.helpers import build_hierarchical_address
