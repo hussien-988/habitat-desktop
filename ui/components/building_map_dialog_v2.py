@@ -3,6 +3,7 @@
 from cProfile import label
 import time
 import json
+import re
 from typing import Optional, List
 from ui.error_handler import ErrorHandler
 from PyQt5.QtCore import QTimer, QThread, pyqtSignal
@@ -209,12 +210,30 @@ class _SearchWorker(QThread):
     not_found = pyqtSignal(str)  # search_text
     error = pyqtSignal(str)
 
-    def __init__(self, search_text, auth_token, neighborhoods_cache):
+    def __init__(
+        self,
+        search_text,
+        auth_token,
+        neighborhoods_cache,
+        exact_only=False,
+    ):
         super().__init__()
         self._search_text = search_text
         self._auth_token = auth_token
         self.neighborhoods_cache = neighborhoods_cache
+        self.exact_only = exact_only
+        self.result_type = None
+    @staticmethod
+    def _normalize_search_text(value):
+        text = str(value or "").casefold().strip()
 
+        text = re.sub(
+            r"[\u064B-\u065F\u0670]",
+            "",
+            text,
+        )
+
+        return " ".join(text.split())
     def run(self):
         try:
             from services.api_client import get_api_client
@@ -236,6 +255,7 @@ class _SearchWorker(QThread):
             match = self._match_neighborhood(search_text)
             if match and match["lat"] and match["lng"]:
                 try:
+                    self.result_type = "neighborhood"
                     self.found.emit(match["name"], float(match["lat"]), float(match["lng"]), 17)
                     return
                 except (ValueError, TypeError):
@@ -246,11 +266,36 @@ class _SearchWorker(QThread):
                 try:
                     from services import boundary_service
                     places = boundary_service.get_places_list()
+                    wanted = self._normalize_search_text(search_text)
                     for p in places:
-                        if search_text in p.get('name_ar', '') or \
-                           search_text.lower() in p.get('name_en', '').lower():
-                            label = p.get('name_ar') or p.get('name_en') or search_text
-                            self.found.emit(label, float(p['lat']), float(p['lng']), 13)
+                        name_ar = p.get("name_ar", "") or ""
+                        name_en = p.get("name_en", "") or ""
+
+                        normalized_ar = self._normalize_search_text(name_ar)
+                        normalized_en = self._normalize_search_text(name_en)
+
+                        if self.exact_only:
+                            matched = (
+                                wanted == normalized_ar
+                                or wanted == normalized_en
+                            )
+                        else:
+                            matched = (
+                                wanted in normalized_ar
+                                or wanted in normalized_en
+                            )
+
+                        if matched:
+                            label = name_ar or name_en or search_text
+
+                            self.result_type = "place"
+
+                            self.found.emit(
+                                label,
+                                float(p["lat"]),
+            float(p["lng"]),
+            13,
+                            )
                             return
                 except Exception as e:
                     logger.warning(f"Places search error: {e}")
@@ -259,16 +304,55 @@ class _SearchWorker(QThread):
                 try:
                     from services.map_utils import normalize_landmark
                     api = get_api_client()
-                    landmarks = api.search_landmarks(search_text, max_results=5)
+                    landmarks = api.search_landmarks(
+                        search_text,
+                        max_results=10,
+                    )
+
                     if landmarks and isinstance(landmarks, list):
-                        lm = normalize_landmark(landmarks[0])
-                        lat, lng = lm.get("latitude"), lm.get("longitude")
-                        if lat and lng:
-                            self.found.emit(
-                                lm.get("name", search_text),
-                                float(lat), float(lng), 17
+                        normalized_landmarks = [
+                            normalize_landmark(lm)
+                            for lm in landmarks
+                        ]
+
+                        if self.exact_only:
+                            wanted = self._normalize_search_text(search_text)
+
+                            lm = next(
+                                (
+                                    item
+                                    for item in normalized_landmarks
+                                    if wanted in {
+                                        self._normalize_search_text(
+                            item.get("name")
+                                        ),
+                                        self._normalize_search_text(
+                                            item.get("nameArabic")
+                                        ),
+                                        self._normalize_search_text(
+                                            item.get("nameEnglish")
+                                        ),
+                                    }
+                                ),
+                                None,
                             )
-                            return
+                        else:
+                            lm = normalized_landmarks[0]
+
+                        if lm:
+                            lat = lm.get("latitude")
+                            lng = lm.get("longitude")
+
+                            if lat and lng:
+                                self.result_type = "landmark"
+
+                                self.found.emit(
+                                    lm.get("name", search_text),
+                                    float(lat),
+                                    float(lng),
+                                    17,
+                                )
+                                return
                 except Exception as e:
                     logger.warning(f"Landmark search error: {e}")
 
@@ -293,6 +377,7 @@ class _SearchWorker(QThread):
                             lons.append(b.longitude)
                     if lats:
                         zoom = 19 if len(lats) <= 5 else 18 if len(lats) <= 15 else 17
+                        self.result_type = "neighborhood"
                         self.found.emit(
                             match["name"],
                             sum(lats) / len(lats),
@@ -311,17 +396,32 @@ class _SearchWorker(QThread):
 
     def _match_neighborhood(self, search_text):
         """Match search text against cached neighborhoods."""
-        search_lower = search_text.lower().strip()
+        search_lower = self._normalize_search_text(search_text)
         best_match = None
+
         for n in (self.neighborhoods_cache or []):
             name_ar = n.get("nameArabic", "") or ""
             name_en = n.get("nameEnglish", "") or n.get("name", "") or ""
-            if search_lower == name_ar.lower() or search_lower == name_en.lower():
+
+            normalized_ar = self._normalize_search_text(name_ar)
+            normalized_en = self._normalize_search_text(name_en)
+
+            if (
+                search_lower == normalized_ar
+                or search_lower == normalized_en
+            ):
                 best_match = n
                 break
-            if not best_match:
-                if search_lower in name_ar.lower() or search_lower in name_en.lower():
-                    best_match = n
+
+            if (
+                not self.exact_only
+                and not best_match
+                and (
+                    search_lower in normalized_ar
+                    or search_lower in normalized_en
+                )
+            ):
+                best_match = n
         if not best_match:
             return None
         code = (
@@ -450,6 +550,7 @@ class BuildingMapDialog(BaseMapDialog):
 
         self._buildings_worker = None
         self._layers_worker = None
+        self._refresh_layers_worker = None
         self._page_loaded = False
         self._pending_layers_data = None
         self._pending_buildings_data = None
@@ -850,6 +951,43 @@ class BuildingMapDialog(BaseMapDialog):
         else:
             self._pending_layers_data = data
             logger.info("Layers data buffered, waiting for page load")
+    def _on_refresh_map(self):
+        """Refresh buildings, landmarks, and streets for the survey map."""
+        super()._on_refresh_map()
+
+        if self._is_view_only:
+            return
+
+        if (
+            self._refresh_layers_worker
+            and self._refresh_layers_worker.isRunning()
+        ):
+            logger.info(
+                "Landmarks/streets refresh already in progress"
+            )
+            return
+
+        self._refresh_layers_worker = _LayersWorker(
+            self._auth_token
+        )
+
+        self._refresh_layers_worker.finished.connect(
+            self._on_refresh_layers_ready
+        )
+
+        self._refresh_layers_worker.error.connect(
+            lambda e: logger.warning(
+                f"Landmarks/streets refresh failed: {e}"
+            )
+        )
+
+        self._refresh_layers_worker.start()
+
+
+    def _on_refresh_layers_ready(self, data):
+        """Inject freshly reloaded landmarks and streets."""
+        self._inject_layers(data)
+        logger.info("Refreshed landmarks and streets")
 
     def _inject_layers(self, data):
         """Inject landmarks and streets into the loaded map page."""
@@ -1144,7 +1282,31 @@ class BuildingMapDialog(BaseMapDialog):
         lng = best_match.get("centerLongitude") or best_match.get("longitude") or best_match.get("centroidLng")
 
         return {"code": code, "name": name, "lat": lat, "lng": lng}
+    def _start_search_worker(
+        self,
+        search_text,
+        exact_only,
+    ):
+        self._search_worker = _SearchWorker(
+            search_text,
+            self._auth_token,
+            self._neighborhoods_cache,
+            exact_only=exact_only,
+        )
 
+        self._search_worker.found.connect(
+            self._on_search_found
+        )
+
+        self._search_worker.not_found.connect(
+            self._on_search_not_found
+        )
+
+        self._search_worker.error.connect(
+            self._on_search_error
+        )
+
+        self._search_worker.start()
     def _on_search_submitted(self):
         """Handle search submission - runs in background thread to avoid UI freeze."""
         if not self.show_search or not hasattr(self, 'search_input'):
@@ -1158,13 +1320,31 @@ class BuildingMapDialog(BaseMapDialog):
         self.search_input.setPlaceholderText(tr("dialog.map.searching"))
         logger.info(f"Searching for: '{search_text}'")
 
-        self._search_worker = _SearchWorker(
-            search_text, self._auth_token, self._neighborhoods_cache
+        def _after_exact_street_not_found():
+            self._start_search_worker(
+                search_text,
+                exact_only=True,
+            )
+
+
+        def _exact_street_found():
+            from ui.components.toast import Toast
+
+            Toast.show_toast(
+                self,
+                search_text,
+                "success",
+            )
+
+            self._reset_search_input()
+
+
+        self._search_streets_js(
+            search_text,
+            exact_only=True,
+            found_callback=_exact_street_found,
+            not_found_callback=_after_exact_street_not_found,
         )
-        self._search_worker.found.connect(self._on_search_found)
-        self._search_worker.not_found.connect(self._on_search_not_found)
-        self._search_worker.error.connect(self._on_search_error)
-        self._search_worker.start()
 
     def _on_search_found(self, name, lat, lng, zoom):
         """Handle successful search result from worker."""
@@ -1172,22 +1352,72 @@ class BuildingMapDialog(BaseMapDialog):
         if self._search_worker and self._search_worker.neighborhoods_cache:
             self._neighborhoods_cache = self._search_worker.neighborhoods_cache
         self._fly_to(lat, lng, zoom)
+        if (
+            self._search_worker
+            and self._search_worker.result_type == "landmark"
+            and self.web_view
+        ):
+            safe_name = json.dumps(name or "", ensure_ascii=False)
+
+            self.web_view.page().runJavaScript(
+                f"if (typeof window.highlightLandmarkSearchResult === 'function') "
+                f"window.highlightLandmarkSearchResult("
+                f"{safe_name}, {float(lat)}, {float(lng)});"
+            )
         from ui.components.toast import Toast
         Toast.show_toast(self, name, "success")
         self._reset_search_input()
 
     def _on_search_not_found(self, search_text):
-        """Handle search not found - try streets JS layer as last resort."""
-        # Update neighborhoods cache from worker
-        if self._search_worker and self._search_worker.neighborhoods_cache:
-            self._neighborhoods_cache = self._search_worker.neighborhoods_cache
+        """Continue through exact then partial search phases."""
+        if (
+            self._search_worker
+            and self._search_worker.neighborhoods_cache
+        ):
+            self._neighborhoods_cache = (
+                self._search_worker.neighborhoods_cache
+            )
+
         from ui.components.toast import Toast
 
-        def _on_street_not_found():
-            Toast.show_toast(self, f"{tr('dialog.map.not_found')}: {search_text}", "warning")
+        # Exact neighborhood/place/landmark search finished.
+        # No exact result anywhere, so start partial search.
+        if (
+            self._search_worker
+            and self._search_worker.exact_only
+        ):
 
-        self._search_streets_js(search_text, not_found_callback=_on_street_not_found)
-        self._reset_search_input()
+            def _partial_street_found():
+                Toast.show_toast(
+                    self,
+                    search_text,
+                    "success",
+                )
+                self._reset_search_input()
+
+            def _partial_street_not_found():
+                self._start_search_worker(
+                    search_text,
+                    exact_only=False,
+                )
+
+            self._search_streets_js(
+                search_text,
+                exact_only=False,
+                found_callback=_partial_street_found,
+                not_found_callback=_partial_street_not_found,
+            )
+
+            return
+
+        # Partial search also failed.
+        Toast.show_toast(
+            self,
+            f"{tr('dialog.map.not_found')}: {search_text}",
+            "warning",
+        )
+
+        self._reset_search_input()      
 
     def _on_search_error(self, error_msg):
         """Handle search error from worker."""
