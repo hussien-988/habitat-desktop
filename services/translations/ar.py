@@ -534,6 +534,8 @@ AR_TRANSLATIONS = {
     "wizard.review.household_card_title": "الشاغلون",
     "wizard.review.persons_card_title": "البيانات الفردية",
     "wizard.review.persons_card_subtitle": "قائمة الأشخاص المسجلين",
+    "wizard.review.designation_contact_person": "نقطة اتصال",
+    "wizard.review.designation_right_claimant": "مدعي حق",
     "wizard.review.head_person": "معلومات الشاغل الرئيسي",
     "wizard.review.claim_card_title": "تسجيل المطالبة",
     "wizard.review.claim_card_subtitle": "ربط المطالبين بالوحدات العقارية وتتبع مطالبات تسجيل حقوق الحيازة",

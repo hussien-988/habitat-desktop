@@ -463,8 +463,18 @@ class SurveyController:
                 else:
                     logger.warning("[ID-DOCS] No target_person_id available — skipping fetch")
 
-            resolved_cp_id = contact_person_id or (
-                contact_person_dto.get("id", "") if contact_person_dto else ""
+                resolved_cp_id = (
+                contact_person_id
+                or (
+                    survey_contact_person_dto.get("id", "")
+                    if survey_contact_person_dto
+                    else ""
+                )
+                or (
+                    contact_person_dto.get("id", "")
+                    if contact_person_dto
+                    else ""
+                )
             )
 
             survey_status = detail.get("status", 1)

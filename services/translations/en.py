@@ -535,6 +535,8 @@ EN_TRANSLATIONS = {
     "wizard.review.persons_card_title": "Individual Data",
     "wizard.review.persons_card_subtitle": "List of registered persons",
     "wizard.review.head_person": "Primary Occupant Information",
+    "wizard.review.designation_contact_person": "Contact Person",
+    "wizard.review.designation_right_claimant": "Right Claimant",
     "wizard.review.claim_card_title": "Case Registration",
     "wizard.review.claim_card_subtitle": "Link claimants to property units and track tenure registration claims",
     "wizard.review.demographics_category": "Category",

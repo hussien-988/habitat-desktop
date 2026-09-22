@@ -1263,6 +1263,52 @@ class CaseDetailsPage(QWidget):
         top.addLayout(name_block, 1)
 
         v.addLayout(top)
+        person_id = str(person.get("person_id") or "").strip()
+        contact_person_id = str(
+            self._context.get_data("contact_person_id") or ""
+        ).strip()
+
+        if contact_person_id:
+            is_contact_person = person_id == contact_person_id
+        else:
+            is_contact_person = bool(
+                person.get("_is_applicant")
+                or person.get("_is_contact_person")
+            )
+
+        claimant_person_ids = {
+            relation.get("person_id")
+            for relation in (self._context.relations or [])
+            if relation.get("person_id")
+        }
+
+        is_right_claimant = person_id in claimant_person_ids
+
+        if is_contact_person or is_right_claimant:
+            badges = QHBoxLayout()
+            badges.setContentsMargins(0, 0, 0, 0)
+            badges.setSpacing(ScreenScale.w(6))
+
+            if is_contact_person:
+                badges.addWidget(
+                    self._create_badge(
+                        tr("wizard.review.designation_contact_person"),
+                        "#E0F2FE",
+                        "#0369A1",
+                    )
+                )
+
+            if is_right_claimant:
+                badges.addWidget(
+                    self._create_badge(
+                        tr("wizard.review.designation_right_claimant"),
+                        "#DCFCE7",
+                        "#166534",
+                    )
+                )
+
+            badges.addStretch(1)
+            v.addLayout(badges)
 
         # National ID row with explicit label so the value has context.
         nid = person.get('national_id') or person.get('nationalId') or ''
