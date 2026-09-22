@@ -28,18 +28,21 @@ from services.translation_manager import tr, get_layout_direction, get_language
 from services.error_mapper import map_exception
 from services.exceptions import humanize_exception, log_exception
 from services.display_mappings import (
-    get_relation_type_options, get_relationship_to_head_options,
+    get_relation_type_options, get_claim_type_options,
+    get_relationship_to_head_options,
     get_evidence_type_options,
     get_gender_options, get_nationality_options
 )
-from ui.components.rtl_combo import RtlCombo
+from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
-    FORM_FIELD_STYLE, read_int_from_combo,
+    FORM_FIELD_STYLE,
+    make_editable_date_combo,
+    read_int_from_combo,
 )
 from utils.logger import get_logger
 
@@ -69,13 +72,15 @@ class PersonDialog(QDialog):
     """Dialog for creating or editing a person - 3 tabs."""
 
     def __init__(self, person_data: Optional[Dict] = None, existing_persons: List[Dict] = None, parent=None,
-                 auth_token: Optional[str] = None, survey_id: Optional[str] = None,
-                 household_id: Optional[str] = None, unit_id: Optional[str] = None,
-                 read_only: bool = False, existing_person_mode: bool = False,
-                 initial_tab: int = 0):
+                auth_token: Optional[str] = None, survey_id: Optional[str] = None,
+                household_id: Optional[str] = None, unit_id: Optional[str] = None,
+                read_only: bool = False, existing_person_mode: bool = False,
+                initial_tab: int = 0, claim_only_mode: bool = False, add_claim_mode: bool = False):
         super().__init__(parent)
         self._existing_person_mode = existing_person_mode
         self._initial_tab = initial_tab
+        self._claim_only_mode = claim_only_mode
+        self._add_claim_mode = add_claim_mode
         self.person_data = person_data
         self.existing_persons = existing_persons or []
         self.editing_mode = person_data is not None and not existing_person_mode
@@ -254,11 +259,13 @@ class PersonDialog(QDialog):
         header_layout.addWidget(close_btn)
 
         # Title in dark header
-        if self.read_only:
+        if self.read_only:      
             title_text = tr("wizard.person_dialog.title_view")
-        elif getattr(self, '_existing_person_mode', False):
+        elif self._add_claim_mode:      
+            title_text = tr("wizard.person_dialog.title_add_claim")
+        elif getattr(self, '_existing_person_mode', False):     
             title_text = tr("wizard.person_dialog.title_link_existing")
-        elif self.editing_mode:
+        elif self.editing_mode:     
             title_text = tr("wizard.person_dialog.title_edit")
         else:
             title_text = tr("wizard.person_dialog.title_add")
@@ -355,6 +362,7 @@ class PersonDialog(QDialog):
         self._connect_progress_signals()
 
         self.tab_widget.currentChanged.connect(self._update_progress)
+        self.tab_widget.currentChanged.connect(self._focus_first_field_for_tab)
         main_layout.addWidget(self.tab_widget)
 
         # Fixed bottom button bar (outside scroll area, always visible)
@@ -387,8 +395,24 @@ class PersonDialog(QDialog):
         bar3_layout = QHBoxLayout(bar3)
         bar3_layout.setContentsMargins(24, 10, 24, 14)
         bar3_layout.setSpacing(8)
-        bar3_layout.addWidget(self._create_btn(tr("wizard.person_dialog.previous"), primary=False, callback=self._go_to_tab2_back))
-        bar3_layout.addWidget(self._create_btn(tr("common.save"), primary=True, callback=self._on_final_save))
+
+        if not self._claim_only_mode:
+            bar3_layout.addWidget(
+                self._create_btn(
+                    tr("wizard.person_dialog.previous"),
+                    primary=False,
+                    callback=self._go_to_tab2_back,
+                )
+            )
+
+        bar3_layout.addWidget(
+            self._create_btn(
+                tr("common.save"),
+                primary=True,
+                callback=self._on_final_save,
+            )
+        )
+
         self._btn_stack.addWidget(bar3)
 
         self.tab_widget.currentChanged.connect(self._btn_stack.setCurrentIndex)
@@ -521,10 +545,9 @@ class PersonDialog(QDialog):
             ]
         else:
             fields = [
-                self.rel_type_combo.currentIndex() > 0,
+                self.rel_type_combo.currentData() is not None,
                 bool(self.ownership_share.text().strip()),
                 self.evidence_type.currentIndex() > 0,
-                bool(self.evidence_desc.text().strip()),
                 bool(self.notes.toPlainText().strip()),
             ]
         filled = sum(fields)
@@ -658,33 +681,28 @@ class PersonDialog(QDialog):
         birth_layout.setContentsMargins(0, 0, 0, 0)
 
         from datetime import datetime as _dt
+
         birth_input_style = self._input_style()
 
-        self.birth_day_combo = RtlCombo()
-        for d in range(1, 32):
-            self.birth_day_combo.addItem(f"{d:02d}", d)
-        self.birth_day_combo.setCurrentIndex(-1)
-        _le = self.birth_day_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.day_placeholder"))
+        self.birth_day_combo = make_editable_date_combo(
+            [(f"{d:02d}", d) for d in range(1, 32)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.day_placeholder"),
+        )
         self.birth_day_combo.setStyleSheet(birth_input_style)
 
-        self.birth_month_combo = RtlCombo()
-        for m in range(1, 13):
-            self.birth_month_combo.addItem(f"{m:02d}", m)
-        self.birth_month_combo.setCurrentIndex(-1)
-        _le = self.birth_month_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.month_placeholder"))
+        self.birth_month_combo = make_editable_date_combo(
+            [(f"{m:02d}", m) for m in range(1, 13)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.month_placeholder"),
+        )
         self.birth_month_combo.setStyleSheet(birth_input_style)
 
-        self.birth_year_combo = RtlCombo()
-        for y in range(_dt.now().year, 1919, -1):
-            self.birth_year_combo.addItem(str(y), y)
-        self.birth_year_combo.setCurrentIndex(-1)
-        _le = self.birth_year_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.year_placeholder"))
+        self.birth_year_combo = make_editable_date_combo(
+            [(str(y), y) for y in range(_dt.now().year, 1919, -1)],
+            max_digits=4,
+            placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
         self.birth_year_combo.setStyleSheet(birth_input_style)
 
         birth_layout.addWidget(self.birth_day_combo, 1)
@@ -716,8 +734,12 @@ class PersonDialog(QDialog):
         row += 1
         self.nationality = RtlCombo()
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+
         for code, display_name in get_nationality_options():
             self.nationality.addItem(display_name, code)
+
+        enable_searchable_combo(self.nationality)
+
         self.nationality.setStyleSheet(self._input_style())
         grid.addWidget(self.nationality, row, 0)
 
@@ -744,6 +766,7 @@ class PersonDialog(QDialog):
             if code == 0:
                 continue
             self.id_doc_type_combo.addItem(label, code)
+        enable_searchable_combo(self.id_doc_type_combo)
         self.id_doc_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.id_doc_type_combo, row, 0, 1, 2)
         row += 1
@@ -943,9 +966,18 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.ownership_share"), label_style), row, 1)
         row += 1
         self.rel_type_combo = RtlCombo()
-        self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_relation_type_options():
+
+        for code, display_name in get_claim_type_options():
             self.rel_type_combo.addItem(display_name, code)
+
+        self.rel_type_combo.setCurrentIndex(-1)
+
+        enable_searchable_combo(self.rel_type_combo)
+
+        self.rel_type_combo.lineEdit().setPlaceholderText(
+            tr("wizard.person_dialog.select")
+        )
+
         self.rel_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.rel_type_combo, row, 0)
 
@@ -989,13 +1021,8 @@ class PersonDialog(QDialog):
             self.evidence_type.addItem(display_name, code)
 
         # Row: Evidence Description (full width)
-        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 0, 1, 2)
-        row += 1
         self.evidence_desc = QLineEdit()
-        self.evidence_desc.setPlaceholderText(tr("wizard.person_dialog.evidence_desc_placeholder"))
-        self.evidence_desc.setStyleSheet(self._input_style())
-        grid.addWidget(self.evidence_desc, row, 0, 1, 2)
-        row += 1
+        self.evidence_desc.hide()
 
         # Notes (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.notes_label"), label_style), row, 0, 1, 2)
@@ -1005,7 +1032,8 @@ class PersonDialog(QDialog):
         self.notes.setPlaceholderStyleSheet(
             "color: rgba(180, 210, 240, 0.4); background: transparent; font-size: 16px; font-weight: 400;"
         )
-        self.notes.setMaximumHeight(ScreenScale.h(80))
+        self.notes.setMinimumHeight(ScreenScale.h(140))
+        self.notes.setMaximumHeight(ScreenScale.h(160))
         self.notes.setStyleSheet("""
             QTextEdit {
                 border: 1px solid rgba(56, 144, 223, 0.2);
@@ -1992,7 +2020,30 @@ class PersonDialog(QDialog):
 
     def _go_to_tab2_back(self):
         """Tab 3 → Tab 2."""
+        if self._claim_only_mode:
+            return
+
         self.tab_widget.setCurrentIndex(1)
+    def _focus_first_field_for_tab(self, index):
+        if self.read_only:
+            return
+
+        if index == 2:
+            QTimer.singleShot(0, self._focus_claim_type_input)
+
+
+    def _focus_claim_type_input(self):
+        if not self.rel_type_combo.isEnabled():
+            return
+
+        line_edit = self.rel_type_combo.lineEdit()
+        if line_edit is None:
+            return
+
+        line_edit.setFocus(Qt.TabFocusReason)
+
+        if line_edit.text():
+            line_edit.selectAll()
 
     # Keep legacy method name for backward compatibility
     def _save_person_and_switch_tab(self):
@@ -2643,6 +2694,7 @@ class PersonDialog(QDialog):
             if code == 0:
                 continue
             ev_type_combo.addItem(display_name, code)
+        enable_searchable_combo(ev_type_combo)
         ev_section.addWidget(ev_type_combo)
 
         ev_type_error = QLabel("")
@@ -2700,29 +2752,36 @@ class PersonDialog(QDialog):
         date_row.setContentsMargins(0, 0, 0, 0)
 
         current_year = _date.today().year
-        year_combo = QComboBox()
-        year_combo.setStyleSheet(combo_style)
+
+        year_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(y), y) for y in range(current_year, 1949, -1)],
+            max_digits=4,
+            placeholder="--",
+        )
         year_combo.setLayoutDirection(Qt.LeftToRight)
         year_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        year_combo.addItem("--", None)
-        for y in range(current_year, 1949, -1):
-            year_combo.addItem(str(y), y)
+        year_combo.setStyleSheet(combo_style)
 
-        month_combo = QComboBox()
-        month_combo.setStyleSheet(combo_style)
+        month_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(m), m) for m in range(1, 13)],
+            max_digits=2,
+            placeholder="--",
+        )
         month_combo.setLayoutDirection(Qt.LeftToRight)
         month_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        month_combo.addItem("--", None)
-        for m in range(1, 13):
-            month_combo.addItem(str(m), m)
+        month_combo.setStyleSheet(combo_style)
 
-        day_combo = QComboBox()
-        day_combo.setStyleSheet(combo_style)
+        day_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(d), d) for d in range(1, 32)],
+            max_digits=2,
+            placeholder="--",
+        )
         day_combo.setLayoutDirection(Qt.LeftToRight)
         day_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        day_combo.addItem("--", None)
-        for d in range(1, 32):
-            day_combo.addItem(str(d), d)
+        day_combo.setStyleSheet(combo_style)
 
         date_row.addWidget(year_combo, 1)
         date_row.addWidget(month_combo, 1)
@@ -2804,9 +2863,9 @@ class PersonDialog(QDialog):
             ev_type_error.setVisible(False)
             ev_type_combo.setStyleSheet(combo_style)
 
-            y = year_combo.currentData()
-            m = month_combo.currentData()
-            d = day_combo.currentData()
+            y = read_int_from_combo(year_combo)
+            m = read_int_from_combo(month_combo)
+            d = read_int_from_combo(day_combo)
             if any((y, m, d)) and not all((y, m, d)):
                 Toast.show_toast(self, tr("wizard.person_dialog.issue_date_incomplete"), Toast.ERROR)
                 return
@@ -2835,9 +2894,9 @@ class PersonDialog(QDialog):
         dlg.adjustSize()
 
         if dlg.exec_() == QDialog.Accepted:
-            y = year_combo.currentData()
-            m = month_combo.currentData()
-            d = day_combo.currentData()
+            y = read_int_from_combo(year_combo)
+            m = read_int_from_combo(month_combo)
+            d = read_int_from_combo(day_combo)
             ref_value = ref_input.text().strip()
             ev_type_value = ev_type_combo.currentData()
             if y:
@@ -3146,9 +3205,15 @@ class PersonDialog(QDialog):
         rel = data.get('relation_data', {})
 
         rel_type = rel.get('rel_type')
-        if rel_type:
+
+        claim_type = rel.get('claim_type')
+
+        if claim_type is None and rel_type is not None:
+            claim_type = 1 if rel_type in (1, 5) else 2
+
+        if claim_type is not None:
             for i in range(self.rel_type_combo.count()):
-                if self.rel_type_combo.itemData(i) == rel_type:
+                if self.rel_type_combo.itemData(i) == claim_type:
                     self.rel_type_combo.setCurrentIndex(i)
                     break
 
@@ -3328,6 +3393,26 @@ class PersonDialog(QDialog):
         self._id_doc_download_worker.finished.connect(_on_done)
         self._id_doc_download_worker.error.connect(_on_error)
         self._id_doc_download_worker.start()
+    def _resolved_relation_type(self):
+        claim_type = self.rel_type_combo.currentData()
+
+        existing_rel_type = None
+        if self.person_data:
+            existing_rel_type = (
+                self.person_data.get('relation_data', {}) or {}
+            ).get('rel_type')
+
+        if claim_type == 1:
+            if existing_rel_type in (1, 5):
+                return existing_rel_type
+            return 1
+
+        if claim_type == 2:
+            if existing_rel_type in (2, 3, 4, 99):
+                return existing_rel_type
+            return 2
+
+        return None
 
     def get_person_data(self) -> Dict[str, Any]:
         """Get all person data from all 3 tabs."""
@@ -3357,7 +3442,8 @@ class PersonDialog(QDialog):
             'is_contact_person': False,
             # Tab 3
             'relation_data': {
-                'rel_type': self.rel_type_combo.currentData(),
+                'claim_type': self.rel_type_combo.currentData(),
+                'rel_type': self._resolved_relation_type(),
                 'start_date': self._build_start_date_iso(),
                 'ownership_share': int(float(self.ownership_share.text() or 0)),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
@@ -3537,7 +3623,7 @@ class PersonDialog(QDialog):
 
         # Ownership share: required and must be > 0 when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
-        is_owner = self.rel_type_combo.currentData() == 1
+        is_owner = self._resolved_relation_type() == 1
         try:
             ownership_val = int(ownership_text) if ownership_text else 0
         except ValueError:

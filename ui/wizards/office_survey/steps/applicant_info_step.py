@@ -12,7 +12,7 @@ import os
 from typing import List
 from datetime import date
 from PyQt5.QtWidgets import (
-    QCompleter, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFrame, QWidget, QComboBox,
     QGridLayout, QCheckBox, QSizePolicy, QRadioButton, QButtonGroup,
     QScrollArea, QFileDialog, QGraphicsDropShadowEffect,
@@ -30,7 +30,7 @@ from ui.wizards.office_survey.wizard_styles import (
 )
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
-from ui.components.rtl_combo import RtlCombo
+from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from ui.style_manager import StyleManager
 from services.display_mappings import get_gender_options, get_nationality_options
 from services.translation_manager import tr, get_layout_direction
@@ -201,7 +201,7 @@ class ApplicantInfoStep(BaseStep):
         )
 
         self._id_doc_type_combo = RtlCombo()
-        self._id_doc_type_combo.setFocusPolicy(Qt.ClickFocus)
+        
         self._id_doc_type_combo.setMinimumWidth(ScreenScale.w(170))
         self._id_doc_type_combo.setMaximumWidth(ScreenScale.w(230))
         self._id_doc_type_combo.setFixedHeight(ScreenScale.h(38))
@@ -262,7 +262,7 @@ class ApplicantInfoStep(BaseStep):
             self._browse_files
         )
         self._refill_id_document_type_combo()
-
+        enable_searchable_combo(self._id_doc_type_combo)
         picker_row.addWidget(self.lbl_id_doc_type)
         picker_row.addWidget(self._id_doc_type_combo)
         picker_row.addWidget(self._id_choose_file_btn)
@@ -368,34 +368,15 @@ class ApplicantInfoStep(BaseStep):
         row += 1
 
         self.nationality = RtlCombo()
-        self.nationality.setFocusPolicy(Qt.StrongFocus)
-        self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+        self.nationality.addItem(
+            tr("wizard.person_dialog.select"),
+            None
+        )
 
-        for code, display_name in get_nationality_options():        
+        for code, display_name in get_nationality_options():
             self.nationality.addItem(display_name, code)
 
-        self.nationality.lineEdit().setReadOnly(False)
-        self.nationality.setInsertPolicy(QComboBox.NoInsert)
-
-        self._nationality_completer = QCompleter(
-            self.nationality.model(),
-            self.nationality,
-        )
-        self._nationality_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self._nationality_completer.setFilterMode(Qt.MatchContains)
-        self._nationality_completer.setCompletionMode(QCompleter.PopupCompletion)
-
-        self.nationality.setCompleter(self._nationality_completer)
-
-        self._nationality_completer.activated[str].connect(
-            self._select_nationality_text
-        )
-
-        self.nationality.lineEdit().editingFinished.connect(
-            lambda: self._select_nationality_text(
-                self.nationality.currentText()
-            )
-        )
+        enable_searchable_combo(self.nationality)
 
         self.nationality.setStyleSheet(self._input_style())
         grid.addWidget(self.nationality, row, 0)
@@ -416,13 +397,7 @@ class ApplicantInfoStep(BaseStep):
         self._gender_group.buttonClicked.connect(lambda *_: self._clear_gender_err())
 
         return grid
-    def _select_nationality_text(self, text):
-        text = str(text or "").strip()
-
-        for index in range(self.nationality.count()):
-            if self.nationality.itemText(index).strip().casefold() == text.casefold():
-                self.nationality.setCurrentIndex(index)
-                return
+    
 
         self.nationality.setCurrentIndex(0)
 

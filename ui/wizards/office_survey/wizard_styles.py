@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QVBoxLayout, QLabel,
     QWidget, QComboBox, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QRegExp as _QtRegExp
+from PyQt5.QtCore import Qt, QRegExp as _QtRegExp, QTimer
 from PyQt5.QtGui import QColor, QRegExpValidator as _QRegExpValidator
 from ui.design_system import ScreenScale, Colors
 
@@ -693,6 +693,8 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "", edit
     combo.setLayoutDirection(get_layout_direction())
     combo.setEditable(True)
     combo.setInsertPolicy(QComboBox.NoInsert)
+    combo.setFocusPolicy(Qt.StrongFocus)
+    combo.setCompleter(None)
     for label, data in items:
         if isinstance(data, int) and label.isdigit():
             display = f"{data:0{max_digits}d}"
@@ -721,7 +723,9 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "", edit
                 if max_digits == 2 and len(text) == 1:
                     line_edit.setText(text.zfill(2))
 
-            line_edit.editingFinished.connect(_normalize_on_finish)
+            line_edit.editingFinished.connect(
+                lambda: QTimer.singleShot(0, _normalize_on_finish)
+            )
         else:
             line_edit.setReadOnly(True)
 

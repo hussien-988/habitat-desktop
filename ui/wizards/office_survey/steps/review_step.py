@@ -7,6 +7,7 @@ watermark scroll area, and animated accent decorations matching
 the CaseDetailsPage design language.
 """
 
+from email.mime import text
 from logging import error
 from copy import error
 from typing import Dict, Any
@@ -643,6 +644,63 @@ class ReviewStep(BaseStep):
                 self._clear_layout(item.layout())
 
     # ── Person row ───────────────────────────────────────────────────
+    def _get_person_designations(self, person: dict):
+        designations = []
+
+        person_id = str(person.get("person_id") or "").strip()
+        contact_person_id = str(
+            self.context.get_data("contact_person_id") or ""
+        ).strip()
+
+        if contact_person_id:
+            is_contact_person = person_id == contact_person_id
+        else:
+            is_contact_person = bool(
+                person.get("_is_applicant")
+                or person.get("_is_contact_person")
+            )
+
+        claimant_person_ids = {
+            relation.get("person_id")
+            for relation in (self.context.relations or [])
+            if relation.get("person_id")
+        }
+
+        is_right_claimant = person_id in claimant_person_ids
+
+        if is_contact_person:
+            designations.append("contact_person")
+
+        if is_right_claimant:
+            designations.append("right_claimant")
+
+        return designations
+    def _create_designation_badge(self, text: str, background: str, color: str):
+        badge = QLabel(text)
+
+        badge.setFont(
+            create_font(
+                size=11,
+                weight=FontManager.WEIGHT_SEMIBOLD,
+            )
+        )
+
+        badge.setStyleSheet(f"""
+            QLabel {{
+                background-color: {background};
+                color: {color};
+                border: none;
+                border-radius: 8px;
+                padding: 4px 8px;
+            }}
+        """)
+
+        badge.setSizePolicy(
+            QSizePolicy.Fixed,
+            QSizePolicy.Fixed,
+        )
+
+        return badge
 
     def _create_person_row(self, person: dict, alt_bg: bool = False) -> QWidget:
         """Compact person card with a link to view full review details in a dialog."""
@@ -698,6 +756,33 @@ class ReviewStep(BaseStep):
         name_lbl.setWordWrap(True)
         top.addWidget(name_lbl, 1)
         v.addLayout(top)
+        designations = self._get_person_designations(person)
+        if designations:
+            designation_row = QHBoxLayout()
+            designation_row.setContentsMargins(0, 0, 0, 0)
+            designation_row.setSpacing(ScreenScale.w(6))
+
+            if "contact_person" in designations:
+                designation_row.addWidget(
+                    self._create_designation_badge(
+                        tr("wizard.review.designation_contact_person"),
+                        "#E0F2FE",
+                        "#0369A1",
+                    )
+                )
+
+            if "right_claimant" in designations:
+                designation_row.addWidget(
+                    self._create_designation_badge(
+                        tr("wizard.review.designation_right_claimant"),
+                        "#DCFCE7",
+                        "#166534",
+                    )
+                )
+
+            designation_row.addStretch(1)
+
+            v.addLayout(designation_row)
 
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 0, 0, 0)

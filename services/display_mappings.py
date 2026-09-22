@@ -203,6 +203,8 @@ def get_gender_options() -> list:
 
 def get_nationality_options() -> list:
     return _vocab_options("Nationality")
+def get_claim_type_options() -> list:
+    return _vocab_options("ClaimType")
 
 def get_claim_type_display(claim_key) -> str:
     _str_fallback = {

@@ -1833,6 +1833,75 @@ class LeafletHTMLGenerator:
             }});
         }}
         window.panToLandmark = panToLandmark;
+        function normalizeLandmarkSearchText(value) {{
+            return String(value || '')
+                .toLocaleLowerCase()
+                .replace(/[\\u064B-\\u065F\\u0670]/g, '')
+                .replace(/\\s+/g, ' ')
+                .trim();
+        }}
+
+        var landmarkSearchHighlight = null;
+
+        function highlightLandmarkSearchResult(name, lat, lng) {{
+            var wanted = normalizeLandmarkSearchText(name);
+            var matched = null;
+
+            landmarksLayer.eachLayer(function(layer) {{
+                if (matched || !layer.landmarkData) return;
+
+                var candidate = normalizeLandmarkSearchText(
+                    layer.landmarkData.name || ''
+                );
+
+                if (!candidate) return;
+
+                if (
+                    candidate === wanted ||
+                    candidate.indexOf(wanted) !== -1 ||
+                    wanted.indexOf(candidate) !== -1
+                ) {{
+                    matched = layer;
+                }}
+            }});
+
+            if (!map.hasLayer(landmarksLayer)) {{
+                landmarksLayer.addTo(map);
+            }}
+
+            if (matched) {{
+                matched.openPopup();
+            }}
+
+            if (landmarkSearchHighlight) {{
+                map.removeLayer(landmarkSearchHighlight);
+            }}
+
+            landmarkSearchHighlight = L.circleMarker(
+                [lat, lng],
+                {{
+                    radius: 20,
+                    color: '#F59E0B',
+                    weight: 4,
+                    opacity: 1,
+                    fillColor: '#FDE68A',
+                    fillOpacity: 0.35,
+                    interactive: false
+                }}
+            ).addTo(map);
+
+            landmarkSearchHighlight.bringToFront();
+
+            setTimeout(function() {{
+                if (landmarkSearchHighlight) {{
+                    map.removeLayer(landmarkSearchHighlight);
+                    landmarkSearchHighlight = null;
+                }}
+            }}, 5000);
+        }}
+
+        window.highlightLandmarkSearchResult =
+            highlightLandmarkSearchResult;
 
         function updateLandmarksOnMap(newData) {{
             landmarksLayer.clearLayers();
@@ -1893,7 +1962,7 @@ class LeafletHTMLGenerator:
                         className: 'street-tooltip'
                     }});
                 }}
-
+                polyline.streetData = street;
                 polyline.on('mouseover', function() {{
                     this.setStyle({{ weight: 5, opacity: 1.0 }});
                 }});
@@ -1928,6 +1997,7 @@ class LeafletHTMLGenerator:
                 var latLngs = wktLineToLatLngs(street.geometryWkt);
                 if (!latLngs) return;
                 var polyline = L.polyline(latLngs, {{ color: '#3B82F6', weight: 3, opacity: 0.7 }});
+                polyline.streetData = street;
                 var label = street.name || '';
                 if (label) {{
                     polyline.bindTooltip(label, {{ sticky: true, direction: 'auto', className: 'street-tooltip' }});
@@ -1938,6 +2008,107 @@ class LeafletHTMLGenerator:
             }});
         }}
         window.updateStreetsOnMap = updateStreetsOnMap;
+        function normalizeStreetSearchText(value) {{
+            return String(value || '')
+                .toLocaleLowerCase()
+                .replace(/[\\u064B-\\u065F\\u0670]/g, '')
+                .replace(/\\s+/g, ' ')
+                .trim();
+        }}
+
+        function searchStreetByName(query, exactOnly) {{
+            var wanted = normalizeStreetSearchText(query);
+
+            if (!wanted) {{
+                return false;
+            }}
+
+            var matched = null;
+
+            streetsLayer.eachLayer(function(layer) {{
+                if (matched) return;
+
+                var street = layer.streetData || {{}};
+                var candidate = normalizeStreetSearchText(
+                    street.name || ''
+                );
+
+                if (!candidate && layer.getTooltip()) {{
+                    candidate = normalizeStreetSearchText(
+                        layer.getTooltip().getContent() || ''
+                    );
+                }}
+
+                if (!candidate) {{
+                    return;
+                }}
+
+                var isMatch = exactOnly
+                    ? candidate === wanted
+                    : candidate.indexOf(wanted) !== -1;
+
+                if (isMatch) {{
+                    matched = layer;
+                }}
+            }});
+
+            if (!matched) {{
+                return false;
+            }}
+
+            if (!map.hasLayer(streetsLayer)) {{
+                streetsLayer.addTo(map);
+            }}
+
+            if (
+                window._streetSearchHighlight &&
+                window._streetSearchHighlight !== matched
+            ) {{
+                window._streetSearchHighlight.setStyle({{
+                    color: '#3B82F6',
+                    weight: 3,
+                    opacity: 0.7
+                }});
+            }}
+
+            window._streetSearchHighlight = matched;
+
+            matched.setStyle({{
+                color: '#F59E0B',
+                weight: 7,
+                opacity: 1.0
+            }});
+
+            if (matched.bringToFront) {{
+                matched.bringToFront();
+            }}
+
+            var center = matched.getBounds().getCenter();
+
+            map.flyTo(
+                center,
+                16,
+                {{ duration: 2.0 }}
+            );
+
+            matched.openTooltip();
+
+            setTimeout(function() {{
+                if (window._streetSearchHighlight === matched) {{
+                    matched.setStyle({{
+                        color: '#3B82F6',
+                        weight: 3,
+                        opacity: 0.7
+                    }});
+
+                    window._streetSearchHighlight = null;
+                }}
+            }}, 5000);
+
+            return true;
+        }}
+
+        window.searchStreetByName = searchStreetByName;
 '''
 
     @staticmethod

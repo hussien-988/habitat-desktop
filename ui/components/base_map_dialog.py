@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Base Map Dialog - unified dialog for all map operations."""
-
+import json
 from typing import Optional, List
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
@@ -1375,35 +1375,31 @@ class BaseMapDialog(QDialog):
             logger.warning(f"Landmark/street search error: {e}")
             return False, None
 
-    def _search_streets_js(self, search_text, not_found_callback=None):
+    def _search_streets_js(self, search_text, not_found_callback=None,found_callback=None,
+    exact_only=False):
         """Search loaded streets layer via JavaScript."""
-        safe_text = search_text.replace("\\", "\\\\").replace("'", "\\'")
+        safe_text = json.dumps(search_text, ensure_ascii=False)
+        exact_flag = "true" if exact_only else "false"
+
         js = f"""
         (function() {{
-            if (typeof streetsLayer !== 'undefined') {{
-                var found = false;
-                streetsLayer.eachLayer(function(layer) {{
-                    if (!found) {{
-                        var name = '';
-                        if (layer.getTooltip()) {{
-                            name = layer.getTooltip().getContent() || '';
-                        }}
-                        if (name.indexOf('{safe_text}') !== -1) {{
-                            var center = layer.getBounds().getCenter();
-                            map.flyTo(center, 16, {{duration: 2.0}});
-                            layer.openTooltip();
-                            found = true;
-                        }}
-                    }}
-                }});
-                return found ? 'found' : 'not_found';
+            if (typeof window.searchStreetByName !== 'function') {{
+                return 'no_layer';
             }}
-            return 'no_layer';
+
+            return window.searchStreetByName({safe_text},{exact_flag})
+                ? 'found'
+                : 'not_found';
         }})()
         """
 
         def on_result(result):
-            if result != 'found' and not_found_callback:
+            if result == "found":
+                if found_callback:
+                    found_callback()
+                return
+
+            if not_found_callback:
                 not_found_callback()
 
         self.web_view.page().runJavaScript(js, on_result)

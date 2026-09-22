@@ -294,7 +294,8 @@ class OccupancyClaimsStep(BaseStep):
             auth_token=auth_token,
             survey_id=survey_id,
             household_id=household_id,
-            unit_id=unit_id
+            unit_id=unit_id,
+            add_claim_mode=True,
         )
 
         if dialog.exec_() == QDialog.Accepted:
@@ -344,14 +345,15 @@ class OccupancyClaimsStep(BaseStep):
         )
 
         if is_applicant:
-            initial_tab = 0
             open_as_existing = False
         else:
-            # No relation yet → open in existing_person_mode so link_person_to_unit() is called
+            # No relation yet → keep existing-person mode so the current
+            # link-to-unit/API behavior remains unchanged.
             open_as_existing = not has_relation
-            # Editing an existing person starts on the first tab (like the applicant);
-            # only the link-new-relation flow jumps ahead to capture the relation.
-            initial_tab = 0 if has_relation else 1
+
+        # From the Add Claim flow, an existing person's personal/contact
+        # information does not need to be shown again.
+        initial_tab = 2
 
         person_data_copy = dict(person_data)
         if is_applicant and self.context.applicant:
@@ -373,6 +375,8 @@ class OccupancyClaimsStep(BaseStep):
             unit_id=unit_id,
             existing_person_mode=open_as_existing,
             initial_tab=initial_tab,
+            claim_only_mode=True,
+            add_claim_mode=True,
             read_only=is_finalized,
         )
 

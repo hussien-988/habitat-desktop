@@ -28,7 +28,7 @@ class FocusSelectSpinBox(QSpinBox):
         super().focusInEvent(event)
         QTimer.singleShot(0, self.selectAll)
 
-from ui.components.rtl_combo import RtlCombo
+from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from ui.style_manager import StyleManager
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.wizards.framework import BaseStep, StepValidationResult
@@ -36,6 +36,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
     STEP_CARD_STYLE, FORM_FIELD_STYLE,
     make_step_card, make_icon_header, make_divider, get_step_card_style,
+    make_editable_date_combo,
     read_int_from_combo,
 )
 from app.config import Config
@@ -221,6 +222,7 @@ class HouseholdStep(BaseStep):
             if code == 0:
                 continue
             self.hh_occupancy_nature.addItem(display_name, code)
+        enable_searchable_combo(self.hh_occupancy_nature)
         self.hh_occupancy_nature.setStyleSheet(combo_style)
         self.hh_occupancy_nature.setMinimumHeight(ScreenScale.h(38))
         nature_col.addWidget(self.hh_occupancy_nature)
@@ -262,11 +264,14 @@ class HouseholdStep(BaseStep):
         date_row = QHBoxLayout()
         date_row.setSpacing(6)
 
-        self.hh_start_year = RtlCombo()
-        for y in range(QDate.currentDate().year(), 1939, -1):
-            self.hh_start_year.addItem(str(y), y)
-        self.hh_start_year.setCurrentIndex(-1)
-        self.hh_start_year.setStyleSheet(FORM_FIELD_STYLE)
+        self.hh_start_year = make_editable_date_combo(
+            [
+                (str(y), y)
+                for y in range(QDate.currentDate().year(), 1939, -1)
+            ],
+            max_digits=4,
+            placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
         date_row.addWidget(self.hh_start_year, 1)
         start_date_col.addLayout(date_row)
         family_info_layout.addLayout(start_date_col)
