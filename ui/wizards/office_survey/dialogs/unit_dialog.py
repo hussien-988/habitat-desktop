@@ -37,7 +37,7 @@ class FocusSelectLineEdit(QLineEdit):
         QTimer.singleShot(0, self.selectAll)
 
 from app.config import Config
-from ui.components.rtl_combo import RtlCombo
+from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from models.building import Building
 from controllers.unit_controller import UnitController
 from ui.error_handler import ErrorHandler
@@ -284,17 +284,37 @@ class UnitDialog(QDialog):
         self.unit_type_combo.setStyleSheet(self._combo_style())
         self.unit_type_combo.setFixedHeight(ScreenScale.h(48))
         self.unit_type_combo.addItem(tr("wizard.unit_dialog.select"), 0)
+
         for code, label in get_unit_type_options():
             self.unit_type_combo.addItem(label, code)
-        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_type"), self.unit_type_combo), 1)
+
+        enable_searchable_combo(self.unit_type_combo)
+
+        row2.addLayout(
+            self._create_field_container(
+                tr("wizard.unit_dialog.unit_type"),
+                self.unit_type_combo
+            ),
+            1
+        )
 
         self.unit_status_combo = RtlCombo()
         self.unit_status_combo.setStyleSheet(self._combo_style())
         self.unit_status_combo.setFixedHeight(ScreenScale.h(48))
         self.unit_status_combo.addItem(tr("wizard.unit_dialog.select"), 0)
+
         for code, label in get_unit_status_options():
             self.unit_status_combo.addItem(label, code)
-        row2.addLayout(self._create_field_container(tr("wizard.unit_dialog.unit_status"), self.unit_status_combo), 1)
+
+        enable_searchable_combo(self.unit_status_combo)
+
+        row2.addLayout(
+            self._create_field_container(
+                tr("wizard.unit_dialog.unit_status"),
+                self.unit_status_combo
+            ),
+            1
+        )
 
         layout.addLayout(row2)
 

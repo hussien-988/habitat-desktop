@@ -33,14 +33,16 @@ from services.display_mappings import (
     get_evidence_type_options,
     get_gender_options, get_nationality_options
 )
-from ui.components.rtl_combo import RtlCombo
+from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from ui.components.centered_text_edit import CenteredTextEdit
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
-    FORM_FIELD_STYLE, read_int_from_combo,
+    FORM_FIELD_STYLE,
+    make_editable_date_combo,
+    read_int_from_combo,
 )
 from utils.logger import get_logger
 
@@ -360,6 +362,7 @@ class PersonDialog(QDialog):
         self._connect_progress_signals()
 
         self.tab_widget.currentChanged.connect(self._update_progress)
+        self.tab_widget.currentChanged.connect(self._focus_first_field_for_tab)
         main_layout.addWidget(self.tab_widget)
 
         # Fixed bottom button bar (outside scroll area, always visible)
@@ -542,7 +545,7 @@ class PersonDialog(QDialog):
             ]
         else:
             fields = [
-                self.rel_type_combo.currentIndex() > 0,
+                self.rel_type_combo.currentData() is not None,
                 bool(self.ownership_share.text().strip()),
                 self.evidence_type.currentIndex() > 0,
                 bool(self.evidence_desc.text().strip()),
@@ -679,33 +682,28 @@ class PersonDialog(QDialog):
         birth_layout.setContentsMargins(0, 0, 0, 0)
 
         from datetime import datetime as _dt
+
         birth_input_style = self._input_style()
 
-        self.birth_day_combo = RtlCombo()
-        for d in range(1, 32):
-            self.birth_day_combo.addItem(f"{d:02d}", d)
-        self.birth_day_combo.setCurrentIndex(-1)
-        _le = self.birth_day_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.day_placeholder"))
+        self.birth_day_combo = make_editable_date_combo(
+            [(f"{d:02d}", d) for d in range(1, 32)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.day_placeholder"),
+        )
         self.birth_day_combo.setStyleSheet(birth_input_style)
 
-        self.birth_month_combo = RtlCombo()
-        for m in range(1, 13):
-            self.birth_month_combo.addItem(f"{m:02d}", m)
-        self.birth_month_combo.setCurrentIndex(-1)
-        _le = self.birth_month_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.month_placeholder"))
+        self.birth_month_combo = make_editable_date_combo(
+            [(f"{m:02d}", m) for m in range(1, 13)],
+            max_digits=2,
+            placeholder=tr("wizard.person_dialog.month_placeholder"),
+        )
         self.birth_month_combo.setStyleSheet(birth_input_style)
 
-        self.birth_year_combo = RtlCombo()
-        for y in range(_dt.now().year, 1919, -1):
-            self.birth_year_combo.addItem(str(y), y)
-        self.birth_year_combo.setCurrentIndex(-1)
-        _le = self.birth_year_combo.lineEdit()
-        if _le is not None:
-            _le.setPlaceholderText(tr("wizard.person_dialog.year_placeholder"))
+        self.birth_year_combo = make_editable_date_combo(
+            [(str(y), y) for y in range(_dt.now().year, 1919, -1)],
+            max_digits=4,
+            placeholder=tr("wizard.person_dialog.year_placeholder"),
+        )
         self.birth_year_combo.setStyleSheet(birth_input_style)
 
         birth_layout.addWidget(self.birth_day_combo, 1)
@@ -737,8 +735,12 @@ class PersonDialog(QDialog):
         row += 1
         self.nationality = RtlCombo()
         self.nationality.addItem(tr("wizard.person_dialog.select"), None)
+
         for code, display_name in get_nationality_options():
             self.nationality.addItem(display_name, code)
+
+        enable_searchable_combo(self.nationality)
+
         self.nationality.setStyleSheet(self._input_style())
         grid.addWidget(self.nationality, row, 0)
 
@@ -765,6 +767,7 @@ class PersonDialog(QDialog):
             if code == 0:
                 continue
             self.id_doc_type_combo.addItem(label, code)
+        enable_searchable_combo(self.id_doc_type_combo)
         self.id_doc_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.id_doc_type_combo, row, 0, 1, 2)
         row += 1
@@ -964,9 +967,18 @@ class PersonDialog(QDialog):
         grid.addWidget(self._label(tr("wizard.person_dialog.ownership_share"), label_style), row, 1)
         row += 1
         self.rel_type_combo = RtlCombo()
-        self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
+
         for code, display_name in get_claim_type_options():
             self.rel_type_combo.addItem(display_name, code)
+
+        self.rel_type_combo.setCurrentIndex(-1)
+
+        enable_searchable_combo(self.rel_type_combo)
+
+        self.rel_type_combo.lineEdit().setPlaceholderText(
+            tr("wizard.person_dialog.select")
+        )
+
         self.rel_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.rel_type_combo, row, 0)
 
@@ -2017,6 +2029,26 @@ class PersonDialog(QDialog):
             return
 
         self.tab_widget.setCurrentIndex(1)
+    def _focus_first_field_for_tab(self, index):
+        if self.read_only:
+            return
+
+        if index == 2:
+            QTimer.singleShot(0, self._focus_claim_type_input)
+
+
+    def _focus_claim_type_input(self):
+        if not self.rel_type_combo.isEnabled():
+            return
+
+        line_edit = self.rel_type_combo.lineEdit()
+        if line_edit is None:
+            return
+
+        line_edit.setFocus(Qt.TabFocusReason)
+
+        if line_edit.text():
+            line_edit.selectAll()
 
     # Keep legacy method name for backward compatibility
     def _save_person_and_switch_tab(self):
@@ -2667,6 +2699,7 @@ class PersonDialog(QDialog):
             if code == 0:
                 continue
             ev_type_combo.addItem(display_name, code)
+        enable_searchable_combo(ev_type_combo)
         ev_section.addWidget(ev_type_combo)
 
         ev_type_error = QLabel("")
@@ -2724,29 +2757,36 @@ class PersonDialog(QDialog):
         date_row.setContentsMargins(0, 0, 0, 0)
 
         current_year = _date.today().year
-        year_combo = QComboBox()
-        year_combo.setStyleSheet(combo_style)
+
+        year_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(y), y) for y in range(current_year, 1949, -1)],
+            max_digits=4,
+            placeholder="--",
+        )
         year_combo.setLayoutDirection(Qt.LeftToRight)
         year_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        year_combo.addItem("--", None)
-        for y in range(current_year, 1949, -1):
-            year_combo.addItem(str(y), y)
+        year_combo.setStyleSheet(combo_style)
 
-        month_combo = QComboBox()
-        month_combo.setStyleSheet(combo_style)
+        month_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(m), m) for m in range(1, 13)],
+            max_digits=2,
+            placeholder="--",
+        )
         month_combo.setLayoutDirection(Qt.LeftToRight)
         month_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        month_combo.addItem("--", None)
-        for m in range(1, 13):
-            month_combo.addItem(str(m), m)
+        month_combo.setStyleSheet(combo_style)
 
-        day_combo = QComboBox()
-        day_combo.setStyleSheet(combo_style)
+        day_combo = make_editable_date_combo(
+            [("--", None)] +
+            [(str(d), d) for d in range(1, 32)],
+            max_digits=2,
+            placeholder="--",
+        )
         day_combo.setLayoutDirection(Qt.LeftToRight)
         day_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        day_combo.addItem("--", None)
-        for d in range(1, 32):
-            day_combo.addItem(str(d), d)
+        day_combo.setStyleSheet(combo_style)
 
         date_row.addWidget(year_combo, 1)
         date_row.addWidget(month_combo, 1)
@@ -2828,9 +2868,9 @@ class PersonDialog(QDialog):
             ev_type_error.setVisible(False)
             ev_type_combo.setStyleSheet(combo_style)
 
-            y = year_combo.currentData()
-            m = month_combo.currentData()
-            d = day_combo.currentData()
+            y = read_int_from_combo(year_combo)
+            m = read_int_from_combo(month_combo)
+            d = read_int_from_combo(day_combo)
             if any((y, m, d)) and not all((y, m, d)):
                 Toast.show_toast(self, tr("wizard.person_dialog.issue_date_incomplete"), Toast.ERROR)
                 return
@@ -2859,9 +2899,9 @@ class PersonDialog(QDialog):
         dlg.adjustSize()
 
         if dlg.exec_() == QDialog.Accepted:
-            y = year_combo.currentData()
-            m = month_combo.currentData()
-            d = day_combo.currentData()
+            y = read_int_from_combo(year_combo)
+            m = read_int_from_combo(month_combo)
+            d = read_int_from_combo(day_combo)
             ref_value = ref_input.text().strip()
             ev_type_value = ev_type_combo.currentData()
             if y:
