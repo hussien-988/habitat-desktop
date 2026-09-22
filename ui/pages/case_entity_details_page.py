@@ -1288,7 +1288,23 @@ class CaseEntityDetailsPage(QWidget):
         self._header.set_case_info(case_number, badges)
         self._header.update_editable_state(self._case.is_editable)
         self._header.set_actions_visible(self._show_actions)
+    def _get_latest_claim_date(self) -> str:
+        latest_date = None
 
+        for claim in self._claim_details:
+            created_at = claim.get("createdAtUtc")
+            if not created_at:
+                continue
+
+            date_text = str(created_at)[:10]
+
+            if not date_text or date_text.startswith("0001"):
+                continue
+
+            if latest_date is None or date_text > latest_date:
+                latest_date = date_text
+
+        return latest_date or "-"
     def _populate_case_info(self):
         if not self._case:
             return
@@ -1311,9 +1327,7 @@ class CaseEntityDetailsPage(QWidget):
         opened = (self._case.opened_date or "")[:10]
         if not opened or opened.startswith("0001"):
             opened = "-"
-        closed = (self._case.closed_date or "")[:10]
-        if not closed or closed.startswith("0001"):
-            closed = "-"
+        latest_claim_date = self._get_latest_claim_date()
 
         fields = [
             (tr("page.case_entity.field_case_number"),
@@ -1322,8 +1336,8 @@ class CaseEntityDetailsPage(QWidget):
              tr(status_style["label_key"])),
             (tr("page.case_entity.field_open_date"),
              opened),
-            (tr("page.case_entity.field_close_date"),
-             closed),
+            (tr("page.case_entity.field_latest_claim_date"),
+             latest_claim_date),
             (tr("page.case_entity.field_survey_count"),
              str(self._case.survey_count)),
             (tr("page.case_entity.field_claim_count"),

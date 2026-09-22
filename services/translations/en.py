@@ -1040,6 +1040,7 @@ EN_TRANSLATIONS = {
     "page.case_entity.field_status": "Status",
     "page.case_entity.field_open_date": "Open Date",
     "page.case_entity.field_close_date": "Close Date",
+    "page.case_entity.field_latest_claim_date": "Latest Claim Date",
     "page.case_entity.field_survey_count": "Survey Count",
     "page.case_entity.field_claim_count": "Claim Count",
     "page.case_entity.section_property": "Property Unit",
