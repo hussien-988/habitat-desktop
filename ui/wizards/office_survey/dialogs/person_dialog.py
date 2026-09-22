@@ -548,7 +548,6 @@ class PersonDialog(QDialog):
                 self.rel_type_combo.currentData() is not None,
                 bool(self.ownership_share.text().strip()),
                 self.evidence_type.currentIndex() > 0,
-                bool(self.evidence_desc.text().strip()),
                 bool(self.notes.toPlainText().strip()),
             ]
         filled = sum(fields)
@@ -1022,13 +1021,8 @@ class PersonDialog(QDialog):
             self.evidence_type.addItem(display_name, code)
 
         # Row: Evidence Description (full width)
-        grid.addWidget(self._label(tr("wizard.person_dialog.evidence_description"), label_style), row, 0, 1, 2)
-        row += 1
         self.evidence_desc = QLineEdit()
-        self.evidence_desc.setPlaceholderText(tr("wizard.person_dialog.evidence_desc_placeholder"))
-        self.evidence_desc.setStyleSheet(self._input_style())
-        grid.addWidget(self.evidence_desc, row, 0, 1, 2)
-        row += 1
+        self.evidence_desc.hide()
 
         # Notes (full width)
         grid.addWidget(self._label(tr("wizard.person_dialog.notes_label"), label_style), row, 0, 1, 2)
@@ -1038,7 +1032,8 @@ class PersonDialog(QDialog):
         self.notes.setPlaceholderStyleSheet(
             "color: rgba(180, 210, 240, 0.4); background: transparent; font-size: 16px; font-weight: 400;"
         )
-        self.notes.setMaximumHeight(ScreenScale.h(80))
+        self.notes.setMinimumHeight(ScreenScale.h(140))
+        self.notes.setMaximumHeight(ScreenScale.h(160))
         self.notes.setStyleSheet("""
             QTextEdit {
                 border: 1px solid rgba(56, 144, 223, 0.2);
