@@ -1040,6 +1040,7 @@ AR_TRANSLATIONS = {
     "page.case_entity.field_status": "الحالة",
     "page.case_entity.field_open_date": "تاريخ الفتح",
     "page.case_entity.field_close_date": "تاريخ الإغلاق",
+    "page.case_entity.field_latest_claim_date": "تاريخ أحدث ادعاء",
     "page.case_entity.field_survey_count": "عدد الادعاءات",
     "page.case_entity.field_claim_count": "عدد المطالبات",
     "page.case_entity.section_property": "الوحدة العقارية",
