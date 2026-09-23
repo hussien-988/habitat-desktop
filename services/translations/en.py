@@ -2961,6 +2961,10 @@ EN_TRANSLATIONS = {
     "page.import_packages.refresh": "Refresh",
     "page.import_packages.stat_active": "Active",
     "page.import_packages.stat_history": "History",
+    "page.import_packages.data_collector": "Data Collector",
+    "page.import_packages.building_numbers": "Building Numbers",
+    "page.import_packages.building_locations": "Building Locations",
+    "page.import_packages.unknown_collector": "Unknown",
     # Strict status-specific action labels — do NOT reuse view_report for
     # statuses other than Completed.
     "page.import_packages.action.process": "Start processing",

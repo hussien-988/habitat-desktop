@@ -2963,6 +2963,10 @@ AR_TRANSLATIONS = {
     "page.import_packages.refresh": "تحديث",
     "page.import_packages.stat_active": "النشطة",
     "page.import_packages.stat_history": "السجل",
+    "page.import_packages.data_collector": "جامع البيانات",
+    "page.import_packages.building_numbers": "أرقام المباني",
+    "page.import_packages.building_locations": "مواقع المباني",
+    "page.import_packages.unknown_collector": "غير معروف",
     # Each action label is status-specific (the user's strict spec). Do NOT
     # reuse "view_report" for non-Completed statuses.
     "page.import_packages.action.process": "بدء المعالجة",

@@ -71,7 +71,7 @@ class _PackageCard(AnimatedCard):
         self._is_selected = False
         status_code = pkg_data.get("status_code", 1)
         color = _STATUS_COLORS.get(status_code, "#6B7280")
-        super().__init__(parent, card_height=110, status_color=color)
+        super().__init__(parent, card_height=165, status_color=color)
 
     def set_selected(self, selected: bool):
         """Toggle the card's selected look.
@@ -107,6 +107,7 @@ class _PackageCard(AnimatedCard):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
         name_label = QLabel(d.get("package_name", "N/A"))
+        name_label.setToolTip(d.get("package_name", ""))
         name_label.setFont(create_font(size=13, weight=QFont.Bold))
         name_label.setStyleSheet(f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;")
         name_label.setMaximumWidth(ScreenScale.w(500))
@@ -128,35 +129,87 @@ class _PackageCard(AnimatedCard):
         row1.addWidget(badge)
         layout.addLayout(row1)
 
-        # Row 2: Date + record counts
+                # Row 2: Data collector
+        collector_name = (
+            d.get("collector_name")
+            or tr("page.import_packages.unknown_collector")
+        )
+
+        collector_label = QLabel(
+            f"{tr('page.import_packages.data_collector')}: {collector_name}"
+        )
+        collector_label.setFont(
+            create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        collector_label.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; "
+            "background: transparent; border: none;"
+        )
+        collector_label.setToolTip(collector_name)
+        apply_label_alignment(collector_label)
+        layout.addWidget(collector_label)
+
+        # Row 3: Building numbers
+        building_numbers = d.get("building_numbers") or []
+        building_numbers_text = ", ".join(building_numbers) if building_numbers else "—"
+
+        buildings_label = QLabel(
+            f"{tr('page.import_packages.building_numbers')}: "
+            f"{building_numbers_text}"
+        )
+        buildings_label.setFont(
+            create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        buildings_label.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; "
+            "background: transparent; border: none;"
+        )
+        buildings_label.setToolTip(building_numbers_text)
+        apply_label_alignment(buildings_label)
+        layout.addWidget(buildings_label)
+
+        # Row 4: Building locations
+        locations = d.get("building_locations") or []
+        locations_text = ", ".join(locations) if locations else "—"
+
+        locations_label = QLabel(
+            f"{tr('page.import_packages.building_locations')}: "
+            f"{locations_text}"
+        )
+        locations_label.setFont(
+            create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        locations_label.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; "
+            "background: transparent; border: none;"
+        )
+        locations_label.setToolTip(locations_text)
+        apply_label_alignment(locations_label)
+        layout.addWidget(locations_label)
+
+        # Row 5: Date / record count + source device
         parts = []
+
         if d.get("created_date"):
             parts.append(d["created_date"])
+
         if d.get("valid_records") is not None:
-            parts.append(f"{tr('import.valid_records')}: {d['valid_records']}")
-        details = QLabel(" \u2009\u00b7\u2009 ".join(parts) if parts else "-")
-        details.setFont(create_font(size=10, weight=FontManager.WEIGHT_REGULAR))
-        details.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            parts.append(
+                f"{tr('import.valid_records')}: {d['valid_records']}"
+            )
+
+        details = QLabel(
+            " \u2009\u00b7\u2009 ".join(parts) if parts else "-"
+        )
+        details.setFont(
+            create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        details.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; "
+            "background: transparent; border: none;"
+        )
         apply_label_alignment(details)
         layout.addWidget(details)
-
-        # Row 3: source chip
-        chips_row = QHBoxLayout()
-        chips_row.setSpacing(6)
-        chip_style = (
-            "QLabel {{ background-color: {bg}; color: {fg}; "
-            "border: 1px solid {border}; border-radius: 4px; "
-            "padding: 2px 8px; }}"
-        )
-        source = d.get("source", "")
-        if source:
-            chip = QLabel(source)
-            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-            chip.setStyleSheet(chip_style.format(bg="#EEF2FF", fg="#4338CA", border="#E0E7FF"))
-            chips_row.addWidget(chip)
-        chips_row.addStretch()
-        layout.addLayout(chips_row)
-
 
 class ImportPackagesPage(QWidget):
     """Import Packages page with dark header, animated cards, pagination, spinner overlay."""
@@ -776,7 +829,44 @@ class ImportPackagesPage(QWidget):
         else:
             status_display = vocab_get_label("import_status", status_raw) or tr("import_status.unknown")
             logger.warning(f"Unknown package status: {status_raw}")
+        buildings = pkg.get("buildings") or []
 
+        building_numbers = []
+        building_locations = []
+
+        seen_numbers = set()
+        seen_locations = set()
+
+        for building in buildings:
+            if not isinstance(building, dict):
+                continue
+
+            building_number = str(
+                building.get("buildingNumber") or ""
+            ).strip()
+
+            if building_number and building_number not in seen_numbers:
+                seen_numbers.add(building_number)
+                building_numbers.append(building_number)
+
+            location = ""
+
+            for key in (
+                "neighborhoodName",
+                "communityName",
+                "subDistrictName",
+                "districtName",
+                "governorateName",
+            ):
+                value = str(building.get(key) or "").strip()
+
+                if value:
+                    location = value
+                    break
+
+            if location and location not in seen_locations:
+                seen_locations.add(location)
+                building_locations.append(location)
         return {
             "package_name": pkg.get("fileName") or "N/A",
             "status_code": status_raw,
@@ -784,7 +874,14 @@ class ImportPackagesPage(QWidget):
             "created_date": date_str,
             "total_records": pkg.get("totalRecords"),
             "valid_records": pkg.get("validRecords"),
-            "source": str(pkg.get("deviceId") or pkg.get("exportedBy") or "")[:24],
+            "source": str(
+                pkg.get("deviceId") or pkg.get("exportedBy") or ""
+            )[:24],
+            "collector_name": str(
+                pkg.get("collectorName") or ""
+            ).strip(),
+            "building_numbers": building_numbers,
+            "building_locations": building_locations,
         }
 
     def _clear_cards(self):
