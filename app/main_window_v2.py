@@ -14,6 +14,7 @@ from PyQt5.QtGui import QKeySequence, QColor, QMouseEvent, QPixmap, QPainter
 from .config import Config, Pages, save_language, get_saved_language
 from repositories.database import Database
 from services.translation_manager import tr, set_language as tm_set_language
+from services.idle_session_monitor import IdleSessionMonitor
 from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.error_handler import ErrorHandler
@@ -102,10 +103,13 @@ class _WatermarkBackground(QWidget):
         self._overlay.raise_()
 
 
-class MainWindow(QMainWindow):
+class MainWindow(QMainWindow):  
     """Main application window with navbar navigation."""
 
     language_changed = pyqtSignal(bool)  # True for Arabic, False for English
+    _token_refreshed_signal = pyqtSignal(str, object)
+    _session_expired_signal = pyqtSignal()
+    _network_error_signal = pyqtSignal(str)
 
     # Pages restricted to specific roles
     _PAGE_ROLE_ACCESS = {
@@ -136,9 +140,40 @@ class MainWindow(QMainWindow):
         self._back_to_case_entity = False
         self._case_entity_case_id = None
 
-        # Proactive token refresh timer
-        self._token_refresh_timer = None
+        
 
+        self._idle_session_monitor = IdleSessionMonitor(
+            self,
+            warning_seconds=60,
+        )
+
+        self._idle_session_monitor.warning.connect(
+            self._on_idle_session_warning
+        )
+
+        self._idle_session_monitor.timed_out.connect(
+            self._on_idle_session_timeout
+        )
+
+        self._idle_session_monitor.resumed_after_warning.connect(
+            self._on_idle_session_resumed
+        )
+
+        self._session_policy_worker = None
+        self._session_renew_worker = None
+        self._session_renew_in_progress = False
+        self._session_warning_toast = None
+        self._token_refreshed_signal.connect(
+            self._sync_refreshed_tokens
+        )
+
+        self._session_expired_signal.connect(
+            self._do_session_expired
+        )
+
+        self._network_error_signal.connect(
+            self._do_network_error
+        )
         self._setup_window()
         self._setup_shortcuts()
         self._create_widgets()
@@ -614,7 +649,7 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("No API token found in user object - API calls may fail with 401")
 
-        self._start_token_refresh_timer()
+        self._start_session_monitoring()
         self._show_login_loading()
 
         # Configure UI immediately (no blocking on vocab refresh)
@@ -936,36 +971,298 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_login_spinner') and self._login_spinner:
             self._login_spinner.hide_loading()
 
-    def _start_token_refresh_timer(self):
-        """Start proactive token refresh every 15 minutes."""
-        self._stop_token_refresh_timer()
-        self._token_refresh_timer = QTimer(self)
-        self._token_refresh_timer.timeout.connect(self._proactive_token_refresh)
-        self._token_refresh_timer.start(15 * 60 * 1000)  # 15 minutes
-        logger.info("Token refresh timer started (every 15 min)")
-
-    def _stop_token_refresh_timer(self):
-        """Stop the proactive token refresh timer."""
-        if self._token_refresh_timer:
-            self._token_refresh_timer.stop()
-            self._token_refresh_timer = None
-
-    def _proactive_token_refresh(self):
-        """Proactively refresh the API token before it expires."""
+    def _start_session_monitoring(self):
+        """Start inactivity monitoring using the backend security policy."""
         if not self.current_user:
-            self._stop_token_refresh_timer()
             return
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            if api and api.access_token:
-                if api.refresh_access_token():
-                    logger.info("Proactive token refresh succeeded")
-                else:
-                    logger.warning("Proactive token refresh failed")
-        except Exception as e:
-            logger.warning(f"Proactive token refresh error: {e}")
 
+        from datetime import datetime, timezone
+        from services.api_client import get_api_client
+        from services.api_worker import ApiWorker
+
+        api = get_api_client()
+
+        # Temporary fallback until the security policy arrives.
+        #
+        # We derive it from the real JWT expiry instead of using a
+        # hardcoded session duration.
+        timeout_minutes = 30
+
+        if api and api.token_expires_at:
+            remaining_seconds = (
+                api.token_expires_at
+                - datetime.now(timezone.utc)
+            ).total_seconds()
+
+            if remaining_seconds > 0:
+                timeout_minutes = max(
+                    1,
+                    round(remaining_seconds / 60),
+                )
+
+        self._idle_session_monitor.start(
+            timeout_minutes
+        )
+
+        if not api:
+            logger.warning(
+                "Cannot load session policy: API client unavailable"
+            )
+            return
+
+        self._session_policy_worker = ApiWorker(
+            api.get_security_settings
+        )
+
+        self._session_policy_worker.finished.connect(
+            self._on_session_policy_loaded
+        )
+
+        self._session_policy_worker.error.connect(
+            self._on_session_policy_load_failed
+        )
+
+        self._session_policy_worker.start()
+
+    def _on_session_policy_loaded(self, settings):
+        """Apply the administrator-configured session timeout."""
+        if not self.current_user:
+            return
+
+        try:
+            if not isinstance(settings, dict):
+                logger.warning(
+                    "Invalid security settings response"
+                )
+                return
+
+            session_policy = settings.get(
+                "sessionLockoutPolicy",
+                {}
+            )
+
+            timeout_minutes = int(
+                session_policy.get(
+                    "sessionTimeoutMinutes",
+                    0,
+                )
+            )
+
+            if timeout_minutes <= 0:
+                logger.warning(
+                    "Backend returned invalid session timeout: %s",
+                    timeout_minutes,
+                )
+                return
+
+            self._idle_session_monitor.update_timeout(
+                timeout_minutes
+            )
+
+            logger.info(
+                "Session timeout loaded from backend: %s minutes",
+                timeout_minutes,
+            )
+
+        except (TypeError, ValueError) as e:
+            logger.warning(
+                "Invalid session timeout returned by backend: %s",
+                e,
+            )
+    def _on_session_policy_load_failed(self, message):
+        """
+        Keep the current fallback timeout.
+
+        Failure to load security settings must not log the user out.
+        """
+        logger.warning(
+            "Could not load session security policy; "
+            "keeping current timeout: %s",
+            message,
+        )
+    def _stop_session_monitoring(self):
+        """Stop all client-side session inactivity monitoring."""
+        self._idle_session_monitor.stop()
+
+        self._session_renew_in_progress = False
+
+        if (
+            self._session_warning_toast
+            and self._session_warning_toast.isVisible()
+        ):
+            self._session_warning_toast._fade_out()
+
+        self._session_warning_toast = None
+    def _on_idle_session_warning(
+        self,
+        seconds_remaining: int,
+    ):
+        """Warn the user shortly before inactivity timeout."""
+        if not self.current_user:
+            return
+
+        from ui.components.toast import Toast
+
+        toast = self.findChild(
+            Toast,
+            "toast-notification",
+        )
+
+        if toast is None:
+            toast = Toast(self)
+
+        self._session_warning_toast = toast
+
+        toast.show_message(
+            tr(
+                "session.expiring",
+                seconds=max(1, seconds_remaining),
+            ),
+            Toast.WARNING,
+            duration=max(
+                1000,
+                seconds_remaining * 1000,
+            ),
+            action_text=tr(
+                "session.continue"
+            ),
+            action_callback=self._renew_session,
+        )
+
+    def _renew_session(self):
+        """Explicitly continue the authenticated session."""
+        if not self.current_user:
+            return
+
+        # Prevent duplicate refresh requests.
+        if self._session_renew_in_progress:
+            return
+
+        from services.api_client import get_api_client
+        from services.api_worker import ApiWorker
+
+        api = get_api_client()
+
+        if not api:
+            logger.warning(
+                "Cannot renew session: API client unavailable"
+            )
+            return
+
+        self._session_renew_in_progress = True
+
+        # The user explicitly chose to keep working.
+        self._idle_session_monitor.extend()
+
+        logger.info(
+            "User requested session renewal"
+        )
+
+        self._session_renew_worker = ApiWorker(
+            api.refresh_access_token
+        )
+
+        self._session_renew_worker.finished.connect(
+            self._on_session_renew_finished
+        )
+
+        self._session_renew_worker.error.connect(
+            self._on_session_renew_worker_error
+        )
+
+        self._session_renew_worker.start()
+    def _on_session_renew_finished(self, result):
+        """Handle explicit session renewal result."""
+        self._session_renew_in_progress = False
+
+        if not self.current_user:
+            return
+
+        if result is True:
+            logger.info(
+                "Session renewed successfully"
+            )
+
+            if (
+                self._session_warning_toast
+                and self._session_warning_toast.isVisible()
+            ):
+                self._session_warning_toast._fade_out()
+
+            return
+
+        if result is False:
+            logger.warning(
+                "Session renewal was rejected by backend"
+            )
+
+            self._on_session_expired()
+            return
+
+        # result == None:
+        # temporary network/server failure.
+        from ui.components.toast import Toast
+
+        logger.warning(
+            "Session renewal temporarily failed"
+        )
+
+        Toast.show_toast(
+            self,
+            tr("session.renew_network_failed"),
+            Toast.WARNING,
+            6000,
+        )
+    def _on_session_renew_worker_error(self, message):
+        """Handle an unexpected renewal worker failure."""
+        self._session_renew_in_progress = False
+
+        logger.warning(
+            "Session renewal worker failed: %s",
+            message,
+        )
+
+        if not self.current_user:
+            return
+
+        from ui.components.toast import Toast
+
+        Toast.show_toast(
+            self,
+            tr("session.renew_network_failed"),
+            Toast.WARNING,
+            6000,
+        )
+    def _on_idle_session_resumed(self):
+        """
+        User interacted with the application while the expiry
+        warning was active.
+        """
+        if not self.current_user:
+            return
+
+        logger.info(
+            "User activity resumed during session warning"
+        )
+
+        if (
+            self._session_warning_toast
+            and self._session_warning_toast.isVisible()
+        ):
+            self._session_warning_toast._fade_out()
+
+        self._renew_session()
+    def _on_idle_session_timeout(self):
+        """Handle client-side inactivity timeout."""
+        if not self.current_user:
+            return
+
+        logger.warning(
+            "Session expired due to user inactivity: %s",
+            self.current_user.username,
+        )
+
+        self._do_session_expired()
     def _force_logout(self):
         """Force logout without confirmation dialog (e.g., backend session expiry)."""
         if self.current_user:
@@ -975,8 +1272,9 @@ class MainWindow(QMainWindow):
                 get_api_client().logout()
             except Exception as e:
                 logger.warning(f"API logout failed: {e}")
+            self._stop_session_monitoring()
             self.current_user = None
-            self._stop_token_refresh_timer()
+            self._api_token = None
             self._show_login()
 
     def _set_api_token_for_controllers(self, token: str):
@@ -997,6 +1295,7 @@ class MainWindow(QMainWindow):
             api.set_session_expired_callback(self._on_session_expired)
             api.set_password_change_required_callback(self._on_password_change_required)
             api.set_network_error_callback(self._on_network_error)
+            api.set_token_refreshed_callback(self._on_token_refreshed)
             logger.info("API token set on singleton")
 
         # Pass token to BuildingsPage controller
@@ -1022,11 +1321,41 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_user_controller') and self._user_controller:
             self._user_controller.set_auth_token(token)
             logger.info("API token set for UserController")
+    def _on_token_refreshed(
+        self,
+        access_token: str,
+        refresh_token: str,
+    ):
+        """Forward refreshed tokens safely to the Qt UI thread."""
+        self._token_refreshed_signal.emit(
+            access_token,
+            refresh_token,
+        )
+
+
+    def _sync_refreshed_tokens(
+        self,
+        access_token: str,
+        refresh_token: str,
+    ):
+        """Update cached tokens after a successful token rotation."""
+        if not self.current_user:
+            return
+
+        self._api_token = access_token
+
+        self.current_user._api_token = access_token
+
+        if refresh_token:
+            self.current_user._api_refresh_token = refresh_token
+
+        logger.debug(
+            "Refreshed authentication tokens synchronized with UI session"
+        )
 
     def _on_network_error(self, error_type: str):
-        """Handle network/server errors from any API call (called from background thread)."""
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, lambda: self._do_network_error(error_type))
+        """Forward network errors safely to the Qt UI thread."""
+        self._network_error_signal.emit(error_type)
 
     def _do_network_error(self, error_type: str):
         """Show network error toast (runs on main thread)."""
@@ -1038,31 +1367,41 @@ class MainWindow(QMainWindow):
         Toast.show_toast(self, msg, Toast.ERROR, 6000)
 
     def _on_session_expired(self):
-        """Handle session expiry (called from background thread)."""
-        if not self.current_user:
-            return
-        if getattr(self, '_session_expiry_pending', False):
-            return
-        self._session_expiry_pending = True
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, self._do_session_expired)
+        """Forward session expiry safely to the Qt UI thread."""
+        self._session_expired_signal.emit()
 
     def _do_session_expired(self):
-        """Show expiry toast and redirect to login (runs on main thread)."""
-        self._session_expiry_pending = False
+        """
+        Show session expiry notification and return to login.
+        Runs on the Qt main thread.
+        """
+
         if not self.current_user:
             return
-        logger.warning(f"Session expired for user: {self.current_user.username}")
+
+        username = self.current_user.username
+
+        logger.warning(
+            "Session expired for user: %s",
+            username,
+        )
+
+        self._stop_session_monitoring()
+
+        # Remove local authenticated state.
+        self.current_user = None
+        self._api_token = None
+
+        self._show_login()
+
         from ui.components.toast import Toast
+
         Toast.show_toast(
             self,
-            "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً",
+            tr("session.expired"),
             Toast.WARNING,
-            5000
+            5000,
         )
-        self.current_user = None
-        self._stop_token_refresh_timer()
-        self._show_login()
 
     def handle_server_change(self):
         """Forced logout + state cleanup after API server URL was changed.
@@ -1086,10 +1425,9 @@ class MainWindow(QMainWindow):
             f"=== SERVER CHANGE: forcing logout (prev_user={prev_user}) ==="
         )
         logger.info(f"[SRV-DIAG] handle_server_change ENTER prev_user={prev_user}")
-        self._stop_token_refresh_timer()
+        self._stop_session_monitoring()
         self._api_token = None
         self.current_user = None
-        self._session_expiry_pending = False
         try:
             if getattr(self, 'office_survey_wizard', None) is not None:
                 new_context = self.office_survey_wizard.create_context()
@@ -1173,12 +1511,13 @@ class MainWindow(QMainWindow):
                     get_api_client().logout()
                 except Exception as e:
                     logger.warning(f"API logout failed (proceeding with local logout): {e}")
+                self._stop_session_monitoring()
                 self.current_user = None
                 # Always wipe the local copy of the token even if the remote
                 # logout raised — otherwise a follow-up login at a different
                 # server can race with stale token state and surface as 403.
                 self._api_token = None
-                self._stop_token_refresh_timer()
+                
                 logger.info("[SRV-DIAG] _handle_logout local teardown complete")
                 # Clear login fields for security
                 login_page = self.pages.get(Pages.LOGIN)
@@ -2312,7 +2651,7 @@ class MainWindow(QMainWindow):
                 return
 
         logger.info("Application closing")
-        self._stop_token_refresh_timer()
+        self._stop_session_monitoring()
         try:
             self.db.close()
         except Exception:

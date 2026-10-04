@@ -3863,4 +3863,8 @@ EN_TRANSLATIONS = {
     "page.import_packages.status_filter_label": "Filter by status",
     "page.import_packages.filter_results_all": "{count} packages",
     "page.import_packages.filter_results_filtered": "Showing {shown} of {total}",
+    "session.expiring": "Your session will expire in {seconds} seconds due to inactivity. Continue to keep working.",
+    "session.continue": "Continue session",
+    "session.renew_network_failed": "The session could not be renewed because of a connection problem. Check your connection and try again.",
+    "session.expired": "Your session has expired. Please sign in again.",
 }
