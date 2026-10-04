@@ -3868,5 +3868,9 @@ AR_TRANSLATIONS = {
     "page.import_packages.status_filter_label": "تصفية حسب الحالة",
     "page.import_packages.filter_results_all": "{count} حزمة",
     "page.import_packages.filter_results_filtered": "عرض {shown} من {total}",
+    "session.expiring": "ستنتهي جلستك خلال {seconds} ثانية بسبب عدم النشاط. اضغط استمرار لمتابعة العمل.",
+    "session.continue": "استمرار الجلسة",
+    "session.renew_network_failed": "تعذّر تجديد الجلسة بسبب مشكلة في الاتصال. تحقق من الشبكة وحاول مرة أخرى.",
+    "session.expired": "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مجدداً.",
 
 }

@@ -18,7 +18,7 @@ import time
 import uuid
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 from utils.logger import get_logger
 from services.exceptions import ApiException, NetworkException, PasswordChangeRequiredException
 
@@ -100,6 +100,67 @@ def _decode_jwt_claims_unsafe(token: Optional[str]) -> Dict[str, Any]:
         return claims if isinstance(claims, dict) else {}
     except Exception:
         return {}
+def _parse_utc_datetime(value: Any) -> Optional[datetime]:
+    """Parse an API ISO-8601 timestamp and normalize it to UTC."""
+    if not value:
+        return None
+
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            text = str(value).strip()
+
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+
+            dt = datetime.fromisoformat(text)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(timezone.utc)
+
+    except (TypeError, ValueError):
+        logger.warning("Could not parse token expiry timestamp")
+        return None
+
+
+def _resolve_access_token_expiry(
+    token: Optional[str],
+    explicit_expiry: Any = None,
+    expires_in: Optional[int] = None,
+) -> Optional[datetime]:
+    """
+    Resolve token expiry in order of reliability:
+
+    1. accessTokenExpiry returned by backend
+    2. exp claim inside JWT
+    3. legacy expiresIn value
+    """
+
+    expiry = _parse_utc_datetime(explicit_expiry)
+    if expiry:
+        return expiry
+
+    claims = _decode_jwt_claims_unsafe(token)
+    exp = claims.get("exp")
+
+    if exp is not None:
+        try:
+            return datetime.fromtimestamp(float(exp), tz=timezone.utc)
+        except (TypeError, ValueError, OverflowError):
+            pass
+
+    if expires_in is not None:
+        try:
+            return datetime.now(timezone.utc) + timedelta(
+                seconds=int(expires_in)
+            )
+        except (TypeError, ValueError):
+            pass
+
+    return None
 
 
 def _token_diag(token: Optional[str]) -> str:
@@ -210,11 +271,14 @@ class TRRCMSApiClient:
         # on first request via the existing _ensure_valid_token path.
         self.refresh_token: Optional[str] = _load_refresh_token(self.base_url)
         self.token_expires_at: Optional[datetime] = None
+        self.refresh_token_expires_at: Optional[datetime] = None
+        self._refresh_lock = threading.Lock()
         self._login_failures: int = 0
         self._login_cooldown_until: Optional[datetime] = None
         self._on_session_expired = None
         self._on_password_change_required = None
         self._on_network_error = None
+        self._on_token_refreshed = None
         self._last_network_error_time: Optional[datetime] = None
         self._session_expired_flag = False
         self._neighborhoods_cache = None
@@ -259,6 +323,9 @@ class TRRCMSApiClient:
     def set_session_expired_callback(self, callback):
         """Set callback to invoke when the session expires (token refresh failed or 401)."""
         self._on_session_expired = callback
+    def set_token_refreshed_callback(self, callback):
+        """Set callback invoked after access/refresh tokens are rotated."""
+        self._on_token_refreshed = callback
 
     def set_password_change_required_callback(self, callback):
         """Set callback to invoke when password change is required (403 PasswordChangeRequired)."""
@@ -296,9 +363,15 @@ class TRRCMSApiClient:
             if self.refresh_token:
                 _save_refresh_token(self.refresh_token, self.base_url)
 
-            # Calculate token expiration
-            expires_in = data.get("expiresIn", 3600)  # default 1 hour
-            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+            self.token_expires_at = _resolve_access_token_expiry(
+                self.access_token,
+                explicit_expiry=data.get("accessTokenExpiry"),
+                expires_in=data.get("expiresIn"),
+            )
+
+            self.refresh_token_expires_at = _parse_utc_datetime(
+                data.get("refreshTokenExpiry")
+            )
 
             self._login_failures = 0
             self._login_cooldown_until = None
@@ -314,57 +387,193 @@ class TRRCMSApiClient:
             logger.error(f"Login failed: {e}")
             raise
 
-    def set_access_token(self, token: str, expires_in: int = 3600):
-        """Set access token from external source."""
+    def set_access_token(
+        self,
+        token: str,
+        expires_in: Optional[int] = None,
+        expires_at: Any = None,
+    ):
+        """Set an externally obtained access token using its real expiry."""
+
+        same_token = token == self.access_token
+        previous_expiry = self.token_expires_at if same_token else None
+
         self.access_token = token
-        self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+
+        resolved_expiry = _resolve_access_token_expiry(
+            token,
+            explicit_expiry=expires_at,
+            expires_in=expires_in,
+        )
+
+        if resolved_expiry:
+            self.token_expires_at = resolved_expiry
+        elif previous_expiry:
+            # Do not destroy a known expiry just because another component
+            # synchronized the same token without expiry metadata.
+            self.token_expires_at = previous_expiry
+        else:
+            self.token_expires_at = None
+
         self._session_expired_flag = False
-        logger.debug(f"Access token updated externally (expires in {expires_in}s)")
+
+        logger.debug(
+            "Access token updated externally (expires_at=%s)",
+            self.token_expires_at.isoformat()
+            if self.token_expires_at
+            else "unknown",
+        )
+
         logger.info(
-            f"[SRV-DIAG] set_access_token singleton_id={id(self)} base_url={self.base_url} "
+            f"[SRV-DIAG] set_access_token singleton_id={id(self)} "
+            f"base_url={self.base_url} "
             f"token=({_token_diag(token)})"
         )
 
-    def refresh_access_token(self) -> bool:
-        """Refresh the access token using the refresh token."""
-        if not self.refresh_token:
+    def refresh_access_token(self) -> Optional[bool]:
+        """
+        Refresh the access token.
+
+        Returns:
+            True  -> refresh succeeded
+            False -> refresh token was rejected; session is no longer valid
+            None  -> temporary network/server problem; do not logout the user
+        """
+
+        refresh_token_before = self.refresh_token
+
+        if not refresh_token_before:
             logger.warning("No refresh token available")
             return False
 
-        try:
-            response = self._session.post(
-                f"{self.base_url}/v1/Auth/refresh",
-                json={"refreshToken": self.refresh_token},
-                headers=self._anon_headers(),
-                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/Auth/refresh", 0)),
-                verify=self._verify_ssl()
-            )
-            response.raise_for_status()
+        # Only one thread may rotate the refresh token at a time.
+        with self._refresh_lock:
 
-            data = response.json()
-            self.access_token = data["accessToken"]
-            new_refresh = data.get("refreshToken", self.refresh_token)
-            # Persist only when the server actually rotated the token, to avoid
-            # touching the keyring on every refresh cycle.
-            if new_refresh and new_refresh != self.refresh_token:
-                _save_refresh_token(new_refresh, self.base_url)
-            self.refresh_token = new_refresh
+            # Another thread may already have refreshed while we were waiting.
+            if self.refresh_token != refresh_token_before:
+                if self.access_token:
+                    logger.debug(
+                        "Token refresh already completed by another request"
+                    )
+                    return True
 
-            expires_in = data.get("expiresIn", 3600)
-            self.token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+                return False
 
-            logger.info("Token refreshed")
-            return True
+            try:
+                response = self._session.post(
+                    f"{self.base_url}/v1/Auth/refresh",
+                    json={"refreshToken": self.refresh_token},
+                    headers=self._anon_headers(),
+                    timeout=(
+                        self._CONNECT_TIMEOUT,
+                        self._endpoint_timeout(
+                            "POST",
+                            "/v1/Auth/refresh",
+                            0
+                        )
+                    ),
+                    verify=self._verify_ssl()
+                )
 
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"Token refresh rejected by server: {e}")
-            return False
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            logger.warning(f"Token refresh failed (network): {e}")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Token refresh failed: {e}")
-            return None
+                response.raise_for_status()
+
+                data = response.json()
+
+                new_access_token = data["accessToken"]
+                new_refresh_token = (
+                    data.get("refreshToken")
+                    or self.refresh_token
+                )
+
+                if (
+                    new_refresh_token
+                    and new_refresh_token != self.refresh_token
+                ):
+                    _save_refresh_token(
+                        new_refresh_token,
+                        self.base_url
+                    )
+
+                self.access_token = new_access_token
+                self.refresh_token = new_refresh_token
+
+
+                self.token_expires_at = _resolve_access_token_expiry(
+                    self.access_token,
+                    explicit_expiry=data.get("accessTokenExpiry"),
+                    expires_in=data.get("expiresIn"),
+                )
+
+                self.refresh_token_expires_at = _parse_utc_datetime(
+                    data.get("refreshTokenExpiry")
+                )
+
+                self._session_expired_flag = False
+
+                logger.info(
+                    "Token refreshed successfully; expires_at=%s",
+                    self.token_expires_at.isoformat()
+                    if self.token_expires_at
+                    else "unknown",
+                )
+                if self._on_token_refreshed:
+                    try:
+                        self._on_token_refreshed(
+                            self.access_token,
+                            self.refresh_token,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Token refreshed callback failed: %s",
+                            e
+                        )
+
+                return True
+
+            except requests.exceptions.HTTPError as e:
+                status_code = (
+                    e.response.status_code
+                    if e.response is not None
+                    else 0
+                )
+
+                # These mean the refresh credentials themselves are rejected.
+                if status_code in (400, 401, 403):
+                    logger.warning(
+                        "Token refresh rejected by server (HTTP %s)",
+                        status_code,
+                    )
+                    return False
+
+                # 429 / 5xx / gateway errors etc. are NOT session expiry.
+                logger.warning(
+                    "Token refresh temporarily unavailable (HTTP %s)",
+                    status_code,
+                )
+
+                self._fire_network_error("server")
+                return None
+
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout
+            ) as e:
+                logger.warning(
+                    "Token refresh failed because of network error: %s",
+                    e,
+                )
+
+                self._fire_network_error("network")
+                return None
+
+            except requests.exceptions.RequestException as e:
+                logger.warning(
+                    "Token refresh temporarily failed: %s",
+                    e,
+                )
+
+                self._fire_network_error("network")
+                return None
 
     def logout(self) -> Dict[str, Any]:
         """POST /v1/Auth/logout — invalidate refresh token server-side.
@@ -386,6 +595,7 @@ class TRRCMSApiClient:
             self.access_token = None
             self.refresh_token = None
             self.token_expires_at = None
+            self.refresh_token_expires_at = None
             _clear_refresh_token(self.base_url)
             logger.info(
                 f"[SRV-DIAG] logout teardown remote_ok={remote_ok} "
@@ -393,20 +603,37 @@ class TRRCMSApiClient:
             )
         return result
 
-    def get_password_policy(self) -> Dict[str, Any]:
-        """GET /api/v1/security-settings/current — anonymous, returns passwordPolicy."""
+    def get_security_settings(self) -> Dict[str, Any]:
+        """Return the currently active backend security policy."""
         try:
             response = self._session.get(
                 f"{self.base_url}/v1/security-settings/current",
                 headers=self._anon_headers(),
-                timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("GET", "/v1/security-settings/current", 0)),
-                verify=self._verify_ssl()
+                timeout=(
+                    self._CONNECT_TIMEOUT,
+                    self._endpoint_timeout(
+                        "GET",
+                        "/v1/security-settings/current",
+                        0,
+                    )
+                ),
+                verify=self._verify_ssl(),
             )
+
             response.raise_for_status()
             return response.json() or {}
+
         except Exception as e:
-            logger.warning(f"get_password_policy failed: {e}")
+            logger.warning(
+                "get_security_settings failed: %s",
+                e,
+            )
             raise
+
+
+    def get_password_policy(self) -> Dict[str, Any]:
+        """Backward-compatible alias used by PasswordPolicyService."""
+        return self.get_security_settings()
 
     def change_password(self, current_password: str, new_password: str, user_id: str = None) -> Dict[str, Any]:
         """POST /v1/auth/change-password."""
@@ -432,19 +659,44 @@ class TRRCMSApiClient:
             raise RuntimeError("Not authenticated")
 
         if self.token_expires_at:
-            time_until_expiry = (self.token_expires_at - datetime.now()).total_seconds()
-            if time_until_expiry < 300:
-                logger.info("Token expiring soon, refreshing...")
+            time_until_expiry = (
+                self.token_expires_at
+                - datetime.now(timezone.utc)
+            ).total_seconds()
+
+            if time_until_expiry <= 60:
+                logger.info(
+                    "Token expires in %.0fs, refreshing...",
+                    time_until_expiry
+                )
+
                 refresh_result = self.refresh_access_token()
+
                 if refresh_result is None:
-                    # Network error — keep existing token and continue
-                    logger.warning("Proactive token refresh failed (network) — keeping existing token")
+                    # Temporary network/server problem.
+                    # Do not destroy the session.
+                    logger.warning(
+                        "Proactive token refresh temporarily failed; "
+                        "keeping current session"
+                    )
+
                 elif refresh_result is False:
-                    logger.warning("Token refresh rejected — session expired")
+                    logger.warning(
+                        "Token refresh rejected; session expired"
+                    )
+
                     self.access_token = None
+                    self.refresh_token = None
+                    self.token_expires_at = None
+                    self.refresh_token_expires_at = None
+
+                    _clear_refresh_token(self.base_url)
+
                     self._session_expired_flag = True
+
                     if self._on_session_expired:
                         self._on_session_expired()
+
                     raise RuntimeError("Session expired")
 
     @staticmethod
@@ -644,24 +896,55 @@ class TRRCMSApiClient:
                                 message=api_msg, status_code=401, response_data=response_data,
                                 endpoint=endpoint, method=method,
                             )
-                        # Only handle if the token hasn't changed (new login) since our request
+                        # Only handle if the token hasn't changed since this request started.
                         if self.access_token and self.access_token == token_used:
                             if self.refresh_token:
                                 refresh_result = self.refresh_access_token()
-                                if refresh_result:
-                                    continue  # Retry with refreshed token
+
+                                if refresh_result is True:
+                                    continue
+
                                 if refresh_result is None:
-                                    # Network error during refresh — keep token, surface as network error
-                                    logger.warning(f"[REQ {req_id}] 401 {method} {endpoint} — refresh failed (network), keeping token")
-                                else:
-                                    # Auth rejection — clear session
-                                    logger.warning(f"[REQ {req_id}] 401 {method} {endpoint} — session expired")
-                                    self.access_token = None
-                                    self._session_expired_flag = True
-                                    if self._on_session_expired:
-                                        self._on_session_expired()
+                                    # The session itself was not rejected.
+                                    # Refresh could not complete because of a temporary
+                                    # network/server problem.
+                                    logger.warning(
+                                        f"[REQ {req_id}] 401 {method} {endpoint} — "
+                                        "refresh temporarily unavailable"
+                                    )
+
+                                    raise NetworkException(
+                                        message="Session refresh temporarily unavailable",
+                                        original_error=e,
+                                    )
+
+                            # At this point either:
+                            #   1. no refresh token exists, or
+                            #   2. refresh_access_token() returned False because the
+                            #      refresh credentials were rejected.
+                            #
+                            # The authenticated session can no longer continue.
+                            logger.warning(
+                                f"[REQ {req_id}] 401 {method} {endpoint} — session expired"
+                            )
+
+                            self.access_token = None
+                            self.refresh_token = None
+                            self.token_expires_at = None
+                            self.refresh_token_expires_at = None
+
+                            _clear_refresh_token(self.base_url)
+
+                            self._session_expired_flag = True
+
+                            if self._on_session_expired:
+                                self._on_session_expired()
+
                         elif self.access_token != token_used:
-                            logger.info(f"[REQ {req_id}] 401 on {endpoint} ignored — token changed by new session")
+                            logger.info(
+                                f"[REQ {req_id}] 401 on {endpoint} ignored — "
+                                "token changed by new session"
+                            )
                     if status_code == 403:
                         error_code = str(response_data.get("code", "") or response_data.get("errorCode", "") or response_data.get("error", ""))
                         if "PasswordChangeRequired" in error_code or "PasswordChangeRequired" in str(response_data):
@@ -4078,6 +4361,7 @@ def reset_api_client():
         _api_client_instance.access_token = None
         _api_client_instance.refresh_token = None
         _api_client_instance.token_expires_at = None
+        _api_client_instance.refresh_token_expires_at = None
         _api_client_instance._neighborhoods_cache = None
         _api_client_instance._login_failures = 0
         _api_client_instance._login_cooldown_until = None
