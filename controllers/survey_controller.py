@@ -311,7 +311,7 @@ class SurveyController:
             # Build persons list straight from the household persons endpoint
             # (which already includes the contact person via isContactPerson).
             persons = []
-            contact_person_dto = None
+            household_contact_dto = None
             seen_person_ids = set()
             for person_dto in all_persons_list:
                 pid = person_dto.get("id", "")
@@ -322,39 +322,53 @@ class SurveyController:
                 persons.append(mapped_person)
                 if pid:
                     seen_person_ids.add(pid)
-                if person_dto.get("isContactPerson") and not contact_person_dto:
-                    contact_person_dto = person_dto
+                if person_dto.get("isContactPerson") and not household_contact_dto:
+                    household_contact_dto = person_dto
 
-            # Prefer the survey-scoped contact person (works for draft surveys
-            # where the detail response omits contactPersonId, and for contact
-            # persons that aren't household members).
-            if survey_contact_person_dto:
-                cp_id = survey_contact_person_dto.get("id", "")
-                cp_household_id = survey_contact_person_dto.get("householdId") or ""
+            # Resolve the applicant (the survey contact person). Priority:
+            #   1. detail.contactPersonId — stored on the survey record itself
+            #   2. survey-scoped contact-person endpoint (drafts may omit contactPersonId)
+            #   3. isContactPerson flag among the selected household's persons
+            # The claim primary claimant is only a last resort (see below): the
+            # applicant and the claimant can be different people, and imported
+            # packages can add households/claims of other surveys to the same unit.
+            contact_person_dto = None
+            applicant_source = ""
 
-                can_use_survey_contact = (
-                    not contact_person_dto
-                    and (
-                        not hh_id
-                        or not all_persons_list
-                        or cp_household_id == hh_id
-                    )
-                )
-
-                if can_use_survey_contact:
+            if contact_person_id:
+                if (
+                    survey_contact_person_dto
+                    and survey_contact_person_dto.get("id") == contact_person_id
+                ):
                     contact_person_dto = survey_contact_person_dto
+                else:
+                    contact_person_dto = person_map.get(contact_person_id)
+                    if not contact_person_dto:
+                        try:
+                            contact_person_dto = api.get_person_by_id(contact_person_id)
+                        except Exception as e:
+                            logger.warning(
+                                f"[APPLICANT] Could not fetch contact person "
+                                f"{contact_person_id}: {e}"
+                            )
+                if contact_person_dto:
+                    applicant_source = "survey.contactPersonId"
 
-                    if cp_id and cp_id not in seen_person_ids:
-                        rel = relation_by_person_id.get(cp_id, {})
-                        persons.append(
-                            ClaimController._map_person_dto(survey_contact_person_dto, rel)
-                        )
-                        seen_person_ids.add(cp_id)
+            if not contact_person_dto and survey_contact_person_dto:
+                contact_person_dto = survey_contact_person_dto
+                applicant_source = "survey contact-person endpoint"
 
-            # Fallback: if neither source returned the contact person but the
-            # survey detail referenced one, pick it up from person_map by id.
-            if not contact_person_dto and contact_person_id:
-                contact_person_dto = person_map.get(contact_person_id)
+            if not contact_person_dto and household_contact_dto:
+                contact_person_dto = household_contact_dto
+                applicant_source = "household isContactPerson"
+
+            # Contact persons that aren't household members still belong in the persons list
+            cp_id = contact_person_dto.get("id", "") if contact_person_dto else ""
+            if cp_id and cp_id not in seen_person_ids:
+                rel = relation_by_person_id.get(cp_id, {})
+                persons.append(ClaimController._map_person_dto(contact_person_dto, rel))
+                seen_person_ids.add(cp_id)
+
             # Add primary claimants returned in survey detail claims but missing
             # from the household persons endpoint.
             for survey_claim in (detail.get("claims") or []):
@@ -387,9 +401,6 @@ class SurveyController:
                 seen_person_ids.add(claimant_id)
             # Claim data mapped from survey detail + linked claim
             claim_data = self._map_survey_to_claim_data(detail, persons, claim_dto)
-            # Prefer the claim primary claimant as applicant for claim-based survey details.
-            # This prevents the survey contact person from overriding the actual claimant
-            # when old surveys share the same property unit with newer imported packages.
             primary_claimant_id = ""
 
             if claim_dto:
@@ -401,18 +412,16 @@ class SurveyController:
                     if primary_claimant_id:
                         break
 
-            if primary_claimant_id:
-                matched_claimant = next(
+            # Last resort: claim-based surveys that have no contact person at all
+            if not contact_person_dto and primary_claimant_id:
+                contact_person_dto = next(
                     (
                         p for p in all_persons_list
                         if p.get("id") == primary_claimant_id
                     ),
                     None,
                 )
-
-                if matched_claimant:
-                    contact_person_dto = matched_claimant
-                else:
+                if not contact_person_dto:
                     try:
                         contact_person_dto = api.get_person_by_id(primary_claimant_id)
                     except Exception as e:
@@ -420,6 +429,18 @@ class SurveyController:
                             f"[APPLICANT] Could not fetch primary claimant "
                             f"{primary_claimant_id}: {e}"
                         )
+                if contact_person_dto:
+                    applicant_source = "claim primaryClaimantId"
+
+            logger.warning(
+                f"[APPLICANT] survey={survey_id} status={detail.get('status')} "
+                f"contactPersonId={contact_person_id or '-'} "
+                f"survey_contact={(survey_contact_person_dto or {}).get('id') or '-'} "
+                f"household_contact={(household_contact_dto or {}).get('id') or '-'} "
+                f"primary_claimant={primary_claimant_id or '-'} "
+                f"-> selected={(contact_person_dto or {}).get('id') or '-'} "
+                f"via {applicant_source or 'none'}"
+            )
 
             applicant = None
             if contact_person_dto:
@@ -463,18 +484,12 @@ class SurveyController:
                 else:
                     logger.warning("[ID-DOCS] No target_person_id available — skipping fetch")
 
-                resolved_cp_id = (
-                contact_person_id
-                or (
-                    survey_contact_person_dto.get("id", "")
-                    if survey_contact_person_dto
-                    else ""
-                )
-                or (
-                    contact_person_dto.get("id", "")
-                    if contact_person_dto
-                    else ""
-                )
+            # Keep the context id in sync with the displayed applicant, so saving
+            # the applicant step never updates a different person's record.
+            resolved_cp_id = (
+                (contact_person_dto.get("id", "") if contact_person_dto else "")
+                or contact_person_id
+                or ""
             )
 
             survey_status = detail.get("status", 1)
