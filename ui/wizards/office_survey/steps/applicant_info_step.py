@@ -67,7 +67,8 @@ def _date_parts_from_value(value):
 
 def _mobile_to_desktop_local(value):
     """Convert valid Syrian mobile formats to the 8 digits shown after the fixed desktop 09 prefix."""
-    raw = str(value or "").strip()
+    # Field packages send numbers like "+963-946-552813"; drop separators first
+    raw = "".join(ch for ch in str(value or "") if ch.isdigit() or ch == "+")
 
     if not raw:
         return ""
