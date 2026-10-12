@@ -371,7 +371,17 @@ class UnitSelectionStep(BaseStep):
 
         def _do_load():
             if survey_id:
-                return self.unit_controller.get_units_for_survey(survey_id)
+                result = self.unit_controller.get_units_for_survey(survey_id)
+                # Imported surveys may have no units linked to them yet while the
+                # building already has them; fall back to the building's units so
+                # the existing unit can be selected (and linked) instead of re-added.
+                if result.success and not result.data and building_uuid:
+                    logger.warning(
+                        f"No units linked to survey {survey_id}; "
+                        f"falling back to units of building {building_uuid}"
+                    )
+                    return self.unit_controller.get_units_for_building(building_uuid)
+                return result
             else:
                 return self.unit_controller.get_units_for_building(building_uuid)
 
