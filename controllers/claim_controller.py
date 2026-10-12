@@ -657,6 +657,11 @@ class ClaimController(BaseController):
             "mother_name": person_dto.get("motherNameArabic", ""),
             "gender": person_dto.get("gender"),
             "date_of_birth": person_dto.get("dateOfBirth", ""),
+            # Keys read by PersonDialog / person cards (same mapping as the applicant)
+            "birth_date": person_dto.get("dateOfBirth") or "",
+            "phone": person_dto.get("mobileNumber") or "",
+            "landline": person_dto.get("phoneNumber") or "",
+            "email": person_dto.get("email") or "",
             "national_id": person_dto.get("nationalId", ""),
             "nationality": person_dto.get("nationality"),
             "person_role": relation_dto.get("relationType", ""),
@@ -673,6 +678,9 @@ class ClaimController(BaseController):
                 "contract_type": relation_dto.get("occupancyType"),
                 "start_date": relation_dto.get("relationStartDate") or relation_dto.get("startDate"),
                 "has_documents": bool(relation_dto.get("hasEvidence")),
+                # Saved as contractDetails / notes (api_client relation payload)
+                "evidence_desc": relation_dto.get("contractDetails") or "",
+                "notes": relation_dto.get("notes") or "",
             },
         }
 
