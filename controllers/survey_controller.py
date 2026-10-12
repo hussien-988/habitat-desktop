@@ -94,6 +94,13 @@ class SurveyController:
             claim_id = detail.get("claimId")
             contact_person_id = detail.get("contactPersonId")
 
+            # A field package may carry claims on other units of the building;
+            # the office survey covers a single unit, so ignore those claims.
+            survey_claims = [
+                c for c in (detail.get("claims") or [])
+                if not unit_id or not c.get("propertyUnitId") or c.get("propertyUnitId") == unit_id
+            ]
+
             households = []
             try:
                 survey_households = api.get_households_for_survey(survey_id) or []
@@ -107,7 +114,7 @@ class SurveyController:
                     if contact_person_id:
                         target_person_ids.append(contact_person_id)
 
-                    for survey_claim in (detail.get("claims") or []):
+                    for survey_claim in survey_claims:
                         claimant_id = (
                             survey_claim.get("primaryClaimantId")
                             or survey_claim.get("personId")
@@ -116,12 +123,15 @@ class SurveyController:
                         if claimant_id and claimant_id not in target_person_ids:
                             target_person_ids.append(claimant_id)
 
+                    survey_household_ids = {h.get("id") for h in survey_households}
                     target_household_id = ""
                     for target_person_id in target_person_ids:
                         try:
                             target_person_dto = api.get_person_by_id(target_person_id)
-                            target_household_id = target_person_dto.get("householdId") or ""
-                            if target_household_id:
+                            person_household_id = target_person_dto.get("householdId") or ""
+                            # Only a household of this survey counts as a match
+                            if person_household_id in survey_household_ids:
+                                target_household_id = person_household_id
                                 break
                         except Exception as e:
                             logger.warning(
@@ -145,7 +155,7 @@ class SurveyController:
                             (claim_id and detail.get("claimId"))
                             or any(
                                 survey_claim.get("primaryClaimantId")
-                                for survey_claim in (detail.get("claims") or [])
+                                for survey_claim in survey_claims
                             )
                         )
 
@@ -171,7 +181,7 @@ class SurveyController:
                             )
 
                             if not reference_dt:
-                                for survey_claim in (detail.get("claims") or []):
+                                for survey_claim in survey_claims:
                                     reference_dt = (
                                         _parse_dt(survey_claim.get("createdAtUtc"))
                                         or _parse_dt(survey_claim.get("submittedDate"))
@@ -371,7 +381,7 @@ class SurveyController:
 
             # Add primary claimants returned in survey detail claims but missing
             # from the household persons endpoint.
-            for survey_claim in (detail.get("claims") or []):
+            for survey_claim in survey_claims:
                 claimant_id = (
                     survey_claim.get("primaryClaimantId")
                     or survey_claim.get("personId")
@@ -407,7 +417,7 @@ class SurveyController:
                 primary_claimant_id = claim_dto.get("primaryClaimantId") or ""
 
             if not primary_claimant_id:
-                for survey_claim in (detail.get("claims") or []):
+                for survey_claim in survey_claims:
                     primary_claimant_id = survey_claim.get("primaryClaimantId") or ""
                     if primary_claimant_id:
                         break
