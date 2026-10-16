@@ -44,6 +44,36 @@ from ui.wizards.office_survey.wizard_styles import (
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+# Claim type compatibility with Backend V1
+OWNERSHIP_RELATION_TYPES = (1, 5)
+
+CLAIM_TYPE_OWNERSHIP = 1
+CLAIM_TYPE_OCCUPANCY = 2
+
+
+def relation_to_claim_type(relation_type):
+    """Convert a V1 relation type to its claim category."""
+    if relation_type is None:
+        return None
+
+    return (
+        CLAIM_TYPE_OWNERSHIP
+        if int(relation_type) in OWNERSHIP_RELATION_TYPES
+        else CLAIM_TYPE_OCCUPANCY
+    )
+
+
+def claim_to_default_relation_type(claim_type):
+    """Get the default V1 relation type for a new claim."""
+    if claim_type == CLAIM_TYPE_OWNERSHIP:
+        return 1  # Owner
+
+    if claim_type == CLAIM_TYPE_OCCUPANCY:
+        return 2  # Occupant
+
+    return None
+
+
 def _mobile_to_desktop_local(value):
     """Convert valid Syrian mobile formats to the 8 digits shown after the fixed desktop 09 prefix."""
     # Field packages send numbers like "+963-946-552813"; drop separators first
@@ -945,8 +975,12 @@ class PersonDialog(QDialog):
         row += 1
         self.rel_type_combo = RtlCombo()
         self.rel_type_combo.addItem(tr("wizard.person_dialog.select"), None)
-        for code, display_name in get_relation_type_options():
-            self.rel_type_combo.addItem(display_name, code)
+        self.rel_type_combo.addItem(
+            tr("mapping.claim_type.ownership"), CLAIM_TYPE_OWNERSHIP
+        )
+        self.rel_type_combo.addItem(
+            tr("mapping.claim_type.occupancy"), CLAIM_TYPE_OCCUPANCY
+        )
         self.rel_type_combo.setStyleSheet(self._input_style())
         grid.addWidget(self.rel_type_combo, row, 0)
 
@@ -2953,7 +2987,9 @@ class PersonDialog(QDialog):
 
     def _on_claim_type_changed(self):
         """Enable ownership share only when claim type is Owner (1)."""
-        is_owner = self.rel_type_combo.currentData() == 1
+        is_owner = (
+            self.rel_type_combo.currentData() == CLAIM_TYPE_OWNERSHIP
+        )
         self.ownership_share.setEnabled(is_owner)
         if not is_owner:
             self.ownership_share.clear()
@@ -3147,11 +3183,11 @@ class PersonDialog(QDialog):
         rel = data.get('relation_data', {})
 
         rel_type = rel.get('rel_type')
-        if rel_type:
-            for i in range(self.rel_type_combo.count()):
-                if self.rel_type_combo.itemData(i) == rel_type:
-                    self.rel_type_combo.setCurrentIndex(i)
-                    break
+        claim_type = relation_to_claim_type(rel_type)
+        if claim_type is not None:
+            idx = self.rel_type_combo.findData(claim_type)
+            if idx >= 0:
+                self.rel_type_combo.setCurrentIndex(idx)
 
         if rel.get('start_date'):
             parts = str(rel['start_date'])[:10].split('-')
@@ -3358,7 +3394,14 @@ class PersonDialog(QDialog):
             'is_contact_person': False,
             # Tab 3
             'relation_data': {
-                'rel_type': self.rel_type_combo.currentData(),
+                'rel_type': self._get_effective_relation_type(),
+                'clear_ownership_share': (
+                    self.person_data is not None
+                    and relation_to_claim_type(
+                        (self.person_data.get('relation_data') or {}).get('rel_type')
+                    ) == CLAIM_TYPE_OWNERSHIP
+                    and self.rel_type_combo.currentData() == CLAIM_TYPE_OCCUPANCY
+                ),
                 'start_date': self._build_start_date_iso(),
                 'ownership_share': int(float(self.ownership_share.text() or 0)),
                 'evidence_type': self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
@@ -3383,6 +3426,34 @@ class PersonDialog(QDialog):
         """Return the API-generated relation ID after linking, or None."""
         return self._api_relation_id
 
+    def _get_effective_relation_type(self):
+        """Return a V1-compatible relation type without losing existing details."""
+        claim_type = self.rel_type_combo.currentData()
+
+        if claim_type is None:
+            return None
+
+        relation_data = (
+            self.person_data.get("relation_data") or {}
+            if self.person_data
+            else {}
+        )
+
+        original_relation_type = relation_data.get("rel_type")
+
+        if original_relation_type is not None:
+            try:
+                original_relation_type = int(original_relation_type)
+
+                if relation_to_claim_type(original_relation_type) == claim_type:
+                    return original_relation_type
+            except (TypeError, ValueError):
+                pass
+
+        return claim_to_default_relation_type(claim_type)
+
+
+
     def _relation_signature(self):
         """Comparable snapshot of the relation's core fields (excludes documents).
 
@@ -3395,7 +3466,7 @@ class PersonDialog(QDialog):
         except (TypeError, ValueError):
             share = 0
         return (
-            self.rel_type_combo.currentData(),
+            self._get_effective_relation_type(),
             self._build_start_date_iso(),
             share,
             self.evidence_type.currentData() if self.evidence_type.currentIndex() > 0 else None,
@@ -3538,7 +3609,9 @@ class PersonDialog(QDialog):
 
         # Ownership share: required and must be > 0 when claim type is Owner (1)
         ownership_text = self.ownership_share.text().strip()
-        is_owner = self.rel_type_combo.currentData() == 1
+        is_owner = (
+            self.rel_type_combo.currentData() == CLAIM_TYPE_OWNERSHIP
+        )
         try:
             ownership_val = int(ownership_text) if ownership_text else 0
         except ValueError:

@@ -2035,7 +2035,9 @@ class TRRCMSApiClient:
             api_data["occupancyType"] = int(occ_val)
         # Backend rejects ownershipShare <= 0, so only send it when positive
         # (a zero/empty share simply means "not an ownership claim").
-        if relation_data.get('ownership_share'):
+        if relation_data.get('clear_ownership_share') is True:
+            api_data["clearOwnershipShare"] = True
+        elif relation_data.get('ownership_share'):
             api_data["ownershipShare"] = relation_data['ownership_share']
         if 'has_documents' in relation_data:
             api_data["hasEvidence"] = bool(relation_data['has_documents'])

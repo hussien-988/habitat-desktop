@@ -20,7 +20,12 @@ from PyQt5.QtGui import QIcon, QColor
 
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
-from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
+from ui.wizards.office_survey.dialogs.person_dialog import (
+    PersonDialog,
+    relation_to_claim_type,
+    CLAIM_TYPE_OWNERSHIP,
+    CLAIM_TYPE_OCCUPANCY,
+)
 
 from app.config import Config
 from services.api_client import get_api_client
@@ -636,7 +641,14 @@ class OccupancyClaimsStep(BaseStep):
         # ── Relation + docs: only rendered when there is actual content ──
         rel_data = person.get('relation_data', {}) or {}
         rel_type = rel_data.get('rel_type')
-        rel_display = get_relation_type_display(rel_type) if rel_type else ''
+        claim_type = relation_to_claim_type(rel_type)
+
+        if claim_type == CLAIM_TYPE_OWNERSHIP:
+            rel_display = tr("mapping.claim_type.ownership")
+        elif claim_type == CLAIM_TYPE_OCCUPANCY:
+            rel_display = tr("mapping.claim_type.occupancy")
+        else:
+            rel_display = ''
         share = rel_data.get('ownership_share')
         if rel_display and share:
             rel_display = f"{rel_display} · {int(share)} {tr('unit.shares')}"
