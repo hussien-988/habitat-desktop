@@ -473,6 +473,7 @@ EN_TRANSLATIONS = {
     "wizard.household.step_title": "Household Information",
     "wizard.household.step_description": "Register demographic information of the household residing in the unit",
     "wizard.household.no_data": "No household registered",
+    "wizard.household.empty_property": "Empty property",
     "wizard.household.head_name": "Head of Household Name",
     "wizard.household.family_size": "Family Size",
     "wizard.household.occupants_title": "Occupants",

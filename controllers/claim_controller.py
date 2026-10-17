@@ -700,6 +700,9 @@ class ClaimController(BaseController):
             "occupancy_nature": dto.get("occupancyNature"),
             "occupancy_start_date": dto.get("occupancyStartDate"),
             "notes": dto.get("notes", ""),
+            # Set by field collectors on the tablet only (read-only here)
+            "is_empty_property": bool(dto.get("isEmptyProperty")),
+            "empty_property_justification": dto.get("emptyPropertyJustification") or "",
         }
 
     @staticmethod

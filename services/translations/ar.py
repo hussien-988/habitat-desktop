@@ -473,6 +473,7 @@ AR_TRANSLATIONS = {
     "wizard.household.step_title": "معلومات الأسرة",
     "wizard.household.step_description": "سجل المعلومات الديموغرافية للأسرة القاطنة في الوحدة",
     "wizard.household.no_data": "لم يتم تسجيل أي أسرة",
+    "wizard.household.empty_property": "عقار فارغ",
     "wizard.household.head_name": "اسم رب الأسرة",
     "wizard.household.family_size": "عدد أفراد الأسرة",
     "wizard.household.occupants_title": "الشاغلين",
