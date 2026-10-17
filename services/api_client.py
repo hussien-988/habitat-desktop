@@ -163,6 +163,19 @@ def _resolve_access_token_expiry(
     return None
 
 
+def _token_user_id(token: Optional[str]) -> Optional[str]:
+    """User id carried by an access token (NameIdentifier claim), if any."""
+    claims = _decode_jwt_claims_unsafe(token)
+    for key in (
+        "nameid",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
+        "sub",
+    ):
+        if claims.get(key):
+            return str(claims[key])
+    return None
+
+
 def _token_diag(token: Optional[str]) -> str:
     """Short diagnostic string for a token. Never logs the token body."""
     if not token:
@@ -477,57 +490,7 @@ class TRRCMSApiClient:
 
                 response.raise_for_status()
 
-                data = response.json()
-
-                new_access_token = data["accessToken"]
-                new_refresh_token = (
-                    data.get("refreshToken")
-                    or self.refresh_token
-                )
-
-                if (
-                    new_refresh_token
-                    and new_refresh_token != self.refresh_token
-                ):
-                    _save_refresh_token(
-                        new_refresh_token,
-                        self.base_url
-                    )
-
-                self.access_token = new_access_token
-                self.refresh_token = new_refresh_token
-
-
-                self.token_expires_at = _resolve_access_token_expiry(
-                    self.access_token,
-                    explicit_expiry=data.get("accessTokenExpiry"),
-                    expires_in=data.get("expiresIn"),
-                )
-
-                self.refresh_token_expires_at = _parse_utc_datetime(
-                    data.get("refreshTokenExpiry")
-                )
-
-                self._session_expired_flag = False
-
-                logger.info(
-                    "Token refreshed successfully; expires_at=%s",
-                    self.token_expires_at.isoformat()
-                    if self.token_expires_at
-                    else "unknown",
-                )
-                if self._on_token_refreshed:
-                    try:
-                        self._on_token_refreshed(
-                            self.access_token,
-                            self.refresh_token,
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Token refreshed callback failed: %s",
-                            e
-                        )
-
+                self._apply_token_response(response.json())
                 return True
 
             except requests.exceptions.HTTPError as e:
@@ -574,6 +537,61 @@ class TRRCMSApiClient:
 
                 self._fire_network_error("network")
                 return None
+
+    def _apply_token_response(self, data: Dict[str, Any]) -> None:
+        """Store the token pair returned by /Auth/refresh or change-password.
+
+        Callers hold `_refresh_lock`. Refresh tokens are single-use, so the
+        new one replaces the old in memory and in the keyring, and the UI is
+        told through the token-refreshed callback.
+        """
+        new_access_token = data["accessToken"]
+        new_refresh_token = (
+            data.get("refreshToken")
+            or self.refresh_token
+        )
+
+        if (
+            new_refresh_token
+            and new_refresh_token != self.refresh_token
+        ):
+            _save_refresh_token(
+                new_refresh_token,
+                self.base_url
+            )
+
+        self.access_token = new_access_token
+        self.refresh_token = new_refresh_token
+
+        self.token_expires_at = _resolve_access_token_expiry(
+            self.access_token,
+            explicit_expiry=data.get("accessTokenExpiry"),
+            expires_in=data.get("expiresIn"),
+        )
+
+        self.refresh_token_expires_at = _parse_utc_datetime(
+            data.get("refreshTokenExpiry")
+        )
+
+        self._session_expired_flag = False
+
+        logger.info(
+            "Token refreshed successfully; expires_at=%s",
+            self.token_expires_at.isoformat()
+            if self.token_expires_at
+            else "unknown",
+        )
+        if self._on_token_refreshed:
+            try:
+                self._on_token_refreshed(
+                    self.access_token,
+                    self.refresh_token,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Token refreshed callback failed: %s",
+                    e
+                )
 
     def logout(self) -> Dict[str, Any]:
         """POST /v1/Auth/logout — invalidate refresh token server-side.
@@ -644,7 +662,14 @@ class TRRCMSApiClient:
         }
         if user_id:
             body["userId"] = user_id
-        return self._request("POST", "/v1/auth/change-password", body) or {}
+        result = self._request("POST", "/v1/auth/change-password", body) or {}
+        # A password change ends the user's other sessions; the response
+        # carries a fresh token pair for this one, which must replace the
+        # now-revoked tokens (older servers return no tokens).
+        if result.get("accessToken"):
+            with self._refresh_lock:
+                self._apply_token_response(result)
+        return result
 
     def lock_building(self, building_id: str, is_locked: bool) -> Dict[str, Any]:
         """PUT /v1/Buildings/{id}/lock — toggle building lock state."""
@@ -829,8 +854,12 @@ class TRRCMSApiClient:
             bucket.add(req_id)
 
         last_error = None
+        attempt = 0
+        # A 401 is retried at most once with a new token; that retry does not
+        # use up the network retries (so it also happens with disable_retry).
+        auth_retried = False
         try:
-            for attempt in range(max_retries + 1):
+            while True:
                 try:
                     token_used = self.access_token
                     headers = self._headers()
@@ -896,12 +925,19 @@ class TRRCMSApiClient:
                                 message=api_msg, status_code=401, response_data=response_data,
                                 endpoint=endpoint, method=method,
                             )
+                        # The server says why: only an expired token (or no
+                        # reason, from older servers) is worth a refresh; a
+                        # revoked, invalid or missing session goes to login.
+                        session_ended = str(response_data.get("errorCode") or "") in (
+                            "SESSION_REVOKED", "TOKEN_INVALID", "AUTHENTICATION_REQUIRED",
+                        )
                         # Only handle if the token hasn't changed since this request started.
                         if self.access_token and self.access_token == token_used:
-                            if self.refresh_token:
+                            if self.refresh_token and not session_ended and not auth_retried:
                                 refresh_result = self.refresh_access_token()
 
                                 if refresh_result is True:
+                                    auth_retried = True
                                     continue
 
                                 if refresh_result is None:
@@ -940,6 +976,19 @@ class TRRCMSApiClient:
                             if self._on_session_expired:
                                 self._on_session_expired()
 
+                        elif (
+                            self.access_token and not auth_retried
+                            and _token_user_id(token_used) is not None
+                            and _token_user_id(token_used) == _token_user_id(self.access_token)
+                        ):
+                            # Another request rotated this user's token
+                            # meanwhile (never retry as a different user)
+                            logger.info(
+                                f"[REQ {req_id}] 401 on {endpoint} — "
+                                "token changed meanwhile, retrying with the new one"
+                            )
+                            auth_retried = True
+                            continue
                         elif self.access_token != token_used:
                             logger.info(
                                 f"[REQ {req_id}] 401 on {endpoint} ignored — "
@@ -980,6 +1029,7 @@ class TRRCMSApiClient:
                             f"[REQ {req_id}] retrying in {wait}s: {endpoint}"
                         )
                         time.sleep(wait)
+                        attempt += 1
                         continue
                     self._fire_network_error("network")
                     raise NetworkException(

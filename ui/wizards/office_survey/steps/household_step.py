@@ -31,6 +31,7 @@ class FocusSelectSpinBox(QSpinBox):
 from ui.components.rtl_combo import RtlCombo, enable_searchable_combo
 from ui.style_manager import StyleManager
 from ui.components.centered_text_edit import CenteredTextEdit
+from ui.components.empty_property_notice import EmptyPropertyNotice, empty_property_text
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
@@ -200,6 +201,11 @@ class HouseholdStep(BaseStep):
 
         # Divider
         family_info_layout.addWidget(make_divider())
+
+        # Shown instead of editing for a unit found empty in the field
+        self._empty_property_notice = EmptyPropertyNotice()
+        self._empty_property_notice.setVisible(False)
+        family_info_layout.addWidget(self._empty_property_notice)
 
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         combo_style = FORM_FIELD_STYLE + f"""
@@ -879,6 +885,7 @@ class HouseholdStep(BaseStep):
         self._occupants_header_title.setText(tr("wizard.household.occupants_title"))
         self._occupants_header_subtitle.setText(tr("wizard.household.subtitle"))
         self.hh_composition_header_title.setText(tr("wizard.household.composition_title"))
+        self._show_empty_property(self.context.households[0] if self.context.households else {})
         self.hh_composition_header_subtitle.setText(tr("wizard.household.composition_subtitle"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
@@ -921,6 +928,12 @@ class HouseholdStep(BaseStep):
     def validate(self) -> StepValidationResult:
         """Validate the step and save household data automatically."""
         result = self.create_validation_result()
+
+        # An imported empty property is read-only: its size is 0, which the
+        # household update would reject, so keep it as imported.
+        stored = self.context.households[0] if self.context.households else {}
+        if stored.get("is_empty_property"):
+            return result
 
         # Auto-save household data when clicking "Next"
         property_unit_id = None
@@ -1114,6 +1127,20 @@ class HouseholdStep(BaseStep):
         self.hh_start_year.setCurrentIndex(-1)
         self.hh_notes.clear()
         self._clear_composition_validation_feedback()
+        self._show_empty_property({})
+
+    def _show_empty_property(self, household: dict):
+        """Show the empty-property notice and lock the form, or undo both."""
+        text = empty_property_text(household)
+        self._empty_property_notice.setText(text)
+        self._empty_property_notice.setVisible(bool(text))
+        for widget in (
+            self.hh_occupancy_nature, self.hh_start_year, self.hh_total_members,
+            self.hh_male_count, self.hh_female_count, self.hh_adult_count,
+            self.hh_child_count, self.hh_elderly_count, self.hh_disabled_count,
+            self.hh_notes,
+        ):
+            widget.setEnabled(not text)
 
     def populate_data(self):
         """Populate the step with data from context."""
@@ -1207,7 +1234,9 @@ class HouseholdStep(BaseStep):
             self.hh_elderly_count.setValue(int(household.get("elderly_count") or 0))
             self.hh_disabled_count.setValue(int(household.get("disabled_count") or 0))
             self.hh_notes.setPlainText(household.get("notes", ""))
+            self._show_empty_property(household)
         else:
+            self._show_empty_property({})
             self.hh_total_members.setValue(0)
             self.hh_male_count.setValue(0)
             self.hh_female_count.setValue(0)

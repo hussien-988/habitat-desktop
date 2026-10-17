@@ -543,8 +543,14 @@ class ClaimStep(BaseStep):
             code = _find_combo_code_by_english("ClaimType", "Occupancy")
             label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Occupancy"]
             card.claim_type_field.setText(label)
+        elif relation_type is not None:
+            # Any other relation (guest, other, admin-added types) is an
+            # occupancy claim, as the backend derives it.
+            code = _find_combo_code_by_english("ClaimType", "Occupancy")
+            label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Occupancy"]
+            card.claim_type_field.setText(label)
         else:
-            logger.warning(f"Unknown relationType={relation_type}, defaulting to Ownership")
+            logger.warning("Missing relationType, defaulting to Ownership")
             code = _find_combo_code_by_english("ClaimType", "Ownership")
             label = get_claim_type_display(code) if code else _TYPE_FALLBACK["Ownership"]
             card.claim_type_field.setText(label)
@@ -701,9 +707,7 @@ class ClaimStep(BaseStep):
                 first_card.claim_survey_date.setText(str(survey_date_str))
 
         _TYPE_FB = {"Ownership": tr("wizard.claim.type_ownership"), "Tenancy": tr("wizard.claim.type_tenancy"), "Occupancy": tr("wizard.claim.type_occupancy")}
-        owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
-        tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
-        occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+        owners_or_heirs, tenants, occupants = self._group_relations_by_claim()
 
         if owners_or_heirs:
             code = _find_combo_code_by_english("ClaimType", "Ownership")
@@ -741,6 +745,23 @@ class ClaimStep(BaseStep):
             label.setText(reason if reason else tr("wizard.claim.awaiting_documents"))
             label.setStyleSheet(EVIDENCE_WAITING_STYLE)
 
+    def _group_relations_by_claim(self):
+        """Split the survey's relations into owners/heirs, tenants and
+        occupancy claims (occupant, guest, other and admin-added types),
+        as the backend derives claim types. Relations without a type are left out."""
+        owners_or_heirs, tenants, occupants = [], [], []
+        for relation in self.context.relations:
+            relation_type = relation.get('relation_type')
+            if relation_type is None:
+                continue
+            if _is_owner_relation(relation_type):
+                owners_or_heirs.append(relation)
+            elif relation_type in ('tenant', 3):
+                tenants.append(relation)
+            else:
+                occupants.append(relation)
+        return owners_or_heirs, tenants, occupants
+
     def _populate_from_context(self):
         self.empty_state_widget.hide()
         self.scroll_area.show()
@@ -757,9 +778,7 @@ class ClaimStep(BaseStep):
 
         if not claims_preview:
             # Fallback: one entry per person who has a relation
-            owners_or_heirs = [r for r in self.context.relations if _is_owner_relation(r.get('relation_type'))]
-            tenants = [r for r in self.context.relations if r.get('relation_type') in ('tenant', 3)]
-            occupants = [r for r in self.context.relations if r.get('relation_type') in ('occupant', 2)]
+            owners_or_heirs, tenants, occupants = self._group_relations_by_claim()
             unit_num = ""
             if self.context.unit:
                 u = self.context.unit
@@ -804,7 +823,9 @@ class ClaimStep(BaseStep):
                 claim_type_en = "Ownership"
             elif role in ('tenant', 3, 'tenancy'):
                 claim_type_en = "Tenancy"
-            elif role in ('occupant', 2, 'occupancy'):
+            elif role is not None:
+                # Occupant and any other relation (guest, other, admin-added
+                # types) is an occupancy claim, as the backend derives it.
                 claim_type_en = "Occupancy"
             else:
                 claim_type_en = "Ownership"

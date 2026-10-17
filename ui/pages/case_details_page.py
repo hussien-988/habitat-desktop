@@ -27,6 +27,7 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.logo import LogoWidget
 from ui.components.toast import Toast
+from ui.components.empty_property_notice import EmptyPropertyNotice, empty_property_text
 from services.translation_manager import tr, get_layout_direction, apply_label_alignment
 from services.display_mappings import (
     get_building_type_display, get_building_status_display,
@@ -1177,6 +1178,10 @@ class CaseDetailsPage(QWidget):
                     break
         if not hh:
             hh = ctx.households[0]
+
+        empty_property = empty_property_text(hh)
+        if empty_property:
+            self._household_content.addWidget(EmptyPropertyNotice(empty_property))
 
         total_size = hh.get('size', 0)
 

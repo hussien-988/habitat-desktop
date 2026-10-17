@@ -3409,7 +3409,8 @@ class PersonDialog(QDialog):
             return 1
 
         if claim_type == 2:
-            if existing_rel_type in (2, 3, 4, 99):
+            # Keep any occupancy relation, including types admins add later
+            if isinstance(existing_rel_type, int) and existing_rel_type not in (1, 5):
                 return existing_rel_type
             return 2
 

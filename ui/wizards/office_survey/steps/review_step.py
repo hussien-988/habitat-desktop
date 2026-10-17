@@ -58,6 +58,7 @@ from services.display_mappings import (
 )
 from utils.helpers import build_hierarchical_address
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from ui.components.empty_property_notice import EmptyPropertyNotice, empty_property_text
 
 logger = get_logger(__name__)
 
@@ -1653,11 +1654,14 @@ class ReviewStep(BaseStep):
     def _populate_household_card(self):
         self._clear_layout(self._household_content)
 
+        hh = self.context.households[0] if self.context.households else {}
+        empty_property = empty_property_text(hh)
         self._add_section_header(
             self._household_content, "user-group",
             tr("wizard.review.household_card_title"),
             tr("wizard.review.household_card_subtitle"),
-            edit_callback=lambda: self._request_edit(3),
+            # An imported empty property cannot be edited from the desktop
+            edit_callback=None if empty_property else (lambda: self._request_edit(3)),
         )
 
         if not self.context.households:
@@ -1666,7 +1670,9 @@ class ReviewStep(BaseStep):
             )
             return
 
-        hh = self.context.households[0] if self.context.households else {}
+        if empty_property:
+            self._household_content.addWidget(EmptyPropertyNotice(empty_property))
+
         total_size = hh.get('size', 0)
 
         main_occupant_name = "-"
