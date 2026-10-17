@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Print Application Dialog — طباعة طلب تسجيل ادعاء
+Print Dialog — طباعة
 
-Lets the desk officer print the claim application with or without its
-attachments, through the print preview (print or the Windows PDF printer)
-or straight to a PDF file.
+One dialog for every printed document: pick the basic or the full version
+(claim application with/without attachments, case report with/without claim
+details), then print through the print preview (printer or the Windows PDF
+printer) or save straight to a PDF file. What is printed comes from a job.
 """
 
 import os
@@ -18,8 +19,10 @@ from PyQt5.QtWidgets import (
 )
 
 from controllers.application_print_controller import ApplicationPrintController
+from controllers.case_print_controller import CasePrintController
 from services.api_worker import ApiWorker
-from services.printing.application_renderer import configure_printer, render_application
+from services.printing.application_renderer import configure_printer, render_application, render_document
+from services.printing.case_html import build_case_html
 from services.translation_manager import get_layout_direction, tr
 from ui.components.dialogs.language_dialog import _LanguageOption
 from ui.components.toast import Toast
@@ -30,26 +33,88 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_FORM_ONLY = "form"
-_WITH_ATTACHMENTS = "attachments"
+_BASIC = "basic"
+_FULL = "full"
 
 
 def open_print_dialog(context, parent=None) -> None:
-    """Show the print dialog for the survey held by `context`."""
-    PrintApplicationDialog(context, parent).exec_()
+    """Show the print dialog for the claim application of the survey in `context`."""
+    PrintDialog(ApplicationPrintJob(context), parent).exec_()
 
 
-class PrintApplicationDialog(QDialog):
-    """Choose with/without attachments, then preview-and-print or save a PDF."""
+def open_case_print_dialog(case_data: dict, parent=None) -> None:
+    """Show the print dialog for a case report (see CasePrintJob for `case_data`)."""
+    PrintDialog(CasePrintJob(case_data), parent).exec_()
 
-    def __init__(self, context, parent=None):
-        super().__init__(parent)
+
+class ApplicationPrintJob:
+    """Claim application, with or without its attachments."""
+    title_key = "print.dialog_title"
+    basic_key = "print.option_form_only"
+    full_key = "print.option_with_attachments"
+
+    def __init__(self, context):
         self._context = context
-        self._controller = ApplicationPrintController(self)
-        self._model = None
-        self._attachment_pages = None
+        self._controller = ApplicationPrintController()
+        self.model = None
+
+    def load(self):
+        return self._controller.build_model(self._context)
+
+    def load_full(self):
+        return self._controller.prepare_attachments(self.model)
+
+    def summary(self) -> str:
+        return tr("print.option_counts", id_docs=self.model.id_documents_count,
+                  evidence=self.model.evidence_count)
+
+    def file_stem(self) -> str:
+        return self.model.reference_code or tr("print.title")
+
+    def render(self, printer: QPrinter, full: bool, full_data) -> None:
+        render_application(printer, self.model, full, full_data)
+
+
+class CasePrintJob:
+    """Case report, with or without the details of its claims.
+
+    `case_data` holds the case page's data: case_number, status, case_rows,
+    property_rows, surveys, claims (API dicts) and notes.
+    """
+    title_key = "print.case.dialog_title"
+    basic_key = "print.case.option_case_only"
+    full_key = "print.case.option_with_claims"
+
+    def __init__(self, case_data: dict):
+        self._case_data = case_data
+        self._controller = CasePrintController()
+        self.model = None
+
+    def load(self):
+        return self._controller.build_model(**self._case_data)
+
+    def load_full(self):
+        return self._controller.load_claim_details(self.model)
+
+    def summary(self) -> str:
+        return ""
+
+    def file_stem(self) -> str:
+        return self.model.case_number or tr("print.case.title")
+
+    def render(self, printer: QPrinter, full: bool, full_data) -> None:
+        render_document(printer, build_case_html(self.model, full_data if full else None), self.model.rtl)
+
+
+class PrintDialog(QDialog):
+    """Choose the basic or full version, then preview-and-print or save a PDF."""
+
+    def __init__(self, job, parent=None):
+        super().__init__(parent)
+        self._job = job
+        self._full_data = None
         self._worker = None
-        self._choice = _FORM_ONLY
+        self._choice = _BASIC
         self._closed = False
 
         self.setModal(True)
@@ -59,7 +124,7 @@ class PrintApplicationDialog(QDialog):
         self.setMinimumWidth(ScreenScale.w(520))
         self._setup_ui()
         self._set_busy(True)
-        self._run(self._controller.build_model, self._context, on_done=self._on_model_ready)
+        self._run(self._job.load, on_done=self._on_model_ready)
 
     # -- UI --
 
@@ -84,23 +149,23 @@ class PrintApplicationDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
 
-        title = QLabel(tr("print.dialog_title"))
+        title = QLabel(tr(self._job.title_key))
         title.setFont(create_font(size=14, weight=FontManager.WEIGHT_BOLD))
         title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY};")
         layout.addWidget(title)
 
-        self._form_option = _LanguageOption(tr("print.option_form_only"), _FORM_ONLY, selected=True)
-        self._attachments_option = _LanguageOption(tr("print.option_with_attachments"), _WITH_ATTACHMENTS)
-        self._form_option.mousePressEvent = lambda e: self._select(_FORM_ONLY)
-        self._attachments_option.mousePressEvent = lambda e: self._select(_WITH_ATTACHMENTS)
-        layout.addWidget(self._form_option)
-        layout.addWidget(self._attachments_option)
+        self._basic_option = _LanguageOption(tr(self._job.basic_key), _BASIC, selected=True)
+        self._full_option = _LanguageOption(tr(self._job.full_key), _FULL)
+        self._basic_option.mousePressEvent = lambda e: self._select(_BASIC)
+        self._full_option.mousePressEvent = lambda e: self._select(_FULL)
+        layout.addWidget(self._basic_option)
+        layout.addWidget(self._full_option)
 
-        self._counts = QLabel()
-        self._counts.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
-        self._counts.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; padding: 0 12px;")
-        self._counts.hide()
-        layout.addWidget(self._counts)
+        self._summary = QLabel()
+        self._summary.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
+        self._summary.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; padding: 0 12px;")
+        self._summary.hide()
+        layout.addWidget(self._summary)
 
         self._status = QLabel(tr("print.preparing"))
         self._status.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_REGULAR))
@@ -149,8 +214,8 @@ class PrintApplicationDialog(QDialog):
         if not self._preview_btn.isEnabled():
             return
         self._choice = choice
-        self._form_option.selected = choice == _FORM_ONLY
-        self._attachments_option.selected = choice == _WITH_ATTACHMENTS
+        self._basic_option.selected = choice == _BASIC
+        self._full_option.selected = choice == _FULL
 
     def _set_busy(self, busy: bool):
         for btn in (self._save_btn, self._preview_btn):
@@ -180,37 +245,36 @@ class PrintApplicationDialog(QDialog):
     def _on_error(self, message: str):
         if self._closed:
             return
-        logger.warning(f"Application print failed: {message}")
+        logger.warning(f"Print failed: {message}")
         self._set_busy(False)
         Toast.show_toast(self.parentWidget() or self, tr("print.failed"), Toast.ERROR)
-        if self._model is None:
+        if self._job.model is None:
             self.reject()
 
     def _on_model_ready(self, model):
-        self._model = model
-        self._counts.setText(tr(
-            "print.option_counts", id_docs=model.id_documents_count, evidence=model.evidence_count,
-        ))
-        self._counts.show()
+        self._job.model = model
+        summary = self._job.summary()
+        if summary:
+            self._summary.setText(summary)
+            self._summary.show()
         self._set_busy(False)
 
-    def _with_attachment_pages(self, then):
-        """Run `then` once the attachment pages needed by the choice are ready."""
-        if self._choice == _FORM_ONLY or self._attachment_pages is not None:
+    def _with_full_data(self, then):
+        """Run `then` once the data needed by the full version is ready."""
+        if self._choice == _BASIC or self._full_data is not None:
             then()
             return
         self._set_busy(True)
 
-        def _ready(pages):
-            self._attachment_pages = pages
+        def _ready(data):
+            self._full_data = data
             self._set_busy(False)
             then()
 
-        self._run(self._controller.prepare_attachments, self._model, on_done=_ready)
+        self._run(self._job.load_full, on_done=_ready)
 
     def _render(self, printer: QPrinter):
-        render_application(printer, self._model, self._choice == _WITH_ATTACHMENTS,
-                           self._attachment_pages)
+        self._job.render(printer, self._choice == _FULL, self._full_data)
 
     def _new_printer(self) -> QPrinter:
         printer = QPrinter(QPrinter.HighResolution)
@@ -218,19 +282,19 @@ class PrintApplicationDialog(QDialog):
         return printer
 
     def _file_stem(self) -> str:
-        return sanitize_filename(self._model.reference_code or tr("print.title"))
+        return sanitize_filename(self._job.file_stem())
 
     def _on_preview(self):
         def _show():
             # Keep the printer referenced: the preview only stores a raw pointer.
             self._printer = self._new_printer()
             preview = QPrintPreviewDialog(self._printer, self)
-            preview.setWindowTitle(tr("print.dialog_title"))
+            preview.setWindowTitle(tr(self._job.title_key))
             preview.paintRequested.connect(self._render)
             preview.exec_()
             self.accept()
 
-        self._with_attachment_pages(_show)
+        self._with_full_data(_show)
 
     def _on_save_pdf(self):
         folder = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
@@ -252,4 +316,4 @@ class PrintApplicationDialog(QDialog):
             Toast.show_toast(self.parentWidget() or self, tr("print.saved"), Toast.SUCCESS)
             self.accept()
 
-        self._with_attachment_pages(_save)
+        self._with_full_data(_save)

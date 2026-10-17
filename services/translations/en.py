@@ -3914,4 +3914,20 @@ EN_TRANSLATIONS = {
     "print.preparing": "Preparing the application...",
     "print.failed": "Could not prepare the application for printing",
     "print.saved": "File saved",
+
+    # Case report printing
+    "print.case.title": "Case Report",
+    "print.case.button": "Print Case",
+    "print.case.dialog_title": "Print Case Report",
+    "print.case.option_case_only": "Case only",
+    "print.case.option_with_claims": "Case with claim details",
+    "print.case.claim_details": "Claim {number} Details",
+    "print.case.col.source": "Source",
+    "print.case.col.claim_date": "Claim Date",
+    "print.case.col.linked_survey": "Linked Survey",
+    "print.case.col.document_type": "Document Type",
+    "print.case.col.file_name": "File Name",
+    "print.case.no_evidences": "No supporting documents",
+    "print.case.prepared_by": "Prepared by",
+    "print.case.signature": "Signature",
 }

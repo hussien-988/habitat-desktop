@@ -3919,4 +3919,20 @@ AR_TRANSLATIONS = {
     "print.preparing": "جاري تجهيز الطلب...",
     "print.failed": "تعذّر تجهيز الطلب للطباعة",
     "print.saved": "تم حفظ الملف",
+
+    # Case report printing
+    "print.case.title": "تقرير حالة",
+    "print.case.button": "طباعة الحالة",
+    "print.case.dialog_title": "طباعة تقرير الحالة",
+    "print.case.option_case_only": "الحالة فقط",
+    "print.case.option_with_claims": "الحالة مع تفاصيل المطالبات",
+    "print.case.claim_details": "تفاصيل المطالبة {number}",
+    "print.case.col.source": "المصدر",
+    "print.case.col.claim_date": "تاريخ المطالبة",
+    "print.case.col.linked_survey": "الادعاء المرتبط",
+    "print.case.col.document_type": "نوع الوثيقة",
+    "print.case.col.file_name": "اسم الملف",
+    "print.case.no_evidences": "لا توجد وثائق داعمة",
+    "print.case.prepared_by": "أعدّه",
+    "print.case.signature": "التوقيع",
 }

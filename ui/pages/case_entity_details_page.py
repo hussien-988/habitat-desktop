@@ -230,6 +230,7 @@ class _CaseEntityHeader(QWidget):
     back_clicked = pyqtSignal()
     toggle_editable_clicked = pyqtSignal()
     revisit_clicked = pyqtSignal()
+    print_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -328,6 +329,34 @@ class _CaseEntityHeader(QWidget):
         self._toggle_editable_btn.clicked.connect(self.toggle_editable_clicked.emit)
         row1.addWidget(self._toggle_editable_btn)
 
+        # Print case report button (admin/data_manager only)
+        self._print_btn = QPushButton(tr("print.case.button"))
+        self._print_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
+        self._print_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._print_btn.setVisible(False)
+        self._print_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._print_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FFFFFF, stop:1 #F0F4FA
+                );
+                border: 1.5px solid rgba(56, 144, 223, 0.35);
+                border-radius: 12px;
+                color: #2A6CB5; padding: 0 14px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #EFF6FF, stop:1 #DBEAFE
+                );
+                border: 1.5px solid rgba(56, 144, 223, 0.55);
+            }
+            QPushButton:pressed { background: #DBEAFE; }
+        """)
+        self._print_btn.clicked.connect(self.print_clicked.emit)
+        row1.addWidget(self._print_btn)
+
         # Revisit button (admin/data_manager only)
         self._revisit_btn = QPushButton(tr("page.case_entity.revisit"))
         self._revisit_btn.setFixedSize(ScreenScale.w(140), ScreenScale.h(38))
@@ -421,12 +450,14 @@ class _CaseEntityHeader(QWidget):
         and can be re-surfaced later without re-wiring.
         """
         self._toggle_editable_btn.setVisible(False)
+        self._print_btn.setVisible(visible)
         self._revisit_btn.setVisible(visible)
 
     def update_texts(self):
         """Update texts and layout direction for language change."""
         self.setLayoutDirection(get_layout_direction())
         self._revisit_btn.setText(tr("page.case_entity.revisit"))
+        self._print_btn.setText(tr("print.case.button"))
         is_rtl = get_layout_direction() == Qt.RightToLeft
         self._num_label.setAlignment(
             Qt.AlignRight | Qt.AlignVCenter if is_rtl else Qt.AlignLeft | Qt.AlignVCenter
@@ -883,6 +914,7 @@ class CaseEntityDetailsPage(QWidget):
         self._claim_details: List[dict] = []
         self._unit_details: dict = {}
         self._building_details: dict = {}
+        self._linked_loaded = False
         self._loading = False
         self._user_role = "admin"
         self._show_actions = True
@@ -910,6 +942,7 @@ class CaseEntityDetailsPage(QWidget):
         self._header.back_clicked.connect(self.back_requested.emit)
         self._header.toggle_editable_clicked.connect(self._on_toggle_editable)
         self._header.revisit_clicked.connect(self._on_revisit)
+        self._header.print_clicked.connect(self._on_print)
         main_layout.addWidget(self._header)
         main_layout.addSpacing(16)
 
@@ -1101,6 +1134,7 @@ class CaseEntityDetailsPage(QWidget):
             return
         self._loading = True
         self._case_id = case_id
+        self._linked_loaded = False
         self._spinner.show_loading(tr("page.case_entity.loading"))
 
         def _fetch(cid):
@@ -1238,6 +1272,7 @@ class CaseEntityDetailsPage(QWidget):
         self._claim_details = data.get("claims", [])
         self._unit_details = data.get("unit", {})
         self._building_details = data.get("building", {})
+        self._linked_loaded = True
 
         if self._case:
             self._case.claim_count = len(self._claim_details)
@@ -1322,34 +1357,30 @@ class CaseEntityDetailsPage(QWidget):
         for c in range(3):
             grid.setColumnStretch(c, 1)
 
-        status_style = _CASE_STATUS_STYLES.get(self._case.status, _CASE_STATUS_STYLES[1])
-
-        opened = (self._case.opened_date or "")[:10]
-        if not opened or opened.startswith("0001"):
-            opened = "-"
-        latest_claim_date = self._get_latest_claim_date()
-
-        fields = [
-            (tr("page.case_entity.field_case_number"),
-             self._case.case_number or "-"),
-            (tr("page.case_entity.field_status"),
-             tr(status_style["label_key"])),
-            (tr("page.case_entity.field_open_date"),
-             opened),
-            (tr("page.case_entity.field_latest_claim_date"),
-             latest_claim_date),
-            (tr("page.case_entity.field_survey_count"),
-             str(self._case.survey_count)),
-            (tr("page.case_entity.field_claim_count"),
-             str(self._case.claim_count)),
-        ]
-
-        for i, (label, value) in enumerate(fields):
+        for i, (label, value) in enumerate(self._case_info_fields()):
             row = i // 3
             col = i % 3
             grid.addWidget(self._create_field_pair(label, value), row, col)
 
         self._case_info_content.addLayout(grid)
+
+    def _case_info_fields(self) -> list:
+        """(label, value) pairs of the case info card, also used for printing."""
+        opened = (self._case.opened_date or "")[:10]
+        if not opened or opened.startswith("0001"):
+            opened = "-"
+        return [
+            (tr("page.case_entity.field_case_number"), self._case.case_number or "-"),
+            (tr("page.case_entity.field_status"), self._status_label()),
+            (tr("page.case_entity.field_open_date"), opened),
+            (tr("page.case_entity.field_latest_claim_date"), self._get_latest_claim_date()),
+            (tr("page.case_entity.field_survey_count"), str(self._case.survey_count)),
+            (tr("page.case_entity.field_claim_count"), str(self._case.claim_count)),
+        ]
+
+    def _status_label(self) -> str:
+        status_style = _CASE_STATUS_STYLES.get(self._case.status, _CASE_STATUS_STYLES[1])
+        return tr(status_style["label_key"])
 
     def _populate_property_info(self):
         if not self._case:
@@ -1368,6 +1399,15 @@ class CaseEntityDetailsPage(QWidget):
         for c in range(3):
             grid.setColumnStretch(c, 1)
 
+        for i, (label, value) in enumerate(self._property_fields()):
+            row = i // 3
+            col = i % 3
+            grid.addWidget(self._create_field_pair(label, value), row, col)
+
+        self._property_content.addLayout(grid)
+
+    def _property_fields(self) -> list:
+        """(label, value) pairs of the property card, also used for printing."""
         bd = self._building_details
         ud = self._unit_details
 
@@ -1414,7 +1454,7 @@ class CaseEntityDetailsPage(QWidget):
             or "-"
         )
 
-        fields = [
+        return [
             (tr("page.case_entity.field_building_code"), building_code),
             (tr("page.case_entity.field_unit_number"), unit_number),
             (tr("page.case_entity.field_floor"), floor_display),
@@ -1423,13 +1463,6 @@ class CaseEntityDetailsPage(QWidget):
             (tr("page.case_entity.field_relations_count"),
              str(self._case.person_property_relation_count)),
         ]
-
-        for i, (label, value) in enumerate(fields):
-            row = i // 3
-            col = i % 3
-            grid.addWidget(self._create_field_pair(label, value), row, col)
-
-        self._property_content.addLayout(grid)
 
     def _populate_surveys_section(self):
         self._clear_layout(self._surveys_content)
@@ -1535,6 +1568,24 @@ class CaseEntityDetailsPage(QWidget):
             'case_id': self._case.id,
             'property_unit_id': property_unit_id,
         })
+
+    def _on_print(self):
+        if not self._case:
+            return
+        if not self._linked_loaded:
+            # Surveys and claims of this case are still loading
+            Toast.show_toast(self, tr("page.case_entity.loading"), Toast.INFO)
+            return
+        from ui.components.print_dialog import open_case_print_dialog
+        open_case_print_dialog({
+            "case_number": self._case.case_number or self._case.id[:16],
+            "status": self._status_label(),
+            "case_rows": self._case_info_fields(),
+            "property_rows": self._property_fields(),
+            "surveys": self._survey_details,
+            "claims": self._claim_details,
+            "notes": self._case.notes or "",
+        }, self)
 
     def update_after_editable_toggle(self, is_editable: bool):
         """Called by MainWindow after successful API call to update UI."""
