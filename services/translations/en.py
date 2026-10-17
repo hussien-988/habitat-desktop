@@ -2775,6 +2775,7 @@ EN_TRANSLATIONS = {
     "page.claims.status_changed_to": "Status changed to",
     "page.claims.tab_documents": "Documents",
     "page.claims.subtitle": "Manage and review claims",
+    "page.claims.linked_title": "Survey Claims",
     "page.claims.stats_open": "Open",
     "page.claims.stats_closed": "Closed",
     "page.claims.stats_total": "Total",

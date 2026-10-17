@@ -403,8 +403,14 @@ class _ClaimCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class CompletedClaimsPage(QWidget):
-    """Claims listing page with dark header zone, shimmer cards,
-    and comprehensive loading states."""
+    """Claims of one survey, with dark header zone, shimmer cards,
+    and comprehensive loading states.
+
+    Claims have no navbar tab: the page is only entered from survey details
+    ("view linked claims") with the survey's reference code, and its back
+    button returns to that survey. The free claims list and its
+    ownership/occupancy tabs are no longer shown.
+    """
 
     claim_selected = pyqtSignal(str, str)  # claim_uuid, highlight_ref (survey ref to highlight)
     add_claim_clicked = pyqtSignal()
@@ -417,7 +423,6 @@ class CompletedClaimsPage(QWidget):
         self.claims_data: List[Dict] = []
         self._active_tab = "open"
         self._buildings_cache: Dict[str, object] = {}
-        self._last_refresh_ms = 0
         self._card_widgets: List[_ClaimCard] = []
         self._loading = False
         self._navigating = False
@@ -449,7 +454,7 @@ class CompletedClaimsPage(QWidget):
 
         # Dark header zone
         self._header = DarkHeaderZone(self)
-        self._header.set_title(tr("page.claims.subtitle"))
+        self._header.set_title(tr("page.claims.linked_title"))
         self._header.set_help(Pages.CLAIMS)
 
         tab_font = create_font(size=12, weight=QFont.DemiBold)
@@ -468,8 +473,12 @@ class CompletedClaimsPage(QWidget):
         self._tab_closed.clicked.connect(lambda: self._on_tab("closed"))
         self._header.add_tab(self._tab_closed)
 
-        # Search context bar (shown when search is active, hidden initially)
-        self._search_bar = SearchContextBar(tabs=[self._tab_open, self._tab_closed])
+        # Linked-claims only: the ownership/occupancy tabs stay hidden
+        self._tab_open.hide()
+        self._tab_closed.hide()
+
+        # Search context bar (shows the survey reference and the back button)
+        self._search_bar = SearchContextBar(tabs=[])
         self._search_bar.back_clicked.connect(self._exit_search_mode)
         self._search_bar.hide()
         self._header.add_row2_widget(self._search_bar)
@@ -517,6 +526,8 @@ class CompletedClaimsPage(QWidget):
         self._search_bar.attach_clear_action(self._search)
 
         self._header.add_action_widget(self._search)
+        # Hidden: only holds the survey reference code passed in by refresh()
+        self._search.hide()
 
         main.addWidget(self._header)
 
@@ -669,27 +680,16 @@ class CompletedClaimsPage(QWidget):
         if not self._search_mode:
             return
 
-        # If this search-mode session was opened by navigation from a survey
-        # details page, the back button should return to that survey details
-        # page rather than just clearing the filter and staying here.
-        if self._return_survey_id:
-            survey_id = self._return_survey_id
-            self._return_survey_id = ""
-            self._search_mode = False
-            self._search_bar.exit_search_mode()
-            self._search.blockSignals(True)
-            self._search.clear()
-            self._search.blockSignals(False)
-            self.back_to_survey_requested.emit(survey_id)
-            return
-
+        # Leaving the linked claims always goes back to the originating survey
+        # (or the surveys list when its id is unknown); there is no free list.
+        survey_id = self._return_survey_id
+        self._return_survey_id = ""
         self._search_mode = False
         self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
-        self._current_page = 1
-        self._load_claims()
+        self.back_to_survey_requested.emit(survey_id)
 
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
@@ -722,14 +722,14 @@ class CompletedClaimsPage(QWidget):
                 self._load_claims()
                 return
 
-        # Fresh entry (not from survey details) — clear any pending return target.
-        self._return_survey_id = ""
-
-        now = int(time.time() * 1000)
-        if now - self._last_refresh_ms < 5000 and self.claims_data:
+        if self._search_mode:
+            # Back from claim details: reload the same survey's claims (the
+            # claim may have been edited) and keep the return target.
+            self._load_claims()
             return
-        self._last_refresh_ms = now
-        self._load_claims()
+
+        # No survey context: nothing to show here, go back to the surveys.
+        QTimer.singleShot(0, lambda: self.back_to_survey_requested.emit(""))
 
     def _load_claims(self):
         if self._loading:
@@ -1176,7 +1176,7 @@ class CompletedClaimsPage(QWidget):
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
 
-        self._header.get_title_label().setText(tr("page.claims.subtitle"))
+        self._header.get_title_label().setText(tr("page.claims.linked_title"))
         self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
 
         self._search_bar.update_language()

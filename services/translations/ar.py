@@ -2777,6 +2777,7 @@ AR_TRANSLATIONS = {
     "page.claims.status_changed_to": "تم تغيير الحالة إلى",
     "page.claims.tab_documents": "المستندات",
     "page.claims.subtitle": "إدارة ومراجعة المطالبات",
+    "page.claims.linked_title": "مطالبات الادعاء",
     "page.claims.stats_open": "اشغال",
     "page.claims.stats_closed": "ملكية",
     "page.claims.stats_total": "المجموع",
