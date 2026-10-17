@@ -355,7 +355,7 @@ class OfficeSurveyWizard(BaseWizard):
         btn_row.addStretch()
         btn_row.addWidget(ok_btn)
         if not is_draft:
-            from ui.components.print_application_dialog import open_print_dialog
+            from ui.components.print_dialog import open_print_dialog
             print_btn = QPushButton(tr("print.button"))
             print_btn.setCursor(Qt.PointingHandCursor)
             print_btn.setFixedHeight(ScreenScale.h(44))

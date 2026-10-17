@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Paint a claim application onto a QPrinter (print preview, printer or PDF).
+Paint a printed document (claim application, case report) onto a QPrinter
+(print preview, printer or PDF).
 
 The form is laid out by QTextDocument at 96 dpi with design metrics (exact,
 unhinted glyph advances) and painted page by page with the painter scaled to
@@ -21,7 +22,8 @@ from PyQt5.QtGui import (
 from PyQt5.QtPrintSupport import QPrinter
 
 from app.config import Config
-from services.printing.application_html import LOGO_RESOURCE, TITLE_COLOR, build_application_html
+from services.printing.application_html import build_application_html
+from services.printing.html_parts import LOGO_RESOURCE, TITLE_COLOR
 from services.printing.application_print_model import ApplicationPrintModel
 from services.translation_manager import tr
 from utils.logger import get_logger
@@ -76,12 +78,19 @@ def render_application(printer: QPrinter, model: ApplicationPrintModel,
                        include_attachments: bool,
                        attachment_pages: Optional[List[AttachmentPage]] = None) -> None:
     """Paint the whole application; called for preview, printing and PDF export."""
-    attachment_pages = attachment_pages if include_attachments else []
+    render_document(printer, build_application_html(model, include_attachments), model.rtl,
+                    model.is_draft, attachment_pages if include_attachments else None)
+
+
+def render_document(printer: QPrinter, html: str, rtl: bool, is_draft: bool = False,
+                    attachment_pages: Optional[List[AttachmentPage]] = None) -> None:
+    """Paint `html` page by page, then one page per attachment."""
+    attachment_pages = attachment_pages or []
     painter = QPainter()
     if not painter.begin(printer):
         raise RuntimeError("Could not start printing")
     try:
-        direction = Qt.RightToLeft if model.rtl else Qt.LeftToRight
+        direction = Qt.RightToLeft if rtl else Qt.LeftToRight
         painter.setLayoutDirection(direction)
         scale = printer.logicalDpiX() / _LAYOUT_DPI
         page = QRectF(0, 0, printer.width(), printer.height())
@@ -89,7 +98,7 @@ def render_application(printer: QPrinter, model: ApplicationPrintModel,
 
         # The text document works in 96-dpi layout units
         doc_w, doc_h = body.width() / scale, body.height() / scale
-        doc = _build_document(model, include_attachments, QSizeF(doc_w, doc_h), direction)
+        doc = _build_document(html, QSizeF(doc_w, doc_h), direction)
         form_pages = doc.pageCount()
         total = form_pages + len(attachment_pages)
 
@@ -103,8 +112,8 @@ def render_application(printer: QPrinter, model: ApplicationPrintModel,
                 doc.drawContents(painter, QRectF(0, index * doc_h, doc_w, doc_h))
                 painter.restore()
             else:
-                _draw_attachment(painter, attachment_pages[index - form_pages], body, scale, model.rtl)
-            if model.is_draft:
+                _draw_attachment(painter, attachment_pages[index - form_pages], body, scale, rtl)
+            if is_draft:
                 _draw_watermark(painter, page)
             _draw_footer(painter, QRectF(0, body.bottom(), page.width(), page.height() - body.height()),
                          index + 1, total)
@@ -112,8 +121,7 @@ def render_application(printer: QPrinter, model: ApplicationPrintModel,
         painter.end()
 
 
-def _build_document(model: ApplicationPrintModel, include_attachments: bool,
-                    page_size: QSizeF, direction) -> QTextDocument:
+def _build_document(html: str, page_size: QSizeF, direction) -> QTextDocument:
     doc = QTextDocument()
     # Lay out at a fixed 96 dpi whatever the screen is; the painter scales.
     reference = QImage(1, 1, QImage.Format_RGB32)
@@ -135,7 +143,7 @@ def _build_document(model: ApplicationPrintModel, include_attachments: bool,
     if not logo.isNull():
         doc.addResource(QTextDocument.ImageResource, QUrl(LOGO_RESOURCE), logo)
 
-    doc.setHtml(build_application_html(model, include_attachments))
+    doc.setHtml(html)
     _apply_direction(doc, direction)
     doc.setPageSize(page_size)
     return doc
