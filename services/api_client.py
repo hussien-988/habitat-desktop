@@ -163,6 +163,19 @@ def _resolve_access_token_expiry(
     return None
 
 
+def _token_user_id(token: Optional[str]) -> Optional[str]:
+    """User id carried by an access token (NameIdentifier claim), if any."""
+    claims = _decode_jwt_claims_unsafe(token)
+    for key in (
+        "nameid",
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
+        "sub",
+    ):
+        if claims.get(key):
+            return str(claims[key])
+    return None
+
+
 def _token_diag(token: Optional[str]) -> str:
     """Short diagnostic string for a token. Never logs the token body."""
     if not token:
@@ -963,8 +976,13 @@ class TRRCMSApiClient:
                             if self._on_session_expired:
                                 self._on_session_expired()
 
-                        elif self.access_token and not auth_retried:
-                            # Another request rotated the token meanwhile
+                        elif (
+                            self.access_token and not auth_retried
+                            and _token_user_id(token_used) is not None
+                            and _token_user_id(token_used) == _token_user_id(self.access_token)
+                        ):
+                            # Another request rotated this user's token
+                            # meanwhile (never retry as a different user)
                             logger.info(
                                 f"[REQ {req_id}] 401 on {endpoint} — "
                                 "token changed meanwhile, retrying with the new one"
