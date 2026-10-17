@@ -24,6 +24,7 @@ arabic-reshaper>=3.0.0 # Arabic text reshaping
 python-bidi>=0.4.2     # Bidirectional text support
 qrcode>=7.4.2          # QR code generation
 Pillow>=10.0.0         # Image processing
+pypdfium2>=4.30,<6     # Render PDF attachments when printing claim applications
 
 # =============================================================================
 # Data Processing & Export - FSD FR-D-17
