@@ -19,8 +19,9 @@ class SurveyRow:
 class ClaimDetail:
     """One claim's details: its data, claimant and supporting documents."""
     number: str
-    rows: Rows
-    evidences: List[Tuple[str, str]]  # (document type, file name)
+    rows: Rows = field(default_factory=list)
+    evidences: List[Tuple[str, str]] = field(default_factory=list)  # (document type, file name)
+    unavailable: bool = False  # details could not be loaded
 
 
 @dataclass
@@ -33,5 +34,5 @@ class CasePrintModel:
     property_rows: Rows = field(default_factory=list)
     surveys: List[SurveyRow] = field(default_factory=list)
     claims: List[ClaimRow] = field(default_factory=list)
-    claim_ids: List[str] = field(default_factory=list)
+    claim_refs: List[Tuple[str, str]] = field(default_factory=list)  # (claim id, number) for the details
     notes: str = ""

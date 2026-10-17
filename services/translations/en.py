@@ -3928,6 +3928,7 @@ EN_TRANSLATIONS = {
     "print.case.col.document_type": "Document Type",
     "print.case.col.file_name": "File Name",
     "print.case.no_evidences": "No supporting documents",
+    "print.case.claim_unavailable": "The details of this claim could not be loaded",
     "print.case.prepared_by": "Prepared by",
     "print.case.signature": "Signature",
 }

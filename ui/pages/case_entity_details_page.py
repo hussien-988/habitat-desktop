@@ -1260,14 +1260,17 @@ class CaseEntityDetailsPage(QWidget):
                 "unit": unit_data, "building": building_data,
             }
 
+        case_id = self._case_id
         self._linked_worker = ApiWorker(_fetch_linked)
-        self._linked_worker.finished.connect(self._on_linked_loaded)
+        self._linked_worker.finished.connect(lambda data: self._on_linked_loaded(data, case_id))
         self._linked_worker.error.connect(self._on_linked_load_error)
         self._linked_worker.start()
 
-    def _on_linked_loaded(self, data):
+    def _on_linked_loaded(self, data, case_id: str):
         if not data:
             return
+        if case_id != self._case_id:
+            return  # result for a case opened before the current one
         self._survey_details = data.get("surveys", [])
         self._claim_details = data.get("claims", [])
         self._unit_details = data.get("unit", {})

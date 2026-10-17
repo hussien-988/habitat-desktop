@@ -40,7 +40,8 @@ class CasePrintController(BaseController):
                 property_rows=property_rows,
                 surveys=[_survey_row(s) for s in surveys],
                 claims=[claim_row(c) for c in claims],
-                claim_ids=[str(c.get("id") or c.get("claimId")) for c in claims if c.get("id") or c.get("claimId")],
+                claim_refs=[(str(c.get("id") or c.get("claimId")), c.get("claimNumber") or "")
+                            for c in claims if c.get("id") or c.get("claimId")],
                 notes=notes or "",
             )
             return OperationResult.ok(data=model)
@@ -52,12 +53,13 @@ class CasePrintController(BaseController):
         """Details of every claim of the case, in the order of the claims table."""
         claims = ClaimController()
         details = []
-        for claim_id in model.claim_ids:
+        for claim_id, number in model.claim_refs:
             result = claims.get_claim_full_detail(claim_id)
             if result.success:
                 details.append(_claim_detail(result.data))
             else:
                 logger.warning(f"Print: claim {claim_id} details unavailable: {result.message}")
+                details.append(ClaimDetail(number=number, unavailable=True))
         return OperationResult.ok(data=details)
 
 

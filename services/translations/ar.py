@@ -3933,6 +3933,7 @@ AR_TRANSLATIONS = {
     "print.case.col.document_type": "نوع الوثيقة",
     "print.case.col.file_name": "اسم الملف",
     "print.case.no_evidences": "لا توجد وثائق داعمة",
+    "print.case.claim_unavailable": "تعذّر تحميل تفاصيل هذه المطالبة",
     "print.case.prepared_by": "أعدّه",
     "print.case.signature": "التوقيع",
 }

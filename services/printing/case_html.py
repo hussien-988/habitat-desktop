@@ -47,6 +47,8 @@ def _surveys_table(model: CasePrintModel) -> str:
 
 
 def _claim_detail(detail: ClaimDetail, rtl: bool) -> str:
+    if detail.unavailable:
+        return note(tr("print.case.claim_unavailable"))
     body = rows_table(detail.rows, rtl)
     if detail.evidences:
         columns = [tr("print.case.col.document_type"), tr("print.case.col.file_name")]
