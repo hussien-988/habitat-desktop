@@ -336,6 +336,7 @@ def _build_cache(api_data: List[Dict]):
         "casestatus": "claimstatus",              # CaseStatus → claim_status
         "unittype": "propertyunittype",           # UnitType → property_unit_type
         "unitstatus": "propertyunitstatus",       # UnitStatus → property_unit_status
+        "identificationdocumenttype": "documenttype",  # IdentificationDocumentType → document_type
     }
     for alias, real_key in _ALIASES.items():
         if real_key in new_lookup and alias not in new_lookup:
