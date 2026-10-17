@@ -115,6 +115,11 @@ class DarkHeaderZone(QFrame):
         stretch_idx = self._row1.count() - 2  # before stretch and actions
         self._row1.insertWidget(stretch_idx, pill)
 
+    def add_row1_widget(self, widget: QWidget):
+        """Insert a widget into row 1 next to the title (before the stretch)."""
+        stretch_idx = self._row1.count() - 2  # before stretch and actions
+        self._row1.insertWidget(stretch_idx, widget)
+
     def add_tab(self, tab: QWidget):
         """Insert a tab into row 2 (before the stretch)."""
         idx = self._row2.count() - 1  # before stretch
