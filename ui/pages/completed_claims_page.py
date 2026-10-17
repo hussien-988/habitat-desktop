@@ -77,10 +77,9 @@ def _claim_is_ownership(summary: Dict) -> bool:
     """Classify a claim summary as Ownership (→ 'ملكية' / closed tab).
 
     Source of truth is `claimType` — the same field the detail badge uses —
-    which `_fetch_all_claim_summaries` enriches onto each summary from
-    /v1/Claims (the /v2/claims/summaries payload omits it). Without that
-    enrichment the chain degrades to `relationType` (the only type-ish field
-    summaries carry), then `caseStatus`.
+    when present. The /v2/claims/summaries payload usually omits it, so the
+    chain falls back to `relationType` (the only type-ish field summaries
+    carry), then `caseStatus`.
 
     Note: for imported-package claims the backend writes claimType,
     relationType and caseStatus independently, and they can contradict each
@@ -403,8 +402,13 @@ class _ClaimCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class CompletedClaimsPage(QWidget):
-    """Claims listing page with dark header zone, shimmer cards,
-    and comprehensive loading states."""
+    """Claims of one survey, with dark header zone, shimmer cards,
+    and comprehensive loading states.
+
+    Claims have no navbar tab: the page is only entered from survey details
+    ("view linked claims") with the survey's reference code, and its back
+    button returns to that survey.
+    """
 
     claim_selected = pyqtSignal(str, str)  # claim_uuid, highlight_ref (survey ref to highlight)
     add_claim_clicked = pyqtSignal()
@@ -417,7 +421,6 @@ class CompletedClaimsPage(QWidget):
         self.claims_data: List[Dict] = []
         self._active_tab = "open"
         self._buildings_cache: Dict[str, object] = {}
-        self._last_refresh_ms = 0
         self._card_widgets: List[_ClaimCard] = []
         self._loading = False
         self._navigating = False
@@ -426,7 +429,6 @@ class CompletedClaimsPage(QWidget):
         self._total_count = 0
         self._page_size = 20
         self._search_mode = False
-        self._claimtype_enrich_unavailable = False
         self._return_survey_id = ""  # Set when navigation came from a survey details page
 
         self._search_timer = QTimer(self)
@@ -449,7 +451,7 @@ class CompletedClaimsPage(QWidget):
 
         # Dark header zone
         self._header = DarkHeaderZone(self)
-        self._header.set_title(tr("page.claims.subtitle"))
+        self._header.set_title(tr("page.claims.linked_title"))
         self._header.set_help(Pages.CLAIMS)
 
         tab_font = create_font(size=12, weight=QFont.DemiBold)
@@ -468,8 +470,12 @@ class CompletedClaimsPage(QWidget):
         self._tab_closed.clicked.connect(lambda: self._on_tab("closed"))
         self._header.add_tab(self._tab_closed)
 
-        # Search context bar (shown when search is active, hidden initially)
-        self._search_bar = SearchContextBar(tabs=[self._tab_open, self._tab_closed])
+        # Linked-claims only: the ownership/occupancy tabs stay hidden
+        self._tab_open.hide()
+        self._tab_closed.hide()
+
+        # Search context bar (shows the survey reference and the back button)
+        self._search_bar = SearchContextBar(tabs=[])
         self._search_bar.back_clicked.connect(self._exit_search_mode)
         self._search_bar.hide()
         self._header.add_row2_widget(self._search_bar)
@@ -517,6 +523,8 @@ class CompletedClaimsPage(QWidget):
         self._search_bar.attach_clear_action(self._search)
 
         self._header.add_action_widget(self._search)
+        # Hidden: only holds the survey reference code passed in by refresh()
+        self._search.hide()
 
         main.addWidget(self._header)
 
@@ -669,27 +677,16 @@ class CompletedClaimsPage(QWidget):
         if not self._search_mode:
             return
 
-        # If this search-mode session was opened by navigation from a survey
-        # details page, the back button should return to that survey details
-        # page rather than just clearing the filter and staying here.
-        if self._return_survey_id:
-            survey_id = self._return_survey_id
-            self._return_survey_id = ""
-            self._search_mode = False
-            self._search_bar.exit_search_mode()
-            self._search.blockSignals(True)
-            self._search.clear()
-            self._search.blockSignals(False)
-            self.back_to_survey_requested.emit(survey_id)
-            return
-
+        # Leaving the linked claims always goes back to the originating survey
+        # (or the surveys list when its id is unknown); there is no free list.
+        survey_id = self._return_survey_id
+        self._return_survey_id = ""
         self._search_mode = False
         self._search_bar.exit_search_mode()
         self._search.blockSignals(True)
         self._search.clear()
         self._search.blockSignals(False)
-        self._current_page = 1
-        self._load_claims()
+        self.back_to_survey_requested.emit(survey_id)
 
     def _on_tab(self, which: str):
         if self._loading or which == self._active_tab:
@@ -722,14 +719,14 @@ class CompletedClaimsPage(QWidget):
                 self._load_claims()
                 return
 
-        # Fresh entry (not from survey details) — clear any pending return target.
-        self._return_survey_id = ""
-
-        now = int(time.time() * 1000)
-        if now - self._last_refresh_ms < 5000 and self.claims_data:
+        if self._search_mode:
+            # Back from claim details: reload the same survey's claims (the
+            # claim may have been edited) and keep the return target.
+            self._load_claims()
             return
-        self._last_refresh_ms = now
-        self._load_claims()
+
+        # No survey context: nothing to show here, go back to the surveys.
+        QTimer.singleShot(0, lambda: self.back_to_survey_requested.emit(""))
 
     def _load_claims(self):
         if self._loading:
@@ -752,10 +749,10 @@ class CompletedClaimsPage(QWidget):
 
         api = get_api_client()
         total_count = 0
+        summaries = []
 
         if search_text:
             reference_code = search_text.strip()
-            summaries = []
             try:
                 raw_surveys = api._request("GET", "/v1/Surveys/office", params={
                     "referenceCode": reference_code,
@@ -816,150 +813,11 @@ class CompletedClaimsPage(QWidget):
                 summaries = []
                 total_count = 0
 
-        else:
-            # Tabs are partitioned by claimType (the field the detail badge
-            # shows), not the backend caseStatus. The summaries payload omits
-            # claimType, so _fetch_all_claim_summaries enriches it from
-            # /v1/Claims. Imported-package claims set claimType, relationType
-            # and caseStatus independently and they can contradict each other,
-            # so only claimType matches the detail. Fetch every claim and
-            # partition locally so the tab and card badge match the detail.
-            try:
-                all_summaries = self._fetch_all_claim_summaries(api)
-                want_ownership = (case_status == CASE_STATUS_CLOSED)
-                bucket = [
-                    s for s in all_summaries
-                    if _claim_is_ownership(s) == want_ownership
-                ]
-                total_count = len(bucket)
-                start = (self._current_page - 1) * self._page_size
-                summaries = bucket[start:start + self._page_size]
-            except Exception as e:
-                logger.warning(f"Claims fetch/partition failed: {e}")
-                summaries = []
-                total_count = 0
-
         return {
             "summaries": summaries,
             "case_status": case_status,
             "total_count": total_count,
         }
-
-    def _fetch_all_claim_summaries(self, api) -> List[Dict]:
-        """Fetch every claim summary across both case statuses (paged).
-
-        Tabs are partitioned client-side by claim type, so the full set is
-        needed regardless of the backend caseStatus value. Mirrors the paged
-        fetch-all loop used by the import packages page, with a hard cap and a
-        dedupe guard against backends that ignore pagination.
-        """
-        FETCH_PAGE_SIZE = 100
-        MAX_TOTAL = 1000
-        items: List[Dict] = []
-        seen = set()
-        page = 1
-        while len(items) < MAX_TOTAL:
-            raw = api._request("GET", "/v2/claims/summaries", params={
-                "page": page,
-                "pageSize": FETCH_PAGE_SIZE,
-            })
-            if isinstance(raw, dict):
-                page_items = raw.get("items", [])
-                total = raw.get("totalCount")
-            elif isinstance(raw, list):
-                page_items = raw
-                total = None
-            else:
-                break
-            if not page_items:
-                break
-            added = 0
-            for s in page_items:
-                key = s.get("claimId") or s.get("id") or s.get("claimNumber")
-                if key is not None and key in seen:
-                    continue
-                if key is not None:
-                    seen.add(key)
-                items.append(s)
-                added += 1
-            # Backend replayed only already-seen rows (e.g. it ignores
-            # pagination and returns page 1 again) — stop to avoid a loop.
-            if added == 0:
-                break
-            if total is not None and len(items) >= total:
-                break
-            if len(page_items) < FETCH_PAGE_SIZE:
-                break
-            page += 1
-        if len(items) >= MAX_TOTAL:
-            logger.warning(
-                "Claim summaries reached cap (%s); some claims may be omitted "
-                "from local tab partitioning", MAX_TOTAL,
-            )
-
-        # The summaries omit claimType (the field the detail badge shows), so
-        # enrich each one from /v1/Claims (joined by id). relationType in the
-        # summary is written independently by the import pipeline and can
-        # contradict claimType, so it is only a fallback.
-        if not self._claimtype_enrich_unavailable:
-            try:
-                type_map = self._fetch_claim_types_map(api)
-                if type_map:
-                    for s in items:
-                        key = s.get("claimId") or s.get("id")
-                        ct = type_map.get(key)
-                        if ct is not None:
-                            s["claimType"] = ct
-            except Exception as e:
-                # /v1/Claims has a server-side duplicate-key bug (see
-                # docs/BACKEND_TEAM_ISSUES.md BE-002); a 400 will not clear
-                # without a backend fix, so stop retrying it this session.
-                # Transient (network) errors do not disable enrichment.
-                if getattr(e, "status_code", None) == 400:
-                    self._claimtype_enrich_unavailable = True
-                logger.warning(
-                    "claimType enrichment failed (%s); falling back to "
-                    "relationType/caseStatus", e,
-                )
-
-        return items
-
-    def _fetch_claim_types_map(self, api) -> Dict:
-        """Build {claimId: claimType} from /v1/Claims (paged).
-
-        Full claim DTOs carry `claimType`, which /v2/claims/summaries omits.
-        Same paged loop + dedupe guard as the summaries fetch.
-        """
-        FETCH_PAGE_SIZE = 100
-        MAX_TOTAL = 1000
-        out: Dict = {}
-        page = 1
-        while len(out) < MAX_TOTAL:
-            raw = api._request("GET", "/v1/Claims", params={
-                "page": page,
-                "pageSize": FETCH_PAGE_SIZE,
-            })
-            if isinstance(raw, dict):
-                claims = raw.get("items") or raw.get("data") or []
-            elif isinstance(raw, list):
-                claims = raw
-            else:
-                break
-            if not claims:
-                break
-            added = 0
-            for c in claims:
-                cid = c.get("id") or c.get("claimId")
-                if not cid or cid in out:
-                    continue
-                out[cid] = c.get("claimType")
-                added += 1
-            if added == 0:
-                break
-            if len(claims) < FETCH_PAGE_SIZE:
-                break
-            page += 1
-        return out
 
     def _on_claims_loaded(self, result):
         try:
@@ -1176,7 +1034,7 @@ class CompletedClaimsPage(QWidget):
         direction = get_layout_direction()
         self.setLayoutDirection(direction)
 
-        self._header.get_title_label().setText(tr("page.claims.subtitle"))
+        self._header.get_title_label().setText(tr("page.claims.linked_title"))
         self._search.setPlaceholderText(tr("page.claims.search_reference_code"))
 
         self._search_bar.update_language()
@@ -1204,3 +1062,8 @@ class CompletedClaimsPage(QWidget):
     def hideEvent(self, event):
         super().hideEvent(event)
         self._shimmer_timer.stop()
+        # A card click shows the spinner and locks navigation before the page
+        # is left; release both so the page is usable when we come back.
+        if self._navigating:
+            self._navigating = False
+            self._spinner.hide_loading()

@@ -470,8 +470,7 @@ class Navbar(QFrame):
         tabs_wrapper_layout.setSpacing(4)
 
         self._tab_keys = [
-            "navbar.tab.completed_claims",
-            "navbar.tab.cases",
+            "navbar.tab.claims_management",
             "navbar.tab.case_management",
             "navbar.tab.import",
             "navbar.tab.field_assignment",
@@ -808,16 +807,16 @@ class Navbar(QFrame):
     # -- Role-based Visibility --
 
     TAB_PERMISSIONS = {
-        "admin":            [0, 1, 2, 3,4],
-        "data_manager":     [0, 1, 2, 3,4],
-        "office_clerk":     [1],
-        "field_supervisor": [4],
+        "admin":            [0, 1, 2, 3],
+        "data_manager":     [0, 1, 2, 3],
+        "office_clerk":     [0],
+        "field_supervisor": [3],
         "field_researcher": [],
         "analyst":          [],
     }
 
     def configure_for_role(self, role: str):
-        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2, 3])
+        allowed = self.TAB_PERMISSIONS.get(role, [0, 1, 2])
         for i, btn in enumerate(self.tab_buttons):
             btn.setVisible(i in allowed)
 
