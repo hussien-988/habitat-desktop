@@ -34,6 +34,16 @@ logger = get_logger(__name__)
 _FINALIZED_STATUSES = ("3", "finalized")
 
 
+def claim_row(claim: Dict, claimant: str = "") -> ClaimRow:
+    """Printed row of an API claim; `claimant` is used when the claim has no name."""
+    return ClaimRow(
+        number=claim.get("claimNumber") or "",
+        claimant=claim.get("primaryClaimantName") or claimant,
+        claim_type=get_claim_type_display(claim["claimType"]) if claim.get("claimType") else "",
+        status=get_claim_status_display(claim["status"]) if claim.get("status") else "",
+    )
+
+
 def _person_name(person: Dict, suffix: str = "") -> str:
     """Full name from first/father/last name keys (applicant keys end in "_ar")."""
     name = " ".join(filter(None, [
@@ -211,13 +221,7 @@ class ApplicationPrintController(BaseController):
                     claim = {**claim, **(api.get_claim_by_id(claim["id"]) or {})}
                 except Exception as e:
                     logger.warning(f"Print: claim {claim.get('id')} unavailable: {e}")
-            claimant_id = claim.get("primaryClaimantId")
-            rows.append(ClaimRow(
-                number=claim.get("claimNumber") or "",
-                claimant=claim.get("primaryClaimantName") or names.get(claimant_id, ""),
-                claim_type=get_claim_type_display(claim["claimType"]) if claim.get("claimType") else "",
-                status=get_claim_status_display(claim["status"]) if claim.get("status") else "",
-            ))
+            rows.append(claim_row(claim, names.get(claim.get("primaryClaimantId"), "")))
         return rows
 
     # -- Attachments --

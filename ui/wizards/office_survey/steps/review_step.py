@@ -2217,7 +2217,7 @@ class ReviewStep(BaseStep):
         self._populate_review()
 
     def _on_print_draft(self):
-        from ui.components.print_application_dialog import open_print_dialog
+        from ui.components.print_dialog import open_print_dialog
         open_print_dialog(self.context, self)
 
     def get_step_title(self) -> str:

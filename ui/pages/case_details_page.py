@@ -1513,7 +1513,7 @@ class CaseDetailsPage(QWidget):
         self.view_linked_claims_requested.emit(reference_code, str(survey_id or ""))
 
     def _on_print_clicked(self):
-        from ui.components.print_application_dialog import open_print_dialog
+        from ui.components.print_dialog import open_print_dialog
         open_print_dialog(self._context, self)
 
     def _on_revert_to_draft_clicked(self):
