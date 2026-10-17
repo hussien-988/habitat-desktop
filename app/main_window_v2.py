@@ -577,6 +577,8 @@ class MainWindow(QMainWindow):
         self.pages[Pages.CLAIMS].back_to_survey_requested.connect(
             self._on_claims_back_to_survey
         )
+        # Claims page - view claim details
+        self.pages[Pages.CLAIMS].claim_selected.connect(self._on_completed_claim_selected)
 
         # Claim Details page signals
         self.pages[Pages.CLAIM_DETAILS].back_requested.connect(

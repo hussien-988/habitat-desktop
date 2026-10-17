@@ -1204,3 +1204,8 @@ class CompletedClaimsPage(QWidget):
     def hideEvent(self, event):
         super().hideEvent(event)
         self._shimmer_timer.stop()
+        # A card click shows the spinner and locks navigation before the page
+        # is left; release both so the page is usable when we come back.
+        if self._navigating:
+            self._navigating = False
+            self._spinner.hide_loading()
