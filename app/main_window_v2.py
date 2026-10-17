@@ -515,9 +515,6 @@ class MainWindow(QMainWindow):
         )
 
         # Case Entity Details - view claim (contextual navigation)
-        self.pages[Pages.CASE_ENTITY_DETAILS].claim_clicked.connect(
-            self._on_case_entity_claim_clicked
-        )
 
         # Case Entity Details - toggle editable
         self.pages[Pages.CASE_ENTITY_DETAILS].toggle_editable_requested.connect(
@@ -2320,15 +2317,6 @@ class MainWindow(QMainWindow):
             self._back_to_case_entity = True
             self._case_entity_case_id = ce_page._case.id
         self._fetch_survey_for_case(survey_id)
-
-    def _on_case_entity_claim_clicked(self, claim_id: str):
-        """Navigate to claim details from case entity details (contextual)."""
-        ce_page = self.pages.get(Pages.CASE_ENTITY_DETAILS)
-        if ce_page and ce_page._case:
-            self._back_to_case_entity = True
-            self._case_entity_case_id = ce_page._case.id
-        self._claim_from_linked = False
-        self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
 
     def _on_toggle_case_editable(self, case_id: str, is_editable: bool):
         """Toggle the editable flag on a case via API."""

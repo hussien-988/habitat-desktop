@@ -237,7 +237,7 @@ class _CaseCard(QFrame):
 
         content.addSpacing(4)
 
-        # Row 3: chips (survey count, claim count)
+        # Row 3: chip (registered surveys count)
         chips_row = QHBoxLayout()
         chips_row.setSpacing(6)
 
@@ -254,14 +254,6 @@ class _CaseCard(QFrame):
             bg="#EBF5FF", fg="#0369A1", border="#BAE6FD"
         ))
         chips_row.addWidget(survey_chip)
-
-        # Claim count chip (purple)
-        claim_chip = QLabel(tr("page.case_mgmt.chip_claims", count=self._case.claim_count))
-        claim_chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
-        claim_chip.setStyleSheet(chip_style_tpl.format(
-            bg="#F3E8FF", fg="#7C3AED", border="#DDD6FE"
-        ))
-        chips_row.addWidget(claim_chip)
 
         chips_row.addStretch()
 
