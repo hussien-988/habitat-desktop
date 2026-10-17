@@ -33,6 +33,7 @@ from ui.font_utils import create_font, FontManager
 from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.nav_style_tab import NavStyleTab
+from ui.components.capsule_switch import CapsuleSwitch
 from ui.components.accent_line import AccentLine
 from ui.components.dark_header_zone import DarkHeaderZone
 from app.config import Pages
@@ -528,27 +529,18 @@ class CasesPage(QWidget):
         self._add_btn.clicked.connect(self.add_claim_clicked.emit)
         self._header.add_action_widget(self._add_btn)
 
-        # Tabs (row 2): survey type, separator, then status
+        # Survey type capsules (row 1, next to the title); each type has the
+        # status tabs below
+        self._type_switch = CapsuleSwitch([
+            (_SURVEY_TYPE_FIELD, tr("page.cases.type_field")),
+            (_SURVEY_TYPE_OFFICE, tr("page.cases.type_office")),
+        ])
+        self._type_switch.set_current(self._survey_type)
+        self._type_switch.clicked.connect(self._on_type_tab)
+        self._header.add_row1_widget(self._type_switch)
+
+        # Status tabs (row 2)
         tab_font = create_font(size=12, weight=QFont.DemiBold)
-
-        self._tab_type_field = NavStyleTab(tr("page.cases.type_field"))
-        self._tab_type_field.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
-        self._tab_type_field.set_font(tab_font)
-        self._tab_type_field.set_active(True)
-        self._tab_type_field.clicked.connect(lambda: self._on_type_tab(_SURVEY_TYPE_FIELD))
-        self._header.add_tab(self._tab_type_field)
-
-        self._tab_type_office = NavStyleTab(tr("page.cases.type_office"))
-        self._tab_type_office.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
-        self._tab_type_office.set_font(tab_font)
-        self._tab_type_office.set_active(False)
-        self._tab_type_office.clicked.connect(lambda: self._on_type_tab(_SURVEY_TYPE_OFFICE))
-        self._header.add_tab(self._tab_type_office)
-
-        self._type_sep = QFrame()
-        self._type_sep.setFixedSize(1, ScreenScale.h(24))
-        self._type_sep.setStyleSheet("background: rgba(255, 255, 255, 0.25); border: none;")
-        self._header.add_tab(self._type_sep)
 
         self._tab_draft = NavStyleTab(tr("page.cases.tab_draft"))
         self._tab_draft.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
@@ -574,7 +566,7 @@ class CasesPage(QWidget):
 
         # Search context bar (shown when search is active, hidden initially)
         self._search_bar = SearchContextBar(
-            tabs=[self._tab_type_field, self._tab_type_office, self._type_sep,
+            tabs=[self._type_switch,
                   self._tab_draft, self._tab_finalized, self._tab_obstructed]
         )
         self._search_bar.back_clicked.connect(self._exit_search_mode)
@@ -748,25 +740,22 @@ class CasesPage(QWidget):
 
         # Office clerks only work with their own office surveys.
         is_clerk = role == "office_clerk"
-        self._tab_type_field.setVisible(not is_clerk)
-        self._tab_type_office.setVisible(True)
-        self._type_sep.setVisible(not is_clerk)
+        self._type_switch.setVisible(not is_clerk)
         self._current_page = 1
         self._apply_type(_SURVEY_TYPE_OFFICE if is_clerk else _SURVEY_TYPE_FIELD)
 
     # -- Tab & filter handlers --
 
     def _apply_type(self, survey_type: int):
-        """Select the field/office tab without reloading."""
+        """Select the field/office capsule without reloading."""
         self._survey_type = survey_type
-        self._tab_type_field.set_active(survey_type == _SURVEY_TYPE_FIELD)
-        self._tab_type_office.set_active(survey_type == _SURVEY_TYPE_OFFICE)
+        self._type_switch.set_current(survey_type)
         # New surveys are always office surveys
         self._add_btn.setVisible(survey_type == _SURVEY_TYPE_OFFICE)
 
     def _on_type_tab(self, survey_type: int):
         if self._loading or survey_type == self._survey_type:
-            return
+            return  # the capsule keeps showing the current type
         self._apply_type(survey_type)
         self._current_page = 1
         self._accent_line.pulse()
@@ -860,8 +849,8 @@ class CasesPage(QWidget):
     # -- Tab labels with counts --
 
     def _update_tab_labels(self):
-        self._tab_type_field.set_text(tr("page.cases.type_field"))
-        self._tab_type_office.set_text(tr("page.cases.type_office"))
+        self._type_switch.set_text(_SURVEY_TYPE_FIELD, tr("page.cases.type_field"))
+        self._type_switch.set_text(_SURVEY_TYPE_OFFICE, tr("page.cases.type_office"))
         self._tab_draft.set_text(tr("page.cases.tab_draft"))
         self._tab_finalized.set_text(tr("page.cases.tab_finalized"))
         self._tab_obstructed.set_text(tr("page.cases.tab_obstructed"))
