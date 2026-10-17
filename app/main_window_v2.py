@@ -419,20 +419,18 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.office_survey_wizard)
 
         # Map tabs to pages
-        # Tab 0: المطالبات المكتملة (Completed Claims)
-        # Tab 1: الادعاءات (Cases/Claims)
-        # Tab 2: إدارة الحالات (Case Management)
-        # Tab 3: الاستيراد (Import)
-        # Tab 4: التكرارات (Duplicates)
-        # Tab 5: تجهيز العمل الميداني (Field Work Preparation)
-        # Tab 6: المباني (Buildings)
+        # Tab 0: إدارة الادعاءات (Claims Management — field & office surveys)
+        # Tab 1: إدارة الوحدات العقارية (Property Units Management)
+        # Tab 2: استيراد المسوح الميدانية (Field Survey Import, incl. duplicates)
+        # Tab 3: إدارة العمل الميداني (Field Work Management)
+        # Sub-pages (survey/claim details, linked claims, duplicates...) are
+        # deliberately unmapped so the tab they were opened from stays active.
         self.tab_page_mapping = {
-            0: Pages.CLAIMS,
-            1: Pages.SURVEYS,
-            2: Pages.CASE_MANAGEMENT,
-            3: Pages.IMPORT_PACKAGES,
-            4: Pages.FIELD_ASSIGNMENT,
-            }
+            0: Pages.SURVEYS,
+            1: Pages.CASE_MANAGEMENT,
+            2: Pages.IMPORT_PACKAGES,
+            3: Pages.FIELD_ASSIGNMENT,
+        }
 
     def _setup_layout(self):
     # لاي اوت خارجي: بدون فراغ شفاف (حسب طلب المستخدم)
@@ -1795,7 +1793,7 @@ class MainWindow(QMainWindow):
         else:
             dup_page.set_return_to_import(True)
             dup_page.refresh()
-        self.navbar.set_current_tab(3)
+        self.navbar.set_current_tab(self._tab_index(Pages.IMPORT_PACKAGES))
         self.stack.setCurrentWidget(dup_page)
 
     def _on_package_status_changed_after_approve(self, package_id: str):
@@ -1879,9 +1877,17 @@ class MainWindow(QMainWindow):
         hidden in the QStackedWidget."""
         self.navigate_to(Pages.SYNC_DATA)
 
+    def _tab_index(self, page_id: str) -> int:
+        """Navbar tab index of a top-level page (avoids hard-coded indices)."""
+        return next(i for i, p in self.tab_page_mapping.items() if p == page_id)
+
     def _on_tab_changed(self, tab_index: int):
         """Handle navbar tab change."""
         if tab_index in self.tab_page_mapping:
+            # Leaving via the navbar ends any case-entity drill-down, so a later
+            # "back" from survey/claim details must not return there.
+            self._back_to_case_entity = False
+            self._case_entity_case_id = None
             page_id = self.tab_page_mapping[tab_index]
             self.navigate_to(page_id)
             logger.debug(f"Tab {tab_index} selected -> navigating to {page_id}")
@@ -2529,15 +2535,17 @@ class MainWindow(QMainWindow):
         """Handle survey completion from wizard — navigate to surveys page."""
         logger.info(f"Survey completed: {data}")
         self.pages[Pages.SURVEYS].refresh()
-        self.navbar.set_current_tab(1)
-        self._on_tab_changed(1)
+        surveys_tab = self._tab_index(Pages.SURVEYS)
+        self.navbar.set_current_tab(surveys_tab)
+        self._on_tab_changed(surveys_tab)
 
 
     def _on_survey_cancelled(self):
         """Handle survey cancellation from wizard."""
         logger.info("Survey cancelled")
-        self.navbar.set_current_tab(1)
-        self._on_tab_changed(1)
+        surveys_tab = self._tab_index(Pages.SURVEYS)
+        self.navbar.set_current_tab(surveys_tab)
+        self._on_tab_changed(surveys_tab)
 
     def _on_cancel_draft_survey(self, survey_id: str, reason: str):
         """Cancel a draft survey via API."""

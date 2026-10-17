@@ -2,7 +2,9 @@
 """
 Surveys Page v2 — Dark navy header with constellation, navbar-style tabs,
 animated shimmer cards, pagination, and cohesive blue palette.
-Displays Draft & Finalized office surveys.
+Backs the "Claims Management" tab: surveys (الادعاءات) split into field and
+office tabs, each filtered by status. Claims (المطالبات) are not listed here;
+they are reached from a survey's details ("view linked claims").
 """
 
 import logging
@@ -42,6 +44,21 @@ from ui.components.toast import Toast
 from ui.components.empty_state import EmptyState
 
 logger = logging.getLogger(__name__)
+
+# Codes of the backend survey_type vocabulary
+_SURVEY_TYPE_FIELD = 1
+_SURVEY_TYPE_OFFICE = 2
+
+
+def _survey_type_code(value) -> Optional[int]:
+    """Normalize an API surveyType (int code or enum name) to its int code."""
+    text = str(value).strip().lower()
+    if text in ("1", "field"):
+        return _SURVEY_TYPE_FIELD
+    if text in ("2", "office"):
+        return _SURVEY_TYPE_OFFICE
+    return None
+
 
 _STATUS_STYLES = {
     "draft":      {"bg": "#FFF7ED", "fg": "#C2410C", "border": "#FDBA74", "glow": "rgba(194, 65, 12, 0.12)"},
@@ -462,6 +479,7 @@ class CasesPage(QWidget):
         self.i18n = i18n
         self._all_data: List[Dict] = []
         self._active_tab = "draft"
+        self._survey_type = _SURVEY_TYPE_FIELD
         self._buildings_cache: Dict[str, object] = {}
         self._last_refresh_ms = 0
         self._card_widgets: List[_SurveyCard] = []
@@ -510,8 +528,27 @@ class CasesPage(QWidget):
         self._add_btn.clicked.connect(self.add_claim_clicked.emit)
         self._header.add_action_widget(self._add_btn)
 
-        # Tabs (row 2)
+        # Tabs (row 2): survey type, separator, then status
         tab_font = create_font(size=12, weight=QFont.DemiBold)
+
+        self._tab_type_field = NavStyleTab(tr("page.cases.type_field"))
+        self._tab_type_field.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
+        self._tab_type_field.set_font(tab_font)
+        self._tab_type_field.set_active(True)
+        self._tab_type_field.clicked.connect(lambda: self._on_type_tab(_SURVEY_TYPE_FIELD))
+        self._header.add_tab(self._tab_type_field)
+
+        self._tab_type_office = NavStyleTab(tr("page.cases.type_office"))
+        self._tab_type_office.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
+        self._tab_type_office.set_font(tab_font)
+        self._tab_type_office.set_active(False)
+        self._tab_type_office.clicked.connect(lambda: self._on_type_tab(_SURVEY_TYPE_OFFICE))
+        self._header.add_tab(self._tab_type_office)
+
+        self._type_sep = QFrame()
+        self._type_sep.setFixedSize(1, ScreenScale.h(24))
+        self._type_sep.setStyleSheet("background: rgba(255, 255, 255, 0.25); border: none;")
+        self._header.add_tab(self._type_sep)
 
         self._tab_draft = NavStyleTab(tr("page.cases.tab_draft"))
         self._tab_draft.setFixedSize(ScreenScale.w(130), ScreenScale.h(38))
@@ -537,7 +574,8 @@ class CasesPage(QWidget):
 
         # Search context bar (shown when search is active, hidden initially)
         self._search_bar = SearchContextBar(
-            tabs=[self._tab_draft, self._tab_finalized, self._tab_obstructed]
+            tabs=[self._tab_type_field, self._tab_type_office, self._type_sep,
+                  self._tab_draft, self._tab_finalized, self._tab_obstructed]
         )
         self._search_bar.back_clicked.connect(self._exit_search_mode)
         self._search_bar.hide()
@@ -667,6 +705,15 @@ class CasesPage(QWidget):
         self._buildings_cache = {}
         self._clear_cards()
 
+        # Drop a search left over from the previous session without reloading,
+        # so the search bar can't restore the previous user's tab visibility.
+        if self._search_mode:
+            self._search_mode = False
+            self._search_bar.exit_search_mode()
+            self._search.blockSignals(True)
+            self._search.clear()
+            self._search.blockSignals(False)
+
         if role in ("admin", "data_manager"):
             self._tab_draft.setVisible(True)
             self._tab_finalized.setVisible(True)
@@ -675,7 +722,6 @@ class CasesPage(QWidget):
             self._tab_draft.set_active(True)
             self._tab_finalized.set_active(False)
             self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
         elif role == "field_supervisor":
             self._tab_draft.setVisible(True)
             self._tab_finalized.setVisible(True)
@@ -684,7 +730,6 @@ class CasesPage(QWidget):
             self._tab_draft.set_active(True)
             self._tab_finalized.set_active(False)
             self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
         elif role == "office_clerk":
             self._tab_draft.setVisible(True)
             self._tab_finalized.setVisible(True)
@@ -693,7 +738,6 @@ class CasesPage(QWidget):
             self._tab_draft.set_active(True)
             self._tab_finalized.set_active(False)
             self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
         else:
             self._tab_draft.setVisible(True)
             self._tab_finalized.setVisible(True)
@@ -701,9 +745,32 @@ class CasesPage(QWidget):
             self._tab_draft.set_active(True)
             self._tab_finalized.set_active(False)
             self._tab_obstructed.set_active(False)
-            self._add_btn.setVisible(True)
+
+        # Office clerks only work with their own office surveys.
+        is_clerk = role == "office_clerk"
+        self._tab_type_field.setVisible(not is_clerk)
+        self._tab_type_office.setVisible(True)
+        self._type_sep.setVisible(not is_clerk)
+        self._current_page = 1
+        self._apply_type(_SURVEY_TYPE_OFFICE if is_clerk else _SURVEY_TYPE_FIELD)
 
     # -- Tab & filter handlers --
+
+    def _apply_type(self, survey_type: int):
+        """Select the field/office tab without reloading."""
+        self._survey_type = survey_type
+        self._tab_type_field.set_active(survey_type == _SURVEY_TYPE_FIELD)
+        self._tab_type_office.set_active(survey_type == _SURVEY_TYPE_OFFICE)
+        # New surveys are always office surveys
+        self._add_btn.setVisible(survey_type == _SURVEY_TYPE_OFFICE)
+
+    def _on_type_tab(self, survey_type: int):
+        if self._loading or survey_type == self._survey_type:
+            return
+        self._apply_type(survey_type)
+        self._current_page = 1
+        self._accent_line.pulse()
+        self._load_surveys()
 
     def set_active_tab(self, which: str):
         """Programmatically switch active tab (draft|finalized|obstructed) and reload."""
@@ -793,6 +860,8 @@ class CasesPage(QWidget):
     # -- Tab labels with counts --
 
     def _update_tab_labels(self):
+        self._tab_type_field.set_text(tr("page.cases.type_field"))
+        self._tab_type_office.set_text(tr("page.cases.type_office"))
         self._tab_draft.set_text(tr("page.cases.tab_draft"))
         self._tab_finalized.set_text(tr("page.cases.tab_finalized"))
         self._tab_obstructed.set_text(tr("page.cases.tab_obstructed"))
@@ -823,13 +892,13 @@ class CasesPage(QWidget):
         clerk_id = self._user_id if self._user_role == "office_clerk" else None
 
         self._worker = ApiWorker(
-            self._fetch_surveys_data, status, name, clerk_id
+            self._fetch_surveys_data, status, name, clerk_id, self._survey_type
         )
         self._worker.finished.connect(self._on_surveys_loaded)
         self._worker.error.connect(self._on_surveys_load_error)
         self._worker.start()
 
-    def _fetch_surveys_data(self, status, name, clerk_id):
+    def _fetch_surveys_data(self, status, name, clerk_id, survey_type):
         from services.api_client import get_api_client
 
         api = get_api_client()
@@ -845,9 +914,11 @@ class CasesPage(QWidget):
             }
             if name:
                 params["referenceCode"] = name
-                # No status filter — search across all statuses
+                # No status or type filter — search across field and office
+                # surveys in every status
             else:
                 params["status"] = status
+                params["surveyType"] = survey_type
             if clerk_id:
                 params["clerkId"] = clerk_id
 
@@ -901,6 +972,17 @@ class CasesPage(QWidget):
                                 contact_names[sid] = full
                     except Exception as e:
                         logger.warning(f"Failed to fetch contact person for survey {sid}: {e}")
+
+        if not name:
+            mismatched = [
+                s for s in surveys
+                if _survey_type_code(s.get("surveyType")) not in (None, survey_type)
+            ]
+            if mismatched:
+                logger.warning(
+                    f"/v1/Surveys/office ignored surveyType={survey_type}: "
+                    f"{len(mismatched)} of {len(surveys)} surveys have another type"
+                )
 
         return {
             "surveys": surveys,
@@ -1072,6 +1154,12 @@ class CasesPage(QWidget):
     def _on_card_clicked(self, claim_id: str):
         if self._navigating or not claim_id:
             return
+        # Follow the opened survey's type (it may come from a mixed search),
+        # so returning after resume/finalize/revert lands on its tab.
+        item = next((c for c in self._all_data if c.get("claim_id") == claim_id), None)
+        survey_type = _survey_type_code(item.get("survey_type")) if item else None
+        if survey_type and self._user_role != "office_clerk":
+            self._apply_type(survey_type)
         self._navigating = True
         self._spinner.show_loading(tr("page.cases.loading"))
         self.claim_selected.emit(claim_id)
