@@ -139,8 +139,10 @@ class MainWindow(QMainWindow):
         # Contextual back navigation (case entity details → survey/claim details → back)
         self._back_to_case_entity = False
         self._case_entity_case_id = None
+        # Claim details opened from a survey's linked claims (back returns there)
+        self._claim_from_linked = False
 
-        
+
 
         self._idle_session_monitor = IdleSessionMonitor(
             self,
@@ -1884,10 +1886,6 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, tab_index: int):
         """Handle navbar tab change."""
         if tab_index in self.tab_page_mapping:
-            # Leaving via the navbar ends any case-entity drill-down, so a later
-            # "back" from survey/claim details must not return there.
-            self._back_to_case_entity = False
-            self._case_entity_case_id = None
             page_id = self.tab_page_mapping[tab_index]
             self.navigate_to(page_id)
             logger.debug(f"Tab {tab_index} selected -> navigating to {page_id}")
@@ -2024,6 +2022,11 @@ class MainWindow(QMainWindow):
         page_to_tab = {v: k for k, v in self.tab_page_mapping.items()}
         if page_id in page_to_tab:
             self.navbar.set_current_tab(page_to_tab[page_id])
+            # Reaching a top-level page ends any drill-down, so a later "back"
+            # from survey/claim details must not return to a stale origin.
+            self._back_to_case_entity = False
+            self._case_entity_case_id = None
+            self._claim_from_linked = False
 
         # Refresh page data if method exists
         # Show page first, then refresh after fade-in completes
@@ -2123,11 +2126,13 @@ class MainWindow(QMainWindow):
 
         if not claim_data:
             logger.warning(f"Survey data not found for: {claim_id}")
+            claims_page.release_navigation()
             return
 
         survey_uuid = claim_data.get('claim_uuid')
         if not survey_uuid:
             logger.warning(f"Could not load survey details for: {claim_id}")
+            claims_page.release_navigation()
             return
 
         self._show_login_loading_msg(tr("component.loading.default"))
@@ -2153,12 +2158,14 @@ class MainWindow(QMainWindow):
         if result and result.success and result.data:
             self.navigate_to(Pages.SURVEY_DETAILS, result.data)
         else:
+            self.pages[Pages.SURVEYS].release_navigation()
             from ui.components.toast import Toast
             msg = getattr(result, 'message', '') if result else ''
             Toast.show_toast(self, msg or "فشل تحميل بيانات المسح", Toast.ERROR)
 
     def _on_draft_claim_fetch_error(self, error_msg, claim_id):
         self._hide_login_loading()
+        self.pages[Pages.SURVEYS].release_navigation()
         logger.warning(f"Survey context fetch failed for {claim_id}: {error_msg}")
 
     def _on_resume_draft_survey(self, survey_uuid: str):
@@ -2292,8 +2299,13 @@ class MainWindow(QMainWindow):
 
     def _on_claim_details_back(self):
         """Navigate back from ClaimDetailsPage.
-        If navigated from case entity details, return there; otherwise go to claims list."""
-        if self._back_to_case_entity and self._case_entity_case_id:
+        Return to the survey's linked claims when opened from there, else to
+        case entity details when opened from there."""
+        if self._claim_from_linked:
+            # Keep the case-entity context: the linked claims lead back to the
+            # survey, whose own back still returns to the case entity.
+            self.navigate_to(Pages.CLAIMS)
+        elif self._back_to_case_entity and self._case_entity_case_id:
             case_id = self._case_entity_case_id
             self._back_to_case_entity = False
             self._case_entity_case_id = None
@@ -2315,6 +2327,7 @@ class MainWindow(QMainWindow):
         if ce_page and ce_page._case:
             self._back_to_case_entity = True
             self._case_entity_case_id = ce_page._case.id
+        self._claim_from_linked = False
         self.navigate_to(Pages.CLAIM_DETAILS, {"claim_id": claim_id})
 
     def _on_toggle_case_editable(self, case_id: str, is_editable: bool):
@@ -2406,6 +2419,7 @@ class MainWindow(QMainWindow):
     def _on_completed_claim_selected(self, claim_id: str, highlight_ref: str = ""):
         """Navigate to claim details page."""
         logger.info(f"Claim selected: {claim_id}")
+        self._claim_from_linked = True
         self.navigate_to(
             Pages.CLAIM_DETAILS,
             {"claim_id": claim_id, "highlight_ref": highlight_ref},

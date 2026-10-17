@@ -1164,6 +1164,12 @@ class CasesPage(QWidget):
         self._spinner.show_loading(tr("page.cases.loading"))
         self.claim_selected.emit(claim_id)
 
+    def release_navigation(self):
+        """Undo a card click's navigation lock and spinner (on leave or failure)."""
+        if self._navigating:
+            self._navigating = False
+            self._spinner.hide_loading()
+
     # -- Public interface (backward compatibility) --
 
     def search_claims(self, query: str, mode: str = "name"):
@@ -1199,3 +1205,4 @@ class CasesPage(QWidget):
     def hideEvent(self, event):
         super().hideEvent(event)
         self._shimmer_timer.stop()
+        self.release_navigation()
