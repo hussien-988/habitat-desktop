@@ -2,10 +2,11 @@
 """
 Paint a claim application onto a QPrinter (print preview, printer or PDF).
 
-The form is laid out by QTextDocument at 96 dpi and painted page by page with
-the painter scaled to the printer resolution (the same approach as
-QTextDocument.print), followed by one page per attachment. Every page gets a
-"page X of N" footer and, for drafts, a diagonal draft watermark.
+The form is laid out by QTextDocument at 96 dpi with design metrics (exact,
+unhinted glyph advances) and painted page by page with the painter scaled to
+the printer resolution, as QTextDocument.print does. Captions, the footer and
+the draft watermark are painted in printer coordinates with point-size fonts.
+Every page gets a "page X of N" footer and, for drafts, a diagonal watermark.
 """
 
 import io
@@ -15,7 +16,7 @@ from typing import List, Optional
 from PyQt5.QtCore import QRectF, QSizeF, Qt, QUrl
 from PyQt5.QtGui import (
     QColor, QFont, QFontDatabase, QImage, QImageReader, QPageLayout, QPageSize,
-    QPainter, QTextDocument, QTextOption,
+    QPainter, QTextCursor, QTextDocument, QTextOption,
 )
 from PyQt5.QtPrintSupport import QPrinter
 
@@ -28,6 +29,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _LAYOUT_DPI = 96
+# Heights in 96-dpi layout units, scaled to the printer resolution when drawn
 _FOOTER_HEIGHT = 22
 _CAPTION_HEIGHT = 34
 _PDF_RENDER_DPI = 150
@@ -79,37 +81,39 @@ def render_application(printer: QPrinter, model: ApplicationPrintModel,
     if not painter.begin(printer):
         raise RuntimeError("Could not start printing")
     try:
+        direction = Qt.RightToLeft if model.rtl else Qt.LeftToRight
+        painter.setLayoutDirection(direction)
         scale = printer.logicalDpiX() / _LAYOUT_DPI
-        painter.scale(scale, scale)
-        page_w = printer.width() / scale
-        page_h = printer.height() / scale
-        body_h = page_h - _FOOTER_HEIGHT
+        page = QRectF(0, 0, printer.width(), printer.height())
+        body = QRectF(0, 0, page.width(), page.height() - _FOOTER_HEIGHT * scale)
 
-        doc = _build_document(model, include_attachments, QSizeF(page_w, body_h))
+        # The text document works in 96-dpi layout units
+        doc_w, doc_h = body.width() / scale, body.height() / scale
+        doc = _build_document(model, include_attachments, QSizeF(doc_w, doc_h), direction)
         form_pages = doc.pageCount()
         total = form_pages + len(attachment_pages)
-        align = Qt.AlignRight if model.rtl else Qt.AlignLeft
 
         for index in range(total):
             if index:
                 printer.newPage()
             if index < form_pages:
                 painter.save()
-                painter.translate(0, -index * body_h)
-                doc.drawContents(painter, QRectF(0, index * body_h, page_w, body_h))
+                painter.scale(scale, scale)
+                painter.translate(0, -index * doc_h)
+                doc.drawContents(painter, QRectF(0, index * doc_h, doc_w, doc_h))
                 painter.restore()
             else:
-                _draw_attachment(painter, attachment_pages[index - form_pages],
-                                 QRectF(0, 0, page_w, body_h), align)
+                _draw_attachment(painter, attachment_pages[index - form_pages], body, scale, model.rtl)
             if model.is_draft:
-                _draw_watermark(painter, page_w, page_h)
-            _draw_footer(painter, QRectF(0, body_h, page_w, _FOOTER_HEIGHT), index + 1, total)
+                _draw_watermark(painter, page)
+            _draw_footer(painter, QRectF(0, body.bottom(), page.width(), page.height() - body.height()),
+                         index + 1, total)
     finally:
         painter.end()
 
 
 def _build_document(model: ApplicationPrintModel, include_attachments: bool,
-                    page_size: QSizeF) -> QTextDocument:
+                    page_size: QSizeF, direction) -> QTextDocument:
     doc = QTextDocument()
     # Lay out at a fixed 96 dpi whatever the screen is; the painter scales.
     reference = QImage(1, 1, QImage.Format_RGB32)
@@ -118,10 +122,13 @@ def _build_document(model: ApplicationPrintModel, include_attachments: bool,
     reference.setDotsPerMeterY(dots_per_meter)
     doc.documentLayout().setPaintDevice(reference)
     doc._layout_device = reference  # the layout keeps only a raw pointer
+    # Unhinted advances: hinted ones are rounded to whole 96-dpi pixels and
+    # drift once scaled, which opens gaps between joined Arabic letters.
+    doc.setUseDesignMetrics(True)
 
     doc.setDefaultFont(QFont(_print_font_family(), 9))
     option = QTextOption()
-    option.setTextDirection(Qt.RightToLeft if model.rtl else Qt.LeftToRight)
+    option.setTextDirection(direction)
     doc.setDefaultTextOption(option)
 
     logo = QImage(str(Config.IMAGES_DIR / "un-logo.jpg"))
@@ -129,22 +136,39 @@ def _build_document(model: ApplicationPrintModel, include_attachments: bool,
         doc.addResource(QTextDocument.ImageResource, QUrl(LOGO_RESOURCE), logo)
 
     doc.setHtml(build_application_html(model, include_attachments))
+    _apply_direction(doc, direction)
     doc.setPageSize(page_size)
     return doc
 
 
-def _draw_attachment(painter: QPainter, page: AttachmentPage, rect: QRectF, align) -> None:
-    painter.save()
-    painter.setFont(_painter_font(10, QFont.Bold))
-    painter.setPen(QColor(TITLE_COLOR))
-    caption_rect = QRectF(rect.left(), rect.top(), rect.width(), _CAPTION_HEIGHT)
-    painter.drawText(caption_rect, align | Qt.AlignVCenter | Qt.TextWordWrap, page.caption)
+def _apply_direction(doc: QTextDocument, direction) -> None:
+    """Set the direction of every paragraph, including those in table cells
+    (QTextDocument applies the HTML `dir` attribute only partially): text is
+    then aligned to the right in RTL and mixed Arabic/Latin text ordered right."""
+    block = doc.begin()
+    while block.isValid():
+        block_format = block.blockFormat()
+        block_format.setLayoutDirection(direction)
+        QTextCursor(block).setBlockFormat(block_format)
+        block = block.next()
 
-    area = QRectF(rect.left(), rect.top() + _CAPTION_HEIGHT + 6,
-                  rect.width(), rect.height() - _CAPTION_HEIGHT - 6)
+
+def _draw_attachment(painter: QPainter, page: AttachmentPage, rect: QRectF,
+                     scale: float, rtl: bool) -> None:
+    painter.save()
+    caption_h = _CAPTION_HEIGHT * scale
+    align = (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignAbsolute
+    painter.setFont(_font(10, QFont.Bold))
+    painter.setPen(QColor(TITLE_COLOR))
+    painter.drawText(QRectF(rect.left(), rect.top(), rect.width(), caption_h),
+                     align | Qt.AlignVCenter | Qt.TextWordWrap, page.caption)
+
+    gap = 6 * scale
+    area = QRectF(rect.left(), rect.top() + caption_h + gap,
+                  rect.width(), rect.height() - caption_h - gap)
     image = _load_image(page)
     if image is None or image.isNull():
-        painter.setFont(_painter_font(11))
+        painter.setFont(_font(11))
         painter.setPen(QColor("#374151"))
         painter.drawText(area, Qt.AlignCenter | Qt.TextWordWrap,
                          page.note or tr("print.attachment_not_printable"))
@@ -158,30 +182,29 @@ def _draw_attachment(painter: QPainter, page: AttachmentPage, rect: QRectF, alig
     painter.restore()
 
 
-def _draw_watermark(painter: QPainter, page_w: float, page_h: float) -> None:
+def _draw_watermark(painter: QPainter, page: QRectF) -> None:
     painter.save()
-    painter.translate(page_w / 2, page_h / 2)
+    painter.translate(page.center())
     painter.rotate(-35)
-    painter.setFont(_painter_font(44, QFont.Bold))
+    painter.setFont(_font(44, QFont.Bold))
     painter.setPen(QColor(185, 28, 28, 45))
-    painter.drawText(QRectF(-page_w, -60, page_w * 2, 120), Qt.AlignCenter, tr("print.draft_marker"))
+    painter.drawText(QRectF(-page.width(), -page.height() / 8, page.width() * 2, page.height() / 4),
+                     Qt.AlignCenter, tr("print.draft_marker"))
     painter.restore()
 
 
 def _draw_footer(painter: QPainter, rect: QRectF, page: int, total: int) -> None:
     painter.save()
-    painter.setFont(_painter_font(8))
+    painter.setFont(_font(8))
     painter.setPen(QColor("#6B7280"))
     painter.drawText(rect, Qt.AlignCenter, tr("print.page_x_of_n", x=page, n=total))
     painter.restore()
 
 
-def _painter_font(point_size: float, weight: int = QFont.Normal) -> QFont:
-    """Font for text painted directly: sized in 96-dpi pixels, since the
-    painter is already scaled to the printer resolution."""
-    font = QFont(_print_font_family())
-    font.setPixelSize(round(point_size * _LAYOUT_DPI / 72))
-    font.setWeight(weight)
+def _font(point_size: float, weight: int = QFont.Normal) -> QFont:
+    """Print font for text painted in printer coordinates."""
+    font = QFont(_print_font_family(), -1, weight)
+    font.setPointSizeF(point_size)
     return font
 
 
