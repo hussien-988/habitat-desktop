@@ -272,6 +272,27 @@ class ReviewStep(BaseStep):
         self._accent_line = _AccentLine()
         layout.addWidget(self._accent_line)
 
+        # Print the application as a draft (no reference number before finalize)
+        print_row = QHBoxLayout()
+        print_row.setContentsMargins(ScreenScale.w(16), ScreenScale.h(10), ScreenScale.w(16), 0)
+        print_row.addStretch()
+        self._print_btn = QPushButton(tr("print.button_draft"))
+        self._print_btn.setFixedHeight(ScreenScale.h(36))
+        self._print_btn.setCursor(Qt.PointingHandCursor)
+        self._print_btn.setFont(create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._print_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF; color: #2A6CB5;
+                border: 1.5px solid rgba(56, 144, 223, 0.35);
+                border-radius: 10px; padding: 0 18px;
+            }
+            QPushButton:hover { background-color: #EFF6FF; border-color: rgba(56, 144, 223, 0.55); }
+            QPushButton:pressed { background-color: #DBEAFE; }
+        """)
+        self._print_btn.clicked.connect(self._on_print_draft)
+        print_row.addWidget(self._print_btn)
+        layout.addLayout(print_row)
+
         # Watermark scroll area
         self._scroll = _WatermarkScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -2192,7 +2213,12 @@ class ReviewStep(BaseStep):
             return False
     def on_show(self):
         super().on_show()
+        self._print_btn.setText(tr("print.button_draft"))
         self._populate_review()
+
+    def _on_print_draft(self):
+        from ui.components.print_application_dialog import open_print_dialog
+        open_print_dialog(self.context, self)
 
     def get_step_title(self) -> str:
         return tr("wizard.review.step_title")

@@ -354,6 +354,22 @@ class OfficeSurveyWizard(BaseWizard):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_row.addWidget(ok_btn)
+        if not is_draft:
+            from ui.components.print_application_dialog import open_print_dialog
+            print_btn = QPushButton(tr("print.button"))
+            print_btn.setCursor(Qt.PointingHandCursor)
+            print_btn.setFixedHeight(ScreenScale.h(44))
+            print_btn.setStyleSheet(
+                "QPushButton {"
+                "    background-color: transparent; color: #8CBEF0;"
+                "    border: 1px solid rgba(140, 190, 240, 0.5);"
+                "    border-radius: 10px; font-size: 15px; font-weight: 600;"
+                "    padding: 0 24px;"
+                "}"
+                "QPushButton:hover { background-color: rgba(56, 144, 223, 0.15); }"
+            )
+            print_btn.clicked.connect(lambda: open_print_dialog(self.context, dlg))
+            btn_row.addWidget(print_btn)
         btn_row.addStretch()
         card_layout.addLayout(btn_row)
 

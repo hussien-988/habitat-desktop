@@ -215,6 +215,7 @@ class _CaseDetailsHeader(QWidget):
     resume_obstructed_clicked = pyqtSignal()
     revert_to_draft_clicked = pyqtSignal()
     view_linked_claims_clicked = pyqtSignal()
+    print_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -417,6 +418,34 @@ class _CaseDetailsHeader(QWidget):
         self._linked_claims_btn.clicked.connect(self.view_linked_claims_clicked.emit)
         row1.addWidget(self._linked_claims_btn)
 
+        # Print application button (finalized surveys only)
+        self._print_btn = QPushButton(tr("print.button"))
+        self._print_btn.setFixedSize(ScreenScale.w(150), ScreenScale.h(38))
+        self._print_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self._print_btn.setVisible(False)
+        self._print_btn.setFont(create_font(size=11, weight=QFont.DemiBold))
+        self._print_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #FFFFFF, stop:1 #F0F4FA
+                );
+                border: 1.5px solid rgba(56, 144, 223, 0.35);
+                border-radius: 12px; padding: 0 18px;
+                color: #2A6CB5;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #EFF6FF, stop:1 #DBEAFE
+                );
+                border: 1.5px solid rgba(56, 144, 223, 0.55);
+            }
+            QPushButton:pressed { background: #DBEAFE; }
+        """)
+        self._print_btn.clicked.connect(self.print_clicked.emit)
+        row1.addWidget(self._print_btn)
+
         outer.addLayout(row1)
         outer.addSpacing(8)
 
@@ -434,7 +463,8 @@ class _CaseDetailsHeader(QWidget):
         self._accent_line = _AccentLine()
         outer.addWidget(self._accent_line)
 
-    def set_info(self, ref_number, badges, is_draft, can_resume_obstructed=False, can_revert=False,can_view_linked_claims=False):
+    def set_info(self, ref_number, badges, is_draft, can_resume_obstructed=False, can_revert=False,can_view_linked_claims=False,
+                 can_print=False):
         self._ref_label.setText(ref_number or tr("page.case_details.title"))
         self._ref_label.setLayoutDirection(Qt.LeftToRight)
         self._ref_label.setAlignment(
@@ -448,6 +478,7 @@ class _CaseDetailsHeader(QWidget):
         self._resume_obstructed_btn.setVisible(can_resume_obstructed)
         self._revert_btn.setVisible(can_revert)
         self._linked_claims_btn.setVisible(can_view_linked_claims)
+        self._print_btn.setVisible(can_print)
 
         # Clear old badges
         while self._badges_layout.count():
@@ -474,6 +505,7 @@ class _CaseDetailsHeader(QWidget):
         self._resume_obstructed_btn.setText(tr("page.case_details.resume_obstructed"))
         self._revert_btn.setText(tr("page.case_details.revert_to_draft"))
         self._linked_claims_btn.setText(tr("page.case_details.view_linked_claims"))
+        self._print_btn.setText(tr("print.button"))
         self._ref_label.setAlignment(
             Qt.AlignRight | Qt.AlignVCenter
             if get_layout_direction() == Qt.RightToLeft
@@ -528,6 +560,7 @@ class CaseDetailsPage(QWidget):
         self._header.resume_obstructed_clicked.connect(self._on_resume_obstructed_clicked)
         self._header.revert_to_draft_clicked.connect(self._on_revert_to_draft_clicked)
         self._header.view_linked_claims_clicked.connect(self._on_view_linked_claims_clicked)
+        self._header.print_clicked.connect(self._on_print_clicked)
         main_layout.addWidget(self._header)
         main_layout.addSpacing(16)
 
@@ -826,7 +859,8 @@ class CaseDetailsPage(QWidget):
 
         badges = []
 
-        self._header.set_info(ref, badges, show_draft_actions, can_resume_obstructed, can_revert, can_view_linked)
+        self._header.set_info(ref, badges, show_draft_actions, can_resume_obstructed, can_revert, can_view_linked,
+                              can_print=is_finalized)
 
     # -- Survey Info Card --
 
@@ -1477,6 +1511,10 @@ class CaseDetailsPage(QWidget):
 
         logger.info(f"View linked claims requested for survey reference: {reference_code}")
         self.view_linked_claims_requested.emit(reference_code, str(survey_id or ""))
+
+    def _on_print_clicked(self):
+        from ui.components.print_application_dialog import open_print_dialog
+        open_print_dialog(self._context, self)
 
     def _on_revert_to_draft_clicked(self):
         survey_id = None

@@ -41,6 +41,7 @@ a = Analysis(
         'bidi',
         'qrcode',
         'PIL',
+        'pypdfium2',
         'openpyxl',
         'pandas',
         'geojson',
