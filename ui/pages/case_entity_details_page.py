@@ -677,223 +677,6 @@ class _SurveyMiniCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
-#  _ClaimMiniCard — Compact clickable card for a linked claim
-# ---------------------------------------------------------------------------
-
-class _ClaimMiniCard(QFrame):
-    """Compact card showing claim summary, clickable to navigate."""
-
-    clicked = pyqtSignal(str)  # claim_id
-
-    _CARD_BG = "#FFFBF7"
-    _CARD_BG_HOVER = "#FFF5ED"
-
-    def _get_lift(self):
-        return self._lift_value
-
-    def _set_lift(self, v):
-        self._lift_value = v
-        lv = int(v)
-        self.setContentsMargins(0, max(0, -lv), 0, max(0, lv))
-        self.update()
-
-    lift = pyqtProperty(float, _get_lift, _set_lift)
-
-    def __init__(self, claim_data: dict, parent=None):
-        super().__init__(parent)
-        self._claim_data = claim_data
-        self._claim_id = claim_data.get("id") or claim_data.get("claimId", "")
-        self._hovered = False
-        self._pressed = False
-        self._shimmer_offset = random.uniform(0, math.tau)
-        self._lift_value = 0.0
-        self._lift_anim = None
-
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        self.setFixedHeight(ScreenScale.h(80))
-        self.setMouseTracking(True)
-        self._build_ui()
-
-    def _build_ui(self):
-        self.setLayoutDirection(get_layout_direction())
-        self.setStyleSheet(f"""
-            _ClaimMiniCard {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {self._CARD_BG}, stop:1 #FFF0E5);
-                border-radius: 12px;
-                border: 1px solid #FDE8D8;
-            }}
-        """)
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(16)
-        shadow.setOffset(0, 3)
-        shadow.setColor(QColor(0, 0, 0, 18))
-        self.setGraphicsEffect(shadow)
-
-        outer = QHBoxLayout(self)
-        outer.setContentsMargins(0, 0, 16, 0)
-        outer.setSpacing(0)
-
-        # Orange/amber status strip
-        strip = QFrame()
-        strip.setFixedWidth(4)
-        is_rtl = get_layout_direction() == Qt.RightToLeft
-        corner = "right" if is_rtl else "left"
-        strip.setStyleSheet(
-            f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            f"stop:0 #F59E0B, stop:0.5 #FBBF24, stop:1 #F59E0B); "
-            f"border-top-{corner}-radius: 12px; border-bottom-{corner}-radius: 12px;"
-        )
-        outer.addWidget(strip)
-
-        content = QVBoxLayout()
-        content.setContentsMargins(14, 8, 0, 8)
-        content.setSpacing(3)
-
-        # Row 1: Claim number + type badge
-        row1 = QHBoxLayout()
-        row1.setSpacing(8)
-
-        claim_number = self._claim_data.get("claimNumber") or self._claim_id[:12]
-        num_label = QLabel(str(claim_number))
-        num_label.setFont(create_font(size=12, weight=QFont.Bold))
-        num_label.setStyleSheet(
-            f"color: {Colors.PAGE_TITLE}; background: transparent; border: none;"
-        )
-        num_label.setMaximumWidth(ScreenScale.w(400))
-        apply_label_alignment(num_label)
-        row1.addWidget(num_label)
-        row1.addStretch()
-
-
-        content.addLayout(row1)
-
-        # Row 2: Claimant name or date
-        claimant = self._claim_data.get("primaryClaimantName") or ""
-        if claimant:
-            name_label = QLabel(str(claimant))
-            name_label.setFont(create_font(size=9, weight=FontManager.WEIGHT_REGULAR))
-            name_label.setStyleSheet(
-                f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;"
-            )
-            name_label.setMaximumWidth(ScreenScale.w(300))
-            apply_label_alignment(name_label)
-            content.addWidget(name_label)
-
-        outer.addLayout(content, 1)
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        t = time.time()
-
-        clip = QPainterPath()
-        clip.addRoundedRect(QRectF(1, 1, w - 2, h - 2), 11, 11)
-        painter.setClipPath(clip)
-
-        # Subtle shimmer sweep (warm tint)
-        sweep_pos = (math.sin(t * 0.6 + self._shimmer_offset) + 1) / 2
-        sweep_x = int(sweep_pos * w)
-        shimmer_grad = QLinearGradient(sweep_x - 120, 0, sweep_x + 120, 0)
-        shimmer_grad.setColorAt(0, QColor(245, 158, 11, 0))
-        shimmer_grad.setColorAt(0.5, QColor(251, 191, 36, 8))
-        shimmer_grad.setColorAt(1, QColor(245, 158, 11, 0))
-        painter.setPen(Qt.NoPen)
-        painter.fillRect(QRectF(0, 0, w, h), shimmer_grad)
-
-        # Top edge accent on hover
-        if self._hovered:
-            top_grad = QLinearGradient(0, 0, w, 0)
-            top_grad.setColorAt(0, QColor(245, 158, 11, 0))
-            top_grad.setColorAt(0.2, QColor(245, 158, 11, 35))
-            top_grad.setColorAt(0.5, QColor(251, 191, 36, 55))
-            top_grad.setColorAt(0.8, QColor(245, 158, 11, 35))
-            top_grad.setColorAt(1, QColor(245, 158, 11, 0))
-            painter.fillRect(QRectF(0, 0, w, 2), top_grad)
-
-        painter.setClipping(False)
-
-        # Chevron (RTL-aware)
-        is_rtl = self.layoutDirection() == Qt.RightToLeft
-        chevron_x = 14 if is_rtl else w - 22
-        chevron_alpha = 140 if self._hovered else 35
-        painter.setPen(QPen(QColor(245, 158, 11, chevron_alpha), 1.5,
-                            Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        cy = h / 2
-        if is_rtl:
-            painter.drawLine(int(chevron_x + 5), int(cy - 4), int(chevron_x), int(cy))
-            painter.drawLine(int(chevron_x), int(cy), int(chevron_x + 5), int(cy + 4))
-        else:
-            painter.drawLine(int(chevron_x), int(cy - 4), int(chevron_x + 5), int(cy))
-            painter.drawLine(int(chevron_x + 5), int(cy), int(chevron_x), int(cy + 4))
-
-        painter.end()
-
-    def _animate_lift(self, target):
-        if self._lift_anim and self._lift_anim.state() == QPropertyAnimation.Running:
-            self._lift_anim.stop()
-        self._lift_anim = QPropertyAnimation(self, b"lift")
-        self._lift_anim.setDuration(180)
-        self._lift_anim.setStartValue(self._lift_value)
-        self._lift_anim.setEndValue(target)
-        self._lift_anim.setEasingCurve(QEasingCurve.OutCubic)
-        self._lift_anim.start()
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self.setStyleSheet(f"""
-            _ClaimMiniCard {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {self._CARD_BG_HOVER}, stop:1 #FFEDD5);
-                border-radius: 12px;
-                border: 1.5px solid rgba(245, 158, 11, 0.30);
-            }}
-        """)
-        eff = self.graphicsEffect()
-        if isinstance(eff, QGraphicsDropShadowEffect):
-            eff.setBlurRadius(30)
-            eff.setOffset(0, 6)
-            eff.setColor(QColor(245, 158, 11, 30))
-        self._animate_lift(3.0)
-        self.update()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._pressed = False
-        self.setStyleSheet(f"""
-            _ClaimMiniCard {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {self._CARD_BG}, stop:1 #FFF0E5);
-                border-radius: 12px;
-                border: 1px solid #FDE8D8;
-            }}
-        """)
-        eff = self.graphicsEffect()
-        if isinstance(eff, QGraphicsDropShadowEffect):
-            eff.setBlurRadius(16)
-            eff.setOffset(0, 3)
-            eff.setColor(QColor(0, 0, 0, 18))
-        self._animate_lift(0.0)
-        self.update()
-        super().leaveEvent(event)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._pressed = True
-            if self._claim_id:
-                self.clicked.emit(self._claim_id)
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        self._pressed = False
-        super().mouseReleaseEvent(event)
-
-
-# ---------------------------------------------------------------------------
 #  CaseEntityDetailsPage — Main page
 # ---------------------------------------------------------------------------
 
@@ -902,7 +685,6 @@ class CaseEntityDetailsPage(QWidget):
 
     back_requested = pyqtSignal()
     survey_clicked = pyqtSignal(str)
-    claim_clicked = pyqtSignal(str)
     toggle_editable_requested = pyqtSignal(str, bool)  # case_id, new_value
     revisit_requested = pyqtSignal(dict)  # case data for revisit flow
 
@@ -998,17 +780,6 @@ class CaseEntityDetailsPage(QWidget):
         self._surveys_content.setSpacing(8)
         self._surveys_layout.addLayout(self._surveys_content)
         self._scroll_layout.addWidget(self._surveys_card)
-
-        # Claims section
-        self._claims_card = _GlowingCard()
-        self._claims_card.set_glow_enabled(False)
-        self._claims_layout = QVBoxLayout(self._claims_card)
-        self._claims_layout.setContentsMargins(20, 16, 20, 16)
-        self._claims_layout.setSpacing(10)
-        self._claims_content = QVBoxLayout()
-        self._claims_content.setSpacing(8)
-        self._claims_layout.addLayout(self._claims_content)
-        self._scroll_layout.addWidget(self._claims_card)
 
         # Notes section (hidden by default)
         self._notes_card = _GlowingCard()
@@ -1283,7 +1054,6 @@ class CaseEntityDetailsPage(QWidget):
 
         self._populate_case_info()
         self._populate_surveys_section()
-        self._populate_claims_section()
         self._populate_property_info()
 
     def _on_linked_load_error(self, error_msg):
@@ -1297,7 +1067,6 @@ class CaseEntityDetailsPage(QWidget):
         self._populate_case_info()
         self._populate_property_info()
         self._populate_surveys_section()
-        self._populate_claims_section()
         self._populate_notes_section()
 
     def _populate_header(self):
@@ -1326,15 +1095,15 @@ class CaseEntityDetailsPage(QWidget):
         self._header.set_case_info(case_number, badges)
         self._header.update_editable_state(self._case.is_editable)
         self._header.set_actions_visible(self._show_actions)
-    def _get_latest_claim_date(self) -> str:
+    def _get_latest_survey_date(self) -> str:
         latest_date = None
 
-        for claim in self._claim_details:
-            created_at = claim.get("createdAtUtc")
-            if not created_at:
+        for survey in self._survey_details:
+            surveyed_at = survey.get("surveyDate") or survey.get("createdAtUtc")
+            if not surveyed_at:
                 continue
 
-            date_text = str(created_at)[:10]
+            date_text = str(surveyed_at)[:10]
 
             if not date_text or date_text.startswith("0001"):
                 continue
@@ -1376,9 +1145,7 @@ class CaseEntityDetailsPage(QWidget):
             (tr("page.case_entity.field_case_number"), self._case.case_number or "-"),
             (tr("page.case_entity.field_status"), self._status_label()),
             (tr("page.case_entity.field_open_date"), opened),
-            (tr("page.case_entity.field_latest_claim_date"), self._get_latest_claim_date()),
-            (tr("page.case_entity.field_survey_count"), str(self._case.survey_count)),
-            (tr("page.case_entity.field_claim_count"), str(self._case.claim_count)),
+            (tr("page.case_entity.field_latest_claim_date"), self._get_latest_survey_date()),
         ]
 
     def _status_label(self) -> str:
@@ -1463,8 +1230,6 @@ class CaseEntityDetailsPage(QWidget):
             (tr("page.case_entity.field_floor"), floor_display),
             (tr("page.case_entity.field_unit_type"), unit_type_display),
             (tr("page.case_entity.field_location"), neighborhood),
-            (tr("page.case_entity.field_relations_count"),
-             str(self._case.person_property_relation_count)),
         ]
 
     def _populate_surveys_section(self):
@@ -1494,34 +1259,6 @@ class CaseEntityDetailsPage(QWidget):
             empty_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             empty_lbl.setAlignment(Qt.AlignCenter)
             self._surveys_content.addWidget(empty_lbl)
-
-    def _populate_claims_section(self):
-        self._clear_layout(self._claims_content)
-
-        count = self._case.claim_count if self._case else 0
-        self._add_section_header(
-            self._claims_content, "blue",
-            tr("page.case_entity.section_claims", count=count),
-            tr("page.case_entity.section_claims_sub"),
-        )
-
-        if self._claim_details:
-            for claim_data in self._claim_details:
-                card = _ClaimMiniCard(claim_data)
-                card.clicked.connect(self.claim_clicked.emit)
-                self._claims_content.addWidget(card)
-        elif self._case and self._case.claim_ids:
-            loading_lbl = QLabel(tr("page.case_entity.loading_claims"))
-            loading_lbl.setFont(create_font(size=10))
-            loading_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            loading_lbl.setAlignment(Qt.AlignCenter)
-            self._claims_content.addWidget(loading_lbl)
-        else:
-            empty_lbl = QLabel(tr("page.case_entity.empty_claims"))
-            empty_lbl.setFont(create_font(size=10))
-            empty_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
-            empty_lbl.setAlignment(Qt.AlignCenter)
-            self._claims_content.addWidget(empty_lbl)
 
     def _populate_notes_section(self):
         self._clear_layout(self._notes_content)

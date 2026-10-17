@@ -11,7 +11,7 @@ from services.translation_manager import tr
 
 
 def build_case_html(model: CasePrintModel, claim_details: Optional[List[ClaimDetail]] = None) -> str:
-    """Case report; `claim_details` adds one section per claim when given."""
+    """Case report; `claim_details` adds the claims table and one section per claim."""
     rtl = model.rtl
     parts = [
         header(tr("print.case.title"), [
@@ -22,11 +22,12 @@ def build_case_html(model: CasePrintModel, claim_details: Optional[List[ClaimDet
         section(tr("page.case_entity.section_case_info"), rows_table(model.case_rows, rtl)),
         section(tr("page.case_entity.section_property"), rows_table(model.property_rows, rtl)),
         section(tr("page.case_entity.section_surveys", count=len(model.surveys)), _surveys_table(model)),
-        section(tr("page.case_entity.section_claims", count=len(model.claims)),
-                claims_table(model.claims, rtl) if model.claims else note(tr("print.no_claims"))),
     ]
     if model.notes:
         parts.append(section(tr("page.case_entity.section_notes"), note(model.notes)))
+    if claim_details is not None:
+        parts.append(section(tr("print.section.claims"),
+                             claims_table(model.claims, rtl) if model.claims else note(tr("print.no_claims"))))
     for detail in claim_details or []:
         parts.append(section(tr("print.case.claim_details", number=detail.number), _claim_detail(detail, rtl)))
     parts.append(signatures([tr("print.case.prepared_by"), tr("print.case.signature"),
