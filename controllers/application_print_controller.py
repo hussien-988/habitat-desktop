@@ -22,7 +22,7 @@ from services.display_mappings import (
 from services.printing.application_print_model import (
     ApplicationPrintModel, AttachmentItem, ClaimRow, PersonRow,
 )
-from services.printing.application_renderer import AttachmentPage, prepare_attachment_pages
+from services.printing.application_renderer import prepare_attachment_pages
 from services.translation_manager import get_language, tr
 from utils.helpers import (
     build_hierarchical_address, download_evidence_file, download_identification_document_file,
@@ -32,6 +32,14 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 _FINALIZED_STATUSES = ("3", "finalized")
+
+
+def _person_name(person: Dict, suffix: str = "") -> str:
+    """Full name from first/father/last name keys (applicant keys end in "_ar")."""
+    name = " ".join(filter(None, [
+        person.get(f"first_name{suffix}"), person.get(f"father_name{suffix}"), person.get(f"last_name{suffix}"),
+    ]))
+    return name or person.get("full_name", "")
 
 
 class ApplicationPrintController(BaseController):
@@ -78,8 +86,7 @@ class ApplicationPrintController(BaseController):
                         item.person_id, item.document_id, item.file_name)
                 else:
                     item.local_path = download_evidence_file(item.document_id, item.file_name)
-            pages: List[AttachmentPage] = prepare_attachment_pages(model)
-            return OperationResult.ok(data=pages)
+            return OperationResult.ok(data=prepare_attachment_pages(model))
         except Exception as e:
             logger.error(f"Failed to prepare application attachments: {e}", exc_info=True)
             return OperationResult.fail(str(e), tr("print.failed"))
@@ -154,11 +161,8 @@ class ApplicationPrintController(BaseController):
         applicant = context.applicant or {}
         if not applicant:
             return []
-        name = " ".join(filter(None, [
-            applicant.get("first_name_ar"), applicant.get("father_name_ar"), applicant.get("last_name_ar"),
-        ])) or applicant.get("full_name", "")
         return [
-            (tr("wizard.applicant.full_name"), name),
+            (tr("wizard.applicant.full_name"), _person_name(applicant, "_ar")),
             (tr("wizard.applicant.national_id"), applicant.get("national_id", "")),
             (tr("wizard.applicant.phone"), applicant.get("phone", "")),
             (tr("wizard.applicant.email"), applicant.get("email", "")),
@@ -226,7 +230,7 @@ class ApplicationPrintController(BaseController):
         contact_id = context.get_data("contact_person_id")
         if contact_id and contact_id not in {pid for pid, _, _ in people}:
             applicant = context.applicant or {}
-            people.insert(0, (contact_id, applicant.get("full_name", ""), None))
+            people.insert(0, (contact_id, _person_name(applicant, "_ar"), None))
 
         relation_ids = self._relation_ids(api, survey_id, unit_id)
         items: List[AttachmentItem] = []
@@ -302,9 +306,3 @@ class ApplicationPrintController(BaseController):
             ))
         return items
 
-
-def _person_name(person: Dict) -> str:
-    name = " ".join(filter(None, [
-        person.get("first_name"), person.get("father_name"), person.get("last_name"),
-    ]))
-    return name or person.get("full_name", "")

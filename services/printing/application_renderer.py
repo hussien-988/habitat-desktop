@@ -20,7 +20,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtPrintSupport import QPrinter
 
 from app.config import Config
-from services.printing.application_html import LOGO_RESOURCE, build_application_html
+from services.printing.application_html import LOGO_RESOURCE, TITLE_COLOR, build_application_html
 from services.printing.application_print_model import ApplicationPrintModel
 from services.translation_manager import tr
 from utils.logger import get_logger
@@ -136,7 +136,7 @@ def _build_document(model: ApplicationPrintModel, include_attachments: bool,
 def _draw_attachment(painter: QPainter, page: AttachmentPage, rect: QRectF, align) -> None:
     painter.save()
     painter.setFont(_painter_font(10, QFont.Bold))
-    painter.setPen(QColor("#1B3A5C"))
+    painter.setPen(QColor(TITLE_COLOR))
     caption_rect = QRectF(rect.left(), rect.top(), rect.width(), _CAPTION_HEIGHT)
     painter.drawText(caption_rect, align | Qt.AlignVCenter | Qt.TextWordWrap, page.caption)
 

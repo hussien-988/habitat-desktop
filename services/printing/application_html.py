@@ -15,7 +15,7 @@ from services.translation_manager import tr
 
 LOGO_RESOURCE = "logo"
 
-_TITLE_COLOR = "#1B3A5C"
+TITLE_COLOR = "#1B3A5C"
 _SECTION_BG = "#E8F1FB"
 _BORDER_COLOR = "#9DB4CC"
 _LABEL_BG = "#F5F8FC"
@@ -70,7 +70,7 @@ def _header(model: ApplicationPrintModel, direction: str, align: str) -> str:
         f'<table dir="{direction}" width="100%" cellspacing="0" cellpadding="0"><tr>'
         f'<td width="80" valign="middle"><img src="{LOGO_RESOURCE}" width="72" height="72"></td>'
         f'<td valign="middle" align="{align}">'
-        f'<p style="font-size: 16pt; font-weight: bold; color: {_TITLE_COLOR};">{escape(tr("print.title"))}</p>'
+        f'<p style="font-size: 16pt; font-weight: bold; color: {TITLE_COLOR};">{escape(tr("print.title"))}</p>'
         f'<p style="color: #4B5563;">UN-Habitat — {escape(tr("print.system_name"))}</p></td>'
         f'<td valign="middle" align="{align}"><table dir="{direction}" cellspacing="0" cellpadding="2">{info_cells}</table></td>'
         f'</tr></table>'
@@ -81,7 +81,7 @@ def _section(title: str, body: str, direction: str, align: str) -> str:
     return (
         f'<table dir="{direction}" width="100%" cellspacing="0" cellpadding="4" style="margin-top: 10px;">'
         f'<tr><td bgcolor="{_SECTION_BG}" align="{align}" style="font-size: 10pt; font-weight: bold; '
-        f'color: {_TITLE_COLOR};">{escape(title)}</td></tr></table>{body}'
+        f'color: {TITLE_COLOR};">{escape(title)}</td></tr></table>{body}'
     )
 
 

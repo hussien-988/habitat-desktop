@@ -222,7 +222,9 @@ class PrintApplicationDialog(QDialog):
 
     def _on_preview(self):
         def _show():
-            preview = QPrintPreviewDialog(self._new_printer(), self)
+            # Keep the printer referenced: the preview only stores a raw pointer.
+            self._printer = self._new_printer()
+            preview = QPrintPreviewDialog(self._printer, self)
             preview.setWindowTitle(tr("print.dialog_title"))
             preview.paintRequested.connect(self._render)
             preview.exec_()
