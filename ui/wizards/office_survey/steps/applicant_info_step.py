@@ -1645,6 +1645,13 @@ class ApplicantInfoStep(BaseStep):
         bd = a.get("birth_date") or a.get("dateOfBirth") or a.get("date_of_birth") or ""
         year, month, day = _date_parts_from_value(bd)
 
+        # Start from empty date / nationality: the applicant may now be a
+        # different person (contact point changed) without these values
+        for c in (self.birth_year_combo, self.birth_month_combo, self.birth_day_combo):
+            c.setCurrentIndex(-1)
+            c.clearEditText()
+        self.nationality.setCurrentIndex(0)
+
         if year:
             idx = self.birth_year_combo.findData(year)
             if idx >= 0:
