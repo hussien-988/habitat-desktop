@@ -640,6 +640,19 @@ class LoginPage(QWidget):
         self.password_input.returnPressed.connect(self._on_login)
         card_layout.addWidget(self.password_input)
 
+        # Forgot password link (asks an administrator to reset it)
+        self._forgot_btn = QPushButton(tr("page.login.forgot_password"))
+        self._forgot_btn.setCursor(Qt.PointingHandCursor)
+        self._forgot_btn.setFlat(True)
+        self._forgot_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        self._forgot_btn.setStyleSheet("""
+            QPushButton { color: #5BA8F0; background: transparent; border: none; padding: 0; }
+            QPushButton:hover { color: #8CC4FF; text-decoration: underline; }
+        """)
+        self._forgot_btn.clicked.connect(self._on_forgot_password)
+        self._card_layout = card_layout
+        card_layout.addWidget(self._forgot_btn, 0, self._forgot_link_alignment())
+
         self.username_input.installEventFilter(self)
         self.password_input.installEventFilter(self)
 
@@ -837,6 +850,18 @@ class LoginPage(QWidget):
         else:
             self.password_input.setEchoMode(QLineEdit.Password)
 
+    @staticmethod
+    def _forgot_link_alignment():
+        """End of the reading direction (left in Arabic), whatever the card's direction."""
+        side = Qt.AlignLeft if tm_get_language() == "ar" else Qt.AlignRight
+        return side | Qt.AlignAbsolute
+
+    def _on_forgot_password(self):
+        """Open the forgot-password request, pre-filled with the typed username."""
+        from ui.components.dialogs.forgot_password_dialog import ForgotPasswordDialog
+        dialog = ForgotPasswordDialog(self.username_input.text().strip(), parent=self)
+        dialog.exec_()
+
     def _on_login(self):
         """Submit login request to backend; backend enforces lockout/policy."""
         self._hide_error()
@@ -979,6 +1004,8 @@ class LoginPage(QWidget):
         self._password_label.setText(tr("page.login.password"))
         self.password_input.setPlaceholderText(tr("page.login.password_placeholder"))
         self.login_btn.setText(tr("page.login.sign_in"))
+        self._forgot_btn.setText(tr("page.login.forgot_password"))
+        self._card_layout.setAlignment(self._forgot_btn, self._forgot_link_alignment())
         if hasattr(self, "_deco_ar_label"):
             self._deco_ar_label.setText(tr("page.login.title"))
         if hasattr(self, "_deco_en_label"):

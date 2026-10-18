@@ -161,10 +161,15 @@ class MainWindow(QMainWindow):
             self._on_idle_session_resumed
         )
 
+        self._idle_session_monitor.reactivated_after_absence.connect(
+            self._check_session_with_server
+        )
+
         self._session_policy_worker = None
         self._session_renew_worker = None
+        self._session_check_worker = None
         self._session_renew_in_progress = False
-        self._session_warning_toast = None
+        self._session_warning_dialog = None
         self._token_refreshed_signal.connect(
             self._sync_refreshed_tokens
         )
@@ -999,6 +1004,11 @@ class MainWindow(QMainWindow):
                     round(remaining_seconds / 60),
                 )
 
+        # How long before expiry to warn, as set by the server (ProdV5).
+        self._idle_session_monitor.warning_seconds = (
+            (api.session_warning_seconds if api else None) or 60
+        )
+
         self._idle_session_monitor.start(
             timeout_minutes
         )
@@ -1085,47 +1095,70 @@ class MainWindow(QMainWindow):
 
         self._session_renew_in_progress = False
 
-        if (
-            self._session_warning_toast
-            and self._session_warning_toast.isVisible()
-        ):
-            self._session_warning_toast._fade_out()
-
-        self._session_warning_toast = None
+        self._close_session_warning()
     def _on_idle_session_warning(
         self,
         seconds_remaining: int,
     ):
-        """Warn the user shortly before inactivity timeout."""
-        if not self.current_user:
+        """Ask the user, shortly before the session ends, whether to continue."""
+        if not self.current_user or self._session_warning_dialog:
             return
+
+        from ui.components.dialogs.session_expiry_dialog import SessionExpiryDialog
+
+        dialog = SessionExpiryDialog(
+            self._idle_session_monitor.seconds_remaining,
+            parent=self,
+        )
+        dialog.continue_requested.connect(self._on_session_warning_continue)
+        dialog.logout_requested.connect(self._on_session_warning_logout)
+        self._session_warning_dialog = dialog
+
+        # The dialog's own clicks are the user's answer, not activity.
+        self._idle_session_monitor.pause_activity(True)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _close_session_warning(self):
+        """Close the expiry warning (if shown) and resume activity tracking."""
+        self._idle_session_monitor.pause_activity(False)
+
+        dialog = self._session_warning_dialog
+        self._session_warning_dialog = None
+
+        if dialog is not None:
+            dialog.done(0)
+            dialog.deleteLater()
+
+    def _on_session_warning_continue(self):
+        """[OK] in the expiry warning: renew the session."""
+        if self._session_warning_dialog:
+            self._session_warning_dialog.set_busy(True)
+
+        self._renew_session()
+
+        # Renewal could not start (e.g. no API client): let the user choose again
+        if not self._session_renew_in_progress and self._session_warning_dialog:
+            self._session_warning_dialog.set_busy(False)
+
+    def _on_session_warning_logout(self):
+        """[Log out] in the expiry warning."""
+        self._close_session_warning()
+        self._force_logout()
+
+    def _on_session_renew_failed_temporarily(self):
+        """Renewal hit a network/server error: let the user try again."""
+        if self._session_warning_dialog:
+            self._session_warning_dialog.set_busy(False)
 
         from ui.components.toast import Toast
 
-        toast = self.findChild(
-            Toast,
-            "toast-notification",
-        )
-
-        if toast is None:
-            toast = Toast(self)
-
-        self._session_warning_toast = toast
-
-        toast.show_message(
-            tr(
-                "session.expiring",
-                seconds=max(1, seconds_remaining),
-            ),
+        Toast.show_toast(
+            self,
+            tr("session.renew_network_failed"),
             Toast.WARNING,
-            duration=max(
-                1000,
-                seconds_remaining * 1000,
-            ),
-            action_text=tr(
-                "session.continue"
-            ),
-            action_callback=self._renew_session,
+            6000,
         )
 
     def _renew_session(self):
@@ -1182,11 +1215,7 @@ class MainWindow(QMainWindow):
                 "Session renewed successfully"
             )
 
-            if (
-                self._session_warning_toast
-                and self._session_warning_toast.isVisible()
-            ):
-                self._session_warning_toast._fade_out()
+            self._close_session_warning()
 
             return
 
@@ -1200,18 +1229,11 @@ class MainWindow(QMainWindow):
 
         # result == None:
         # temporary network/server failure.
-        from ui.components.toast import Toast
-
         logger.warning(
             "Session renewal temporarily failed"
         )
 
-        Toast.show_toast(
-            self,
-            tr("session.renew_network_failed"),
-            Toast.WARNING,
-            6000,
-        )
+        self._on_session_renew_failed_temporarily()
     def _on_session_renew_worker_error(self, message):
         """Handle an unexpected renewal worker failure."""
         self._session_renew_in_progress = False
@@ -1224,14 +1246,7 @@ class MainWindow(QMainWindow):
         if not self.current_user:
             return
 
-        from ui.components.toast import Toast
-
-        Toast.show_toast(
-            self,
-            tr("session.renew_network_failed"),
-            Toast.WARNING,
-            6000,
-        )
+        self._on_session_renew_failed_temporarily()
     def _on_idle_session_resumed(self):
         """
         User interacted with the application while the expiry
@@ -1244,11 +1259,7 @@ class MainWindow(QMainWindow):
             "User activity resumed during session warning"
         )
 
-        if (
-            self._session_warning_toast
-            and self._session_warning_toast.isVisible()
-        ):
-            self._session_warning_toast._fade_out()
+        self._close_session_warning()
 
         self._renew_session()
     def _on_idle_session_timeout(self):
@@ -1261,7 +1272,45 @@ class MainWindow(QMainWindow):
             self.current_user.username,
         )
 
+        self._close_session_warning()
+
+        # The session is over: drop the tokens so nothing reuses them.
+        # (Local only: a server logout call could loop back through the
+        # 401 handling into session expiry.)
+        try:
+            from services.api_client import get_api_client
+            api = get_api_client()
+            if api:
+                api.clear_tokens()
+        except Exception as e:
+            logger.warning(f"Could not clear tokens after inactivity: {e}")
+
         self._do_session_expired()
+
+    def _check_session_with_server(self):
+        """After a long absence (e.g. PC sleep) re-read the session timing
+        from the server. A revoked/expired session surfaces through the
+        normal 401 handling; other errors (e.g. an older server) are ignored."""
+        if not self.current_user:
+            return
+
+        if self._session_check_worker and self._session_check_worker.isRunning():
+            return
+
+        from services.api_client import get_api_client
+        from services.api_worker import ApiWorker
+
+        api = get_api_client()
+        if not api:
+            return
+
+        self._session_check_worker = ApiWorker(api.get_session)
+        self._session_check_worker.error.connect(
+            lambda message: logger.info(
+                "Session check after absence failed: %s", message
+            )
+        )
+        self._session_check_worker.start()
     def _force_logout(self):
         """Force logout without confirmation dialog (e.g., backend session expiry)."""
         if self.current_user:
@@ -1287,7 +1336,18 @@ class MainWindow(QMainWindow):
         from services.api_client import get_api_client
         api = get_api_client()
         if api:
-            api.set_access_token(token)
+            # Lifetime measured on the server, so a skewed PC clock does
+            # not shift the expiry (None with older servers → JWT exp).
+            api.set_access_token(
+                token,
+                server_expires_in=getattr(self.current_user, '_api_expires_in', None),
+            )
+            warning_seconds = getattr(self.current_user, '_api_session_warning', None)
+            if warning_seconds:
+                try:
+                    api.session_warning_seconds = int(warning_seconds)
+                except (TypeError, ValueError):
+                    pass
             refresh = getattr(self.current_user, '_api_refresh_token', None)
             if refresh:
                 api.refresh_token = refresh

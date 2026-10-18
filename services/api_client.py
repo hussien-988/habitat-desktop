@@ -130,14 +130,23 @@ def _resolve_access_token_expiry(
     token: Optional[str],
     explicit_expiry: Any = None,
     expires_in: Optional[int] = None,
+    server_expires_in: Optional[int] = None,
 ) -> Optional[datetime]:
     """
     Resolve token expiry in order of reliability:
 
-    1. accessTokenExpiry returned by backend
-    2. exp claim inside JWT
-    3. legacy expiresIn value
+    1. accessTokenExpiresInSeconds returned by backend (a duration measured
+       on the server, so it is right even when the PC clock is off)
+    2. accessTokenExpiry returned by backend
+    3. exp claim inside JWT
+    4. legacy expiresIn value
     """
+
+    if server_expires_in is not None:
+        try:
+            return datetime.now(timezone.utc) + timedelta(seconds=int(server_expires_in))
+        except (TypeError, ValueError):
+            pass
 
     expiry = _parse_utc_datetime(explicit_expiry)
     if expiry:
@@ -285,6 +294,8 @@ class TRRCMSApiClient:
         self.refresh_token: Optional[str] = _load_refresh_token(self.base_url)
         self.token_expires_at: Optional[datetime] = None
         self.refresh_token_expires_at: Optional[datetime] = None
+        # Seconds before expiry to warn the user, as sent by the server
+        self.session_warning_seconds: Optional[int] = None
         self._refresh_lock = threading.Lock()
         self._login_failures: int = 0
         self._login_cooldown_until: Optional[datetime] = None
@@ -405,6 +416,7 @@ class TRRCMSApiClient:
         token: str,
         expires_in: Optional[int] = None,
         expires_at: Any = None,
+        server_expires_in: Optional[int] = None,
     ):
         """Set an externally obtained access token using its real expiry."""
 
@@ -417,6 +429,7 @@ class TRRCMSApiClient:
             token,
             explicit_expiry=expires_at,
             expires_in=expires_in,
+            server_expires_in=server_expires_in,
         )
 
         if resolved_expiry:
@@ -567,11 +580,14 @@ class TRRCMSApiClient:
             self.access_token,
             explicit_expiry=data.get("accessTokenExpiry"),
             expires_in=data.get("expiresIn"),
+            server_expires_in=data.get("accessTokenExpiresInSeconds"),
         )
 
         self.refresh_token_expires_at = _parse_utc_datetime(
             data.get("refreshTokenExpiry")
         )
+        if data.get("sessionExpiryWarningSeconds"):
+            self.session_warning_seconds = int(data["sessionExpiryWarningSeconds"])
 
         self._session_expired_flag = False
 
@@ -610,16 +626,63 @@ class TRRCMSApiClient:
         except Exception as e:
             logger.warning(f"Remote logout failed; proceeding with local teardown: {e}")
         finally:
-            self.access_token = None
-            self.refresh_token = None
-            self.token_expires_at = None
-            self.refresh_token_expires_at = None
-            _clear_refresh_token(self.base_url)
+            self.clear_tokens()
             logger.info(
                 f"[SRV-DIAG] logout teardown remote_ok={remote_ok} "
                 f"singleton_id={id(self)} base_url={self.base_url}"
             )
         return result
+
+    def clear_tokens(self) -> None:
+        """Forget the session locally (memory and keyring), without a request."""
+        self.access_token = None
+        self.refresh_token = None
+        self.token_expires_at = None
+        self.refresh_token_expires_at = None
+        self.session_warning_seconds = None
+        _clear_refresh_token(self.base_url)
+
+    def get_session(self) -> Dict[str, Any]:
+        """GET /v1/auth/session — timing of the current token (does not extend it).
+
+        Used when the app comes back after a long absence (e.g. PC sleep) to
+        re-sync the token expiry with the server.
+        """
+        result = self._request("GET", "/v1/auth/session") or {}
+        if result.get("accessTokenExpiresInSeconds") is not None:
+            self.token_expires_at = _resolve_access_token_expiry(
+                self.access_token,
+                server_expires_in=result["accessTokenExpiresInSeconds"],
+            )
+        if result.get("sessionExpiryWarningSeconds"):
+            self.session_warning_seconds = int(result["sessionExpiryWarningSeconds"])
+        return result
+
+    def forgot_password(self, username: str, note: str = "") -> Dict[str, Any]:
+        """POST /v1/auth/forgot-password (no token): ask an administrator to reset.
+
+        The server always answers 202 with the same localized message, whether
+        or not the user exists, and 429 after 3 requests per 10 minutes.
+        Returns {"accepted": bool, "message": server message or ""}.
+        """
+        response = self._session.post(
+            f"{self.base_url}/v1/auth/forgot-password",
+            json={"username": username, "note": note},
+            headers=self._anon_headers(),
+            timeout=(self._CONNECT_TIMEOUT, self._endpoint_timeout("POST", "/v1/auth/forgot-password", 0)),
+            verify=self._verify_ssl(),
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        message = (data.get("message") or "") if isinstance(data, dict) else ""
+        if response.status_code in (200, 202):
+            return {"accepted": True, "message": message}
+        if response.status_code == 429:
+            return {"accepted": False, "message": message}
+        response.raise_for_status()
+        return {"accepted": False, "message": message}
 
     def get_security_settings(self) -> Dict[str, Any]:
         """Return the currently active backend security policy."""
