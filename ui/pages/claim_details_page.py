@@ -832,6 +832,16 @@ class ClaimDetailsPage(QWidget):
                 self._person_content.addWidget(no_lbl)
                 return
 
+            # Contact Point (of this claim's survey) / Rights Claimant badges
+            from ui.components.designation_badges import build_designation_row
+            badges = build_designation_row(
+                bool(self._claim_data.get("primaryClaimantIsContactPoint")),
+                bool(person.get("isRightsClaimant")),
+                ScreenScale.w(6),
+            )
+            if badges is not None:
+                self._person_content.addLayout(badges)
+
             # Grid of fields
             grid = QGridLayout()
             grid.setSpacing(16)
