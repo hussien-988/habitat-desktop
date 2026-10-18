@@ -376,7 +376,12 @@ class SurveyController:
             cp_id = contact_person_dto.get("id", "") if contact_person_dto else ""
             if cp_id and cp_id not in seen_person_ids:
                 rel = relation_by_person_id.get(cp_id, {})
-                persons.append(ClaimController._map_person_dto(contact_person_dto, rel))
+                mapped_contact = ClaimController._map_person_dto(contact_person_dto, rel)
+                # Not a household member: once another person becomes the
+                # contact point, it is edited as a plain person
+                mapped_contact["_is_household_member"] = False
+                mapped_contact["_person_source"] = "contact"
+                persons.append(mapped_contact)
                 seen_person_ids.add(cp_id)
 
             # Add primary claimants returned in survey detail claims but missing

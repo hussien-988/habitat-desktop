@@ -32,6 +32,9 @@ class Case:
     person_property_relation_count: int = 0
     survey_ids: List[str] = field(default_factory=list)
     claim_ids: List[str] = field(default_factory=list)
+    # Persons of the case (CaseDto.persons, raw dicts): contact points first,
+    # with isContactPoint / isRightsClaimant / claimType / relations[]
+    persons: List[dict] = field(default_factory=list)
     created_at_utc: Optional[str] = None
     last_modified_at_utc: Optional[str] = None
 
@@ -64,6 +67,7 @@ class Case:
             "personPropertyRelationCount": self.person_property_relation_count,
             "surveyIds": self.survey_ids,
             "claimIds": self.claim_ids,
+            "persons": self.persons,
             "createdAtUtc": self.created_at_utc,
             "lastModifiedAtUtc": self.last_modified_at_utc,
         }
@@ -87,6 +91,7 @@ class Case:
             person_property_relation_count=data.get("personPropertyRelationCount", 0),
             survey_ids=data.get("surveyIds") or [],
             claim_ids=data.get("claimIds") or [],
+            persons=data.get("persons") or [],
             created_at_utc=data.get("createdAtUtc"),
             last_modified_at_utc=data.get("lastModifiedAtUtc"),
         )

@@ -50,6 +50,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import (
     get_claim_type_display, get_relationship_to_head_display, resolve_claim_type,
 )
+from ui.components.designation_badges import build_designation_row, wizard_designations
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -521,6 +522,62 @@ class OccupancyClaimsStep(BaseStep):
                 self._saving_in_progress = False
                 self._spinner.hide_loading()
 
+    def _set_contact_point(self, person_id: str):
+        """Make this person the survey's contact point (POST /contact-point).
+
+        The server keeps the previous contact point as a normal person. Here
+        the applicant (the contact person shown in the applicant step) is
+        switched to the new person, so that step shows and saves their data.
+        """
+        if self._saving_in_progress:
+            return
+        person = next((p for p in self.context.persons if p.get('person_id') == person_id), None)
+        survey_id = self.context.get_data("survey_id")
+        if not person or not survey_id:
+            return
+
+        full_name = " ".join(filter(None, [
+            person.get('first_name', ''), person.get('father_name', ''), person.get('last_name', ''),
+        ])).strip()
+        if not ErrorHandler.confirm(
+            self, tr("wizard.occupancy_claims.set_contact_point_confirm", name=full_name),
+            tr("wizard.occupancy_claims.set_contact_point"),
+        ):
+            return
+
+        self._saving_in_progress = True
+        self._spinner.show_loading(tr("component.loading.default"))
+        try:
+            from services.api_worker import run_blocking_async
+            self._set_auth_token()
+            run_blocking_async(self._api_service.set_contact_point, survey_id, person_id)
+        except Exception as e:
+            logger.error(f"Failed to set contact point {person_id}: {e}")
+            ErrorHandler.show_error(self, map_exception(e), tr("common.error"))
+            return
+        finally:
+            self._saving_in_progress = False
+            self._spinner.hide_loading()
+
+        # The previous contact point stays as a normal person
+        for p in self.context.persons:
+            p.pop('_is_applicant', None)
+            p['_is_contact_person'] = False
+        person['_is_applicant'] = True
+        person['_is_contact_person'] = True
+        self.context.update_data("contact_person_id", person_id)
+
+        # The applicant is now this person (ID photos reload from the server
+        # when the applicant step is shown again)
+        previous = self.context.applicant or {}
+        self.context.applicant = {"in_person": previous.get("in_person", True)}
+        self._sync_persons_into_applicant(person)
+        self.context.finalize_response = None
+
+        self._refresh_persons_list()
+        Toast.show_toast(self, tr("wizard.occupancy_claims.contact_point_changed"), Toast.SUCCESS)
+        logger.info(f"Contact point changed to person {person_id}")
+
     def _create_person_row_card(self, person: dict, index: int = 0) -> QFrame:
         from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
@@ -608,6 +665,39 @@ class OccupancyClaimsStep(BaseStep):
         name_val.setStyleSheet("color: #0F172A; background: transparent; border: none;")
         name_val.setWordWrap(True)
         info_grid.addWidget(_labeled_cell(tr("wizard.person_dialog.first_name"), name_val), 0, 0)
+
+        # Row 0 col 1: Contact Point / Rights Claimant badges, and the action
+        # to make this person the survey's contact point (drafts only)
+        contact_person_id = self.context.get_data('contact_person_id')
+        is_contact, is_claimant = wizard_designations(person, contact_person_id)
+        can_set_contact = (
+            not is_contact
+            and bool(person_id)
+            and bool(self.context.get_data("survey_id"))
+            and self.context.status != "finalized"
+        )
+        if is_contact or is_claimant or can_set_contact:
+            side = QVBoxLayout()
+            side.setContentsMargins(0, 0, 0, 0)
+            side.setSpacing(ScreenScale.h(6))
+            badges = build_designation_row(is_contact, is_claimant, ScreenScale.w(6))
+            if badges is not None:
+                side.addLayout(badges)
+            if can_set_contact:
+                set_contact_btn = QPushButton(tr("wizard.occupancy_claims.set_contact_point"))
+                set_contact_btn.setCursor(Qt.PointingHandCursor)
+                set_contact_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+                set_contact_btn.setStyleSheet(
+                    "QPushButton { color: #0369A1; background: transparent; border: none;"
+                    " padding: 0; text-align: left; }"
+                    "QPushButton:hover { color: #075985; text-decoration: underline; }"
+                )
+                set_contact_btn.clicked.connect(
+                    lambda _=False, pid=person_id: self._set_contact_point(pid)
+                )
+                side.addWidget(set_contact_btn, 0, cell_align)
+            side.addStretch(1)
+            info_grid.addLayout(side, 0, 1)
 
 
         # Row 1: father_name | mother_name

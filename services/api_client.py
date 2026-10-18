@@ -3328,6 +3328,17 @@ class TRRCMSApiClient:
         endpoint = f"/v1/Surveys/{survey_id}/contact-person"
         return self._request("GET", endpoint)
 
+    def set_contact_point(self, survey_id: str, person_id: str) -> Dict[str, Any]:
+        """Make an existing person of the survey its contact point (draft only).
+
+        POST /v1/Surveys/{id}/contact-point {personId}; the previous contact
+        point stays in the survey as a normal person.
+        """
+        if not survey_id or not person_id:
+            raise ValueError("survey_id and person_id are required")
+        endpoint = f"/v1/Surveys/{survey_id}/contact-point"
+        return self._request("POST", endpoint, {"personId": person_id})
+
     def get_office_surveys(
         self,
         status: Optional[str] = None,

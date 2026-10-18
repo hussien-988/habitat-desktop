@@ -770,6 +770,18 @@ class CaseEntityDetailsPage(QWidget):
 
         self._scroll_layout.addLayout(info_row)
 
+        # Persons in this case (hidden when the server sends none)
+        self._persons_card = _GlowingCard()
+        self._persons_card.set_glow_enabled(False)
+        self._persons_card.setVisible(False)
+        self._persons_layout = QVBoxLayout(self._persons_card)
+        self._persons_layout.setContentsMargins(20, 16, 20, 16)
+        self._persons_layout.setSpacing(10)
+        self._persons_content = QVBoxLayout()
+        self._persons_content.setSpacing(8)
+        self._persons_layout.addLayout(self._persons_content)
+        self._scroll_layout.addWidget(self._persons_card)
+
         # Surveys section
         self._surveys_card = _GlowingCard()
         self._surveys_card.set_glow_enabled(False)
@@ -1066,6 +1078,7 @@ class CaseEntityDetailsPage(QWidget):
         self._populate_header()
         self._populate_case_info()
         self._populate_property_info()
+        self._populate_persons_section()
         self._populate_surveys_section()
         self._populate_notes_section()
 
@@ -1259,6 +1272,119 @@ class CaseEntityDetailsPage(QWidget):
             empty_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
             empty_lbl.setAlignment(Qt.AlignCenter)
             self._surveys_content.addWidget(empty_lbl)
+
+    def _populate_persons_section(self):
+        """Persons in this case (CaseDto.persons): who to call first.
+        The server lists the contact points first."""
+        self._clear_layout(self._persons_content)
+
+        persons = (self._case.persons if self._case else None) or []
+        if not persons:
+            self._persons_card.setVisible(False)
+            return
+
+        self._persons_card.setVisible(True)
+        self._add_section_header(
+            self._persons_content, "user",
+            tr("page.case_entity.section_persons", count=len(persons)),
+            tr("page.case_entity.section_persons_sub"),
+        )
+
+        cols = 2
+        grid = QGridLayout()
+        grid.setContentsMargins(0, ScreenScale.h(4), 0, 0)
+        grid.setHorizontalSpacing(ScreenScale.w(10))
+        grid.setVerticalSpacing(ScreenScale.h(10))
+        for c in range(cols):
+            grid.setColumnStretch(c, 1)
+        for i, person in enumerate(persons):
+            r, c = divmod(i, cols)
+            grid.addWidget(self._build_case_person_card(person), r, c)
+        self._persons_content.addLayout(grid)
+
+    def _build_case_person_card(self, person: dict) -> QFrame:
+        from services.display_mappings import get_claim_type_display
+        from ui.components.designation_badges import build_designation_row, server_designations
+
+        is_rtl = get_layout_direction() == Qt.RightToLeft
+        text_align = (Qt.AlignRight if is_rtl else Qt.AlignLeft) | Qt.AlignAbsolute | Qt.AlignVCenter
+
+        card = QFrame()
+        card.setObjectName("casePersonCard")
+        card.setLayoutDirection(get_layout_direction())
+        card.setStyleSheet(
+            "QFrame#casePersonCard { background-color: #FFFFFF;"
+            " border: 1px solid #E2EAF2; border-radius: 10px; }"
+        )
+        v = QVBoxLayout(card)
+        v.setContentsMargins(ScreenScale.w(12), ScreenScale.h(10), ScreenScale.w(12), ScreenScale.h(10))
+        v.setSpacing(ScreenScale.h(6))
+
+        full_name = (person.get("fullNameArabic") or " ".join(filter(None, [
+            person.get("firstNameArabic"), person.get("fatherNameArabic"), person.get("familyNameArabic"),
+        ]))).strip() or "-"
+        name_lbl = QLabel(full_name)
+        name_lbl.setAlignment(text_align)
+        name_lbl.setWordWrap(True)
+        name_lbl.setFont(create_font(size=FontManager.SIZE_BODY, weight=FontManager.WEIGHT_SEMIBOLD))
+        name_lbl.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent; border: none;")
+        v.addWidget(name_lbl)
+
+        is_contact, is_claimant = server_designations(person)
+        badges = build_designation_row(is_contact, is_claimant, ScreenScale.w(6))
+        if badges is not None:
+            v.addLayout(badges)
+
+        def _info_row(label_text, value_text, ltr_value=False):
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(ScreenScale.w(6))
+            lbl = QLabel(f"{label_text}:")
+            lbl.setAlignment(text_align)
+            lbl.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_SEMIBOLD))
+            lbl.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent; border: none;")
+            val = QLabel(str(value_text))
+            if ltr_value:
+                val.setLayoutDirection(Qt.LeftToRight)
+            val.setAlignment(text_align)
+            val.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_REGULAR))
+            val.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+            row.addWidget(lbl, 0)
+            row.addWidget(val, 1)
+            return row
+
+        nid = person.get("nationalId") or ""
+        if nid:
+            v.addLayout(_info_row(tr("wizard.applicant.national_id"), nid, ltr_value=True))
+
+        claim_type = person.get("claimType")
+        if is_claimant and claim_type:
+            v.addLayout(_info_row(tr("wizard.person_dialog.claim_type_label"), get_claim_type_display(claim_type)))
+
+        phone = person.get("mobileNumber") or person.get("phoneNumber") or ""
+        if phone:
+            phone_label = tr("wizard.person_dialog.mobile" if person.get("mobileNumber") else "wizard.person_dialog.phone")
+            phone_row = _info_row(phone_label, phone, ltr_value=True)
+            if is_contact:
+                # The desk operator calls the contact point: copy the number
+                copy_btn = QPushButton(tr("page.case_entity.copy_phone"))
+                copy_btn.setCursor(Qt.PointingHandCursor)
+                copy_btn.setFont(create_font(size=FontManager.SIZE_SMALL, weight=FontManager.WEIGHT_SEMIBOLD))
+                copy_btn.setStyleSheet(
+                    "QPushButton { color: #0369A1; background-color: #E0F2FE; border: none;"
+                    " border-radius: 6px; padding: 3px 10px; }"
+                    "QPushButton:hover { background-color: #BAE6FD; }"
+                )
+                copy_btn.clicked.connect(lambda _=False, number=phone: self._copy_phone(number))
+                phone_row.addWidget(copy_btn, 0)
+            v.addLayout(phone_row)
+
+        return card
+
+    def _copy_phone(self, number: str):
+        from PyQt5.QtWidgets import QApplication
+        QApplication.clipboard().setText(number)
+        Toast.show_toast(self, tr("page.case_entity.phone_copied"), Toast.SUCCESS, 2500)
 
     def _populate_notes_section(self):
         self._clear_layout(self._notes_content)
