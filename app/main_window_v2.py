@@ -1116,7 +1116,9 @@ class MainWindow(QMainWindow):
 
         # The dialog's own clicks are the user's answer, not activity.
         self._idle_session_monitor.pause_activity(True)
-        dialog.open()
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _close_session_warning(self):
         """Close the expiry warning (if shown) and resume activity tracking."""

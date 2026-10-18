@@ -30,7 +30,9 @@ class SessionExpiryDialog(QDialog):
         super().__init__(parent)
         self._seconds_remaining = seconds_remaining
 
-        self.setModal(True)
+        # Application-modal and shown with show() (open() forces window
+        # modality), so it stays reachable above any dialog already open.
+        self.setWindowModality(Qt.ApplicationModal)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -120,11 +122,13 @@ class SessionExpiryDialog(QDialog):
         self._ok_btn.setEnabled(not busy)
         self._logout_btn.setEnabled(not busy)
 
-    def keyPressEvent(self, event):
-        # The user must choose: Escape neither renews nor logs out
-        if event.key() == Qt.Key_Escape:
-            return
-        super().keyPressEvent(event)
+    # The user must choose [OK] or [Log out]: Escape, Alt+F4 and window
+    # close do nothing. The owner closes the dialog through done().
+    def reject(self):
+        pass
+
+    def closeEvent(self, event):
+        event.ignore()
 
     def done(self, result_code: int):
         self._countdown.stop()
