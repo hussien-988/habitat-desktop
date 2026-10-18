@@ -47,7 +47,9 @@ def _is_owner_relation(relation_type) -> bool:
         return relation_type.lower() in ('owner', 'co_owner', 'coowner', 'heir')
     return False
 from services.translation_manager import tr, get_layout_direction
-from services.display_mappings import get_relation_type_display, get_relationship_to_head_display
+from services.display_mappings import (
+    get_claim_type_display, get_relationship_to_head_display, resolve_claim_type,
+)
 from services.error_mapper import map_exception
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -660,10 +662,10 @@ class OccupancyClaimsStep(BaseStep):
 
         # ── Relation + docs: only rendered when there is actual content ──
         rel_data = person.get('relation_data', {}) or {}
-        rel_type = rel_data.get('rel_type')
-        rel_display = get_relation_type_display(rel_type) if rel_type else ''
+        claim_type = resolve_claim_type(rel_data.get('claim_type'), rel_data.get('rel_type'))
+        rel_display = get_claim_type_display(claim_type) if claim_type else ''
         share = rel_data.get('ownership_share')
-        if rel_display and share:
+        if rel_display and share and claim_type == 1:
             rel_display = f"{rel_display} · {int(share)} {tr('unit.shares')}"
         has_docs = bool(rel_data.get('has_documents') or person.get('_relation_uploaded_files'))
 
@@ -682,7 +684,7 @@ class OccupancyClaimsStep(BaseStep):
                     "background: transparent; border: none;"
                 )
                 bottom_row.addWidget(
-                    _labeled_cell(tr("wizard.occupancy_claims.rel_type_label"), rel_val), 1
+                    _labeled_cell(tr("wizard.person_dialog.claim_type_label"), rel_val), 1
                 )
             else:
                 bottom_row.addStretch(1)
@@ -842,6 +844,8 @@ class OccupancyClaimsStep(BaseStep):
                 person['relation_data'] = {
                     **existing,
                     'rel_type': rel.get('relationType') or rel.get('RelationType'),
+                    # Server-derived claim type (1 ownership / 2 occupancy)
+                    'claim_type': rel.get('claimType') or rel.get('ClaimType'),
                     'ownership_share': rel.get('ownershipShare') or rel.get('OwnershipShare'),
                     'occupancy_type': rel.get('occupancyType') or rel.get('OccupancyType'),
                     'evidence_desc': rel.get('contractDetails') or rel.get('ContractDetails'),

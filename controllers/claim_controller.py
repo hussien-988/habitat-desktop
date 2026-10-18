@@ -674,6 +674,8 @@ class ClaimController(BaseController):
             # (Tab 3 reads exclusively from relation_data).
             "relation_data": {
                 "rel_type": relation_dto.get("relationType"),
+                # Server-derived claim type (1 ownership / 2 occupancy)
+                "claim_type": relation_dto.get("claimType"),
                 "ownership_share": relation_dto.get("ownershipShare"),
                 "contract_type": relation_dto.get("occupancyType"),
                 "start_date": relation_dto.get("relationStartDate") or relation_dto.get("startDate"),
