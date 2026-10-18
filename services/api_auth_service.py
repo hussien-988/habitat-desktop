@@ -185,4 +185,9 @@ class ApiAuthService:
         if refresh_token:
             user._api_refresh_token = refresh_token
 
+        # Session timing measured on the server (ProdV5): token lifetime and
+        # how long before expiry to warn. None with older servers.
+        user._api_expires_in = data.get("accessTokenExpiresInSeconds")
+        user._api_session_warning = data.get("sessionExpiryWarningSeconds")
+
         return user

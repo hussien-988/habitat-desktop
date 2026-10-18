@@ -979,6 +979,16 @@ AR_TRANSLATIONS = {
     "page.login.lockout_exceeded": "تم قفل الحساب لمدة {minutes} دقيقة بسبب تجاوز عدد المحاولات المسموحة",
     "page.login.invalid_credentials_remaining": "اسم المستخدم أو كلمة المرور غير صحيحة ({remaining} محاولات متبقية)",
     "page.login.invalid_credentials": "اسم المستخدم أو كلمة المرور غير صحيحة",
+    "page.login.forgot_password": "نسيت كلمة المرور؟",
+    "forgot_password.title": "نسيت كلمة المرور",
+    "forgot_password.hint": "سيُرسل طلب إلى مدير النظام لإعادة تعيين كلمة المرور.",
+    "forgot_password.note": "ملاحظة (اختياري)",
+    "forgot_password.note_placeholder": "أضف ملاحظة لمدير النظام",
+    "forgot_password.send": "إرسال الطلب",
+    "forgot_password.sending": "جاري الإرسال...",
+    "forgot_password.sent": "تم إرسال طلبك إلى مدير النظام.",
+    "forgot_password.too_many": "تم تجاوز عدد الطلبات المسموح. حاول لاحقاً.",
+    "forgot_password.username_required": "يرجى إدخال اسم المستخدم",
 
     # Cases page
     "page.cases.type_field": "مسوح حقلية",
@@ -3863,8 +3873,8 @@ AR_TRANSLATIONS = {
     "page.import_packages.status_filter_label": "تصفية حسب الحالة",
     "page.import_packages.filter_results_all": "{count} حزمة",
     "page.import_packages.filter_results_filtered": "عرض {shown} من {total}",
-    "session.expiring": "ستنتهي جلستك خلال {seconds} ثانية بسبب عدم النشاط. اضغط استمرار لمتابعة العمل.",
-    "session.continue": "استمرار الجلسة",
+    "session.expiring_title": "تنبيه انتهاء الجلسة",
+    "session.expiring_prompt": "ستنتهي الجلسة خلال {seconds} ثانية. هل تريد المتابعة؟",
     "session.renew_network_failed": "تعذّر تجديد الجلسة بسبب مشكلة في الاتصال. تحقق من الشبكة وحاول مرة أخرى.",
     "session.expired": "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مجدداً.",
 

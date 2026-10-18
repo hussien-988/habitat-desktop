@@ -979,6 +979,16 @@ EN_TRANSLATIONS = {
     "page.login.lockout_exceeded": "Account locked for {minutes} minutes due to exceeding allowed attempts",
     "page.login.invalid_credentials_remaining": "Invalid username or password ({remaining} attempts remaining)",
     "page.login.invalid_credentials": "Invalid username or password",
+    "page.login.forgot_password": "Forgot password?",
+    "forgot_password.title": "Forgot password",
+    "forgot_password.hint": "A request will be sent to the system administrator to reset your password.",
+    "forgot_password.note": "Note (optional)",
+    "forgot_password.note_placeholder": "Add a note for the administrator",
+    "forgot_password.send": "Send request",
+    "forgot_password.sending": "Sending...",
+    "forgot_password.sent": "Your request has been sent to the system administrator.",
+    "forgot_password.too_many": "Too many requests. Please try again later.",
+    "forgot_password.username_required": "Please enter your username",
 
     # Cases page
     "page.cases.type_field": "Field Surveys",
@@ -3858,8 +3868,8 @@ EN_TRANSLATIONS = {
     "page.import_packages.status_filter_label": "Filter by status",
     "page.import_packages.filter_results_all": "{count} packages",
     "page.import_packages.filter_results_filtered": "Showing {shown} of {total}",
-    "session.expiring": "Your session will expire in {seconds} seconds due to inactivity. Continue to keep working.",
-    "session.continue": "Continue session",
+    "session.expiring_title": "Session expiry warning",
+    "session.expiring_prompt": "Your session will end in {seconds} seconds. Do you want to continue?",
     "session.renew_network_failed": "The session could not be renewed because of a connection problem. Check your connection and try again.",
     "session.expired": "Your session has expired. Please sign in again.",
 

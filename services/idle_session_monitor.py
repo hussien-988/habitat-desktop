@@ -16,9 +16,14 @@ logger = get_logger(__name__)
 class IdleSessionMonitor(QObject):
     """Track meaningful user activity and emit warning/timeout events."""
 
+    # Coming back after this long (e.g. from PC sleep) re-checks the
+    # session with the server.
+    RESYNC_AFTER_SECONDS = 300
+
     warning = pyqtSignal(int)
     timed_out = pyqtSignal()
     resumed_after_warning = pyqtSignal()
+    reactivated_after_absence = pyqtSignal()
 
     def __init__(
         self,
@@ -33,6 +38,7 @@ class IdleSessionMonitor(QObject):
         self._last_activity_at: Optional[datetime] = None
         self._warning_emitted = False
         self._active = False
+        self._activity_paused = False
 
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
@@ -75,6 +81,12 @@ class IdleSessionMonitor(QObject):
         self._timer.stop()
         self._last_activity_at = None
         self._warning_emitted = False
+        self._activity_paused = False
+
+    def pause_activity(self, paused: bool):
+        """Ignore user activity while the expiry warning asks for a decision
+        (its own clicks must not count as activity); timeouts still apply."""
+        self._activity_paused = paused
 
     def record_activity(self):
         if not self._active:
@@ -149,11 +161,20 @@ class IdleSessionMonitor(QObject):
             QEvent.Wheel,
             QEvent.TouchBegin,
         ):
-            self.record_activity()
+            if not self._activity_paused:
+                self.record_activity()
 
         # Returning from background/sleep must check the real elapsed time
         # before treating anything as new activity.
         elif event_type == QEvent.ApplicationActivate:
-            QTimer.singleShot(0, self._check_timeout)
+            QTimer.singleShot(0, self._on_application_activated)
 
         return False
+
+    def _on_application_activated(self):
+        if not self._active or self._last_activity_at is None:
+            return
+        absence = (datetime.now(timezone.utc) - self._last_activity_at).total_seconds()
+        self._check_timeout()
+        if self._active and absence >= self.RESYNC_AFTER_SECONDS:
+            self.reactivated_after_absence.emit()
