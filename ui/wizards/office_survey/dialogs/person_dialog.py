@@ -964,7 +964,8 @@ class PersonDialog(QDialog):
 
         # Row: Claim Type | Ownership Share
         grid.addWidget(self._label(tr("wizard.person_dialog.claim_type_label"), label_style), row, 0)
-        grid.addWidget(self._label(tr("wizard.person_dialog.ownership_share"), label_style), row, 1)
+        self._ownership_label = self._label(tr("wizard.person_dialog.ownership_share"), label_style)
+        grid.addWidget(self._ownership_label, row, 1)
         row += 1
         self.rel_type_combo = RtlCombo()
 
@@ -988,6 +989,9 @@ class PersonDialog(QDialog):
         self.ownership_share.editingFinished.connect(self._clamp_ownership_share)
         self.ownership_share.setStyleSheet(self._input_style())
         self.ownership_share.setEnabled(False)
+        # Shown only for an ownership claim (claim type 1)
+        self._ownership_label.setVisible(False)
+        self.ownership_share.setVisible(False)
         self._ownership_error = QLabel("")
         self._ownership_error.setStyleSheet(self._error_label_style())
         self._ownership_error.setVisible(False)
@@ -3011,9 +3015,11 @@ class PersonDialog(QDialog):
     # Validation
 
     def _on_claim_type_changed(self):
-        """Enable ownership share only when claim type is Owner (1)."""
+        """Show ownership share only for an ownership claim (claim type 1)."""
         is_owner = self.rel_type_combo.currentData() == 1
         self.ownership_share.setEnabled(is_owner)
+        self.ownership_share.setVisible(is_owner)
+        self._ownership_label.setVisible(is_owner)
         if not is_owner:
             self.ownership_share.clear()
             self._clear_field_error(self.ownership_share, self._ownership_error)
@@ -3623,9 +3629,10 @@ class PersonDialog(QDialog):
                 self.tab_widget.setCurrentIndex(1)
             has_error = True
 
-        # Ownership share: required and must be > 0 when claim type is Owner (1)
+        # Ownership share: required and must be > 0 for an ownership claim
+        # (claim type 1), Heir relations included
         ownership_text = self.ownership_share.text().strip()
-        is_owner = self._resolved_relation_type() == 1
+        is_owner = self.rel_type_combo.currentData() == 1
         try:
             ownership_val = int(ownership_text) if ownership_text else 0
         except ValueError:

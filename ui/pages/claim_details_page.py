@@ -1042,7 +1042,7 @@ class ClaimDetailsPage(QWidget):
                     self._ownership_share_input = QLineEdit()
                     self._ownership_share_input.setMinimumHeight(ScreenScale.h(40))
                     self._ownership_share_input.setMinimumWidth(ScreenScale.w(160))
-                    self._ownership_share_input.setPlaceholderText("0 - 2400")
+                    self._ownership_share_input.setPlaceholderText("1 - 2400")
                     self._ownership_share_input.setValidator(QIntValidator(0, 2400, self._ownership_share_input))
                     self._ownership_share_input.setFocusPolicy(Qt.StrongFocus)
                     self._ownership_share_input.setStyleSheet("""
@@ -2082,7 +2082,8 @@ class ClaimDetailsPage(QWidget):
         except (ValueError, TypeError):
             Toast.show_toast(self, tr("page.claim_details.ownership_share_required"), Toast.WARNING)
             return
-        if new_share_val is not None and (new_share_val < 0 or new_share_val > 2400):
+        # The server accepts a share of 1–2400 (0 is rejected)
+        if new_share_val is not None and (new_share_val < 1 or new_share_val > 2400):
             Toast.show_toast(self, tr("page.claim_details.ownership_share_out_of_range"), Toast.WARNING)
             if self._ownership_share_input:
                 self._ownership_share_input.setFocus()
@@ -2128,9 +2129,14 @@ class ClaimDetailsPage(QWidget):
         update_data = {}
 
         if type_changed:
+            # PUT /Claims takes the relation type only: 1 Owner / 2 Occupant
+            # match the two claim types
             update_data["relationType"] = new_type
 
-        if share_changed and new_share_val is not None:
+        if type_changed and not is_ownership and self._original_ownership_share is not None:
+            # An occupancy claim has no ownership share: drop the old one
+            update_data["clearOwnershipShare"] = True
+        elif share_changed and new_share_val is not None:
             update_data["ownershipShare"] = new_share_val
 
         if self._pending_uploads:

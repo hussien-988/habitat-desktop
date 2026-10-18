@@ -54,7 +54,7 @@ from services.display_mappings import (
     get_unit_status_display,
     get_claim_type_display, get_priority_display,
     get_business_type_display, get_source_display,
-    get_claim_status_display,
+    get_claim_status_display, resolve_claim_type,
 )
 from utils.helpers import build_hierarchical_address
 from ui.components.loading_spinner import LoadingSpinnerOverlay
@@ -1194,7 +1194,7 @@ class ReviewStep(BaseStep):
     def _build_review_claims_section(self, person: dict,
                                      ev_type_display, rel_type_display, claim_type_display):
         rel = person.get("relation_data") or {}
-        rel_type = rel.get("rel_type")
+        claim_type = resolve_claim_type(rel.get("claim_type"), rel.get("rel_type"))
         docs = person.get("_relation_uploaded_files") or []
 
         wrap = QFrame()
@@ -1212,13 +1212,13 @@ class ReviewStep(BaseStep):
             title_size=FontManager.SIZE_BODY,
         ))
 
-        if rel_type is not None:
+        if claim_type is not None:
             v.addWidget(self._review_kv_row(
                 tr("wizard.review.claim_type_label"),
-                rel_type_display(rel_type) if rel_type_display else str(rel_type),
+                get_claim_type_display(claim_type),
             ))
         share = rel.get("ownership_share")
-        if share:
+        if share and claim_type == 1:
             v.addWidget(self._review_kv_row(
                 tr("wizard.review.ownership_share"),
                 f"{share} {tr('wizard.review.shares')}",

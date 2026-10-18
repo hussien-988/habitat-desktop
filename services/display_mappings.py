@@ -206,6 +206,19 @@ def get_nationality_options() -> list:
 def get_claim_type_options() -> list:
     return _vocab_options("ClaimType")
 
+def resolve_claim_type(claim_type, rel_type):
+    """Claim type of a relation: the server's claimType (1 ownership /
+    2 occupancy), else derived from the relation type like the server does
+    (Owner 1 / Heir 5 -> 1, any other type -> 2). None when neither is set."""
+    try:
+        if claim_type not in (None, ""):
+            return int(claim_type)
+        if rel_type not in (None, ""):
+            return 1 if int(rel_type) in (1, 5) else 2
+    except (TypeError, ValueError):
+        pass
+    return None
+
 def get_claim_type_display(claim_key) -> str:
     _str_fallback = {
         "ownership": "mapping.claim_type.ownership",
