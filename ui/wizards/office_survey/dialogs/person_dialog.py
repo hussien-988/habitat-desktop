@@ -41,6 +41,7 @@ from ui.design_system import Colors, ScreenScale
 from ui.font_utils import create_font, FontManager
 from ui.wizards.office_survey.wizard_styles import (
     FORM_FIELD_STYLE,
+    COMBO_DOWN_ARROW_STYLE,
     make_editable_date_combo,
     read_int_from_combo,
 )
@@ -2673,7 +2674,7 @@ class PersonDialog(QDialog):
             }
             QComboBox:focus { border-color: #3B82F6; }
             QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center left; width: 22px; border: none; }
-        """
+        """ + COMBO_DOWN_ARROW_STYLE
 
         def _make_section(label_html: str):
             wrap = QVBoxLayout()

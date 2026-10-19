@@ -46,9 +46,13 @@ STEP_CONTAINER_STYLE = """
 """
 
 # -- Form inputs (enhanced) --
-def _form_field_style() -> str:
+def _down_img() -> str:
     from app.config import Config
-    down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+    return str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
+
+
+def _form_field_style() -> str:
+    down_img = _down_img()
     return f"""
     QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, QSpinBox, QTextEdit {{
         border: 1.5px solid #D0D7E2;
@@ -90,6 +94,12 @@ def _form_field_style() -> str:
 
 
 FORM_FIELD_STYLE = _form_field_style()
+
+
+# Append to a custom QComboBox sheet: styling ::drop-down hides Qt's native arrow
+COMBO_DOWN_ARROW_STYLE = (
+    f"QComboBox::down-arrow {{ image: url({_down_img()}); width: 12px; height: 12px; }}"
+)
 
 # -- Read-only fields --
 READONLY_FIELD_STYLE = f"""
@@ -723,9 +733,14 @@ def make_editable_date_combo(items, max_digits: int, placeholder: str = "", edit
                 if max_digits == 2 and len(text) == 1:
                     line_edit.setText(text.zfill(2))
 
-            line_edit.editingFinished.connect(
-                lambda: QTimer.singleShot(0, _normalize_on_finish)
-            )
+            # Deferred through a timer the combo owns: QTimer.singleShot(0, closure)
+            # from editingFinished (fired when the popup takes focus) crashed the
+            # app with an access violation once a QWebEngineView was in the window.
+            normalize_timer = QTimer(combo)
+            normalize_timer.setSingleShot(True)
+            normalize_timer.setInterval(0)
+            normalize_timer.timeout.connect(_normalize_on_finish)
+            line_edit.editingFinished.connect(normalize_timer.start)
         else:
             line_edit.setReadOnly(True)
 
