@@ -37,6 +37,19 @@ _PRIORITY_STR_TO_INT = {"low": 1, "normal": 2, "high": 3, "urgent": 4}
 _PRIORITY_INT_TO_STR = {v: k for k, v in _PRIORITY_STR_TO_INT.items()}
 
 
+def split_relation_notes(contract_details, notes):
+    """Return (contract_details, notes) for the claim dialog.
+
+    A tablet package carries the claim notes in claims.claim_description,
+    which the import stores as the relation's ContractDetails, a field the
+    dialog keeps hidden. While the relation has no notes, show that text as
+    the notes; the next save then stores it there.
+    """
+    if not notes and contract_details:
+        return None, contract_details
+    return contract_details, notes
+
+
 @dataclass
 class ClaimFilter:
     """Filter criteria for claim search."""
@@ -648,6 +661,9 @@ class ClaimController(BaseController):
     @staticmethod
     def _map_person_dto(person_dto: dict, relation_dto: dict) -> dict:
         """Map API PersonDto + RelationDto to person dict for SurveyContext."""
+        contract_details, notes = split_relation_notes(
+            relation_dto.get("contractDetails"), relation_dto.get("notes")
+        )
         return {
             "person_id": person_dto.get("id", ""),
             "first_name": person_dto.get("firstNameArabic", ""),
@@ -681,8 +697,8 @@ class ClaimController(BaseController):
                 "start_date": relation_dto.get("relationStartDate") or relation_dto.get("startDate"),
                 "has_documents": bool(relation_dto.get("hasEvidence")),
                 # Saved as contractDetails / notes (api_client relation payload)
-                "evidence_desc": relation_dto.get("contractDetails") or "",
-                "notes": relation_dto.get("notes") or "",
+                "evidence_desc": contract_details or "",
+                "notes": notes or "",
             },
         }
 
@@ -702,7 +718,7 @@ class ClaimController(BaseController):
             "occupancy_nature": dto.get("occupancyNature"),
             "occupancy_start_date": dto.get("occupancyStartDate"),
             "notes": dto.get("notes", ""),
-            # Set by field collectors on the tablet only (read-only here)
+            # Set on the tablet or by the household step's empty-unit checkbox
             "is_empty_property": bool(dto.get("isEmptyProperty")),
             "empty_property_justification": dto.get("emptyPropertyJustification") or "",
         }

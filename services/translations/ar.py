@@ -458,7 +458,7 @@ AR_TRANSLATIONS = {
     "wizard.household.add_notes": "إضافة ملاحظات",
     "wizard.household.notes_label": "إضافة ملاحظات",
     "wizard.household.notes_placeholder": "أدخل ملاحظاتك هنا...",
-    "wizard.household.composition_title": "معلومات القاطنين",
+    "wizard.household.composition_title": "معلومات الشاغلين",
     "wizard.household.composition_subtitle": "توزيع أفراد الأسرة حسب الجنس والفئة العمرية",
     "wizard.household.male": "ذكور",
     "wizard.household.males": "ذكور",
@@ -474,6 +474,7 @@ AR_TRANSLATIONS = {
     "wizard.household.step_description": "سجل المعلومات الديموغرافية للأسرة القاطنة في الوحدة",
     "wizard.household.no_data": "لم يتم تسجيل أي أسرة",
     "wizard.household.empty_property": "عقار فارغ",
+    "wizard.household.empty_property_check": "المقسم فارغ (لا يوجد شاغلين)",
     "wizard.household.head_name": "اسم رب الأسرة",
     "wizard.household.family_size": "عدد أفراد الأسرة",
     "wizard.household.occupants_title": "الشاغلين",
@@ -483,7 +484,7 @@ AR_TRANSLATIONS = {
     "wizard.household.unit_area": "مساحة المقسم",
     "wizard.household.unit_type_label": "نوع المقسم",
     "wizard.household.unit_status_label": "حالة المقسم",
-    "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر",
+    "wizard.household.members_required": "يجب أن يكون عدد أفراد الأسرة أكبر من صفر، أو حدّد أن المقسم فارغ",
     "wizard.household.gender_exceeds_total": "مجموع الذكور والإناث يتجاوز حجم الأسرة",
     "wizard.household.age_exceeds_total": "مجموع الفئات العمرية يتجاوز حجم الأسرة",
     "wizard.household.age_must_equal_total": "عدد القاصرين والبالغين وكبار السن يجب أن يساوي إجمالي حجم الأسرة",
@@ -2978,6 +2979,7 @@ AR_TRANSLATIONS = {
     "page.import_packages.data_collector": "جامع البيانات",
     "page.import_packages.building_numbers": "أرقام المباني",
     "page.import_packages.building_locations": "مواقع المباني",
+    "page.import_packages.assigned_by": "أسند المبنى",
     "page.import_packages.unknown_collector": "غير معروف",
     # Each action label is status-specific (the user's strict spec). Do NOT
     # reuse "view_report" for non-Completed statuses.

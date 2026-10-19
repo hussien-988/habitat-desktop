@@ -474,6 +474,7 @@ EN_TRANSLATIONS = {
     "wizard.household.step_description": "Register demographic information of the household residing in the unit",
     "wizard.household.no_data": "No household registered",
     "wizard.household.empty_property": "Empty property",
+    "wizard.household.empty_property_check": "The unit is empty (no occupants)",
     "wizard.household.head_name": "Head of Household Name",
     "wizard.household.family_size": "Family Size",
     "wizard.household.occupants_title": "Occupants",
@@ -483,7 +484,7 @@ EN_TRANSLATIONS = {
     "wizard.household.unit_area": "Unit Area",
     "wizard.household.unit_type_label": "Unit Type",
     "wizard.household.unit_status_label": "Unit Status",
-    "wizard.household.members_required": "Number of household members must be greater than zero",
+    "wizard.household.members_required": "Number of household members must be greater than zero, or mark the unit as empty",
     "wizard.household.gender_exceeds_total": "Gender sum exceeds household size",
     "wizard.household.age_exceeds_total": "Age group sum exceeds household size",
     "wizard.household.age_must_equal_total": "Minors + adults + elderly must equal total household size",
@@ -2976,6 +2977,7 @@ EN_TRANSLATIONS = {
     "page.import_packages.data_collector": "Data Collector",
     "page.import_packages.building_numbers": "Building Numbers",
     "page.import_packages.building_locations": "Building Locations",
+    "page.import_packages.assigned_by": "Assigned by",
     "page.import_packages.unknown_collector": "Unknown",
     # Strict status-specific action labels — do NOT reuse view_report for
     # statuses other than Completed.

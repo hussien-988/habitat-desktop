@@ -2808,6 +2808,11 @@ class MainWindow(QMainWindow):
                         }}
                     """)
                     self._apply_round_mask()
+            # Fires for the button, title-bar double-click and Windows snap alike
+            maximized = self.isMaximized()
+            for owner in (getattr(self, "navbar", None), self.pages.get(Pages.LOGIN) if hasattr(self, "pages") else None):
+                if owner is not None and hasattr(owner, "set_maximized_state"):
+                    owner.set_maximized_state(maximized)
         super().changeEvent(event)
 
     def _apply_round_mask(self):

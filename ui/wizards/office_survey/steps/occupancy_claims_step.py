@@ -23,6 +23,7 @@ from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.dialogs.person_dialog import PersonDialog
 
 from app.config import Config
+from controllers.claim_controller import split_relation_notes
 from services.api_client import get_api_client
 from services.exceptions import humanize_exception, log_exception
 from utils.logger import get_logger
@@ -931,6 +932,10 @@ class OccupancyClaimsStep(BaseStep):
                 continue
             existing = person.get('relation_data') or {}
             if not existing.get('rel_type'):
+                contract_details, notes = split_relation_notes(
+                    rel.get('contractDetails') or rel.get('ContractDetails'),
+                    rel.get('notes') or rel.get('Notes'),
+                )
                 person['relation_data'] = {
                     **existing,
                     'rel_type': rel.get('relationType') or rel.get('RelationType'),
@@ -938,8 +943,8 @@ class OccupancyClaimsStep(BaseStep):
                     'claim_type': rel.get('claimType') or rel.get('ClaimType'),
                     'ownership_share': rel.get('ownershipShare') or rel.get('OwnershipShare'),
                     'occupancy_type': rel.get('occupancyType') or rel.get('OccupancyType'),
-                    'evidence_desc': rel.get('contractDetails') or rel.get('ContractDetails'),
-                    'notes': rel.get('notes') or rel.get('Notes'),
+                    'evidence_desc': contract_details,
+                    'notes': notes,
                     'has_documents': bool(
                         rel.get('hasEvidence') or rel.get('evidenceCount')
                         or rel.get('HasEvidence') or rel.get('EvidenceCount')

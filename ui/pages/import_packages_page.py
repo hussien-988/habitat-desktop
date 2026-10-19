@@ -71,7 +71,7 @@ class _PackageCard(AnimatedCard):
         self._is_selected = False
         status_code = pkg_data.get("status_code", 1)
         color = _STATUS_COLORS.get(status_code, "#6B7280")
-        super().__init__(parent, card_height=165, status_color=color)
+        super().__init__(parent, card_height=190, status_color=color)
 
     def set_selected(self, selected: bool):
         """Toggle the card's selected look.
@@ -148,6 +148,24 @@ class _PackageCard(AnimatedCard):
         collector_label.setToolTip(collector_name)
         apply_label_alignment(collector_label)
         layout.addWidget(collector_label)
+
+        # Row 2b: Who assigned the buildings to the collector
+        assigned_by = d.get("assigned_by_names") or []
+        assigned_by_text = ", ".join(assigned_by) if assigned_by else "—"
+
+        assigned_by_label = QLabel(
+            f"{tr('page.import_packages.assigned_by')}: {assigned_by_text}"
+        )
+        assigned_by_label.setFont(
+            create_font(size=11, weight=FontManager.WEIGHT_SEMIBOLD)
+        )
+        assigned_by_label.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; "
+            "background: transparent; border: none;"
+        )
+        assigned_by_label.setToolTip(assigned_by_text)
+        apply_label_alignment(assigned_by_label)
+        layout.addWidget(assigned_by_label)
 
         # Row 3: Building numbers
         building_numbers = d.get("building_numbers") or []
@@ -833,6 +851,7 @@ class ImportPackagesPage(QWidget):
 
         building_numbers = []
         building_locations = []
+        assigned_by_names = []
 
         seen_numbers = set()
         seen_locations = set()
@@ -867,6 +886,10 @@ class ImportPackagesPage(QWidget):
             if location and location not in seen_locations:
                 seen_locations.add(location)
                 building_locations.append(location)
+
+            assigned_by = str(building.get("assignedByName") or "").strip()
+            if assigned_by and assigned_by not in assigned_by_names:
+                assigned_by_names.append(assigned_by)
         return {
             "package_name": pkg.get("fileName") or "N/A",
             "status_code": status_raw,
@@ -882,6 +905,7 @@ class ImportPackagesPage(QWidget):
             ).strip(),
             "building_numbers": building_numbers,
             "building_locations": building_locations,
+            "assigned_by_names": assigned_by_names,
         }
 
     def _clear_cards(self):

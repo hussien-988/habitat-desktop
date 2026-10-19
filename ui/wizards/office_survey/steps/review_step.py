@@ -1660,8 +1660,7 @@ class ReviewStep(BaseStep):
             self._household_content, "user-group",
             tr("wizard.review.household_card_title"),
             tr("wizard.review.household_card_subtitle"),
-            # An imported empty property cannot be edited from the desktop
-            edit_callback=None if empty_property else (lambda: self._request_edit(3)),
+            edit_callback=lambda: self._request_edit(3),
         )
 
         if not self.context.households:

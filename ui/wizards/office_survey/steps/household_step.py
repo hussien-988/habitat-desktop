@@ -15,7 +15,7 @@ import uuid
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QFrame, QScrollArea, QWidget, QGroupBox, QSizePolicy,
-    QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect,
+    QSpinBox, QTextEdit, QGridLayout, QGraphicsDropShadowEffect, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QLocale, QDate, QTimer
 from PyQt5.QtGui import QColor
@@ -202,10 +202,18 @@ class HouseholdStep(BaseStep):
         # Divider
         family_info_layout.addWidget(make_divider())
 
-        # Shown instead of editing for a unit found empty in the field
+        # Justification the field collector gave for a unit found empty
         self._empty_property_notice = EmptyPropertyNotice()
         self._empty_property_notice.setVisible(False)
         family_info_layout.addWidget(self._empty_property_notice)
+
+        # Confirms a unit with no occupants, so a size of 0 is accepted
+        self.hh_empty_property_check = QCheckBox(tr("wizard.household.empty_property_check"))
+        self.hh_empty_property_check.setFont(create_font(size=FontManager.WIZARD_CARD_LABEL, weight=FontManager.WEIGHT_REGULAR))
+        self.hh_empty_property_check.setStyleSheet(f"color: {Colors.WIZARD_TITLE}; background: transparent;")
+        self.hh_empty_property_check.toggled.connect(self._apply_empty_property_state)
+        family_info_layout.addWidget(self.hh_empty_property_check)
+        self._loaded_snapshot = None
 
         down_img = str(Config.IMAGES_DIR / "down.png").replace("\\", "/")
         combo_style = FORM_FIELD_STYLE + f"""
@@ -885,7 +893,11 @@ class HouseholdStep(BaseStep):
         self._occupants_header_title.setText(tr("wizard.household.occupants_title"))
         self._occupants_header_subtitle.setText(tr("wizard.household.subtitle"))
         self.hh_composition_header_title.setText(tr("wizard.household.composition_title"))
-        self._show_empty_property(self.context.households[0] if self.context.households else {})
+        self.hh_empty_property_check.setText(tr("wizard.household.empty_property_check"))
+        if self._empty_property_notice.isVisible():
+            self._empty_property_notice.setText(
+                empty_property_text(self.context.households[0] if self.context.households else {})
+            )
         self.hh_composition_header_subtitle.setText(tr("wizard.household.composition_subtitle"))
         self._occupancy_nature_label.setText(tr("wizard.household.occupancy_nature"))
         self._total_members_label.setText(tr("wizard.household.total_members"))
@@ -929,10 +941,14 @@ class HouseholdStep(BaseStep):
         """Validate the step and save household data automatically."""
         result = self.create_validation_result()
 
-        # An imported empty property is read-only: its size is 0, which the
-        # household update would reject, so keep it as imported.
+        empty = self.hh_empty_property_check.isChecked()
+
+        # An imported empty property left untouched is kept as imported, without a save
         stored = self.context.households[0] if self.context.households else {}
-        if stored.get("is_empty_property"):
+        if (
+            stored.get("is_empty_property") and empty
+            and self._editable_snapshot() == self._loaded_snapshot
+        ):
             return result
 
         # Auto-save household data when clicking "Next"
@@ -942,9 +958,9 @@ class HouseholdStep(BaseStep):
         elif self.context.new_unit_data:
             property_unit_id = self.context.new_unit_data.get('unit_uuid')
 
-        # Validate: total members must be > 0
+        # Validate: total members must be > 0 unless the unit is marked empty
         total_entered = self.hh_total_members.value()
-        if total_entered <= 0:
+        if total_entered <= 0 and not empty:
             self._clear_composition_validation_feedback()
             result.add_error(tr("wizard.household.members_required"))
             return result
@@ -1009,7 +1025,11 @@ class HouseholdStep(BaseStep):
             "child_count": self.hh_child_count.value(),
             "elderly_count": self.hh_elderly_count.value(),
             "disabled_count": self.hh_disabled_count.value(),
-            "notes": self.hh_notes.toPlainText().strip()
+            "notes": self.hh_notes.toPlainText().strip(),
+            "is_empty_property": empty,
+            "empty_property_justification": (
+                stored.get("empty_property_justification") or "" if empty else ""
+            ),
         }
 
         # Save household data
@@ -1101,7 +1121,7 @@ class HouseholdStep(BaseStep):
             "size", "occupancy_nature", "occupancy_start_date",
             "male_count", "female_count",
             "adult_count", "child_count", "elderly_count",
-            "disabled_count", "notes"
+            "disabled_count", "notes", "is_empty_property",
         ]
         for key in compare_keys:
             if current.get(key) != stored.get(key):
@@ -1130,17 +1150,39 @@ class HouseholdStep(BaseStep):
         self._show_empty_property({})
 
     def _show_empty_property(self, household: dict):
-        """Show the empty-property notice and lock the form, or undo both."""
-        text = empty_property_text(household)
+        """Tick the empty-unit box for an empty household; the notice shows
+        the justification a tablet import carries."""
+        empty = bool(household.get("is_empty_property"))
+        has_justification = bool((household.get("empty_property_justification") or "").strip())
+        text = empty_property_text(household) if has_justification else ""
         self._empty_property_notice.setText(text)
         self._empty_property_notice.setVisible(bool(text))
-        for widget in (
-            self.hh_occupancy_nature, self.hh_start_year, self.hh_total_members,
-            self.hh_male_count, self.hh_female_count, self.hh_adult_count,
-            self.hh_child_count, self.hh_elderly_count, self.hh_disabled_count,
-            self.hh_notes,
+        self.hh_empty_property_check.setChecked(empty)
+        # setChecked emits nothing when the state is unchanged
+        self._apply_empty_property_state(empty)
+
+    def _apply_empty_property_state(self, empty: bool):
+        """An empty unit has no occupants: zero the counts and lock them."""
+        for spin in (
+            self.hh_total_members, self.hh_male_count, self.hh_female_count,
+            self.hh_adult_count, self.hh_child_count, self.hh_elderly_count,
+            self.hh_disabled_count,
         ):
-            widget.setEnabled(not text)
+            if empty:
+                spin.setValue(0)
+            spin.setEnabled(not empty)
+        if empty:
+            self._clear_composition_validation_feedback()
+        else:
+            self._empty_property_notice.setVisible(False)
+
+    def _editable_snapshot(self):
+        """Fields still editable on an empty unit, to tell whether it was changed."""
+        return (
+            self.hh_occupancy_nature.currentData(),
+            read_int_from_combo(self.hh_start_year),
+            self.hh_notes.toPlainText().strip(),
+        )
 
     def populate_data(self):
         """Populate the step with data from context."""
@@ -1245,6 +1287,7 @@ class HouseholdStep(BaseStep):
             self.hh_elderly_count.setValue(0)
             self.hh_disabled_count.setValue(0)
             self.hh_notes.clear()
+        self._loaded_snapshot = self._editable_snapshot()
 
     def get_step_title(self) -> str:
         """Get step title."""

@@ -24,7 +24,7 @@ from app.config import Config
 from ui.wizards.framework import BaseStep, StepValidationResult
 from ui.wizards.office_survey.survey_context import SurveyContext
 from ui.wizards.office_survey.wizard_styles import (
-    STEP_CARD_STYLE, FORM_FIELD_STYLE,
+    STEP_CARD_STYLE, FORM_FIELD_STYLE, COMBO_DOWN_ARROW_STYLE,
     make_step_card, make_icon_header, make_divider, make_sub_section_header,make_editable_date_combo,
     read_int_from_combo,
 )
@@ -225,7 +225,7 @@ class ApplicantInfoStep(BaseStep):
                 border: none;
                 width: 26px;
             }
-        """)
+        """ + COMBO_DOWN_ARROW_STYLE)
 
 
         self._id_choose_file_btn = QPushButton(

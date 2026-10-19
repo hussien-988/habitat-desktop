@@ -30,6 +30,7 @@ from ui.style_manager import StyleManager
 from ui.components.icon import Icon
 from ui.components.logo import LogoWidget
 from ui.components.toast import Toast
+from ui.wizards.office_survey.wizard_styles import COMBO_DOWN_ARROW_STYLE
 from services.translation_manager import tr, get_layout_direction
 from services.display_mappings import (
     get_unit_type_display, get_unit_status_display,
@@ -1813,7 +1814,7 @@ class ClaimDetailsPage(QWidget):
                 width: 22px;
                 border: none;
         }
-        """
+        """ + COMBO_DOWN_ARROW_STYLE
 
         input_style = """
             QLineEdit {
