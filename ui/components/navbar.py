@@ -28,6 +28,16 @@ from .curved_tab import CurvedTab
 from services.translation_manager import tr, get_language
 
 
+def set_maximize_button_state(btn: QPushButton, maximized: bool):
+    """Show the Restore Down glyph while the window is maximized, Maximize otherwise."""
+    if maximized:
+        btn.setText("\U0001F5D7")
+        btn.setStyleSheet("QPushButton { font-size: 18px; }")
+    else:
+        btn.setText("□")
+        btn.setStyleSheet("QPushButton { font-size: 28px; margin-bottom: 4px; }")
+
+
 # -- Draggable Top Bar Frame --
 
 class DraggableFrame(QFrame):
@@ -416,10 +426,11 @@ class Navbar(QFrame):
         lay.setSpacing(0)
 
         btn_min = QPushButton("\u2013")
-        btn_max = QPushButton("\u25A1")
+        btn_max = QPushButton()
         btn_close = QPushButton("\u2715")
 
-        btn_max.setStyleSheet("QPushButton { font-size: 28px; margin-bottom: 4px; }")
+        set_maximize_button_state(btn_max, False)
+        self._btn_max = btn_max
 
         btn_min.setObjectName("win_btn")
         btn_max.setObjectName("win_btn")
@@ -446,6 +457,9 @@ class Navbar(QFrame):
             win.showNormal()
         else:
             win.showMaximized()
+
+    def set_maximized_state(self, maximized: bool):
+        set_maximize_button_state(self._btn_max, maximized)
 
     # -- Tabs Bar --
 

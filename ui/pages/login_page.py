@@ -23,6 +23,7 @@ from utils.i18n import I18n
 from utils.logger import get_logger
 from ui.font_utils import create_font, FontManager
 from ui.design_system import Colors, ScreenScale
+from ui.components.navbar import set_maximize_button_state
 
 logger = get_logger(__name__)
 
@@ -806,15 +807,11 @@ class LoginPage(QWidget):
 
         # Window control buttons
         btn_min = QPushButton("\u2013")
-        btn_max = QPushButton("\u25a1")
+        btn_max = QPushButton()
         btn_close = QPushButton("\u2715")
 
-        btn_max.setStyleSheet("""
-            QPushButton {
-                font-size: 28px;
-                margin-bottom: 4px;
-            }
-        """)
+        set_maximize_button_state(btn_max, False)
+        self._btn_max = btn_max
 
         btn_min.setObjectName("win_btn")
         btn_max.setObjectName("win_btn")
@@ -928,6 +925,10 @@ class LoginPage(QWidget):
             win.showNormal()
         else:
             win.showMaximized()
+
+    def set_maximized_state(self, maximized: bool):
+        set_maximize_button_state(self._btn_max, maximized)
+
     def _show_error(self, message: str):
         """Show a raw API/server error message.
 
