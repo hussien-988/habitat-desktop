@@ -2232,7 +2232,10 @@ class TRRCMSApiClient:
             "elderlyCount": int(get_value('elderly_count', 'elderlyCount', 0)),
             "disabledCount": int(get_value('disabled_count', 'disabledCount', 0)),
             "occupancyStartDate": start_date,
-            "notes": get_value('notes', 'notes', '') or None
+            "notes": get_value('notes', 'notes', '') or None,
+            # A household size of 0 is accepted only for an empty unit
+            "isEmptyProperty": bool(household_data.get('is_empty_property')),
+            "emptyPropertyJustification": household_data.get('empty_property_justification') or None,
         }
         if survey_id:
             api_data["surveyId"] = survey_id

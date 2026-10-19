@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Read-only notice for a household unit found empty during a field survey."""
+"""Notice for a household unit marked empty (no occupants)."""
 
 from PyQt5.QtWidgets import QLabel
 
@@ -17,7 +17,7 @@ def empty_property_text(household: dict) -> str:
 
 
 class EmptyPropertyNotice(QLabel):
-    """Amber notice label; empty properties are set from the tablet only."""
+    """Amber notice label for an empty-property household."""
 
     def __init__(self, text: str = "", parent=None):
         super().__init__(text, parent)
