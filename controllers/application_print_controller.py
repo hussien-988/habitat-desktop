@@ -26,6 +26,7 @@ from services.printing.application_renderer import prepare_attachment_pages
 from services.translation_manager import get_language, tr
 from utils.helpers import (
     build_hierarchical_address, download_evidence_file, download_identification_document_file,
+    format_gps_coordinates,
 )
 from utils.logger import get_logger
 
@@ -132,6 +133,7 @@ class ApplicationPrintController(BaseController):
             (tr("print.col.building_code"), building.building_id_formatted or building.building_id or ""),
             (tr("wizard.building.type"), building.building_type_display),
             (tr("print.col.address"), build_hierarchical_address(building_obj=building, include_unit=False)),
+            (tr("print.col.gps_coordinates"), format_gps_coordinates(building.latitude, building.longitude)),
             (tr("wizard.building.status"), building.building_status_display),
             (tr("wizard.building.units_count"), str(getattr(building, "number_of_units", "") or "")),
         ]

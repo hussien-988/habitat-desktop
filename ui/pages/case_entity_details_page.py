@@ -1237,12 +1237,19 @@ class CaseEntityDetailsPage(QWidget):
             or "-"
         )
 
+        # GPS of the building. LTR embedding keeps "lat, lon" from being
+        # reordered by the RTL label (the print keeps it LTR on its own).
+        from utils.helpers import format_gps_coordinates
+        gps = format_gps_coordinates(bd.get("latitude"), bd.get("longitude"))
+        gps_display = f"\u202A{gps}\u202C" if gps else "-"
+
         return [
             (tr("page.case_entity.field_building_code"), building_code),
             (tr("page.case_entity.field_unit_number"), unit_number),
             (tr("page.case_entity.field_floor"), floor_display),
             (tr("page.case_entity.field_unit_type"), unit_type_display),
             (tr("page.case_entity.field_location"), neighborhood),
+            (tr("print.col.gps_coordinates"), gps_display),
         ]
 
     def _populate_surveys_section(self):

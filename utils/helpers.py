@@ -486,6 +486,23 @@ def validate_coordinates(lat: float, lon: float) -> bool:
     return -90 <= lat <= 90 and -180 <= lon <= 180
 
 
+def format_gps_coordinates(lat, lon) -> str:
+    """
+    Format coordinates for display/printing as "lat, lon" with 6 decimals.
+
+    Args:
+        lat: Latitude (number or numeric string)
+        lon: Longitude (number or numeric string)
+
+    Returns:
+        "36.202400, 37.133300", or "" when either value is missing/invalid
+    """
+    try:
+        return f"{float(lat):.6f}, {float(lon):.6f}"
+    except (TypeError, ValueError):
+        return ""
+
+
 def is_aleppo_region(lat: float, lon: float) -> bool:
     """
     Check if coordinates are within Aleppo region bounds.

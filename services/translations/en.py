@@ -3900,6 +3900,7 @@ EN_TRANSLATIONS = {
     "print.section.attachments": "Attachments",
     "print.col.building_code": "Building Code",
     "print.col.address": "Address",
+    "print.col.gps_coordinates": "GPS Coordinates",
     "print.col.name": "Name",
     "print.col.relation": "Relation to Property",
     "print.col.documents": "Documents",
