@@ -1024,6 +1024,8 @@ AR_TRANSLATIONS = {
     "page.case_mgmt.pill_open_count": "مفتوحة: {count}",
     "page.case_mgmt.pill_closed_count": "مغلقة: {count}",
     "page.case_mgmt.chip_surveys": "المسوحات المسجلة: {count}",
+    "page.case_mgmt.chip_building": "رقم البناء: {value}",
+    "page.case_mgmt.chip_unit": "رقم المقسم: {value}",
     "page.case_mgmt.opened_date": "تاريخ الفتح: {date}",
     "page.case_mgmt.not_editable": "غير قابلة للتعديل",
     "page.case_mgmt.loading": "جاري تحميل الحالات...",

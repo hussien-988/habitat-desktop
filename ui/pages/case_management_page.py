@@ -255,6 +255,21 @@ class _CaseCard(QFrame):
         ))
         chips_row.addWidget(survey_chip)
 
+        # Building / unit chips (neutral) — hidden when the backend doesn't send them
+        location_chips = [
+            ("page.case_mgmt.chip_building", self._case.building_code_display),
+            ("page.case_mgmt.chip_unit", self._case.unit_identifier),
+        ]
+        for key, value in location_chips:
+            if not value:
+                continue
+            chip = QLabel(tr(key, value=value))
+            chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
+            chip.setStyleSheet(chip_style_tpl.format(
+                bg="#F1F5F9", fg="#334155", border="#CBD5E1"
+            ))
+            chips_row.addWidget(chip)
+
         chips_row.addStretch()
 
         content.addLayout(chips_row)
