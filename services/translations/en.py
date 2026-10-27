@@ -1796,8 +1796,6 @@ EN_TRANSLATIONS = {
     "page.comparison.no_documents": "No Documents",
     "page.comparison.no_linked_documents": "No linked documents",
     "page.comparison.num_rooms": "Number of Rooms",
-    "page.comparison.other_unit_one": "+1 other unit",
-    "page.comparison.other_units_many": "+{count} other units",
     "page.comparison.person_data": "Person Data",
     "page.comparison.persons": "Persons",
     "page.comparison.phone_number": "Phone Number",

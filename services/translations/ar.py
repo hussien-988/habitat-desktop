@@ -1796,8 +1796,6 @@ AR_TRANSLATIONS = {
     "page.comparison.no_documents": "لا توجد مستندات",
     "page.comparison.no_linked_documents": "لا توجد مستندات مرتبطة بالسجلات",
     "page.comparison.num_rooms": "عدد الغرف",
-    "page.comparison.other_unit_one": "+1 مقسم آخر",
-    "page.comparison.other_units_many": "+{count} مقاسم أخرى",
     "page.comparison.person_data": "بيانات الشخص",
     "page.comparison.persons": "الأشخاص",
     "page.comparison.phone_number": "رقم الهاتف",

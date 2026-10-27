@@ -1232,18 +1232,6 @@ class ClaimComparisonPage(QWidget):
         from services.display_mappings import get_unit_type_display
 
         loc = location if isinstance(location, dict) else {}
-        unit_identifier = str(loc.get("unitIdentifier") or "-")
-
-        # The person may be linked to more units than the one shown; note it
-        # next to the unit number. `_unit_identifier` keeps the bare value so
-        # the note alone doesn't flag the row as different.
-        unit_number = unit_identifier
-        others = loc.get("otherUnitsCount") or 0
-        if others and unit_identifier != "-":
-            note = (tr("page.comparison.other_unit_one") if others == 1
-                    else tr("page.comparison.other_units_many", count=others))
-            unit_number = f"{unit_identifier} ({note})"
-
         unit_type = loc.get("unitType")
         floor = loc.get("floorNumber")
         address = " - ".join(filter(None, [
@@ -1252,8 +1240,7 @@ class ClaimComparisonPage(QWidget):
         return {
             "building_code": str(loc.get("buildingCode") or "-"),
             "building_address": address or "-",
-            "unit_number": unit_number,
-            "_unit_identifier": unit_identifier,
+            "unit_number": str(loc.get("unitIdentifier") or "-"),
             "unit_type": get_unit_type_display(unit_type) if unit_type else "-",
             # Ground floor is 0 — only None means missing.
             "floor": str(floor) if floor is not None else "-",
@@ -1269,11 +1256,8 @@ class ClaimComparisonPage(QWidget):
             "building_code", "building_address", "unit_number",
             "unit_type", "floor",
         ]
-        # Compare the bare unit identifier, not the "+N other units" display.
-        compare_keys = {"unit_number": "_unit_identifier"}
         for key in all_keys:
-            cmp_key = compare_keys.get(key, key)
-            values = {str(d.get(cmp_key, d.get(key, ""))) for d in comparison_dicts}
+            values = {str(d.get(key, "")) for d in comparison_dicts}
             if len(values) > 1:
                 diff_fields.add(key)
         return diff_fields
