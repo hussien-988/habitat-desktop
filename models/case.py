@@ -20,6 +20,9 @@ class Case:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     case_number: str = ""
     property_unit_id: str = ""
+    # Location of the property unit (case list items only)
+    building_code: str = ""  # 17 digits, no dashes
+    unit_identifier: str = ""
     status: int = 1  # 1=Open, 2=Closed
     status_name: str = "Open"
     opened_date: Optional[str] = None
@@ -50,11 +53,21 @@ class Case:
     def status_display_ar(self) -> str:
         return {1: "مفتوحة", 2: "مغلقة"}.get(self.status, str(self.status))
 
+    @property
+    def building_code_display(self) -> str:
+        """Building code with dashes (14-14-01-010-011-29269), as on the case details page."""
+        code = self.building_code
+        if len(code) == 17 and "-" not in code:
+            return f"{code[0:2]}-{code[2:4]}-{code[4:6]}-{code[6:9]}-{code[9:12]}-{code[12:17]}"
+        return code
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "caseNumber": self.case_number,
             "propertyUnitId": self.property_unit_id,
+            "buildingCode": self.building_code,
+            "unitIdentifier": self.unit_identifier,
             "status": self.status,
             "statusName": self.status_name,
             "openedDate": self.opened_date,
@@ -79,6 +92,8 @@ class Case:
             id=str(data.get("id", "")),
             case_number=data.get("caseNumber", ""),
             property_unit_id=str(data.get("propertyUnitId", "")),
+            building_code=data.get("buildingCode") or "",
+            unit_identifier=data.get("unitIdentifier") or "",
             status=data.get("status", 1),
             status_name=data.get("statusName", "Open"),
             opened_date=data.get("openedDate"),

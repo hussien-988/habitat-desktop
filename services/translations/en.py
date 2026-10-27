@@ -1024,6 +1024,8 @@ EN_TRANSLATIONS = {
     "page.case_mgmt.pill_open_count": "Open: {count}",
     "page.case_mgmt.pill_closed_count": "Closed: {count}",
     "page.case_mgmt.chip_surveys": "Registered Surveys: {count}",
+    "page.case_mgmt.chip_building": "Building No.: {value}",
+    "page.case_mgmt.chip_unit": "Unit No.: {value}",
     "page.case_mgmt.opened_date": "Opened: {date}",
     "page.case_mgmt.not_editable": "Not editable",
     "page.case_mgmt.loading": "Loading cases...",
