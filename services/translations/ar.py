@@ -3905,6 +3905,7 @@ AR_TRANSLATIONS = {
     "print.section.attachments": "المرفقات",
     "print.col.building_code": "رمز البناء",
     "print.col.address": "العنوان",
+    "print.col.gps_coordinates": "إحداثيات GPS",
     "print.col.name": "الاسم",
     "print.col.relation": "العلاقة بالعقار",
     "print.col.documents": "الوثائق",
