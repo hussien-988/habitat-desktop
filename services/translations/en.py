@@ -1745,6 +1745,8 @@ EN_TRANSLATIONS = {
     "page.comparison.action_failed": "Action failed",
     "page.comparison.action_success": "Action successful",
     "page.comparison.breadcrumb": "Comparison",
+    "page.comparison.building_address": "Building Address",
+    "page.comparison.building_code": "Building Code",
     "page.comparison.building_data": "Building Data",
     "page.comparison.building_description": "Building Description",
     "page.comparison.building_location": "Building Location",

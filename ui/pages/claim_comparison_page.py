@@ -753,6 +753,11 @@ class ClaimComparisonPage(QWidget):
                 ("gender", tr("page.comparison.gender")),
                 ("nationality", tr("page.comparison.nationality")),
                 ("phone_number", tr("page.comparison.phone_number")),
+                ("building_code", tr("page.comparison.building_code")),
+                ("building_address", tr("page.comparison.building_address")),
+                ("unit_number", tr("page.comparison.unit_number")),
+                ("unit_type", tr("page.comparison.unit_type")),
+                ("floor", tr("page.comparison.floor_number")),
             ]
         else:
             fields = [
@@ -1212,12 +1217,34 @@ class ClaimComparisonPage(QWidget):
             "nationality": nationality_label,
             "phone_number": str(phone),
         }
+        out.update(self._map_person_location(record.get("_location")))
         logger.warning(
             f"[CMP-MAP] output: full_name_ar={out.get('full_name_ar')!r}, "
             f"national_id={out.get('national_id')!r}, "
             f"date_of_birth={out.get('date_of_birth')!r}"
         )
         return out
+
+    @staticmethod
+    def _map_person_location(location) -> dict:
+        """Map backend `personLocation` (unit + building of the person) to
+        comparison-table cells. Missing location renders as dashes."""
+        from services.display_mappings import get_unit_type_display
+
+        loc = location if isinstance(location, dict) else {}
+        unit_type = loc.get("unitType")
+        floor = loc.get("floorNumber")
+        address = " - ".join(filter(None, [
+            loc.get("communityName"), loc.get("neighborhoodName"),
+        ]))
+        return {
+            "building_code": str(loc.get("buildingCode") or "-"),
+            "building_address": address or "-",
+            "unit_number": str(loc.get("unitIdentifier") or "-"),
+            "unit_type": get_unit_type_display(unit_type) if unit_type else "-",
+            # Ground floor is 0 — only None means missing.
+            "floor": str(floor) if floor is not None else "-",
+        }
 
     def _compute_person_diff_fields(self, comparison_dicts: list) -> set:
         if len(comparison_dicts) < 2:
@@ -1226,6 +1253,8 @@ class ClaimComparisonPage(QWidget):
         all_keys = [
             "full_name_ar", "mother_name", "national_id",
             "date_of_birth", "gender", "nationality", "phone_number",
+            "building_code", "building_address", "unit_number",
+            "unit_type", "floor",
         ]
         for key in all_keys:
             values = {str(d.get(key, "")) for d in comparison_dicts}
@@ -1472,6 +1501,10 @@ class ClaimComparisonPage(QWidget):
                     snap_wrapper, snap_source = _match_snapshot_to_id(details, eid)
                     snap_dto = _extract_dto_from_snapshot(snap_wrapper) if snap_wrapper else None
                     if snap_dto:
+                        # Unit + building the person is linked to (backend
+                        # `personLocation`); travels with the DTO into the
+                        # merged record read by _map_person_to_comparison_dict.
+                        snap_dto["_location"] = snap_wrapper.get("personLocation")
                         fetched_records[eid] = snap_dto
                         record_sources[eid] = (
                             f"snapshot:{snap_source.lower()}" if snap_source else "snapshot"

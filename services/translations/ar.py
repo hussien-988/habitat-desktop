@@ -1745,6 +1745,8 @@ AR_TRANSLATIONS = {
     "page.comparison.action_failed": "فشلت عملية المعالجة",
     "page.comparison.action_success": "تم تنفيذ الإجراء بنجاح",
     "page.comparison.breadcrumb": "اختيار السجل الأساسي",
+    "page.comparison.building_address": "عنوان البناء",
+    "page.comparison.building_code": "رمز البناء",
     "page.comparison.building_data": "بيانات البناء",
     "page.comparison.building_description": "وصف البناء",
     "page.comparison.building_location": "موقع البناء",
