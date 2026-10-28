@@ -36,6 +36,7 @@ from services.display_mappings import get_gender_options, get_nationality_option
 from services.translation_manager import tr, get_layout_direction
 from ui.components.toast import Toast
 from ui.components.loading_spinner import LoadingSpinnerOverlay
+from utils.helpers import birth_date_for_year
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -333,26 +334,13 @@ class ApplicantInfoStep(BaseStep):
         birth_layout = QHBoxLayout()
         birth_layout.setSpacing(6)
         birth_layout.setContentsMargins(0, 0, 0, 0)
-        self.birth_day_combo = make_editable_date_combo(
-            [(f"{d:02d}", d) for d in range(1, 32)],
-            max_digits=2,
-            placeholder=tr("wizard.person_dialog.day_placeholder"),
-        )
-
-        self.birth_month_combo = make_editable_date_combo(
-            [(f"{m:02d}", m) for m in range(1, 13)],
-            max_digits=2,
-            placeholder=tr("wizard.person_dialog.month_placeholder"),
-        )
-
+        # Year only — mobile packages carry no day/month (stored as Jan 1st)
         self.birth_year_combo = make_editable_date_combo(
             [(str(y), y) for y in range(date.today().year, 1919, -1)],
             max_digits=4,
             placeholder=tr("wizard.person_dialog.year_placeholder"),
         )
-        birth_layout.addWidget(self.birth_day_combo, 1)
-        birth_layout.addWidget(self.birth_month_combo, 1)
-        birth_layout.addWidget(self.birth_year_combo, 2)
+        birth_layout.addWidget(self.birth_year_combo, 1)
         birth_container = QWidget()
         birth_container.setStyleSheet("background-color: transparent;")
         birth_container.setLayout(birth_layout)
@@ -1232,18 +1220,8 @@ class ApplicantInfoStep(BaseStep):
             result.add_error(tr("wizard.applicant.national_id_11_digits"))
 
         y = read_int_from_combo(self.birth_year_combo)
-        m = read_int_from_combo(self.birth_month_combo)
-        d = read_int_from_combo(self.birth_day_combo)
-        if any((y, m, d)) and not all((y, m, d)):
-            result.add_error(tr("wizard.applicant.birth_date_incomplete"))
-        elif y and m and d:
-            from datetime import date as _date
-            try:
-                bd = _date(y, m, d)
-                if bd > _date.today():
-                    result.add_error(tr("wizard.applicant.birth_date_future"))
-            except ValueError:
-                result.add_error(tr("wizard.applicant.birth_date_invalid"))
+        if y and y > date.today().year:
+            result.add_error(tr("wizard.applicant.birth_date_future"))
         for file_path in self.uploaded_files:
             norm = os.path.normpath(file_path)
 
@@ -1547,21 +1525,19 @@ class ApplicantInfoStep(BaseStep):
         fat = self.father_name.text().strip()
         ln  = self.last_name.text().strip()
 
-        y = read_int_from_combo(self.birth_year_combo)
-        m = read_int_from_combo(self.birth_month_combo)
-        d = read_int_from_combo(self.birth_day_combo)
-        birth_date = None
-        if y:
-            month = m if m else 1
-            day = d if d else 1
-            birth_date = f"{y:04d}-{month:02d}-{day:02d}"
+        existing = self.context.applicant or {}
+        # Year-only input; a full date the applicant was loaded with is kept
+        # when the year is unchanged.
+        birth_date = birth_date_for_year(
+            read_int_from_combo(self.birth_year_combo),
+            existing.get("birth_date") or existing.get("dateOfBirth") or existing.get("date_of_birth"),
+        ) or None
         raw = self.phone.text().strip()
 
         if raw:
             full_mobile = f"09{raw}"
         else:
             full_mobile = ""
-        existing = self.context.applicant or {}
         # Prefer the live UI list, but fall back to whatever applicant already
         # has — guards against an async ID-photo download finishing after this
         # call (which would leave self.uploaded_files empty momentarily).
@@ -1614,9 +1590,8 @@ class ApplicantInfoStep(BaseStep):
                       self.mother_name, self.national_id, self.phone]:
             field.clear()
         self.landline_digits.clear()
-        for c in (self.birth_year_combo, self.birth_month_combo, self.birth_day_combo):
-            c.setCurrentIndex(-1)
-            c.clearEditText()
+        self.birth_year_combo.setCurrentIndex(-1)
+        self.birth_year_combo.clearEditText()
         self._set_gender(None)
         self.nationality.setCurrentIndex(0)
         self.in_person_check.setChecked(True)
@@ -1643,29 +1618,18 @@ class ApplicantInfoStep(BaseStep):
         self.last_name.setText(a.get("last_name_ar", ""))
 
         bd = a.get("birth_date") or a.get("dateOfBirth") or a.get("date_of_birth") or ""
-        year, month, day = _date_parts_from_value(bd)
+        year, _month, _day = _date_parts_from_value(bd)
 
-        # Start from empty date / nationality: the applicant may now be a
+        # Start from empty year / nationality: the applicant may now be a
         # different person (contact point changed) without these values
-        for c in (self.birth_year_combo, self.birth_month_combo, self.birth_day_combo):
-            c.setCurrentIndex(-1)
-            c.clearEditText()
+        self.birth_year_combo.setCurrentIndex(-1)
+        self.birth_year_combo.clearEditText()
         self.nationality.setCurrentIndex(0)
 
         if year:
             idx = self.birth_year_combo.findData(year)
             if idx >= 0:
                 self.birth_year_combo.setCurrentIndex(idx)
-
-            if month:
-                idx = self.birth_month_combo.findData(month)
-                if idx >= 0:
-                    self.birth_month_combo.setCurrentIndex(idx)
-
-            if day:
-                idx = self.birth_day_combo.findData(day)
-                if idx >= 0:
-                    self.birth_day_combo.setCurrentIndex(idx)
 
         elif a.get("birth_year"):
             idx = self.birth_year_combo.findData(int(a["birth_year"]))
@@ -1954,15 +1918,10 @@ class ApplicantInfoStep(BaseStep):
         self.mother_name.setPlaceholderText(tr("wizard.person_dialog.mother_name_placeholder"))
         self.national_id.setPlaceholderText("00000000000")
 
-    # Birth date placeholders
-        for combo, key in (
-            (self.birth_day_combo,   "wizard.person_dialog.day_placeholder"),
-            (self.birth_month_combo, "wizard.person_dialog.month_placeholder"),
-            (self.birth_year_combo,  "wizard.person_dialog.year_placeholder"),
-        ):
-            le = combo.lineEdit()
-            if le is not None:
-                le.setPlaceholderText(tr(key))
+    # Year of birth placeholder
+        le = self.birth_year_combo.lineEdit()
+        if le is not None:
+            le.setPlaceholderText(tr("wizard.person_dialog.year_placeholder"))
 
     # Contact section labels
         

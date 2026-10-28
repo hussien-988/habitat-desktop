@@ -852,8 +852,9 @@ class ClaimDetailsPage(QWidget):
 
             gender_raw = person.get("gender", 0)
             gender_label = _get_gender_label(gender_raw)
-            dob = person.get("dateOfBirth")
-            dob_display = str(dob)[:10] if dob and not str(dob).startswith("0001") else "-"
+            from utils.helpers import birth_year_of
+            birth_year = birth_year_of(person.get("dateOfBirth"))
+            dob_display = str(birth_year) if birth_year else "-"
 
             fields = [
                 (tr("page.claim_details.first_name"), person.get("firstNameArabic") or "-"),

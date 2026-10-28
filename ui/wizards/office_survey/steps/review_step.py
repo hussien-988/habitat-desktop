@@ -56,7 +56,7 @@ from services.display_mappings import (
     get_business_type_display, get_source_display,
     get_claim_status_display, resolve_claim_type,
 )
-from utils.helpers import build_hierarchical_address
+from utils.helpers import birth_year_of, build_hierarchical_address
 from ui.components.loading_spinner import LoadingSpinnerOverlay
 from ui.components.empty_property_notice import EmptyPropertyNotice, empty_property_text
 
@@ -1107,7 +1107,7 @@ class ReviewStep(BaseStep):
             (tr("wizard.person_dialog.gender"), gender_text),
             (tr("wizard.person_dialog.father_name"), _val(person.get("father_name"))),
             (tr("wizard.person_dialog.mother_name"), _val(person.get("mother_name"))),
-            (tr("wizard.person_dialog.birth_date"), _val(str(person.get("birth_date") or "")[:10] if person.get("birth_date") else None)),
+            (tr("wizard.person_dialog.birth_date"), _val(birth_year_of(person.get("birth_date")))),
         ]
         for label, value in rows:
             v.addWidget(self._review_kv_row(label, value))
