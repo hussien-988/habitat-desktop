@@ -164,6 +164,83 @@ def _extract_dto_from_snapshot(snapshot):
     payload = snapshot.get(payload_key)
     return dict(payload) if isinstance(payload, dict) else None
 
+
+# ─── Building address from the admin divisions ──
+#
+# `personLocation` names come from each record's own building row: a staged
+# building from a mobile package may carry only the codes while its production
+# twin carries the names. The names are picked once per building code instead,
+# so the same building always reads the same on both sides.
+
+_AREA_NAMES_CACHE = {}
+
+
+def _normalize_building_code(building_code):
+    """17-digit building code without dashes, or "" when it isn't one."""
+    code = str(building_code or "").replace("-", "")
+    return code if len(code) == 17 and code.isdigit() else ""
+
+
+def _resolve_area_names(code):
+    """Return (community, neighborhood) Arabic names for a normalized building code
+    from the admin divisions; "" for a level that isn't found there.
+
+    Makes API calls — run it from the worker thread.
+    """
+    full_neighborhood_code = code[:12]
+    if full_neighborhood_code in _AREA_NAMES_CACHE:
+        return _AREA_NAMES_CACHE[full_neighborhood_code]
+
+    community = neighborhood = ""
+    try:
+        from services.divisions_service import DivisionsService
+        _, community = DivisionsService().get_community_name(
+            code[0:2], code[2:4], code[4:6], code[6:9]
+        )
+    except Exception as e:
+        logger.warning(f"Community name lookup failed for {full_neighborhood_code}: {e}")
+    try:
+        from services.api_client import get_api_client
+        # Full 12-digit code: the 3-digit neighborhood code is only unique per community.
+        neighborhood_dto = get_api_client().get_neighborhood_by_code(full_neighborhood_code)
+        neighborhood = (neighborhood_dto or {}).get("nameArabic") or ""
+    except Exception as e:
+        logger.warning(f"Neighborhood name lookup failed for {full_neighborhood_code}: {e}")
+
+    names = (community or "", neighborhood or "")
+    # Cache only full hits so a transient failure is retried on the next conflict.
+    if community and neighborhood:
+        _AREA_NAMES_CACHE[full_neighborhood_code] = names
+    return names
+
+
+def _unify_area_names(locations):
+    """Give every `personLocation` of the same building the same community and
+    neighborhood text (mutates the dicts).
+
+    Per level: the admin-divisions name, else a name one of the records carries
+    (e.g. written in the package), else the code.
+    """
+    by_building = {}
+    for location in locations:
+        if isinstance(location, dict):
+            code = _normalize_building_code(location.get("buildingCode"))
+            if code:
+                by_building.setdefault(code, []).append(location)
+
+    for code, group in by_building.items():
+        resolved = _resolve_area_names(code)
+        levels = (("communityName", code[6:9]), ("neighborhoodName", code[9:12]))
+        for (field, level_code), resolved_name in zip(levels, resolved):
+            carried = next(
+                (str(loc[field]) for loc in group
+                 if loc.get(field) and str(loc[field]) != level_code),
+                "",
+            )
+            text = resolved_name or carried or level_code
+            for location in group:
+                location[field] = text
+
 # ─── Styles ───────────────────────────────────────────────────────────
 _RECORD_CARD_NORMAL = f"""
     QFrame#recordCard {{
@@ -789,19 +866,19 @@ class ClaimComparisonPage(QWidget):
             sep1.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
             self._table_grid.addWidget(sep1, row, 1)
 
-            # Record A value — alignment kept at Qt default for Arabic
-            # text values (matches the previous look). For known Latin-
-            # only fields (NID, date, phone) we explicitly:
-            #   • set layout direction to LTR so digits/dashes/`+` don't
-            #     get bidi-reordered, and
-            #   • align them to the trailing edge of the cell so they
-            #     visually match the rest of the column in Arabic UI.
+            # Record A value — every cell aligns to the UI language's
+            # leading edge. AlignAbsolute keeps that edge fixed whatever
+            # the text's own direction ("شقة 5" in an LTR cell, a bare
+            # "-"), so the whole column lines up. Known Latin fields (NID,
+            # date, phone) also get an LTR layout direction so digits,
+            # dashes and `+` don't get bidi-reordered.
+            value_alignment = get_text_alignment() | Qt.AlignAbsolute | Qt.AlignVCenter
             val_a = str(comparison_dicts[0].get(field_key, "-"))
             lbl_a = QLabel(val_a)
             lbl_a.setWordWrap(True)
+            lbl_a.setAlignment(value_alignment)
             if field_key in _LTR_FIELD_KEYS:
                 lbl_a.setLayoutDirection(Qt.LeftToRight)
-                lbl_a.setAlignment(get_text_alignment() | Qt.AlignVCenter)
             if is_diff:
                 lbl_a.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
                 lbl_a.setStyleSheet(_get_diff_indicator_style("#E8F2FF"))
@@ -816,13 +893,13 @@ class ClaimComparisonPage(QWidget):
             sep2.setStyleSheet(f"QFrame {{ background: #E2EAF2; }}")
             self._table_grid.addWidget(sep2, row, 3)
 
-            # Record B value — same LTR + trailing-edge alignment for Latin.
+            # Record B value — same alignment and LTR rule as record A.
             val_b = str(comparison_dicts[1].get(field_key, "-"))
             lbl_b = QLabel(val_b)
             lbl_b.setWordWrap(True)
+            lbl_b.setAlignment(value_alignment)
             if field_key in _LTR_FIELD_KEYS:
                 lbl_b.setLayoutDirection(Qt.LeftToRight)
-                lbl_b.setAlignment(get_text_alignment() | Qt.AlignVCenter)
             if is_diff:
                 lbl_b.setFont(create_font(size=9, weight=FontManager.WEIGHT_BOLD))
                 lbl_b.setStyleSheet(_get_diff_indicator_style("#FFF8EB"))
@@ -1504,7 +1581,10 @@ class ClaimComparisonPage(QWidget):
                         # Unit + building the person is linked to (backend
                         # `personLocation`); travels with the DTO into the
                         # merged record read by _map_person_to_comparison_dict.
-                        snap_dto["_location"] = snap_wrapper.get("personLocation")
+                        location = snap_wrapper.get("personLocation")
+                        snap_dto["_location"] = (
+                            dict(location) if isinstance(location, dict) else location
+                        )
                         fetched_records[eid] = snap_dto
                         record_sources[eid] = (
                             f"snapshot:{snap_source.lower()}" if snap_source else "snapshot"
@@ -1563,6 +1643,8 @@ class ClaimComparisonPage(QWidget):
                         f"[CMP] eid={eid} source={record_sources[eid]} "
                         f"has_keys={list(fetched_records.get(eid,{}).keys())[:10]}"
                     )
+                # Both records are in hand: same building → same address text.
+                _unify_area_names([r.get("_location") for r in fetched_records.values()])
             logger.warning(
                 f"[CMP] worker return: fetched_persons keys={list(fetched_records.keys())}, "
                 f"sources={record_sources}"
