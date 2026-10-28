@@ -1229,13 +1229,12 @@ class ClaimComparisonPage(QWidget):
             ])
             full_name_ar = " ".join(parts) or "-"
 
-        dob = (
+        from utils.helpers import birth_year_of
+        birth_year = birth_year_of(
             record.get("date_of_birth")
             or record.get("dateOfBirth")
-            or ""
         )
-        if dob and "T" in str(dob):
-            dob = str(dob).split("T")[0]
+        dob = str(birth_year) if birth_year else ""
 
         gender_raw = record.get("gender")
         gender_label = (

@@ -2,13 +2,14 @@
 """Claim edit page with collapsible sections."""
 
 import os
+from datetime import date
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QScrollArea, QSpacerItem, QSizePolicy, QFrame,
     QComboBox, QTextEdit, QPushButton, QFileDialog, QGridLayout
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, pyqtSignal, QRegExp
+from PyQt5.QtGui import QFont, QColor, QRegExpValidator
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
 from ui.design_system import Colors, PageDimensions, ScreenScale
@@ -20,6 +21,7 @@ from services.translation_manager import tr, get_layout_direction
 from services.api_worker import ApiWorker
 from services.exceptions import humanize_exception, log_exception
 from app.config import Pages
+from utils.helpers import birth_date_for_year, birth_year_of
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -169,6 +171,7 @@ class ClaimEditPage(QWidget):
         self._person_gender = self._add_combo_field(grid, 2, 1, tr("page.claim_edit.gender"),
                                                      [(1, tr("page.claim_edit.gender_male")), (2, tr("page.claim_edit.gender_female"))])
         self._person_dob = self._add_field(grid, 3, 0, tr("page.claim_edit.date_of_birth"))
+        self._person_dob.setValidator(QRegExpValidator(QRegExp(r"\d{0,4}"), self._person_dob))
 
         section.layout().addLayout(grid)
         return section
@@ -402,8 +405,10 @@ class ClaimEditPage(QWidget):
             p.get("nationalId") or p.get("national_id") or "")
         self._set_combo_value(self._person_gender,
                               p.get("gender") or p.get("genderId"))
-        dob = p.get("dateOfBirth") or p.get("date_of_birth") or ""
-        self._person_dob.setText(str(dob)[:10])
+        # Year of birth only; the full date is kept to be saved back unchanged
+        self._person_dob_original = p.get("dateOfBirth") or p.get("date_of_birth") or ""
+        birth_year = birth_year_of(self._person_dob_original)
+        self._person_dob.setText(str(birth_year) if birth_year else "")
 
         # Unit (S05)
         u = self._unit_dto
@@ -709,6 +714,12 @@ class ClaimEditPage(QWidget):
             Toast.show_toast(self, tr("page.claim_edit.save_blocked_orphaned"), Toast.ERROR)
             return
 
+        birth_text = self._person_dob.text().strip()
+        birth_year = birth_year_of(birth_text)
+        if birth_text and (not birth_year or birth_year > date.today().year):
+            Toast.show_toast(self, tr("page.claim_edit.birth_year_invalid"), Toast.ERROR)
+            return
+
         changes = self._collect_changes()
 
         if not changes:
@@ -791,6 +802,12 @@ class ClaimEditPage(QWidget):
         }
         person_diff = {k: v for k, v in person_now.items()
                        if v != self._original_person.get(k)}
+        if "birth_date" in person_diff:
+            # The field holds the year only; send a date the API accepts
+            person_diff["birth_date"] = birth_date_for_year(
+                birth_year_of(person_diff["birth_date"]),
+                getattr(self, "_person_dob_original", None),
+            )
         if person_diff:
             changes["person"] = person_diff
 

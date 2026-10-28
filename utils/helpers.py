@@ -503,6 +503,49 @@ def format_gps_coordinates(lat, lon) -> str:
         return ""
 
 
+def birth_year_of(value) -> Optional[int]:
+    """
+    Year of a stored date of birth.
+
+    The desktop shows and edits only the year of birth: mobile packages
+    carry the year alone, which the server stores as January 1st.
+
+    Args:
+        value: "1990-05-12", "1990-05-12T00:00:00Z", "1990" or 1990
+
+    Returns:
+        1990, or None when missing/invalid (including the 0001-01-01 placeholder)
+    """
+    head = str(value or "").strip()[:4]
+    if len(head) != 4 or not head.isdigit():
+        return None
+    year = int(head)
+    return year if year > 1 else None
+
+
+def birth_date_for_year(year: Optional[int], original=None) -> str:
+    """
+    Date of birth to save from a year-only input.
+
+    Keeps the original date when its year is unchanged, so a full date
+    entered earlier isn't reset to January 1st.
+
+    Args:
+        year: Year picked in the form
+        original: Date of birth the form was loaded with
+
+    Returns:
+        "YYYY-MM-DD", or "" when no year
+    """
+    if not year:
+        return ""
+    original_date = str(original or "").strip()[:10]
+    if (birth_year_of(original_date) == year and len(original_date) == 10
+            and original_date[4] == "-" and original_date[7] == "-"):
+        return original_date
+    return f"{int(year):04d}-01-01"
+
+
 def is_aleppo_region(lat: float, lon: float) -> bool:
     """
     Check if coordinates are within Aleppo region bounds.

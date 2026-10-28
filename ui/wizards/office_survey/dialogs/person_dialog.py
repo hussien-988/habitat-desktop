@@ -674,7 +674,7 @@ class PersonDialog(QDialog):
         grid.addLayout(mn_container, row, 1)
         row += 1
 
-        # Row: Birth Date (col 0) | National ID (col 1)
+        # Row: Year of Birth (col 0) | National ID (col 1)
         grid.addWidget(self._label(tr("wizard.person_dialog.birth_date"), label_style), row, 0)
         grid.addWidget(self._label(tr("wizard.person_dialog.national_id") , label_style), row, 1)
         row += 1
@@ -684,32 +684,15 @@ class PersonDialog(QDialog):
 
         from datetime import datetime as _dt
 
-        birth_input_style = self._input_style()
-
-        self.birth_day_combo = make_editable_date_combo(
-            [(f"{d:02d}", d) for d in range(1, 32)],
-            max_digits=2,
-            placeholder=tr("wizard.person_dialog.day_placeholder"),
-        )
-        self.birth_day_combo.setStyleSheet(birth_input_style)
-
-        self.birth_month_combo = make_editable_date_combo(
-            [(f"{m:02d}", m) for m in range(1, 13)],
-            max_digits=2,
-            placeholder=tr("wizard.person_dialog.month_placeholder"),
-        )
-        self.birth_month_combo.setStyleSheet(birth_input_style)
-
+        # Year only — mobile packages carry no day/month (stored as Jan 1st)
         self.birth_year_combo = make_editable_date_combo(
             [(str(y), y) for y in range(_dt.now().year, 1919, -1)],
             max_digits=4,
             placeholder=tr("wizard.person_dialog.year_placeholder"),
         )
-        self.birth_year_combo.setStyleSheet(birth_input_style)
+        self.birth_year_combo.setStyleSheet(self._input_style())
 
-        birth_layout.addWidget(self.birth_day_combo, 1)
-        birth_layout.addWidget(self.birth_month_combo, 1)
-        birth_layout.addWidget(self.birth_year_combo, 2)
+        birth_layout.addWidget(self.birth_year_combo, 1)
         birth_container = QWidget()
         birth_container.setStyleSheet("background-color: transparent;")
         birth_container.setLayout(birth_layout)
@@ -3075,17 +3058,8 @@ class PersonDialog(QDialog):
         today = _date.today()
 
         y = read_int_from_combo(self.birth_year_combo)
-        m = read_int_from_combo(self.birth_month_combo)
-        d = read_int_from_combo(self.birth_day_combo)
-        if any((y, m, d)) and not all((y, m, d)):
-            return False, tr("wizard.person_dialog.birth_date_incomplete"), 0
-        if y and m and d:
-            try:
-                bd = _date(y, m, d)
-                if bd > today:
-                    return False, tr("wizard.person_dialog.birth_date_future"), 0
-            except ValueError:
-                return False, tr("wizard.person_dialog.birth_date_invalid"), 0
+        if y and y > today.year:
+            return False, tr("wizard.person_dialog.birth_date_future"), 0
 
         if check_start:
             sy = read_int_from_combo(self.start_year)
@@ -3104,15 +3078,12 @@ class PersonDialog(QDialog):
         return True, None, None
 
     def _build_birth_date_iso(self) -> str:
-        """Build ISO date string from birth date combo boxes."""
-        y = read_int_from_combo(self.birth_year_combo)
-        m = read_int_from_combo(self.birth_month_combo)
-        d = read_int_from_combo(self.birth_day_combo)
-        if y:
-            month = m if m else 1
-            day = d if d else 1
-            return f"{y:04d}-{month:02d}-{day:02d}"
-        return ""
+        """Build ISO date string from the year of birth combo."""
+        from utils.helpers import birth_date_for_year
+        return birth_date_for_year(
+            read_int_from_combo(self.birth_year_combo),
+            getattr(self, "_loaded_birth_date", None),
+        )
 
     def _build_start_date_iso(self) -> str:
         """Build ISO date string from the 3 dropdown combos (year/month/day)."""
@@ -3167,21 +3138,14 @@ class PersonDialog(QDialog):
         self.last_name.setText(data.get('last_name') or '')
         self.national_id.setText(data.get('national_id') or '')
 
-        # Birth date (3 combos)
-        if data.get('birth_date'):
-            parts = str(data['birth_date'])[:10].split('-')
-            if len(parts) >= 1 and parts[0].isdigit():
-                idx = self.birth_year_combo.findData(int(parts[0]))
-                if idx >= 0:
-                    self.birth_year_combo.setCurrentIndex(idx)
-            if len(parts) >= 2 and parts[1].isdigit():
-                idx = self.birth_month_combo.findData(int(parts[1]))
-                if idx >= 0:
-                    self.birth_month_combo.setCurrentIndex(idx)
-            if len(parts) >= 3 and parts[2].isdigit():
-                idx = self.birth_day_combo.findData(int(parts[2]))
-                if idx >= 0:
-                    self.birth_day_combo.setCurrentIndex(idx)
+        # Year of birth; the full date is kept to be saved back unchanged
+        from utils.helpers import birth_year_of
+        self._loaded_birth_date = data.get('birth_date')
+        year = birth_year_of(self._loaded_birth_date)
+        if year:
+            idx = self.birth_year_combo.findData(year)
+            if idx >= 0:
+                self.birth_year_combo.setCurrentIndex(idx)
 
         # Gender
         self._set_gender(data.get('gender'))
