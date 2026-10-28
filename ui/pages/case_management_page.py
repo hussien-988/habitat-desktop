@@ -263,7 +263,8 @@ class _CaseCard(QFrame):
         for key, value in location_chips:
             if not value:
                 continue
-            chip = QLabel(tr(key, value=value))
+            # LTR embedding keeps "02-00-…" / "1-3" from being reversed after the Arabic label
+            chip = QLabel(tr(key, value=f"\u202A{value}\u202C"))
             chip.setFont(create_font(size=8, weight=FontManager.WEIGHT_MEDIUM))
             chip.setStyleSheet(chip_style_tpl.format(
                 bg="#F1F5F9", fg="#334155", border="#CBD5E1"
