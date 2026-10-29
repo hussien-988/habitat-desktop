@@ -8,7 +8,7 @@ sync pulse overlay, status change notifications, and unassign.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QScrollArea, QComboBox,
-    QPushButton, QStackedWidget, QSizePolicy
+    QPushButton, QStackedWidget, QSizePolicy, QMenu
 )
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QFont, QPainter, QColor, QLinearGradient
@@ -62,6 +62,64 @@ _IN_FLIGHT_STATUS_CODES = {STATUS_IN_PROGRESS}
 _DONE_STATUS_CODES = {STATUS_TRANSFERRED, STATUS_SYNCHRONIZED}
 _FAILED_STATUS_CODES = {STATUS_FAILED}
 _CANCELLED_STATUS_CODES = {STATUS_CANCELLED}
+
+_ROWS_PER_PAGE_OPTIONS = (10, 20, 50)
+_DEFAULT_ROWS_PER_PAGE = 20
+
+# Stat pill -> transfer statuses it counts (same grouping as the cards' colours)
+_STATUS_COUNT_GROUPS = {
+    "pending": (STATUS_PENDING,),
+    "syncing": (STATUS_IN_PROGRESS,),
+    "synced": (STATUS_TRANSFERRED, STATUS_SYNCHRONIZED),
+    "failed": (STATUS_FAILED,),
+    "cancelled": (STATUS_CANCELLED,),
+}
+
+_NAV_BTN_STYLE = """
+    QPushButton {{
+        background: {bg};
+        border: 1px solid rgba(56, 144, 223, 30);
+        border-radius: 6px;
+        color: {fg};
+        font-size: 13pt;
+        font-weight: bold;
+    }}
+    QPushButton:hover {{ background: {hover}; }}
+    QPushButton:disabled {{
+        background: #E8EDF2;
+        color: #B0BEC5;
+        border-color: #DDE3EA;
+    }}
+"""
+
+
+def _fetch_assignments_page(field_collector_id, page: int, page_size: int):
+    """One page of assignments, newest first, filtered by collector on the server (worker thread)."""
+    from services.api_client import get_api_client
+    return get_api_client().get_all_assignments(
+        page=page, page_size=page_size, field_collector_id=field_collector_id,
+    )
+
+
+def _fetch_status_counts(field_collector_id) -> dict:
+    """Stat pill totals over all assignments: a 1-row request per status, reading totalCount.
+
+    Independent of how many assignments exist (worker thread).
+    """
+    from services.api_client import get_api_client
+    api = get_api_client()
+    counts = {}
+    for group, statuses in _STATUS_COUNT_GROUPS.items():
+        total = 0
+        for status in statuses:
+            response = api.get_all_assignments(
+                page=1, page_size=1,
+                field_collector_id=field_collector_id, transfer_status=status,
+            )
+            if isinstance(response, dict):
+                total += int(response.get("totalCount") or 0)
+        counts[group] = total
+    return counts
 
 
 def _resolve_status_code(assignment: dict) -> int:
@@ -453,8 +511,14 @@ class SyncDataPage(QWidget):
         self._card_map = {}                 # assignment_id -> _AssignmentCard
         self._sync_overlays = {}            # assignment_id -> _SyncPulseOverlay
         self._previous_statuses = {}        # assignment_id -> status_str
-        self._current_items = []            # last API items
+        self._current_items = []            # last API items (current page)
         self._pending_notifications = 0
+
+        # Server-side paging
+        self._current_page = 1
+        self._rows_per_page = _DEFAULT_ROWS_PER_PAGE
+        self._total_count = 0
+        self._total_pages = 0
 
         # Shimmer timer for card animation
         self._shimmer_timer = QTimer(self)
@@ -490,6 +554,10 @@ class SyncDataPage(QWidget):
 
         self._stat_failed = StatPill(tr("page.sync.status_failed"))
         self._header.add_stat_pill(self._stat_failed)
+
+        # Cancelled too, so the pills add up to the total
+        self._stat_cancelled = StatPill(tr("page.sync.status_cancelled"))
+        self._header.add_stat_pill(self._stat_cancelled)
 
         # Collector filter combo in header (dark style)
         self._collector_combo = QComboBox()
@@ -571,27 +639,11 @@ class SyncDataPage(QWidget):
         self._stack.addWidget(self._empty_state)
 
         content_layout.addWidget(self._stack, 1)
+        content_layout.addWidget(self._build_footer())
         main_layout.addWidget(content_wrapper, 1)
 
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._spinner = LoadingSpinnerOverlay(self)
-
-    def _update_stat_pills(self):
-        pending = syncing = synced = failed = 0
-        for item in self._current_items:
-            code = _resolve_status_code(item)
-            if code in _PENDING_STATUS_CODES:
-                pending += 1
-            elif code in _IN_FLIGHT_STATUS_CODES:
-                syncing += 1
-            elif code in _DONE_STATUS_CODES:
-                synced += 1
-            elif code in _FAILED_STATUS_CODES:
-                failed += 1
-        self._stat_pending.set_count(pending)
-        self._stat_syncing.set_count(syncing)
-        self._stat_synced.set_count(synced)
-        self._stat_failed.set_count(failed)
 
     # -- Data loading --
 
@@ -632,7 +684,7 @@ class SyncDataPage(QWidget):
             logger.warning(f"Failed to process collectors response: {e}")
 
     def _on_collector_changed(self):
-        self._load_assignments()
+        self._load_assignments(reset_page=True)
 
     def _filter_items_from_response(self, response) -> list:
         """Extract and filter assignment items from API response."""
@@ -655,17 +707,48 @@ class SyncDataPage(QWidget):
             ]
         return items
 
-    def _load_assignments(self):
-        """Full rebuild of all card items (non-blocking)."""
+    def _selected_collector_id(self):
+        return (
+            self._collector_combo.currentData()
+            if self._collector_combo and self._collector_combo.currentIndex() > 0
+            else None
+        )
+
+    def _load_assignments(self, reset_page: bool = False, with_counts: bool = True):
+        """Rebuild the cards of the current page (non-blocking).
+
+        Paging is done by the server, so any number of assignments loads in one
+        page-sized request; the stat pills come from per-status totals.
+        """
+        if reset_page:
+            self._current_page = 1
         self._spinner.show_loading(tr("page.sync.loading_data"))
         self._clear_cards()
 
-        from services.api_client import get_api_client
-        api = get_api_client()
-        self._assignments_worker = ApiWorker(api.get_all_assignments, page=1, page_size=100)
+        collector_id = self._selected_collector_id()
+        self._assignments_worker = ApiWorker(
+            _fetch_assignments_page, collector_id, self._current_page, self._rows_per_page,
+        )
         self._assignments_worker.finished.connect(self._on_assignments_loaded)
         self._assignments_worker.error.connect(self._on_assignments_load_error)
         self._assignments_worker.start()
+
+        if with_counts:
+            self._counts_worker = ApiWorker(_fetch_status_counts, collector_id)
+            self._counts_worker.finished.connect(self._on_status_counts_loaded)
+            self._counts_worker.error.connect(
+                lambda msg: logger.warning(f"Sync status counts not loaded: {msg}")
+            )
+            self._counts_worker.start()
+
+    def _on_status_counts_loaded(self, counts):
+        if not isinstance(counts, dict):
+            return
+        self._stat_pending.set_count(counts.get("pending", 0))
+        self._stat_syncing.set_count(counts.get("syncing", 0))
+        self._stat_synced.set_count(counts.get("synced", 0))
+        self._stat_failed.set_count(counts.get("failed", 0))
+        self._stat_cancelled.set_count(counts.get("cancelled", 0))
 
     def _on_assignments_loaded(self, response):
         """Handle assignment list API response."""
@@ -673,6 +756,20 @@ class SyncDataPage(QWidget):
             items = self._filter_items_from_response(response)
             self._current_items = items
             self._clear_cards()
+
+            if isinstance(response, dict):
+                self._total_count = int(response.get("totalCount") or len(items))
+                self._total_pages = int(response.get("totalPages")
+                                        or -(-self._total_count // self._rows_per_page))
+            else:
+                self._total_count, self._total_pages = len(items), 1
+            self._update_pagination()
+
+            if not items and self._current_page > 1:
+                # The page emptied (e.g. its last assignment was unassigned): step back
+                self._current_page -= 1
+                self._load_assignments(with_counts=False)
+                return
 
             if not items:
                 self._empty_state.clear_action()
@@ -701,8 +798,9 @@ class SyncDataPage(QWidget):
                 if code in _IN_FLIGHT_STATUS_CODES:
                     self._add_sync_overlay(aid)
 
-            self._update_stat_pills()
+            # Stat pills cover all assignments — set from _on_status_counts_loaded
             animate_card_entrance(self._card_widgets)
+            self._scroll.verticalScrollBar().setValue(0)
 
             if not self._shimmer_timer.isActive():
                 self._shimmer_timer.start()
@@ -720,6 +818,132 @@ class SyncDataPage(QWidget):
         self._spinner.hide_loading()
         from ui.utils.page_helpers import show_error_state
         show_error_state(self._empty_state, self._stack, error_msg, self._load_assignments)
+
+    # -- Pagination (same footer as the import packages page) --
+
+    def _build_footer(self) -> QFrame:
+        footer = QFrame()
+        footer.setFixedHeight(ScreenScale.h(54))
+        footer.setStyleSheet("""
+            QFrame {
+                background-color: #F8FAFC;
+                border-top: 1px solid #E8EDF2;
+                border-bottom-left-radius: 16px;
+                border-bottom-right-radius: 16px;
+            }
+        """)
+        layout = QHBoxLayout(footer)
+        layout.setContentsMargins(16, 0, 16, 0)
+        layout.setSpacing(10)
+
+        nav_style = _NAV_BTN_STYLE.format(bg="#F0F7FF", fg="#3890DF", hover="#E0EFFF")
+        self._prev_btn = QPushButton()
+        self._prev_btn.setFixedSize(ScreenScale.w(34), ScreenScale.h(34))
+        self._prev_btn.setCursor(Qt.PointingHandCursor)
+        self._prev_btn.setStyleSheet(nav_style)
+        self._prev_btn.clicked.connect(self._go_prev)
+        layout.addWidget(self._prev_btn)
+
+        self._page_label = QLabel("0")
+        self._page_label.setFont(create_font(size=10))
+        self._page_label.setStyleSheet("color: #546E7A; background: transparent;")
+        layout.addWidget(self._page_label)
+
+        self._next_btn = QPushButton()
+        self._next_btn.setFixedSize(ScreenScale.w(34), ScreenScale.h(34))
+        self._next_btn.setCursor(Qt.PointingHandCursor)
+        self._next_btn.setStyleSheet(nav_style)
+        self._next_btn.clicked.connect(self._go_next)
+        layout.addWidget(self._next_btn)
+
+        layout.addStretch()
+
+        self._rows_label = QLabel(tr("page.sync.rows_per_page"))
+        self._rows_label.setFont(create_font(size=9))
+        self._rows_label.setStyleSheet("color: #78909C; background: transparent;")
+        layout.addWidget(self._rows_label)
+
+        self._rows_btn = QPushButton(str(self._rows_per_page))
+        self._rows_btn.setFixedSize(ScreenScale.w(44), ScreenScale.h(30))
+        self._rows_btn.setCursor(Qt.PointingHandCursor)
+        self._rows_btn.setStyleSheet("""
+            QPushButton {
+                background: #F0F7FF;
+                border: 1px solid #DDE3EA;
+                border-radius: 6px;
+                color: #546E7A;
+                font-size: 10pt;
+            }
+            QPushButton:hover { background: #E0EFFF; }
+        """)
+        self._rows_btn.clicked.connect(self._show_rows_menu)
+        layout.addWidget(self._rows_btn)
+
+        self._apply_nav_arrows()
+        self._update_pagination()
+        return footer
+
+    def _apply_nav_arrows(self):
+        """Arrows point back / forward in the reading direction (RTL: ▷ back, LTR: ◁ back)."""
+        rtl = get_layout_direction() == Qt.RightToLeft
+        self._prev_btn.setText("▷" if rtl else "◁")
+        self._next_btn.setText("◁" if rtl else "▷")
+
+    def _update_pagination(self):
+        if self._total_count <= 0:
+            self._page_label.setText("0")
+            self._prev_btn.setEnabled(False)
+            self._next_btn.setEnabled(False)
+            return
+        start = (self._current_page - 1) * self._rows_per_page + 1
+        end = min(start + self._rows_per_page - 1, self._total_count)
+        # LTR embedding keeps "1-20 / 250" in order inside the RTL page
+        self._page_label.setText(f"‪{start}-{end} / {self._total_count}‬")
+        self._prev_btn.setEnabled(self._current_page > 1)
+        self._next_btn.setEnabled(self._current_page < self._total_pages)
+
+    def _go_prev(self):
+        if self._current_page > 1:
+            self._current_page -= 1
+            self._load_assignments(with_counts=False)
+
+    def _go_next(self):
+        if self._current_page < self._total_pages:
+            self._current_page += 1
+            self._load_assignments(with_counts=False)
+
+    def _show_rows_menu(self):
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #E1E8ED;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 24px;
+                color: #546E7A;
+                font-size: 10pt;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #F0F7FF;
+                color: #3890DF;
+            }
+        """)
+        for size in _ROWS_PER_PAGE_OPTIONS:
+            action = menu.addAction(str(size))
+            if size == self._rows_per_page:
+                action.setEnabled(False)
+            else:
+                action.triggered.connect(lambda checked, s=size: self._set_rows_per_page(s))
+        menu.exec_(self._rows_btn.mapToGlobal(self._rows_btn.rect().bottomLeft()))
+
+    def _set_rows_per_page(self, size: int):
+        self._rows_per_page = size
+        self._rows_btn.setText(str(size))
+        self._load_assignments(reset_page=True, with_counts=False)
 
     # -- Card click -> expand detail panel --
 
@@ -1359,7 +1583,7 @@ class SyncDataPage(QWidget):
 
     def refresh(self, data=None):
         self._load_collectors()
-        self._load_assignments()
+        self._load_assignments(reset_page=True)
 
     def update_language(self, is_arabic: bool):
         self.setLayoutDirection(get_layout_direction())
@@ -1371,12 +1595,15 @@ class SyncDataPage(QWidget):
         self._stat_syncing.set_label(tr("page.sync.status_syncing"))
         self._stat_synced.set_label(tr("page.sync.status_synced"))
         self._stat_failed.set_label(tr("page.sync.status_failed"))
+        self._stat_cancelled.set_label(tr("page.sync.status_cancelled"))
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
         if self._collector_combo and self._collector_combo.count() > 0:
             self._collector_combo.setItemText(0, tr("page.sync.all_collectors"))
         for card in self._card_widgets:
             card.update_language(is_arabic)
+        self._rows_label.setText(tr("page.sync.rows_per_page"))
+        self._apply_nav_arrows()
 
     def hideEvent(self, event):
         super().hideEvent(event)

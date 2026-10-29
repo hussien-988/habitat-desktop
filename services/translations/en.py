@@ -1982,6 +1982,7 @@ EN_TRANSLATIONS = {
     "page.sync.persons": "Persons",
     "page.sync.property_units": "Property Units",
     "page.sync.refresh": "Refresh",
+    "page.sync.rows_per_page": "Rows per page:",
     "page.sync.status_cancelled": "Cancelled",
     "page.sync.status_failed": "Failed",
     "page.sync.status_pending": "Pending",

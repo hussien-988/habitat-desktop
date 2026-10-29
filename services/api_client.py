@@ -1769,10 +1769,16 @@ class TRRCMSApiClient:
     def get_all_assignments(
         self,
         page: int = 1,
-        page_size: int = 100
+        page_size: int = 100,
+        field_collector_id: Optional[str] = None,
+        transfer_status: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Get all building assignments with pagination."""
-        params = {"page": page, "pageSize": page_size}
+        """Get one page of building assignments, newest first (the server caps page_size at 100)."""
+        params = {"pageNumber": page, "pageSize": page_size}
+        if field_collector_id:
+            params["fieldCollectorId"] = field_collector_id
+        if transfer_status is not None:
+            params["transferStatus"] = transfer_status
         return self._request("GET", "/v1/BuildingAssignments", params=params)
 
     def get_assignment(self, assignment_id: str) -> Dict[str, Any]:

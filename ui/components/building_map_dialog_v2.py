@@ -204,6 +204,16 @@ class _LayersWorker(QThread):
             self.error.emit(str(e))
 
 
+def _in_map_bounds(place, config) -> bool:
+    """True when a places-file entry lies inside the configured map bounds."""
+    try:
+        lat, lng = float(place["lat"]), float(place["lng"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (config.MAP_BOUNDS_MIN_LAT <= lat <= config.MAP_BOUNDS_MAX_LAT
+            and config.MAP_BOUNDS_MIN_LNG <= lng <= config.MAP_BOUNDS_MAX_LNG)
+
+
 class _SearchWorker(QThread):
     """Background worker for search operations without blocking UI."""
     found = pyqtSignal(str, float, float, int)  # name, lat, lng, zoom
@@ -262,100 +272,13 @@ class _SearchWorker(QThread):
                     logger.warning(f"Invalid coords for {match['name']}")
 
             if not match:
-                # Step 3: places fallback (local file, fast)
-                try:
-                    from services import boundary_service
-                    places = boundary_service.get_places_list()
-                    wanted = self._normalize_search_text(search_text)
-                    for p in places:
-                        name_ar = p.get("name_ar", "") or ""
-                        name_en = p.get("name_en", "") or ""
-
-                        normalized_ar = self._normalize_search_text(name_ar)
-                        normalized_en = self._normalize_search_text(name_en)
-
-                        if self.exact_only:
-                            matched = (
-                                wanted == normalized_ar
-                                or wanted == normalized_en
-                            )
-                        else:
-                            matched = (
-                                wanted in normalized_ar
-                                or wanted in normalized_en
-                            )
-
-                        if matched:
-                            label = name_ar or name_en or search_text
-
-                            self.result_type = "place"
-
-                            self.found.emit(
-                                label,
-                                float(p["lat"]),
-            float(p["lng"]),
-            13,
-                            )
-                            return
-                except Exception as e:
-                    logger.warning(f"Places search error: {e}")
-
-                # Step 4: landmarks API
-                try:
-                    from services.map_utils import normalize_landmark
-                    api = get_api_client()
-                    landmarks = api.search_landmarks(
-                        search_text,
-                        max_results=10,
-                    )
-
-                    if landmarks and isinstance(landmarks, list):
-                        normalized_landmarks = [
-                            normalize_landmark(lm)
-                            for lm in landmarks
-                        ]
-
-                        if self.exact_only:
-                            wanted = self._normalize_search_text(search_text)
-
-                            lm = next(
-                                (
-                                    item
-                                    for item in normalized_landmarks
-                                    if wanted in {
-                                        self._normalize_search_text(
-                            item.get("name")
-                                        ),
-                                        self._normalize_search_text(
-                                            item.get("nameArabic")
-                                        ),
-                                        self._normalize_search_text(
-                                            item.get("nameEnglish")
-                                        ),
-                                    }
-                                ),
-                                None,
-                            )
-                        else:
-                            lm = normalized_landmarks[0]
-
-                        if lm:
-                            lat = lm.get("latitude")
-                            lng = lm.get("longitude")
-
-                            if lat and lng:
-                                self.result_type = "landmark"
-
-                                self.found.emit(
-                                    lm.get("name", search_text),
-                                    float(lat),
-                                    float(lng),
-                                    17,
-                                )
-                                return
-                except Exception as e:
-                    logger.warning(f"Landmark search error: {e}")
-
+                # Registered data (landmarks) wins over the generic places file, whose
+                # Syria-wide names would otherwise catch partial landmark searches
+                # (e.g. "القلعة" → a village in Latakia).
+                if self._search_landmarks(search_text):
+                    return
+                if self._search_places(search_text):
+                    return
                 self.not_found.emit(search_text)
                 return
 
@@ -393,6 +316,111 @@ class _SearchWorker(QThread):
         except Exception as e:
             logger.error(f"Search worker error: {e}", exc_info=True)
             self.error.emit(str(e))
+
+    def _search_landmarks(self, search_text) -> bool:
+        """Landmarks via the API (all registered ones); emits found and returns True on a hit."""
+        from services.api_client import get_api_client
+        try:
+            from services.map_utils import normalize_landmark
+            api = get_api_client()
+            landmarks = api.search_landmarks(
+                search_text,
+                max_results=10,
+            )
+
+            if landmarks and isinstance(landmarks, list):
+                normalized_landmarks = [
+                    normalize_landmark(lm)
+                    for lm in landmarks
+                ]
+
+                if self.exact_only:
+                    wanted = self._normalize_search_text(search_text)
+
+                    lm = next(
+                        (
+                            item
+                            for item in normalized_landmarks
+                            if wanted in {
+                                self._normalize_search_text(
+                    item.get("name")
+                                ),
+                                self._normalize_search_text(
+                                    item.get("nameArabic")
+                                ),
+                                self._normalize_search_text(
+                                    item.get("nameEnglish")
+                                ),
+                            }
+                        ),
+                        None,
+                    )
+                else:
+                    lm = normalized_landmarks[0]
+
+                if lm:
+                    lat = lm.get("latitude")
+                    lng = lm.get("longitude")
+
+                    if lat and lng:
+                        self.result_type = "landmark"
+
+                        self.found.emit(
+                            lm.get("name", search_text),
+                            float(lat),
+                            float(lng),
+                            17,
+                        )
+                        return True
+        except Exception as e:
+            logger.warning(f"Landmark search error: {e}")
+
+        return False
+
+    def _search_places(self, search_text) -> bool:
+        """Populated places (local file) inside the map bounds; emits found and returns True on a hit."""
+        from app.config import Config
+        try:
+            from services import boundary_service
+            places = boundary_service.get_places_list()
+            wanted = self._normalize_search_text(search_text)
+            for p in places:
+                # The map only covers Aleppo; same-named places elsewhere are not results
+                if not _in_map_bounds(p, Config):
+                    continue
+                name_ar = p.get("name_ar", "") or ""
+                name_en = p.get("name_en", "") or ""
+
+                normalized_ar = self._normalize_search_text(name_ar)
+                normalized_en = self._normalize_search_text(name_en)
+
+                if self.exact_only:
+                    matched = (
+                        wanted == normalized_ar
+                        or wanted == normalized_en
+                    )
+                else:
+                    matched = (
+                        wanted in normalized_ar
+                        or wanted in normalized_en
+                    )
+
+                if matched:
+                    label = name_ar or name_en or search_text
+
+                    self.result_type = "place"
+
+                    self.found.emit(
+                        label,
+                        float(p["lat"]),
+                        float(p["lng"]),
+                        13,
+                    )
+                    return True
+        except Exception as e:
+            logger.warning(f"Places search error: {e}")
+
+        return False
 
     def _match_neighborhood(self, search_text):
         """Match search text against cached neighborhoods."""
