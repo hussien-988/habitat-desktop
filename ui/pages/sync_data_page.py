@@ -72,6 +72,7 @@ _STATUS_COUNT_GROUPS = {
     "syncing": (STATUS_IN_PROGRESS,),
     "synced": (STATUS_TRANSFERRED, STATUS_SYNCHRONIZED),
     "failed": (STATUS_FAILED,),
+    "cancelled": (STATUS_CANCELLED,),
 }
 
 _NAV_BTN_STYLE = """
@@ -554,6 +555,10 @@ class SyncDataPage(QWidget):
         self._stat_failed = StatPill(tr("page.sync.status_failed"))
         self._header.add_stat_pill(self._stat_failed)
 
+        # Cancelled too, so the pills add up to the total
+        self._stat_cancelled = StatPill(tr("page.sync.status_cancelled"))
+        self._header.add_stat_pill(self._stat_cancelled)
+
         # Collector filter combo in header (dark style)
         self._collector_combo = QComboBox()
         self._collector_combo.setMinimumHeight(ScreenScale.h(38))
@@ -743,6 +748,7 @@ class SyncDataPage(QWidget):
         self._stat_syncing.set_count(counts.get("syncing", 0))
         self._stat_synced.set_count(counts.get("synced", 0))
         self._stat_failed.set_count(counts.get("failed", 0))
+        self._stat_cancelled.set_count(counts.get("cancelled", 0))
 
     def _on_assignments_loaded(self, response):
         """Handle assignment list API response."""
@@ -1589,6 +1595,7 @@ class SyncDataPage(QWidget):
         self._stat_syncing.set_label(tr("page.sync.status_syncing"))
         self._stat_synced.set_label(tr("page.sync.status_synced"))
         self._stat_failed.set_label(tr("page.sync.status_failed"))
+        self._stat_cancelled.set_label(tr("page.sync.status_cancelled"))
         if self._collector_combo and self._collector_combo.lineEdit():
             self._collector_combo.lineEdit().setPlaceholderText(tr("page.sync.all_collectors"))
         if self._collector_combo and self._collector_combo.count() > 0:
