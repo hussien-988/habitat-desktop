@@ -195,6 +195,20 @@ class ImportStepProcessing(QWidget):
         )
         state_layout.addWidget(self._state_detail)
 
+        # ValidationFailed: the "details below" the detail line refers to
+        self._view_errors_btn = QPushButton("")
+        self._view_errors_btn.setCursor(Qt.PointingHandCursor)
+        self._view_errors_btn.setFixedHeight(ScreenScale.h(40))
+        self._view_errors_btn.setStyleSheet(
+            "QPushButton { background: #DC2626; color: white;"
+            " border: none; border-radius: 8px; padding: 8px 24px;"
+            " font-size: 11pt; font-weight: 600; }"
+            " QPushButton:hover { background: #B91C1C; }"
+        )
+        self._view_errors_btn.clicked.connect(self._show_validation_errors)
+        self._view_errors_btn.setVisible(False)
+        state_layout.addWidget(self._view_errors_btn, 0, Qt.AlignHCenter)
+
         # Spinner dots — proves the UI thread is alive.
         self._dots_label = QLabel("")
         self._dots_label.setAlignment(Qt.AlignCenter)
@@ -341,6 +355,14 @@ class ImportStepProcessing(QWidget):
 
     # -- Internal helpers ----------------------------------------------------
 
+    def _show_validation_errors(self):
+        if not self.import_controller or not self._package_id:
+            return
+        from ui.components.dialogs.validation_errors_dialog import ValidationErrorsDialog
+        ValidationErrorsDialog.show_for(
+            self._package_id, self.import_controller, parent=self.window(),
+        )
+
     def _load_package_summary(self):
         if not self.import_controller or not self._package_id:
             return
@@ -373,6 +395,8 @@ class ImportStepProcessing(QWidget):
 
         # Hide conflict CTA by default.
         self._conflict_box.setVisible(False)
+        self._view_errors_btn.setVisible(sub_state == _SUB_STATE_VALIDATION_FAILED)
+        self._view_errors_btn.setText(tr("page.import_packages.action.view_validation_errors"))
 
         if sub_state == _SUB_STATE_PENDING:
             self._state_icon.setText("⏳")

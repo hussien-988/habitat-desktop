@@ -7,12 +7,13 @@ from typing import Dict, Any, List, Optional
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton,
     QSizePolicy, QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
     QScrollArea, QWidget,
 )
 
 from services.translation_manager import tr, get_layout_direction
+from ui.components.toast import Toast
 from ui.design_system import ScreenScale, Colors
 from ui.font_utils import create_font, FontManager
 from utils.logger import get_logger
@@ -180,9 +181,20 @@ class QuarantineReportDialog(QDialog):
         self._issues_scroll.setWidget(self._issues_container)
         card_layout.addWidget(self._issues_scroll)
 
-        # Close button
+        # Copy-for-support + Close buttons
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, ScreenScale.h(4), 0, 0)
+        self._copy_btn = QPushButton()
+        self._copy_btn.setCursor(Qt.PointingHandCursor)
+        self._copy_btn.setFont(create_font(size=10, weight=FontManager.WEIGHT_MEDIUM))
+        self._copy_btn.setMinimumHeight(ScreenScale.h(36))
+        self._copy_btn.setStyleSheet(
+            "QPushButton { background: #FFFFFF; color: #334155; border: 1px solid #CBD5E1;"
+            " border-radius: 8px; padding: 0 16px; }"
+            "QPushButton:hover { background: #F8FAFC; }"
+        )
+        self._copy_btn.clicked.connect(self._copy_for_support)
+        btn_row.addWidget(self._copy_btn)
         btn_row.addStretch()
         self._close_btn = QPushButton()
         self._close_btn.setCursor(Qt.PointingHandCursor)
@@ -281,16 +293,17 @@ class QuarantineReportDialog(QDialog):
         self._file_name_value_lbl.setText(str(r.get("fileName") or "-"))
         self._schema_label_lbl.setText(tr("quarantine_dialog.schema_version"))
         self._schema_value_lbl.setText(str(r.get("schemaVersion") or "-"))
-        # Hide the raw backend exception/reason text because it may contain
-        # untranslated English diagnostics. The localized guidance below is the
-        # user-facing reason message.
+        # The backend reason of automatic checks is untranslated English, so only
+        # the localized guidance below is shown. A manual quarantine's reason was
+        # typed by a user and is shown as is. Raw details go to "copy for support".
+        category = str(r.get("quarantineCategory") or "")
+        manual_reason = str(r.get("quarantineReason") or "").strip() if category == "ManualQuarantine" else ""
         self._reason_label_lbl.setText(tr("quarantine_dialog.reason_label"))
-        self._reason_value_lbl.setText("")
-        self._reason_label_lbl.setVisible(False)
-        self._reason_value_lbl.setVisible(False)
+        self._reason_value_lbl.setText(manual_reason)
+        self._reason_label_lbl.setVisible(bool(manual_reason))
+        self._reason_value_lbl.setVisible(bool(manual_reason))
 
         # Category guidance
-        category = str(r.get("quarantineCategory") or "")
         guidance_key = _CATEGORY_GUIDANCE_KEYS.get(category, "quarantine_dialog.guidance_generic")
         self._guidance_lbl.setText(tr(guidance_key))
 
@@ -319,8 +332,25 @@ class QuarantineReportDialog(QDialog):
         self._issues_title_lbl.setVisible(False)
         self._issues_scroll.setVisible(False)
 
+        self._copy_btn.setText(tr("import_errors.copy_for_support"))
+        self._copy_btn.adjustSize()
         self._close_btn.setText(tr("quarantine_dialog.close"))
         self._close_btn.adjustSize()
+
+    def _copy_for_support(self):
+        """Raw (technical) details — reason, checks, vocabulary issues — to paste to support."""
+        r = self._report
+        lines = [
+            f"Package {r.get('packageNumber') or '-'} ({r.get('fileName') or '-'}) — quarantined",
+            f"Category: {r.get('quarantineCategory') or '-'}",
+            f"Reason: {r.get('quarantineReason') or '-'}",
+            f"Checksum valid: {r.get('isChecksumValid')} | Signature valid: {r.get('isSignatureValid')} | "
+            f"Vocabulary compatible: {r.get('isVocabularyCompatible')} | Schema valid: {r.get('isSchemaValid')} "
+            f"(schema {r.get('schemaVersion') or '-'})",
+        ]
+        lines += [f"Vocabulary: {i}" for i in _parse_vocab_issues(r.get("vocabularyCompatibilityIssues"))]
+        QApplication.clipboard().setText("\n".join(lines))
+        Toast.show_toast(self, tr("import_errors.copied"), Toast.SUCCESS)
 
     def update_language(self, is_arabic: bool = True):
         self.setLayoutDirection(get_layout_direction())
