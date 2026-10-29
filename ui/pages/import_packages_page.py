@@ -505,6 +505,9 @@ class ImportPackagesPage(QWidget):
         if status_code == PkgStatus.QUARANTINED:
             self._show_quarantine_report(self._selected_pkg_id)
             return
+        if status_code == PkgStatus.VALIDATION_FAILED:
+            self._show_validation_errors(self._selected_pkg_id)
+            return
         self._on_view_package(self._selected_pkg_id)
 
     def _build_footer(self) -> QFrame:
@@ -1076,6 +1079,14 @@ class ImportPackagesPage(QWidget):
                 self._start_btn.setToolTip("")
                 self._start_btn.adjustSize()
 
+            elif status_code == PkgStatus.VALIDATION_FAILED:
+                # Read-only in the wizard, but the reasons can be viewed
+                self._start_btn.setVisible(True)
+                self._start_btn.setEnabled(True)
+                self._start_btn.setText(tr("page.import_packages.action.view_validation_errors"))
+                self._start_btn.setToolTip("")
+                self._start_btn.adjustSize()
+
             elif status_code and actionable:
                 self._start_btn.setVisible(True)
                 self._start_btn.setEnabled(True)
@@ -1178,10 +1189,9 @@ class ImportPackagesPage(QWidget):
         )
 
         if data.get("isQuarantined"):
-            # Do not proceed to staging; surface the reason immediately.
-            ErrorHandler.show_error(
-                self, data.get("message") or tr("import.error.quarantined")
-            )
+            # Do not proceed to staging; the quarantine report below explains why.
+            # The backend "message" is technical English, so it is not shown.
+            ErrorHandler.show_error(self, tr("import.error.quarantined"))
             if pkg_id:
                 self._show_quarantine_report(pkg_id)
             self._load_packages()
@@ -1293,6 +1303,17 @@ class ImportPackagesPage(QWidget):
             ErrorHandler.show_error(self, humanize_exception(e, context="import.uncancel"))
         finally:
             self._spinner.hide_loading()
+
+    def _show_validation_errors(self, package_id):
+        """Open the per-record validation errors of a ValidationFailed package."""
+        from ui.components.dialogs.validation_errors_dialog import ValidationErrorsDialog
+        package_name = ""
+        if self._selected_card is not None:
+            package_name = self._selected_card._data.get("package_name", "")
+        ValidationErrorsDialog.show_for(
+            package_id, self.import_controller,
+            package_number=package_name, parent=self.window(),
+        )
 
     def _show_quarantine_report(self, package_id):
         """Fetch and display the quarantine report dialog for a package."""
