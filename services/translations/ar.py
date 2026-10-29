@@ -1982,6 +1982,7 @@ AR_TRANSLATIONS = {
     "page.sync.persons": "الأفراد",
     "page.sync.property_units": "المقاسم",
     "page.sync.refresh": "تحديث",
+    "page.sync.rows_per_page": "صفوف في الصفحة:",
     "page.sync.status_cancelled": "ملغى",
     "page.sync.status_failed": "فشلت المزامنة",
     "page.sync.status_pending": "في الانتظار",
