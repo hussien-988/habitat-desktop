@@ -3,6 +3,7 @@
 from cProfile import label
 import time
 import json
+import html
 import re
 from typing import Optional, List
 from ui.error_handler import ErrorHandler
@@ -219,6 +220,7 @@ class _SearchWorker(QThread):
     found = pyqtSignal(str, float, float, int)  # name, lat, lng, zoom
     not_found = pyqtSignal(str)  # search_text
     error = pyqtSignal(str)
+    building_found = pyqtSignal(object)  # Building model with validated geometry
 
     def __init__(
         self,
@@ -248,6 +250,53 @@ class _SearchWorker(QThread):
         try:
             from services.api_client import get_api_client
             search_text = self._search_text
+
+            # Building codes are 17 digits (optionally grouped with dashes).
+            # A UUID is also a valid building identifier. Do this before place
+            # matching so a building search cannot be mistaken for a place.
+            normalized_code = re.sub(r"[\s-]", "", search_text)
+            is_code = bool(re.fullmatch(r"[0-9]{17}", normalized_code))
+            is_uuid = bool(re.fullmatch(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", search_text
+            ))
+            if is_code or is_uuid:
+                try:
+                    from services.map_service_api import MapServiceAPI
+                    api = get_api_client()
+                    if self._auth_token:
+                        api.set_access_token(self._auth_token)
+                    if is_uuid:
+                        building = MapServiceAPI(api_client=api).get_building_with_polygon(search_text)
+                    else:
+                        response = api.search_buildings(building_id=normalized_code, page_size=10)
+                        items = response.get("buildings", response.get("items", response.get("data", [])))
+                        if isinstance(items, dict):
+                            items = items.get("items", items.get("buildings", []))
+                        if not isinstance(items, list):
+                            items = []
+                        exact = next((item for item in items if
+                                      str(item.get("buildingId") or item.get("buildingCode") or "")
+                                      .replace("-", "") == normalized_code), None)
+                        building = None
+                        if exact:
+                            uuid = exact.get("id") or exact.get("buildingUuid")
+                            if uuid:
+                                building = MapServiceAPI(api_client=api).get_building_with_polygon(uuid)
+                            if not building:
+                                building = Building.from_dict(exact)
+                    if building:
+                        geometry = json.loads(GeoJSONConverter.buildings_to_geojson(
+                            [building], force_points=True))
+                        if geometry.get("features"):
+                            self.result_type = "building"
+                            self.building_found.emit(building)
+                            return
+                    self.not_found.emit(search_text)
+                except Exception as exc:
+                    logger.warning("Building ID search failed: %s", exc, exc_info=True)
+                    self.error.emit(str(exc))
+                return
 
             # Step 1: load neighborhoods if not cached
             if self.neighborhoods_cache is None:
@@ -1325,6 +1374,7 @@ class BuildingMapDialog(BaseMapDialog):
         self._search_worker.found.connect(
             self._on_search_found
         )
+        self._search_worker.building_found.connect(self._on_building_search_found)
 
         self._search_worker.not_found.connect(
             self._on_search_not_found
@@ -1347,6 +1397,13 @@ class BuildingMapDialog(BaseMapDialog):
         self.search_input.setEnabled(False)
         self.search_input.setPlaceholderText(tr("dialog.map.searching"))
         logger.info(f"Searching for: '{search_text}'")
+
+        normalized_code = re.sub(r"[\s-]", "", search_text)
+        if re.fullmatch(r"[0-9]{17}", normalized_code) or re.fullmatch(
+            r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", search_text
+        ):
+            self._start_search_worker(search_text, exact_only=True)
+            return
 
         def _after_exact_street_not_found():
             self._start_search_worker(
@@ -1373,6 +1430,87 @@ class BuildingMapDialog(BaseMapDialog):
             found_callback=_exact_street_found,
             not_found_callback=_after_exact_street_not_found,
         )
+
+    def _on_building_search_found(self, building):
+        """Render a searched building even when outside the loaded viewport."""
+        geojson = GeoJSONConverter.buildings_to_geojson([building], force_points=True)
+        features = json.loads(geojson).get("features", [])
+        if not features:
+            self._on_search_not_found(building.building_id)
+            return
+        feature = features[0]
+        coordinates = feature["geometry"]["coordinates"]
+        if feature["geometry"]["type"] != "Point":
+            self._on_search_error("Building location is not a point")
+            return
+        lon, lat = coordinates[:2]
+        building_code = str(feature.get("properties", {}).get("building_id") or building.building_id)
+        if not building_code:
+            self._on_search_error("Building has no code")
+            return
+        # Match the building number label used by the normal map pins.
+        building_number = str(feature.get("properties", {}).get("building_number") or "").strip()
+        building_label = building_number or building_code.replace("-", "")[-5:]
+        safe_building_label = html.escape(building_label)
+        # updateBuildingsOnMap is additive, preserves existing map markers and
+        # installs the same click/select handler as viewport-loaded buildings.
+        js = f"""
+        (function() {{
+            if (typeof window.updateBuildingsOnMap !== 'function') return;
+            window.updateBuildingsOnMap({geojson});
+            if (typeof map !== 'undefined') {{
+                map.setView([{float(lat)}, {float(lon)}], 19);
+                // Search result is a visual overlay, NOT a selected building.
+                if (window._buildingSearchHighlight) {{
+                    map.removeLayer(window._buildingSearchHighlight);
+                    window._buildingSearchHighlight = null;
+                }}
+                // Use the same pin silhouette as ordinary buildings, but visibly larger.
+                // This marker is presentation-only; it cannot select a building.
+                var searchPinIcon = L.divIcon({{
+                    className: 'building-search-highlight',
+                    html: '<div style="position:relative;width:38px;height:57px;pointer-events:none;">' +
+                          '<div style="position:absolute;bottom:62px;left:50%;transform:translateX(-50%);' +
+                          'padding:4px 8px;border-radius:6px;background:#6D28D9;color:#fff;' +
+                          'font-size:12px;font-weight:700;white-space:nowrap;' +
+                          'box-shadow:0 2px 8px rgba(0,0,0,.3);">' +
+                          {json.dumps(safe_building_label, ensure_ascii=False)} + '</div>' +
+                          '<svg width="38" height="57" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg">' +
+                          '<path d="M12 0C5.4 0 0 5.4 0 12c0 8 12 24 12 24s12-16 12-24c0-6.6-5.4-12-12-12z" ' +
+                          'fill="#7C3AED" stroke="#FFFFFF" stroke-width="2.4"/>' +
+                          '<circle cx="12" cy="12" r="5.5" fill="#FFFFFF"/>' +
+                          '</svg></div>',
+                    iconSize: [38, 57],
+                    iconAnchor: [19, 57]
+                }});
+                window._buildingSearchHighlight = L.marker(
+                    [{float(lat)}, {float(lon)}], {{
+                        icon: searchPinIcon,
+                        interactive: false,
+                        keyboard: false,
+                        zIndexOffset: 1000000
+                    }}
+                ).addTo(map);
+            }}
+            var code = {json.dumps(building_code, ensure_ascii=False)};
+            if (typeof currentMarkersCluster !== 'undefined' && currentMarkersCluster) {{
+                currentMarkersCluster.eachLayer(function(layer) {{
+                    if (!layer.feature || !layer.feature.properties) return;
+                    if (String(layer.feature.properties.building_id) !== code) return;
+                    if (typeof currentMarkersCluster.zoomToShowLayer === 'function') {{
+                        currentMarkersCluster.zoomToShowLayer(layer, function() {{
+                            if (layer.openTooltip) layer.openTooltip();
+                        }});
+                    }} else if (layer.openTooltip) layer.openTooltip();
+                }});
+            }}
+        }})();
+        """
+        if self.web_view:
+            self.web_view.page().runJavaScript(js)
+        from ui.components.toast import Toast
+        Toast.show_toast(self, building_code, "success")
+        self._reset_search_input()
 
     def _on_search_found(self, name, lat, lng, zoom):
         """Handle successful search result from worker."""
@@ -1407,6 +1545,14 @@ class BuildingMapDialog(BaseMapDialog):
             )
 
         from ui.components.toast import Toast
+
+        # Building identifiers have no partial-search phase.
+        if re.fullmatch(r"[0-9]{17}", re.sub(r"[\s-]", "", search_text)) or re.fullmatch(
+            r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", search_text
+        ):
+            Toast.show_toast(self, f"{tr('dialog.map.not_found')}: {search_text}", "warning")
+            self._reset_search_input()
+            return
 
         # Exact neighborhood/place/landmark search finished.
         # No exact result anywhere, so start partial search.
@@ -1450,6 +1596,8 @@ class BuildingMapDialog(BaseMapDialog):
     def _on_search_error(self, error_msg):
         """Handle search error from worker."""
         logger.error(f"Search error: {error_msg}")
+        from ui.components.toast import Toast
+        Toast.show_toast(self, str(error_msg), "warning")
         self._reset_search_input()
 
     def _reset_search_input(self):
