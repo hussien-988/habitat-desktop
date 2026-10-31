@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """Field work preparation step 3: review assignment before submission."""
 
+from collections import deque
 from datetime import date
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from services.api_worker import ApiWorker
 from services.translation_manager import tr, get_layout_direction
@@ -39,65 +40,206 @@ class FieldWorkPreparationStep3(QWidget):
                  revisit_unit_id=None, revisit_building_id=None,
                  parent=None):
         super().__init__(parent)
+        self._ui_ready = False
+        self._disposed = False
         self.buildings = buildings or []
         self.researcher = researcher or {}
-        self._building_units = {}  # building_id -> list of unit dicts
-        self._unit_count_badges = {}  # building_id -> QLabel (units badge in header)
-        self._accordion_bodies = {}  # building_id -> QWidget (body)
-        self._accordion_arrows = {}  # building_id -> QLabel (arrow)
-        self._units_labels = {}  # building_id -> QLabel (units section label)
+        self._building_units = {}  # building_id -> units already fetched this step
+        self._unit_uuids = {}  # building_id -> API UUID
+        self._unit_count_badges = {}  # building_id -> QLabel
+        self._accordion_bodies = {}  # building_id -> QWidget
+        self._accordion_arrows = {}  # building_id -> QLabel
+        self._units_labels = {}  # building_id -> QLabel (rendered units heading)
+        self._unit_status_labels = {}  # building_id -> QLabel
+        self._unit_retry_buttons = {}  # created only on failures
+        self._unit_states = {}  # building_id -> idle/loading/ready/empty/error
+        self._rendered_unit_ids = set()
+        self._pending_unit_ids = deque()
+        self._queued_unit_ids = set()
+        self._active_unit_id = None
+        self._active_unit_worker = None
+        # Keep references while threads may still be running (QThread lifetime).
+        self._unit_workers = []
         self._revisit_unit_id = revisit_unit_id
         self._revisit_building_id = revisit_building_id
         self._revisit_reason_input = None
 
-        # Show a temporary loading layout, fetch units in background
+        # Build only the building headers. Fetch each building's units on
+        # expansion; the assignment payload does not depend on these details.
         from ui.components.loading_spinner import LoadingSpinnerOverlay
         self._outer_layout = QVBoxLayout(self)
         self._outer_layout.setContentsMargins(0, 0, 0, 0)
-        self._spinner = LoadingSpinnerOverlay(self)
-        self._spinner.show_loading(tr("wizard.step3.loading_units"))
+        self._spinner = LoadingSpinnerOverlay(self, timeout_ms=120_000)
+        self._spinner.show_loading(tr("wizard.step3.loading_summary"))
+        # Let the wizard display this page before assembling 100 headers.
+        QTimer.singleShot(0, self._finish_initial_ui)
 
-        self._units_worker = ApiWorker(self._fetch_units_data, self.buildings)
-        self._units_worker.finished.connect(self._on_units_loaded)
-        self._units_worker.error.connect(self._on_units_load_error)
-        self._units_worker.start()
+    def dispose_unit_requests(self):
+        """Discard queued GETs and UI updates after the page is replaced.
 
-    def _on_units_loaded(self, building_units):
-        """Handle successful unit fetch, then build UI."""
-        self._building_units = building_units or {}
-        self._spinner.hide_loading()
-        self._setup_ui()
+        An active HTTP request may finish, but its result must no longer
+        update the discarded page or trigger the next queued request.
+        """
+        self._disposed = True
+        self._pending_unit_ids.clear()
+        self._queued_unit_ids.clear()
 
-    def _on_units_load_error(self, error_msg):
-        """Handle failed unit fetch, build UI with empty units."""
-        logger.warning(f"Could not fetch property units: {error_msg}")
-        self._spinner.hide_loading()
-        Toast.show_toast(self, tr("wizard.step3.err_load_summary"), Toast.ERROR)
-        self._setup_ui()
+    def _finish_initial_ui(self):
+        """Hide the initial spinner only after the summary is constructed."""
+        if self._disposed:
+            return
+        try:
+            self._setup_ui()
+            self._ui_ready = True
+        except Exception:
+            logger.exception("Could not construct fieldwork summary")
+            Toast.show_toast(self, tr("wizard.step3.err_load_summary"), Toast.ERROR)
+        finally:
+            self._spinner.hide_loading()
 
     @staticmethod
-    def _fetch_units_data(buildings):
-        """Fetch property units for each building. Runs in background thread."""
-        building_units = {}
-        try:
-            from services.api_client import get_api_client
-            api = get_api_client()
-            for building in buildings:
-                building_uuid = (
-                    getattr(building, 'building_uuid', None)
-                    or getattr(building, 'id', None)
-                )
-                if not building_uuid:
-                    continue
-                try:
-                    units = api.get_assignment_property_units(building_uuid)
-                    bid = getattr(building, 'building_id', '') or str(building)
-                    building_units[bid] = units if isinstance(units, list) else []
-                except Exception as e:
-                    logger.debug(f"Could not fetch units for {building_uuid}: {e}")
-        except Exception as e:
-            logger.warning(f"Could not fetch property units: {e}")
-        return building_units
+    def _fetch_single_building_units(building_uuid):
+        """Fetch one building's units off the GUI thread."""
+        from services.api_client import get_api_client
+        result = get_api_client().get_assignment_property_units(building_uuid)
+        if result is None:
+            return []
+        if not isinstance(result, list):
+            raise ValueError("Unexpected property-units response type")
+        return result
+
+    def _queue_unit_fetch(self, building_id):
+        """Queue at most one request per building, using one API worker at a time.
+
+        The API client shares a requests.Session, so issuing many concurrent
+        requests against that client could introduce thread-safety problems.
+        """
+        if self._disposed:
+            return
+        if (building_id in self._building_units
+                or building_id in self._queued_unit_ids
+                or building_id == self._active_unit_id):
+            return
+        if not self._unit_uuids.get(building_id):
+            self._set_unit_state(building_id, "error")
+            return
+        self._unit_states[building_id] = "loading"
+        self._set_unit_state(building_id, "loading")
+        self._pending_unit_ids.append(building_id)
+        self._queued_unit_ids.add(building_id)
+        self._process_unit_queue()
+
+    def _process_unit_queue(self):
+        """Run one queued request; completed workers unlock the next."""
+        if self._disposed:
+            return
+        if self._active_unit_id is not None:
+            return
+        # The ApiWorker data signal is emitted just before its QThread exits.
+        # Do not start a second request using the shared session until it has
+        # actually stopped, even if the previous result was already delivered.
+        if self._active_unit_worker is not None:
+            if self._active_unit_worker.isRunning():
+                QTimer.singleShot(25, self._process_unit_queue)
+                return
+            self._active_unit_worker = None
+        while self._pending_unit_ids:
+            building_id = self._pending_unit_ids.popleft()
+            self._queued_unit_ids.discard(building_id)
+            if building_id in self._building_units:
+                continue
+            self._active_unit_id = building_id
+            worker = ApiWorker(
+                self._fetch_single_building_units, self._unit_uuids[building_id]
+            )
+            self._unit_workers.append(worker)
+            self._active_unit_worker = worker
+            worker.finished.connect(
+                lambda units, bid=building_id:
+                self._on_single_units_loaded(bid, units)
+            )
+            worker.error.connect(
+                lambda message, bid=building_id:
+                self._on_single_units_error(bid, message)
+            )
+            worker.start()
+            return
+
+    def _on_single_units_loaded(self, building_id, units):
+        """Cache the result; render cards only if this accordion is open."""
+        if self._disposed:
+            return
+        self._building_units[building_id] = units
+        badge = self._unit_count_badges.get(building_id)
+        if badge is not None:
+            badge.setText(tr("wizard.step3.units_count", count=len(units)))
+            badge.show()
+        self._set_unit_state(building_id, "ready" if units else "empty")
+        body = self._accordion_bodies.get(building_id)
+        if body is not None and body.isVisible():
+            self._render_units_if_needed(building_id)
+        self._finish_unit_request(building_id)
+
+    def _on_single_units_error(self, building_id, message):
+        if self._disposed:
+            return
+        self._set_unit_state(building_id, "error")
+        self._finish_unit_request(building_id)
+
+    def _finish_unit_request(self, building_id):
+        if self._active_unit_id == building_id:
+            self._active_unit_id = None
+        # Defer the next request to avoid overlapping use of the shared
+        # requests.Session while the previous QThread is still returning.
+        QTimer.singleShot(0, self._process_unit_queue)
+
+    def _set_unit_state(self, building_id, state):
+        """Update per-accordion loading/error/empty feedback."""
+        self._unit_states[building_id] = state
+        label = self._unit_status_labels.get(building_id)
+        if label is None:
+            return
+        key_by_state = {
+            "loading": "wizard.step3.loading_units",
+            "empty": "wizard.step3.no_units",
+            "error": "wizard.step3.units_load_failed",
+        }
+        key = key_by_state.get(state)
+        label.setText(tr(key) if key else "")
+        label.setVisible(bool(key))
+
+        retry = self._unit_retry_buttons.get(building_id)
+        if state == "error" and retry is None:
+            from PyQt5.QtWidgets import QPushButton
+            retry = QPushButton(tr("wizard.step3.retry_units"))
+            retry.setCursor(Qt.PointingHandCursor)
+            retry.clicked.connect(
+                lambda _checked=False, bid=building_id: self._queue_unit_fetch(bid)
+            )
+            self._accordion_bodies[building_id].layout().addWidget(retry)
+            self._unit_retry_buttons[building_id] = retry
+        if retry is not None:
+            retry.setVisible(state == "error")
+
+    def _render_units_if_needed(self, building_id):
+        """Create unit widgets at most once for each expanded building."""
+        if building_id in self._rendered_unit_ids:
+            return
+        units = self._building_units.get(building_id)
+        if not units:
+            return
+        body = self._accordion_bodies.get(building_id)
+        if body is None:
+            return
+        layout = body.layout()
+        units_label = QLabel(tr("wizard.step3.units_label"))
+        units_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
+        units_label.setStyleSheet("color: #4B5563; background: transparent; border: none;")
+        layout.addWidget(units_label)
+        self._units_labels[building_id] = units_label
+        for unit in units:
+            layout.addWidget(self._create_unit_card(unit))
+        self._rendered_unit_ids.add(building_id)
 
     def _setup_ui(self):
         self.setLayoutDirection(get_layout_direction())
@@ -268,16 +410,16 @@ class FieldWorkPreparationStep3(QWidget):
 
         header_layout.addStretch()
 
-        # All units for this building
-        units = self._building_units.get(building_id, [])
-        total_count = len(units)
+        # Units are loaded only when this building is expanded.
+        self._unit_uuids[building_id] = (
+            getattr(building, 'building_uuid', None)
+            or getattr(building, 'id', None)
+        )
+        self._unit_states[building_id] = "idle"
 
-        # Units count badge
-        if total_count > 0:
-            badge = QLabel(tr("wizard.step3.units_count", count=total_count))
-        else:
-            num_units = getattr(building, 'number_of_units', 0) or 0
-            badge = QLabel(tr("wizard.step3.units_count", count=num_units) if num_units > 0 else "")
+        # Before expansion, show the count already known from the building.
+        num_units = getattr(building, 'number_of_units', 0) or 0
+        badge = QLabel(tr("wizard.step3.units_count", count=num_units) if num_units > 0 else "")
         badge.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
         badge.setStyleSheet(f"""
             color: {Colors.PRIMARY_BLUE};
@@ -286,8 +428,9 @@ class FieldWorkPreparationStep3(QWidget):
             border-radius: 10px;
             border: none;
         """)
-        if badge.text():
-            header_layout.addWidget(badge)
+        # Keep the badge in the layout even when the initial count is unknown.
+        header_layout.addWidget(badge)
+        badge.setVisible(bool(badge.text()))
         self._unit_count_badges[building_id] = badge
 
         container_layout.addWidget(header)
@@ -300,17 +443,12 @@ class FieldWorkPreparationStep3(QWidget):
         body_layout.setContentsMargins(44, 8, 16, 12)
         body_layout.setSpacing(10)
 
-        # Property units — show all units (read-only)
-        if units:
-            units_label = QLabel(tr("wizard.step3.units_label"))
-            units_label.setFont(create_font(size=10, weight=FontManager.WEIGHT_SEMIBOLD))
-            units_label.setStyleSheet("color: #4B5563; background: transparent; border: none;")
-            body_layout.addWidget(units_label)
-            self._units_labels[building_id] = units_label
-
-            for u in units:
-                unit_card = self._create_unit_card(u)
-                body_layout.addWidget(unit_card)
+        status_label = QLabel("")
+        status_label.setWordWrap(True)
+        status_label.setStyleSheet("color: #4B5563; background: transparent; border: none;")
+        status_label.hide()
+        self._unit_status_labels[building_id] = status_label
+        body_layout.addWidget(status_label)
 
         container_layout.addWidget(body)
 
@@ -439,6 +577,12 @@ class FieldWorkPreparationStep3(QWidget):
         if arrow:
             arrow.setText("\u25BC" if not is_visible else "\u25B6")
 
+        if not is_visible:
+            if building_id in self._building_units:
+                self._render_units_if_needed(building_id)
+            elif self._unit_states.get(building_id) == "idle":
+                self._queue_unit_fetch(building_id)
+
     def _format_building_id(self, building_id: str) -> str:
         """Format building ID with dashes: GG-DD-SS-CCC-NNN-BBBBB."""
         if not building_id:
@@ -519,6 +663,12 @@ class FieldWorkPreparationStep3(QWidget):
 
         for building_id in self._units_labels:
             self._units_labels[building_id].setText(tr("wizard.step3.units_label"))
+        # Re-translate feedback for in-flight and completed unit fetches.
+        for building_id, state in list(self._unit_states.items()):
+            if state in ("loading", "empty", "error"):
+                self._set_unit_state(building_id, state)
+        for retry in self._unit_retry_buttons.values():
+            retry.setText(tr("wizard.step3.retry_units"))
 
         if hasattr(self, '_revisit_reason_label') and self._revisit_reason_label:
             self._revisit_reason_label.setText(tr("wizard.step3.revisit_reason_label") + " *")
@@ -526,6 +676,17 @@ class FieldWorkPreparationStep3(QWidget):
             self._revisit_reason_input.setPlaceholderText(tr("wizard.step3.revisit_reason_placeholder"))
 
     def validate(self) -> bool:
+        # The UI is scheduled for the next Qt event-loop turn; never submit
+        # before the revisit reason field and building summary are ready.
+        if not self._ui_ready:
+            return False
+        # Avoid starting the assignment POST while this step is using the
+        # shared API client's session for a unit-details GET.
+        worker_busy = (self._active_unit_worker is not None
+                       and self._active_unit_worker.isRunning())
+        if worker_busy or self._pending_unit_ids:
+            Toast.show_toast(self, tr("wizard.step3.wait_for_units"), Toast.WARNING)
+            return False
         if self._revisit_unit_id and self._revisit_reason_input is not None:
             if not self._revisit_reason_input.text().strip():
                 Toast.show_toast(self, tr("wizard.step3.revisit_reason_required"), Toast.WARNING)

@@ -21,6 +21,9 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Keep in sync with AssignBuildingsCommandValidator in the Backend.
+_MAX_BUILDINGS_PER_ASSIGNMENT = 100
+
 
 class FieldWorkPreparationPage(QWidget):
     """Field work preparation wizard with header, steps, and footer."""
@@ -35,6 +38,8 @@ class FieldWorkPreparationPage(QWidget):
         super().__init__(parent)
         self.building_controller = building_controller
         self.i18n = i18n
+        self._assignment_submitting = False
+        self._assignment_spinner = None
 
         self._setup_ui()
         self._create_steps()
@@ -167,6 +172,8 @@ class FieldWorkPreparationPage(QWidget):
 
     def _on_back(self):
         """Handle back button."""
+        if self._assignment_submitting:
+            return
         if self.current_step == 3:
             self.refresh()
             return
@@ -175,14 +182,38 @@ class FieldWorkPreparationPage(QWidget):
             self.step_container.setCurrentIndex(self.current_step)
             self._update_navigation()
 
+    def _exceeds_assignment_limit(self, buildings):
+        """Warn before navigating or submitting more than the backend allows."""
+        count = len(buildings)
+        if count <= _MAX_BUILDINGS_PER_ASSIGNMENT:
+            return False
+
+        from ui.components.toast import Toast
+        Toast.show_toast(
+            self,
+            tr(
+                "wizard.field_work.max_buildings_warning",
+                max_count=_MAX_BUILDINGS_PER_ASSIGNMENT,
+                selected_count=count,
+            ),
+            Toast.WARNING,
+            duration=6000,
+        )
+        return True
+
     def _on_next(self):
         """Handle next button."""
+        # Navigation is allowed until a submission actually starts.
+        if self._assignment_submitting:
+            return
         if self.current_step == 0:
             # Moving from Step 1 to Step 2
             selected_buildings = self.step1.get_selected_buildings()
             if not selected_buildings:
                 from ui.components.toast import Toast
                 Toast.show_toast(self, tr("wizard.field_work.select_building_warning"), Toast.WARNING)
+                return
+            if self._exceeds_assignment_limit(selected_buildings):
                 return
 
             # Create Step 2 if not exists
@@ -211,9 +242,12 @@ class FieldWorkPreparationPage(QWidget):
             buildings = self._revisit_buildings or self.step1.get_selected_buildings()
             revisit_unit_id = self._revisit_unit_id
             revisit_building_id = self._revisit_buildings[0].building_id if self._revisit_buildings else ''
+            if self._exceeds_assignment_limit(buildings):
+                return
 
             # Rebuild step3 each time (fresh data)
             if self.step3 is not None:
+                self.step3.dispose_unit_requests()
                 self.step_container.removeWidget(self.step3)
                 self.step3.deleteLater()
 
@@ -236,6 +270,8 @@ class FieldWorkPreparationPage(QWidget):
                 return
             try:
                 summary = self.step3.get_summary()
+                if self._exceeds_assignment_limit(summary["buildings"]):
+                    return
                 workflow_data = {
                     'buildings': summary['buildings'],
                     'researcher': summary['researcher'],
@@ -272,9 +308,12 @@ class FieldWorkPreparationPage(QWidget):
             self.btn_next.setEnabled(has_researcher)
 
         elif self.current_step == 2:
-            self.btn_back.setEnabled(True)
-            self.btn_next.setText(tr("wizard.field_work.btn_confirm_send"))
-            self.btn_next.setEnabled(True)
+            self.btn_back.setEnabled(not self._assignment_submitting)
+            self.btn_next.setText(tr(
+                "wizard.field_work.assignment_sending" if self._assignment_submitting
+                else "wizard.field_work.btn_confirm_send"
+            ))
+            self.btn_next.setEnabled(not self._assignment_submitting)
 
         elif self.current_step == 3:
             # Completion view — only "New Assignment" button
@@ -282,9 +321,23 @@ class FieldWorkPreparationPage(QWidget):
             self.btn_next.setText(tr("wizard.field_work.btn_new_assignment"))
             self.btn_next.setEnabled(True)
 
+    def set_assignment_submitting(self, submitting: bool):
+        """Disable submission controls only while a request is in progress."""
+        self._assignment_submitting = submitting
+        if submitting:
+            if self._assignment_spinner is None:
+                from ui.components.loading_spinner import LoadingSpinnerOverlay
+                self._assignment_spinner = LoadingSpinnerOverlay(self, timeout_ms=150_000)
+            self._update_navigation()
+            self._assignment_spinner.show_loading(tr("wizard.field_work.assignment_sending"))
+        else:
+            if self._assignment_spinner is not None:
+                self._assignment_spinner.hide_loading()
+            self._update_navigation()
+
     def enable_next_button(self, enabled: bool):
         """Allow steps to enable/disable next button."""
-        self.btn_next.setEnabled(enabled)
+        self.btn_next.setEnabled(enabled and not self._assignment_submitting)
 
     def show_completion(self, buildings, researcher_name, assignment_ids):
         """Show completion and transfer status view after successful assignment."""
@@ -309,6 +362,11 @@ class FieldWorkPreparationPage(QWidget):
 
     def refresh(self, data=None):
         """Reset wizard to step 1 for a new assignment, or start at step 2 in revisit mode."""
+        # No wizard reset is permitted during a pending server mutation.
+        if self._assignment_submitting:
+            return
+        if self._assignment_spinner is not None:
+            self._assignment_spinner.hide_loading()
         # Reset revisit state
         self._revisit_buildings = None
         self._revisit_unit_id = None
@@ -323,6 +381,7 @@ class FieldWorkPreparationPage(QWidget):
 
         # Remove step 2 and 3 if they exist
         if self.step3 is not None:
+            self.step3.dispose_unit_requests()
             self.step_container.removeWidget(self.step3)
             self.step3.deleteLater()
             self.step3 = None

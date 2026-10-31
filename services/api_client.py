@@ -876,6 +876,7 @@ class TRRCMSApiClient:
         skip_accept_language: bool = False,
         disable_retry: bool = False,
         timeout_override: int = 0,
+        disable_transport_retry: bool = False,
     ) -> Any:
         """Execute HTTP request with error handling and automatic retry."""
         url = f"{self.base_url}{endpoint}"
@@ -934,15 +935,23 @@ class TRRCMSApiClient:
                     logger.info(
                         f"[REQ {req_id}] sending (prep={int((t_sent-t_enter)*1000)}ms, attempt={attempt+1}/{max_retries+1})"
                     )
-                    response = self._session.request(
+                    request_kwargs = dict(
                         method=method,
                         url=url,
                         json=json_data,
                         params=params,
                         headers=headers,
                         timeout=(self._CONNECT_TIMEOUT, effective_timeout),
-                        verify=self._verify_ssl()
+                        verify=self._verify_ssl(),
                     )
+                    if disable_transport_retry:
+                        # Isolated default Session has no adapter-level retries.
+                        # Never replay a non-idempotent assignment POST after
+                        # an ambiguous connection failure.
+                        with requests.Session() as single_attempt_session:
+                            response = single_attempt_session.request(**request_kwargs)
+                    else:
+                        response = self._session.request(**request_kwargs)
                     t_recv = time.monotonic()
                     logger.info(
                         f"[REQ {req_id}] status={response.status_code} "
@@ -1764,7 +1773,11 @@ class TRRCMSApiClient:
             payload["targetCompletionDate"] = target_completion_date
 
         logger.info(f"Creating assignment for {len(buildings)} buildings → researcher: {field_collector_id}")
-        return self._request("POST", "/v1/BuildingAssignments/assign", json_data=payload)
+        return self._request(
+            "POST", "/v1/BuildingAssignments/assign", json_data=payload,
+            disable_retry=True, disable_transport_retry=True,
+            timeout_override=120,
+        )
 
     def get_all_assignments(
         self,

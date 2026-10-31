@@ -1588,93 +1588,180 @@ class MainWindow(QMainWindow):
                 self._show_login()
 
     def _on_field_work_completed(self, workflow_data):
-        """Handle field work wizard completion - create assignment via API."""
-        try:
-            from ui.components.toast import Toast
-            from services.api_client import get_api_client
+        """Submit one assignment request asynchronously, with no automatic replay."""
+        from services.api_worker import ApiWorker
+        from services.api_client import get_api_client
+        from ui.components.toast import Toast
 
-            logger.info(f"_on_field_work_completed received: {type(workflow_data)}")
-            buildings = workflow_data.get('buildings', [])
-            researcher = workflow_data.get('researcher', {})
-            revisit_reasons = workflow_data.get('revisit_reasons', {})
-            researcher_name = researcher.get('name', 'N/A')
-            researcher_id = researcher.get('id', '')
-            building_count = len(buildings)
+        if getattr(self, "_fieldwork_assignment_inflight", False):
+            logger.warning("Ignored duplicate fieldwork Confirm click")
+            return
+        previous = getattr(self, "_fieldwork_assignment_worker", None)
+        if previous is not None and previous.isRunning():
+            return
 
-            if not buildings or not researcher_id:
-                logger.error("Missing buildings or researcher ID for assignment")
-                Toast.show_toast(self, "\u0628\u064a\u0627\u0646\u0627\u062a \u063a\u064a\u0631 \u0645\u0643\u062a\u0645\u0644\u0629 \u0644\u0644\u062a\u0639\u064a\u064a\u0646", Toast.ERROR)
-                return
+        buildings = workflow_data.get("buildings", [])
+        researcher = workflow_data.get("researcher", {})
+        researcher_id = researcher.get("id")
+        researcher_name = researcher.get("name") or "N/A"
+        if not buildings or not researcher_id:
+            Toast.show_toast(self, tr("wizard.field_work.assignment_missing_data"), Toast.ERROR)
+            return
+        if len(buildings) > 100:
+            Toast.show_toast(self, tr(
+                "wizard.field_work.max_buildings_warning",
+                max_count=100, selected_count=len(buildings),
+            ), Toast.WARNING)
+            return
 
-            # Build buildings payload (assignment is at building level)
-            buildings_payload = []
-            for b in buildings:
-                b_uuid = getattr(b, 'building_uuid', None) or (
-                    b.get('building_uuid') if isinstance(b, dict) else None
-                )
-                b_id = getattr(b, 'building_id', None) or (
-                    b.get('building_id') if isinstance(b, dict) else None
-                )
-                item = {"buildingId": b_uuid}
-                reason = revisit_reasons.get(b_id)
-                if reason:
-                    item["revisitReason"] = reason
-                buildings_payload.append(item)
-
-            logger.info(f"Creating API assignment: {building_count} buildings -> {researcher_name} ({researcher_id})")
-
-            try:
-                api = get_api_client()
-                api_response = api.create_assignment(
-                    buildings=buildings_payload,
-                    field_collector_id=researcher_id,
-                )
-                logger.info("Assignment created on backend API successfully")
-
-                # Extract assignment IDs from response
-                api_assignment_ids = []
-                if isinstance(api_response, dict):
-                    api_assignment_ids = api_response.get("createdAssignmentIds", [])
-                    if not api_assignment_ids:
-                        for a in api_response.get("assignments", []):
-                            aid = a.get("id") or a.get("assignmentId")
-                            if aid:
-                                api_assignment_ids.append(aid)
-
-            except Exception as api_err:
-                logger.error(f"API assignment creation failed: {api_err}")
-                Toast.show_toast(
-                    self,
-                    f"فشل إنشاء التعيين في الخادم: {str(api_err)}",
-                    Toast.ERROR
-                )
-                return
-
-            Toast.show_toast(
-                self,
-                f"تم إسناد {building_count} مبنى إلى {researcher_name}",
-                Toast.SUCCESS
+        revisit_reasons = workflow_data.get("revisit_reasons", {})
+        payload = []
+        for building in buildings:
+            building_uuid = getattr(building, "building_uuid", None) or (
+                building.get("building_uuid") if isinstance(building, dict) else None
             )
+            building_id = getattr(building, "building_id", None) or (
+                building.get("building_id") if isinstance(building, dict) else None
+            )
+            if not building_uuid:
+                Toast.show_toast(self, tr("wizard.field_work.assignment_missing_data"), Toast.ERROR)
+                return
+            item = {"buildingId": building_uuid}
+            reason = revisit_reasons.get(building_id)
+            if reason:
+                item["revisitReason"] = reason
+            payload.append(item)
 
-            # Invalidate building cache so map reflects new assignment status
-            try:
-                from services.building_cache_service import BuildingCacheService
-                BuildingCacheService.get_instance().invalidate_cache()
-            except Exception:
-                pass
+        # An earlier timed-out request may already have committed. Only guard
+        # an actual resubmission of those buildings; never lock wizard navigation.
+        building_ids = {str(item["buildingId"]) for item in payload}
+        uncertain_ids = getattr(self, "_fieldwork_uncertain_building_ids", set())
+        if building_ids & uncertain_ids:
+            Toast.show_toast(
+                self, tr("wizard.field_work.assignment_uncertain"), Toast.WARNING, 12000
+            )
+            return
 
-            effective_ids = api_assignment_ids
+        self._fieldwork_assignment_context = {
+            "count": len(buildings),
+            "researcher_name": researcher_name,
+            "building_ids": building_ids,
+        }
+        field_page = self.pages.get(Pages.FIELD_ASSIGNMENT)
+        self._fieldwork_assignment_inflight = True
+        if field_page is not None:
+            field_page.set_assignment_submitting(True)
 
-            # Reset wizard and navigate to sync data page
-            if Pages.FIELD_ASSIGNMENT in self.pages:
-                field_page = self.pages[Pages.FIELD_ASSIGNMENT]
-                if hasattr(field_page, 'refresh'):
-                    field_page.refresh()
+        worker = ApiWorker(
+            get_api_client().create_assignment,
+            buildings=payload, field_collector_id=researcher_id,
+        )
+        self._fieldwork_assignment_worker = worker
+        worker.finished.connect(self._on_fieldwork_assignment_finished)
+        worker.error.connect(self._on_fieldwork_assignment_error)
+        logger.info("Starting fieldwork assignment for %d buildings", len(buildings))
+        try:
+            worker.start()
+        except Exception:
+            self._fieldwork_assignment_inflight = False
+            if field_page is not None:
+                field_page.set_assignment_submitting(False)
+            logger.exception("Could not start fieldwork assignment worker")
+            Toast.show_toast(self, tr("wizard.field_work.assignment_failed_generic"), Toast.ERROR)
 
-            self.navigate_to(Pages.SYNC_DATA)
+    def _finish_fieldwork_assignment_ui(self):
+        self._fieldwork_assignment_inflight = False
+        field_page = self.pages.get(Pages.FIELD_ASSIGNMENT)
+        if field_page is not None:
+            field_page.set_assignment_submitting(False)
 
-        except Exception as e:
-            logger.error(f"Error in _on_field_work_completed: {e}", exc_info=True)
+    def _remember_uncertain_fieldwork_buildings(self):
+        """Remember potentially committed buildings without blocking navigation."""
+        previous = getattr(self, "_fieldwork_uncertain_building_ids", set())
+        previous.update(getattr(self, "_fieldwork_assignment_context", {}).get("building_ids", ()))
+        self._fieldwork_uncertain_building_ids = previous
+
+    def _on_fieldwork_assignment_finished(self, response):
+        """Use backend counts, never the number of selected buildings, for success."""
+        from ui.components.toast import Toast
+
+        context = getattr(self, "_fieldwork_assignment_context", {})
+        requested = context.get("count", 0)
+        researcher_name = context.get("researcher_name", "N/A")
+        try:
+            if not isinstance(response, dict):
+                raise ValueError("Assignment response was not an object")
+            assigned = response["assignedCount"]
+            failed = response["failedCount"]
+            ids = response["createdAssignmentIds"]
+            if (type(assigned) is not int or type(failed) is not int
+                    or not isinstance(ids, list)
+                    or assigned < 0 or failed < 0
+                    or assigned + failed != requested
+                    or len(ids) != assigned
+                    or response.get("success") is not (assigned > 0)):
+                raise ValueError("Inconsistent assignment result")
+        except (KeyError, ValueError, TypeError):
+            logger.exception("Ambiguous fieldwork assignment response")
+            self._remember_uncertain_fieldwork_buildings()
+            self._finish_fieldwork_assignment_ui()
+            Toast.show_toast(self, tr("wizard.field_work.assignment_uncertain"), Toast.WARNING, 12000)
+            return
+
+        self._finish_fieldwork_assignment_ui()
+        logger.info("Fieldwork assignment result: requested=%d assigned=%d failed=%d",
+                    requested, assigned, failed)
+        if assigned == 0:
+            Toast.show_toast(self, tr("wizard.field_work.assignment_none"), Toast.ERROR, 10000)
+            return
+
+        # A partial success is NOT safe to resend as a whole batch.
+        # Show the warning and navigate away from the completed selection.
+        if failed:
+            message = tr("wizard.field_work.assignment_partial", assigned=assigned, failed=failed)
+            toast_kind = Toast.WARNING
+        else:
+            message = tr("wizard.field_work.assignment_success", count=assigned,
+                         researcher=researcher_name)
+            toast_kind = Toast.SUCCESS
+
+        try:
+            from services.building_cache_service import BuildingCacheService
+            BuildingCacheService.get_instance().invalidate_cache()
+        except Exception:
+            logger.warning("Could not invalidate building assignment cache")
+
+        field_page = self.pages.get(Pages.FIELD_ASSIGNMENT)
+        if field_page is not None:
+            field_page.refresh()
+        self.navigate_to(Pages.SYNC_DATA)
+        Toast.show_toast(self, message, toast_kind, 12000 if failed else 5000)
+
+    def _on_fieldwork_assignment_error(self, message):
+        """A timeout or server error may hide a successfully committed assignment."""
+        from services.exceptions import ApiException
+        from ui.components.toast import Toast
+
+        worker = getattr(self, "_fieldwork_assignment_worker", None)
+        exc = getattr(worker, "exception", None)
+        # Only a clear 4xx rejection means no assignment was committed.
+        # Timeouts (408), rate limits (429), unexpected errors, and malformed
+        # responses are uncertain: do not automatically resend the batch.
+        rejected = (isinstance(exc, ApiException)
+                    and isinstance(exc.status_code, int)
+                    and exc.status_code in (400, 401, 403, 404, 405, 422))
+        ambiguous = not rejected
+        if ambiguous:
+            self._remember_uncertain_fieldwork_buildings()
+        self._finish_fieldwork_assignment_ui()
+        if ambiguous:
+            logger.warning("Assignment outcome unknown; affected buildings require review")
+            Toast.show_toast(self, tr("wizard.field_work.assignment_uncertain"), Toast.WARNING, 12000)
+        else:
+            logger.warning("Fieldwork assignment refused: status=%s", exc.status_code)
+            Toast.show_toast(self,
+                             tr("wizard.field_work.assignment_failed", details=message),
+                             Toast.ERROR, 10000)
 
     def _on_import_requested(self):
         """Handle import data request from navbar menu."""
