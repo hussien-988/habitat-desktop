@@ -194,6 +194,18 @@ class MapServiceAPI:
             logger.error(f"Error loading buildings: {e}", exc_info=True)
             return []
 
+    def load_viewport_buildings(self, bounds: MapBounds, max_results: int) -> List[Building]:
+        """Load buildings for a map area. Unlike get_buildings_in_bbox, errors propagate."""
+        buildings_data = self.data_provider.get_buildings_for_viewport(bounds=bounds, max_results=max_results)
+        return [
+            self._convert_api_building_to_model(data, resolve_address_names=False)
+            for data in buildings_data
+        ]
+
+    def load_building_grid(self, bounds: MapBounds, cell_size_degrees: float) -> List[Dict[str, Any]]:
+        """Load building counts per grid cell for a map area. Errors propagate."""
+        return self.data_provider.get_building_grid(bounds, cell_size_degrees)
+
     def get_buildings_in_bbox_optimized(
         self,
         north_east_lat: float,
@@ -708,9 +720,6 @@ class MapServiceAPI:
         building_id = data.get("buildingCode") or data.get("buildingId", "")
         geo_location = data.get("buildingGeometryWkt")
 
-        if not geo_location:
-            logger.warning(f"Building {building_id}: no buildingGeometryWkt in API response")
-
         # Extract codes from API response
         gov_code = data.get("governorateCode", "")
         dist_code = data.get("districtCode", "")
@@ -773,7 +782,8 @@ class MapServiceAPI:
             neighborhood_code=neighborhood_code,
             neighborhood_name_ar=neighborhood_name,
             building_number=building_number,
-            is_assigned=data.get("hasActiveAssignment", False) or data.get("isAssigned", False),
+            # isAssigned stays true after an assignment ends, so prefer the active state
+            is_assigned=data.get("hasActiveAssignment", data.get("isAssigned", False)),
             is_locked=data.get("isLocked", False),
         )
 

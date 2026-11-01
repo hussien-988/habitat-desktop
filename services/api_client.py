@@ -1133,7 +1133,9 @@ class TRRCMSApiClient:
         north_east_lng: float,
         south_west_lat: float,
         south_west_lng: float,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        include_geometry: bool = True,
+        max_results: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Get buildings within bounding box for map display."""
         payload = {
@@ -1145,6 +1147,10 @@ class TRRCMSApiClient:
 
         if status:
             payload["status"] = status
+        if not include_geometry:
+            payload["includeGeometry"] = False
+        if max_results:
+            payload["maxResults"] = max_results
 
         logger.debug(f"Fetching buildings for map: bbox={payload}")
         result = self._request(
@@ -1156,6 +1162,28 @@ class TRRCMSApiClient:
         logger.info(f"Fetched {len(buildings)} buildings from API")
 
         return buildings
+
+    def get_building_map_grid(
+        self,
+        north_east_lat: float,
+        north_east_lng: float,
+        south_west_lat: float,
+        south_west_lng: float,
+        cell_size_degrees: float
+    ) -> List[Dict[str, Any]]:
+        """Get building counts per grid cell for low-zoom map display."""
+        result = self._request(
+            "POST", "/v2/buildings/map/grid",
+            json_data={
+                "northEastLat": north_east_lat,
+                "northEastLng": north_east_lng,
+                "southWestLat": south_west_lat,
+                "southWestLng": south_west_lng,
+                "cellSizeDegrees": cell_size_degrees,
+            },
+            skip_accept_language=True,
+        )
+        return result.get("items", []) if isinstance(result, dict) else result
 
     def get_landmarks_for_map(
         self,

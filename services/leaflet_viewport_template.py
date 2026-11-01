@@ -32,8 +32,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         }
 
         // Configuration (from MapConstants)
-        var MIN_ZOOM_FOR_LOADING = 15;
-        var MAX_MARKERS_PER_VIEWPORT = 2000;
 
         // Viewport loading state
         var viewportLoadingEnabled = true;
@@ -42,6 +40,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
         var currentBuildingsLayer = null;
         var currentMarkersCluster = null;
         var isLoadingViewport = false;
+        var pendingViewportLoad = false;
+        var buildingGridLayer = L.layerGroup();
 
         // Reuse bridge from selection JS (already initialized)
         // Don't create a new QWebChannel - use the existing 'bridge' variable
@@ -76,12 +76,17 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
          * Load buildings for current viewport bounds.
          * Called on map moveend/zoomend events.
          *
-         * - Min zoom check (don't load at low zoom levels)
-         * - Max markers limit per viewport
+         * - Pins, or per-cell counts when the view holds too many buildings
          * - Debouncing to prevent too many requests
          */
         function loadBuildingsForViewport() {
-            if (!viewportLoadingEnabled || isLoadingViewport) {
+            if (!viewportLoadingEnabled) {
+                return;
+            }
+
+            // A move during a load is requested as soon as that load finishes
+            if (isLoadingViewport) {
+                pendingViewportLoad = true;
                 return;
             }
 
@@ -91,12 +96,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 return;
             }
 
-            // Min zoom check - don't load NEW buildings when zoomed out too far
-            // but keep existing buildings visible (clustering handles density)
+            // Python answers with pins, or with per-cell counts for very dense views
             var currentZoom = map.getZoom();
-            if (currentZoom < MIN_ZOOM_FOR_LOADING) {
-                return;
-            }
 
             // Get current viewport bounds
             var bounds = map.getBounds();
@@ -109,8 +110,6 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 southWest: southWest,
                 center: center,
                 zoom: currentZoom,
-                minZoom: MIN_ZOOM_FOR_LOADING,
-                maxMarkers: MAX_MARKERS_PER_VIEWPORT
             });
 
             // Send bounds to Python via WebChannel
@@ -128,7 +127,7 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     center.lng
                 );
 
-                console.log('Requesting buildings for viewport (max: ' + MAX_MARKERS_PER_VIEWPORT + ')...');
+                console.log('Requesting buildings for viewport...');
             } else if (typeof bridgeReady === 'undefined' || !bridgeReady) {
                 console.warn('Bridge not ready yet, skipping viewport load');
                 isLoadingViewport = false;
@@ -138,13 +137,22 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
             }
         }
 
+        function onViewportLoadDone() {
+            isLoadingViewport = false;
+            if (pendingViewportLoad) {
+                pendingViewportLoad = false;
+                loadBuildingsForViewport();
+            }
+        }
+        window.onViewportLoadDone = onViewportLoadDone;
+
         // ─── Additive loading state ───────────────────────────────────────────
         // Buildings accumulate as the user explores — never cleared by viewport events.
         var _addedBuildingIds = {};
 
         function _createMarkersCluster() {
             if (typeof L.markerClusterGroup === 'function') {
-                return L.markerClusterGroup({
+                var cluster = L.markerClusterGroup({
                     maxClusterRadius: function(zoom) {
                         if (zoom <= 15) return 80;
                         if (zoom <= 16) return 50;
@@ -153,14 +161,20 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     spiderfyOnMaxZoom: true,
                     showCoverageOnHover: false,
                     zoomToBoundsOnClick: true,
-                    disableClusteringAtZoom: 16,
+                    disableClusteringAtZoom: 18,
                     chunkedLoading: true,
                     chunkInterval: 50,
                     chunkDelay: 5,
-                    removeOutsideVisibleBounds: false,
+                    removeOutsideVisibleBounds: true,
                     animate: false,
                     animateAddingMarkers: false
                 });
+                // The library draws one extra screen on every side (9 screens), which
+                // means tens of thousands of elements in dense areas. Keep a small margin.
+                cluster._getExpandedVisibleBounds = function() {
+                    return this._map.getBounds().pad(0.15);
+                };
+                return cluster;
             }
             console.warn('MarkerCluster not available, using featureGroup fallback');
             return L.featureGroup();
@@ -199,7 +213,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
 
                 if (newFeatures.length === 0) {
                     console.log('No new buildings. Total on map: ' + Object.keys(_addedBuildingIds).length);
-                    isLoadingViewport = false;
+                    showBuildingPins();
+                    onViewportLoadDone();
                     return;
                 }
 
@@ -257,6 +272,14 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                         _addedBuildingIds[props.building_id] = true;
                         layersBatch.push(layer);
 
+                        // Markers outside the screen have no element yet
+                        if (typeof assignmentFilter !== 'undefined' && assignmentFilter && assignmentFilter !== 'all'
+                            && typeof window.applyAssignmentFilterToLayer === 'function') {
+                            layer.on('add', function() {
+                                window.applyAssignmentFilterToLayer(layer);
+                            });
+                        }
+
                         if (window.multiselectMode && typeof window.attachMultiselectHandler === 'function') {
                             window.attachMultiselectHandler(layer);
                             return;
@@ -278,18 +301,71 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                     layersBatch.forEach(window.applyAssignmentFilterToLayer);
                 }
 
-                isLoadingViewport = false;
                 var total = currentMarkersCluster.getLayers().length;
                 console.log('Added ' + newFeatures.length + ' buildings. Total on map: ' + total);
                 if (typeof window.updateBuildingCount === 'function') {
                     window.updateBuildingCount(total);
                 }
+                showBuildingPins();
+                onViewportLoadDone();
 
             } catch (error) {
                 console.error('Error updating buildings:', error);
-                isLoadingViewport = false;
+                onViewportLoadDone();
             }
         }
+
+        function showBuildingPins() {
+            if (map.hasLayer(buildingGridLayer)) {
+                map.removeLayer(buildingGridLayer);
+            }
+            if (currentMarkersCluster && !map.hasLayer(currentMarkersCluster)) {
+                map.addLayer(currentMarkersCluster);
+            }
+        }
+
+        function gridCellCount(cell) {
+            if (typeof assignmentFilter === 'undefined' || !assignmentFilter || assignmentFilter === 'all') {
+                return cell.count;
+            }
+            return assignmentFilter === 'true' ? cell.assignedCount : cell.count - cell.assignedCount;
+        }
+
+        /**
+         * Show building counts per grid cell instead of pins. Works for any number
+         * of buildings, because the server sends one row per cell, not one per building.
+         */
+        function updateBuildingGrid(cells) {
+            try {
+                buildingGridLayer.clearLayers();
+                cells.forEach(function(cell) {
+                    var count = gridCellCount(cell);
+                    if (count <= 0) return;
+
+                    var size = count < 100 ? 'small' : (count < 1000 ? 'medium' : 'large');
+                    var bubble = L.marker([cell.latitude, cell.longitude], {
+                        icon: L.divIcon({
+                            className: 'marker-cluster marker-cluster-' + size,
+                            html: '<div><span>' + count + '</span></div>',
+                            iconSize: [40, 40]
+                        })
+                    });
+                    bubble.on('click', function() {
+                        map.setView([cell.latitude, cell.longitude], map.getZoom() + 2);
+                    });
+                    buildingGridLayer.addLayer(bubble);
+                });
+                if (currentMarkersCluster && map.hasLayer(currentMarkersCluster)) {
+                    map.removeLayer(currentMarkersCluster);
+                }
+                if (!map.hasLayer(buildingGridLayer)) {
+                    map.addLayer(buildingGridLayer);
+                }
+            } catch (error) {
+                console.error('Error updating building grid:', error);
+            }
+        }
+        window.updateBuildingGrid = updateBuildingGrid;
 
         // Called from Python on forced refresh: clears all buildings then re-triggers load
         window.clearMapBuildings = function() {
@@ -302,7 +378,9 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                 map.removeLayer(currentBuildingsLayer);
                 currentBuildingsLayer = null;
             }
+            buildingGridLayer.clearLayers();
             isLoadingViewport = false;
+            pendingViewportLoad = false;
             console.log('Map buildings cleared for refresh');
         };
 
