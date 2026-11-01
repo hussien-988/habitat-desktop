@@ -514,6 +514,9 @@ class _SearchWorker(QThread):
 class BuildingMapDialog(BaseMapDialog):
     """Dialog for selecting a single building by clicking on map."""
 
+    SEARCH_PLACEHOLDER_KEY = "dialog.map.search_placeholder_buildings"
+    SEARCH_CLEARABLE = True
+
     def __init__(
         self,
         db: Database,
@@ -1396,6 +1399,7 @@ class BuildingMapDialog(BaseMapDialog):
 
         self.search_input.setEnabled(False)
         self.search_input.setPlaceholderText(tr("dialog.map.searching"))
+        self._update_clear_search_btn()
         logger.info(f"Searching for: '{search_text}'")
 
         normalized_code = re.sub(r"[\s-]", "", search_text)
@@ -1421,7 +1425,7 @@ class BuildingMapDialog(BaseMapDialog):
                 "success",
             )
 
-            self._reset_search_input()
+            self._reset_search_input(found=True)
 
 
         self._search_streets_js(
@@ -1510,7 +1514,7 @@ class BuildingMapDialog(BaseMapDialog):
             self.web_view.page().runJavaScript(js)
         from ui.components.toast import Toast
         Toast.show_toast(self, building_code, "success")
-        self._reset_search_input()
+        self._reset_search_input(found=True)
 
     def _on_search_found(self, name, lat, lng, zoom):
         """Handle successful search result from worker."""
@@ -1532,7 +1536,7 @@ class BuildingMapDialog(BaseMapDialog):
             )
         from ui.components.toast import Toast
         Toast.show_toast(self, name, "success")
-        self._reset_search_input()
+        self._reset_search_input(found=True)
 
     def _on_search_not_found(self, search_text):
         """Continue through exact then partial search phases."""
@@ -1567,7 +1571,7 @@ class BuildingMapDialog(BaseMapDialog):
                     search_text,
                     "success",
                 )
-                self._reset_search_input()
+                self._reset_search_input(found=True)
 
             def _partial_street_not_found():
                 self._start_search_worker(
@@ -1600,11 +1604,47 @@ class BuildingMapDialog(BaseMapDialog):
         Toast.show_toast(self, str(error_msg), "warning")
         self._reset_search_input()
 
-    def _reset_search_input(self):
+    def _reset_search_input(self, found=False):
         """Re-enable search input after search completes."""
+        if found:
+            self._search_result_active = True
         if hasattr(self, 'search_input'):
             self.search_input.setEnabled(True)
-            self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
+            self.search_input.setPlaceholderText(tr(self.SEARCH_PLACEHOLDER_KEY))
+            self._update_clear_search_btn()
+
+    def _on_clear_search_clicked(self):
+        """Clear the search box; if a result is on the map, remove it and return to the opening view."""
+        had_result = self._search_result_active
+        self._search_result_active = False
+        self.search_input.clear()
+        self._update_clear_search_btn()
+        self.search_input.setFocus()
+
+        if not had_result or not self.web_view:
+            return
+
+        js = """
+        (function() {
+            if (typeof map === 'undefined') return;
+            if (window._buildingSearchHighlight) {
+                map.removeLayer(window._buildingSearchHighlight);
+                window._buildingSearchHighlight = null;
+            }
+            if (typeof landmarkSearchHighlight !== 'undefined' && landmarkSearchHighlight) {
+                map.removeLayer(landmarkSearchHighlight);
+                landmarkSearchHighlight = null;
+            }
+            if (window._streetSearchHighlight) {
+                window._streetSearchHighlight.setStyle({color: '#3B82F6', weight: 3, opacity: 0.7});
+                window._streetSearchHighlight.closeTooltip();
+                window._streetSearchHighlight = null;
+            }
+            map.closePopup();
+        })();
+        """
+        self.web_view.page().runJavaScript(js)
+        self._fly_to(self._initial_center_lat, self._initial_center_lon, self._initial_zoom or 15)
 
     def get_selected_building(self) -> Optional[Building]:
         """Get selected building or None."""
