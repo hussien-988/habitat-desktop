@@ -39,91 +39,6 @@ def _cache_view_only_html(key, html: str) -> None:
     _VIEW_ONLY_HTML_CACHE[key] = html
 
 
-class _BuildingsWorker(QThread):
-    """Background worker for loading buildings data."""
-    finished = pyqtSignal(dict)
-    error = pyqtSignal(str)
-
-    def __init__(self, auth_token, selected_building_id, is_view_only,
-                 fallback_building, center_lat, center_lon, data_provider=None,
-                 perf_trace=None):
-        super().__init__()
-        self._auth_token = auth_token
-        self._selected_building_id = selected_building_id
-        self._is_view_only = is_view_only
-        self._fallback_building = fallback_building
-        self._center_lat = center_lat
-        self._center_lon = center_lon
-        self._data_provider = data_provider
-        self._perf_trace = perf_trace
-
-
-    def run(self):
-        try:
-            result = {}
-            from services.map_service_api import MapServiceAPI
-
-            map_service = MapServiceAPI(data_provider=self._data_provider)
-            if self._auth_token:
-                map_service.set_auth_token(self._auth_token)
-
-            buildings = []
-            if self._is_view_only and self._selected_building_id:
-                if self._perf_trace:
-                    self._perf_trace.mark('buildings_api_start', mode='view_only')
-                result['buildings_geojson'] = '{"type": "FeatureCollection", "features": []}'
-                if self._fallback_building:
-                    result['view_buildings'] = [self._fallback_building]
-                else:
-                    building = map_service.get_building_with_polygon(self._selected_building_id)
-                    result['view_buildings'] = [building] if building else []
-                if self._perf_trace:
-                    self._perf_trace.mark(
-                        'buildings_api_done',
-                        n_buildings=len(result.get('view_buildings', [])),
-                    )
-            else:
-                if self._perf_trace:
-                    self._perf_trace.mark(
-                        'buildings_api_start',
-                        center_lat=f"{self._center_lat:.4f}",
-                        center_lon=f"{self._center_lon:.4f}",
-                        delta=0.15,
-                        page_size=2000,
-                    )
-                try:
-                    # ~15km radius to cover the full screen at zoom 15
-                    delta_lat, delta_lng = 0.15, 0.15
-                    buildings = map_service.get_buildings_in_bbox(
-                        north_east_lat=self._center_lat + delta_lat,
-                        north_east_lng=self._center_lon + delta_lng,
-                        south_west_lat=self._center_lat - delta_lat,
-                        south_west_lng=self._center_lon - delta_lng,
-                        page_size=2000
-                    )
-                except Exception as e:
-                    logger.warning(f"API map loading failed: {e}")
-                if self._perf_trace:
-                    self._perf_trace.mark(
-                        'buildings_api_done',
-                        n_buildings=len(buildings) if buildings else 0,
-                    )
-                result['buildings_list'] = buildings
-                result['buildings_geojson'] = GeoJSONConverter.buildings_to_geojson(
-                    buildings, force_points=True
-                )
-                if self._perf_trace:
-                    self._perf_trace.mark(
-                        'geojson_built',
-                        bytes=len(result['buildings_geojson']),
-                    )
-
-            self.finished.emit(result)
-        except Exception as e:
-            logger.error(f"Buildings worker error: {e}", exc_info=True)
-            self.error.emit(str(e))
-
-
 class _LayersWorker(QThread):
     """Background worker for loading neighborhoods, boundaries, landmarks and streets."""
     finished = pyqtSignal(dict)
@@ -612,6 +527,9 @@ class BuildingMapDialog(BaseMapDialog):
         )
         # Restore auth token after BaseMapDialog.__init__
         self._auth_token = temp_auth_token
+        # Every open starts fresh, so buildings added or moved in QGIS show up immediately.
+        if self._viewport_loader:
+            self._viewport_loader.clear_cache()
         logger.debug(f"Auth token set in BaseMapDialog: {bool(self._auth_token)}")
 
         # Set token in viewport loader
@@ -628,7 +546,6 @@ class BuildingMapDialog(BaseMapDialog):
         self._neighborhoods_cache = None
         self._search_worker = None
 
-        self._buildings_worker = None
         self._layers_worker = None
         self._refresh_layers_worker = None
         self._page_loaded = False
@@ -670,7 +587,6 @@ class BuildingMapDialog(BaseMapDialog):
         if self._is_view_only:
             QTimer.singleShot(0, self._start_map_load)
         else:
-            QTimer.singleShot(0, self._prefetch_buildings_early)
             QTimer.singleShot(50, self._start_map_load)
 
     def _build_legend_labels(self) -> dict:
@@ -810,46 +726,10 @@ class BuildingMapDialog(BaseMapDialog):
         }})();
         """
 
-        if self._buildings_worker is None and not self._is_view_only:
-            if self._perf_trace:
-                self._perf_trace.mark('buildings_worker_start_late')
-            self._buildings_worker = _BuildingsWorker(
-                self._auth_token, self._selected_building_id,
-                self._is_view_only, self._fallback_building,
-                center_lat, center_lon,
-                data_provider=self._map_data_provider,
-                perf_trace=self._perf_trace,
-            )
-            self._buildings_worker.finished.connect(self._on_buildings_ready)
-            self._buildings_worker.error.connect(self._on_map_data_error)
-            self._buildings_worker.start()
-
         # _LayersWorker is deferred to _on_page_ready — its CPU-bound JSON
         # parsing (neighborhoods 2.9MB + normalize_landmark/normalize_street
         # per feature) holds the Python GIL and starves Qt's event loop
         # during the critical setHtml -> loadFinished window.
-
-    def _prefetch_buildings_early(self):
-        """Start fetching buildings immediately on dialog open, before HTML is ready."""
-        if self._perf_trace:
-            self._perf_trace.mark('prefetch_start')
-        if self._is_view_only or self._buildings_worker is not None:
-            if self._perf_trace:
-                self._perf_trace.mark(
-                    'prefetch_skipped',
-                    reason='view_only' if self._is_view_only else 'already_running',
-                )
-            return
-        self._buildings_worker = _BuildingsWorker(
-            self._auth_token, self._selected_building_id,
-            self._is_view_only, self._fallback_building,
-            self._initial_center_lat, self._initial_center_lon,
-            data_provider=self._map_data_provider,
-            perf_trace=self._perf_trace,
-        )
-        self._buildings_worker.finished.connect(self._on_buildings_ready)
-        self._buildings_worker.error.connect(self._on_map_data_error)
-        self._buildings_worker.start()
 
     def _on_map_data_error(self, error_msg):
         """Handle map data loading error — show banner for network issues, modal for others."""
@@ -1854,6 +1734,17 @@ class MultiSelectBuildingMapDialog(BuildingMapDialog):
 
     def get_selected_buildings(self) -> List[Building]:
         """Get newly added buildings (excludes pre-selected)."""
+        from services.map_service_api import MapServiceAPI
+        for building in self._multi_selected_buildings:
+            # Map data carries codes only; names are needed once a building is selected.
+            if building.neighborhood_name_ar:
+                continue
+            names = MapServiceAPI._resolve_address_names(
+                building.governorate_code, building.district_code, building.subdistrict_code,
+                building.community_code, building.neighborhood_code,
+            )
+            for attribute, value in names.items():
+                setattr(building, attribute, value)
         return list(self._multi_selected_buildings)
 
     def get_removed_pre_selected_ids(self) -> set:

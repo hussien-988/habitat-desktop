@@ -35,6 +35,10 @@ class IMapDataProvider(ABC):
         """Get buildings visible in map viewport."""
         pass
 
+    def get_building_grid(self, bounds: MapBounds, cell_size_degrees: float) -> List[Dict]:
+        """Get building counts per grid cell, for providers that support it."""
+        return []
+
     @abstractmethod
     def get_buildings_in_polygon(self, polygon_wkt: str, filters: Optional[Dict] = None, page_size: int = 1000) -> List[Dict]:
         """Get buildings within a polygon."""
@@ -125,32 +129,37 @@ class BuildingsMapProvider(IMapDataProvider):
 
 class FieldAssignmentMapProvider(IMapDataProvider):
     """
-    Provider for field assignment workflow.
+    Provider for building selection maps with assignment data.
 
-    Uses BuildingAssignments API with assignment-specific data.
+    Viewports use the same Buildings/map API as the QGIS plugin, so both show
+    the same buildings. Polygon search uses the BuildingAssignments API.
     """
 
     def __init__(self, api_client):
         self.api = api_client
 
     def get_buildings_for_viewport(self, bounds: MapBounds, max_results: int = 2000) -> List[Dict]:
-        """Get buildings for viewport with assignment data."""
-        try:
-            polygon_wkt = self._bounds_to_polygon_wkt(bounds)
+        """Get buildings for viewport. Errors propagate so a failed area is never cached as empty."""
+        buildings = self.api.get_buildings_for_map(
+            north_east_lat=bounds.max_lat,
+            north_east_lng=bounds.max_lng,
+            south_west_lat=bounds.min_lat,
+            south_west_lng=bounds.min_lng,
+            include_geometry=False,
+            max_results=max_results
+        )
+        logger.info(f"Loaded {len(buildings)} buildings for viewport (Buildings/map API)")
+        return buildings
 
-            result = self.api.search_buildings_for_assignment(
-                polygon_wkt=polygon_wkt,
-                has_active_assignment=None,
-                page_size=max_results
-            )
-
-            buildings = result.get("items", []) if isinstance(result, dict) else result
-            logger.info(f"Loaded {len(buildings)} buildings for viewport (BuildingAssignments API)")
-            return buildings
-
-        except Exception as e:
-            logger.error(f"Error loading buildings for viewport: {e}")
-            return []
+    def get_building_grid(self, bounds: MapBounds, cell_size_degrees: float) -> List[Dict]:
+        """Get building counts per grid cell. Errors propagate."""
+        return self.api.get_building_map_grid(
+            north_east_lat=bounds.max_lat,
+            north_east_lng=bounds.max_lng,
+            south_west_lat=bounds.min_lat,
+            south_west_lng=bounds.min_lng,
+            cell_size_degrees=cell_size_degrees
+        )
 
     def get_buildings_in_polygon(self, polygon_wkt: str, filters: Optional[Dict] = None, page_size: int = 1000) -> List[Dict]:
         """Get buildings in polygon with assignment filters."""

@@ -188,6 +188,7 @@ class _ViewportWorker(QThread):
     """Background worker for loading buildings in viewport without blocking UI."""
     finished = pyqtSignal(str)       # GeoJSON string
     buildings_loaded = pyqtSignal(list)  # Building objects for cache
+    grid_ready = pyqtSignal(str)     # JSON list of per-cell building counts
     network_error = pyqtSignal(str)  # user-friendly error message
 
     def __init__(self, viewport_loader, bounds, zoom, auth_token):
@@ -199,7 +200,7 @@ class _ViewportWorker(QThread):
 
     def run(self):
         try:
-            buildings = self._viewport_loader.load_buildings_for_viewport(
+            buildings, cells = self._viewport_loader.load_viewport(
                 north_east_lat=self._bounds[0],
                 north_east_lng=self._bounds[1],
                 south_west_lat=self._bounds[2],
@@ -208,6 +209,11 @@ class _ViewportWorker(QThread):
                 auth_token=self._auth_token
             )
             if self.isInterruptionRequested():
+                return
+            if cells is not None or not buildings:
+                self.buildings_loaded.emit([])
+                self.grid_ready.emit(json.dumps(cells or []))
+                self.finished.emit('{"type":"FeatureCollection","features":[]}')
                 return
             from services.geojson_converter import GeoJSONConverter
             import json as _json
@@ -314,7 +320,6 @@ class BaseMapDialog(QDialog):
             self._viewport_loader = get_shared_viewport_loader(
                 provider_key=provider_key,
                 map_service=map_svc,
-                cache_max_age_minutes=30,
             )
             logger.info(f"Viewport loading enabled (session cache, provider={provider_key})")
 
@@ -1217,6 +1222,7 @@ class BaseMapDialog(QDialog):
             self._viewport_worker.requestInterruption()
             try:
                 self._viewport_worker.buildings_loaded.disconnect()
+                self._viewport_worker.grid_ready.disconnect()
                 self._viewport_worker.finished.disconnect()
             except (TypeError, RuntimeError):
                 pass
@@ -1240,6 +1246,7 @@ class BaseMapDialog(QDialog):
             zoom, auth_token
         )
         self._viewport_worker.buildings_loaded.connect(self._on_viewport_buildings_cached)
+        self._viewport_worker.grid_ready.connect(self._on_viewport_grid_ready)
         self._viewport_worker.finished.connect(self._on_viewport_geojson_ready)
         self._viewport_worker.network_error.connect(self._on_map_network_error)
         self._viewport_worker.start()
@@ -1282,6 +1289,13 @@ class BaseMapDialog(QDialog):
                 "var o=document.getElementById('loadingOverlay');if(o)o.remove();"
             )
 
+    def _on_viewport_grid_ready(self, cells_json):
+        """Show per-cell building counts when a view holds too many buildings for pins."""
+        if self.web_view:
+            self.web_view.page().runJavaScript(
+                f"if (typeof window.updateBuildingGrid === 'function') window.updateBuildingGrid({cells_json});"
+            )
+
     def _on_viewport_geojson_ready(self, geojson):
         """Update map with GeoJSON from viewport worker."""
         import json as _json
@@ -1295,10 +1309,10 @@ class BaseMapDialog(QDialog):
         if has_buildings:
             self._update_map_buildings(geojson)
         else:
-            # Reset isLoadingViewport without clearing existing buildings
+            # Finish the load without clearing existing buildings
             if self.web_view:
                 self.web_view.page().runJavaScript(
-                    "if (typeof isLoadingViewport !== 'undefined') { isLoadingViewport = false; }"
+                    "if (typeof window.onViewportLoadDone === 'function') { window.onViewportLoadDone(); }"
                 )
 
     def _update_buildings_list(self, building_ids: List[str]):
