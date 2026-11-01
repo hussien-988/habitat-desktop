@@ -254,6 +254,14 @@ class BaseMapDialog(QDialog):
         buildings_multiselected(building_ids): List of building IDs selected
     """
 
+    # Search box hint; subclasses that search more than places override it.
+    SEARCH_PLACEHOLDER_KEY = "dialog.map.search_placeholder"
+    # Subclasses that can reset a search result enable the clear button.
+    SEARCH_CLEARABLE = False
+
+    _clear_search_btn = None
+    _search_result_active = False
+
     geometry_selected = pyqtSignal(str, str)
     building_selected = pyqtSignal(str)
     coordinates_updated = pyqtSignal(float, float, int)
@@ -539,7 +547,7 @@ class BaseMapDialog(QDialog):
 
         # Search input (disabled until map loads)
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
+        self.search_input.setPlaceholderText(tr(self.SEARCH_PLACEHOLDER_KEY))
         self.search_input.setEnabled(False)
         self.search_input.setLayoutDirection(Qt.RightToLeft)
         self.search_input.setAlignment(Qt.AlignRight)
@@ -599,6 +607,19 @@ class BaseMapDialog(QDialog):
         """)
         search_icon_btn.clicked.connect(self._on_search_submitted)
         search_layout.insertWidget(0, search_icon_btn)
+
+        if self.SEARCH_CLEARABLE:
+            self._clear_search_btn = QToolButton()
+            self._clear_search_btn.setText("✕")
+            self._clear_search_btn.setFixedSize(ScreenScale.w(32), ScreenScale.h(32))
+            self._clear_search_btn.setFont(create_font(size=10))
+            self._clear_search_btn.setCursor(Qt.PointingHandCursor)
+            self._clear_search_btn.setToolTip(tr("dialog.map.clear_search"))
+            self._clear_search_btn.setStyleSheet(search_icon_btn.styleSheet())
+            self._clear_search_btn.clicked.connect(self._on_clear_search_clicked)
+            self._clear_search_btn.hide()
+            search_layout.insertWidget(1, self._clear_search_btn)
+            self.search_input.textChanged.connect(self._update_clear_search_btn)
 
         return search_frame
 
@@ -1059,7 +1080,7 @@ class BaseMapDialog(QDialog):
         logger.info("Map bridge ready")
         if hasattr(self, 'search_input') and self.search_input:
             self.search_input.setEnabled(True)
-            self.search_input.setPlaceholderText(tr("dialog.map.search_placeholder"))
+            self.search_input.setPlaceholderText(tr(self.SEARCH_PLACEHOLDER_KEY))
 
     def _show_map_error(self, message: str):
         """Log map error. No Qt overlay — web_view renders directly."""
@@ -1407,6 +1428,17 @@ class BaseMapDialog(QDialog):
     def _on_search_submitted(self):
         """Handle search submission - subclass should override."""
         pass
+
+    def _on_clear_search_clicked(self):
+        """Handle the clear-search button - clearable subclasses override."""
+        pass
+
+    def _update_clear_search_btn(self, *_):
+        """Show the clear button while there is something to clear and no search is running."""
+        if self._clear_search_btn is None:
+            return
+        has_search = bool(self.search_input.text()) or self._search_result_active
+        self._clear_search_btn.setVisible(has_search and self.search_input.isEnabled())
 
     def _update_coordinates_display(self, geom_type: str, wkt: str):
         """
