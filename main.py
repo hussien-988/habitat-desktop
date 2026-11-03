@@ -387,11 +387,14 @@ class AnimatedSplash(QSplashScreen):
 def main():
     """Main application entry point."""
 
-    # Enable GPU acceleration for QWebEngineView (must be set before QApplication)
+    # Enable GPU acceleration for QWebEngineView (must be set before QApplication).
+    # Certificate errors are ignored because the map tile server runs on the
+    # internal network with a self-signed / internal-CA certificate.
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
         "--ignore-gpu-blacklist "
         "--enable-gpu-rasterization "
-        "--enable-zero-copy"
+        "--enable-zero-copy "
+        "--ignore-certificate-errors"
     )
 
     # Set Qt attributes BEFORE creating QApplication
