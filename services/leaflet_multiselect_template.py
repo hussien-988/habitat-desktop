@@ -122,17 +122,13 @@ MULTISELECT_JS_TEMPLATE = """
             }
         }
 
-        // Clear all selections (including pre-selected ones — treat as explicit removal)
+        // Clear all selections (including pre-selected ones — treat as explicit removal).
+        // Goes through deselectBuildingMulti so point markers get their original icon back.
         function clearAllSelections() {
-            if (window.alreadySelectedIds && window.explicitlyRemovedPreSelected) {
-                selectedBuildings.forEach(function(_, buildingId) {
-                    if (window.alreadySelectedIds.has(buildingId)) {
-                        window.explicitlyRemovedPreSelected.add(buildingId);
-                    }
-                });
-            }
+            Array.from(selectedBuildings.keys()).forEach(function(buildingId) {
+                deselectBuildingMulti(buildingId);
+            });
             selectedLayersGroup.clearLayers();
-            selectedBuildings.clear();
             updateMultiSelectCounter();
             sendMultiSelectedBuildingsToPython();
         }

@@ -637,6 +637,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.neighborhood_combo.setPlaceholderText(tr("filter.step1.select_neighborhood"))
         self._style_combo(self.neighborhood_combo)
         self.neighborhood_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self.neighborhood_combo.activated.connect(self._on_filter_reselected)
         filter2_container.layout().addWidget(self.neighborhood_combo)
         filters_layout.addWidget(filter2_container, 1)
 
@@ -650,6 +651,7 @@ class FieldWorkPreparationStep1(QWidget):
         self.assignment_status_combo.addItem(tr("filter.step1.assigned"), "true")
         self.assignment_status_combo.setCurrentIndex(0)
         self.assignment_status_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self.assignment_status_combo.activated.connect(self._on_filter_reselected)
         filter3_container.layout().addWidget(self.assignment_status_combo)
         filters_layout.addWidget(filter3_container, 1)
 
@@ -1382,15 +1384,17 @@ class FieldWorkPreparationStep1(QWidget):
 
         self._results_stack.setCurrentIndex(1)
 
-    def _on_search_text_changed(self, text):
-        """Update UI state on text change; actual search happens only on Enter or icon click."""
+    def _has_active_filter(self) -> bool:
         filters = self.get_filters()
-        has_active_filter = any([
+        return any([
             filters['community'],
             filters['neighborhood'],
             filters['assignment_status'] is not None
         ])
-        should_show = bool(text.strip()) or has_active_filter
+
+    def _on_search_text_changed(self, text):
+        """Update UI state on text change; actual search happens only on Enter or icon click."""
+        should_show = bool(text.strip()) or self._has_active_filter()
         self._set_suggestions_visible(should_show)
         self._update_selected_card_visibility()
 
@@ -1691,6 +1695,13 @@ class FieldWorkPreparationStep1(QWidget):
         # correct label ("View Selected (n)") instead of the reverse-mode text.
         self._update_selected_card_visibility()
 
+    def _on_filter_reselected(self, _index=None):
+        """Picking the already-selected item emits no currentIndexChanged, so reload
+        here when the results are not on screen. When the item did change,
+        _on_filter_changed has already shown the results and this is a no-op."""
+        if self._results_stack.currentIndex() != 1 or self._showing_selected_view:
+            self._on_filter_changed()
+
     def _on_search(self):
         """Handle search icon click - show suggestions with filtered results.
 
@@ -1863,9 +1874,13 @@ class FieldWorkPreparationStep1(QWidget):
 
         # Only run dismiss logic in actual search-results view, not in the selected
         # buildings grid (both share results_stack index 1, so check the flag too).
+        # Only typed-search suggestions are dismissable. Results produced by a filter
+        # (including "All", whose value is None) must survive an outside click.
         if (event.type() == QEvent.MouseButtonPress
                 and self._results_stack.currentIndex() == 1
-                and not self._showing_selected_view):
+                and not self._showing_selected_view
+                and self.building_search.text().strip()
+                and not self._has_active_filter()):
             # Check if click is inside suggestions area or search bar
             click_pos = event.globalPos()
             inside = False

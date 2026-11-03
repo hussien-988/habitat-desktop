@@ -2271,7 +2271,7 @@ class LeafletHTMLGenerator:
             var div = L.DomUtil.create('div', 'map-legend');
             div.style.cssText = 'background:white;padding:10px 14px;border-radius:10px;' +
                 'box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;direction:{direction};line-height:1.9;' +
-                'border:1px solid rgba(0,0,0,0.08);min-width:150px;';
+                'border:1px solid rgba(0,0,0,0.08);min-width:150px;margin-bottom:32px;';
             var dot = 'display:inline-block;width:12px;height:12px;border-radius:50%;' +
                 'margin-inline-end:8px;vertical-align:middle;flex-shrink:0;';
             var rowBase = 'display:flex;align-items:center;white-space:nowrap;';
