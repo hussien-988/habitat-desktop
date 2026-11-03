@@ -152,6 +152,12 @@ class _SearchWorker(QThread):
         self.result_type = None
     @staticmethod
     def _normalize_search_text(value):
+        """Normalize for comparison: matching stays exact, but on the normalized form.
+
+        Arabic spelling variants are unified (hamza forms of alef, ta marbuta,
+        alef maqsura) and the definite article is dropped from each word, so
+        "\u0627\u0644\u0641\u0631\u062F\u0648\u0633" matches "\u0641\u0631\u062F\u0648\u0633".
+        """
         text = str(value or "").casefold().strip()
 
         text = re.sub(
@@ -159,8 +165,12 @@ class _SearchWorker(QThread):
             "",
             text,
         )
+        text = re.sub(r"[\u0623\u0625\u0622]", "\u0627", text)
+        text = text.replace("\u0629", "\u0647").replace("\u0649", "\u064A")
 
-        return " ".join(text.split())
+        # Strip "\u0627\u0644" only when at least two letters remain, so short words survive
+        words = [w[2:] if w.startswith("\u0627\u0644") and len(w) > 3 else w for w in text.split()]
+        return " ".join(words)
     def run(self):
         try:
             from services.api_client import get_api_client

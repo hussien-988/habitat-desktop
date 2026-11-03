@@ -473,6 +473,22 @@ class ImportPackagesPage(QWidget):
         self._selected_label.setVisible(False)
         layout.addWidget(self._selected_label, 1)
 
+        # Shown only for ValidationFailed packages, which otherwise have no way out
+        self._cancel_btn = QPushButton(tr("wizard.import.cancel_package"))
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setMinimumHeight(ScreenScale.h(42))
+        self._cancel_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self._cancel_btn.setFont(create_font(size=9, weight=FontManager.WEIGHT_SEMIBOLD))
+        self._cancel_btn.setStyleSheet(
+            "QPushButton { background: white; color: #DC2626; border: 1px solid #FCA5A5;"
+            " border-radius: 10px; padding: 0 18px; font-size: 11pt;"
+            " font-weight: 600; min-height: 44px; }"
+            " QPushButton:hover { background: #FEF2F2; }"
+        )
+        self._cancel_btn.setVisible(False)
+        self._cancel_btn.clicked.connect(self._on_cancel_failed_package)
+        layout.addWidget(self._cancel_btn)
+
         self._start_btn = QPushButton(tr("page.import_packages.start_processing"))
         self._start_btn.setCursor(Qt.PointingHandCursor)
         self._start_btn.setMinimumHeight(ScreenScale.h(42))
@@ -1064,6 +1080,7 @@ class ImportPackagesPage(QWidget):
             self._selected_label.setVisible(True)
 
             actionable = is_actionable_status(status_code) if status_code else True
+            self._cancel_btn.setVisible(status_code == PkgStatus.VALIDATION_FAILED)
 
             if status_code == PkgStatus.CANCELLED:
                 self._start_btn.setVisible(True)
@@ -1109,6 +1126,7 @@ class ImportPackagesPage(QWidget):
         else:
             self._selected_label.clear()
             self._selected_label.setVisible(False)
+            self._cancel_btn.setVisible(False)
 
             self._start_btn.setVisible(False)
             self._start_btn.setEnabled(False)
@@ -1247,10 +1265,26 @@ class ImportPackagesPage(QWidget):
 
     # -- Package actions ---------------------------------------------------
 
-    def _cancel_package(self, package_id):
+    def _on_cancel_failed_package(self):
+        """Cancel the selected ValidationFailed package after asking for a reason."""
+        if not self._selected_pkg_id:
+            return
+        from ui.pages.import_wizard_page import _prompt_reason_via_bottom_sheet
+        reason = _prompt_reason_via_bottom_sheet(
+            self,
+            title=tr("wizard.import.cancel_reason_title"),
+            field_label=tr("wizard.import.cancel_reason_prompt"),
+            submit_text=tr("wizard.import.cancel_package"),
+            cancel_text=tr("action.dismiss"),
+        )
+        if not reason:
+            return
+        self._cancel_package(self._selected_pkg_id, reason)
+
+    def _cancel_package(self, package_id, reason: str = ""):
         self._spinner.show_loading(tr("page.import_packages.cancelling"))
         try:
-            result = self.import_controller.cancel_package(package_id)
+            result = self.import_controller.cancel_package(package_id, reason=reason)
             if result.success:
                 ErrorHandler.show_success(self, result.message_ar or tr("page.import_packages.package_cancelled"))
                 self._load_packages()
