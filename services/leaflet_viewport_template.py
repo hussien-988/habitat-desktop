@@ -248,8 +248,8 @@ VIEWPORT_LOADING_JS_TEMPLATE = '''
                             _idLabel = _rawId.length >= 5 ? _rawId.slice(-5) : _rawId;
                         }
                         var _embeddedLabel = (_showLabels && _idLabel)
-                            ? '<div style="position:absolute;bottom:40px;left:12px;transform:translateX(-50%);' +
-                              'white-space:nowrap;pointer-events:none;color:#0072BC;font-size:10px;font-weight:700;">' +
+                            ? '<div class="building-number-label" style="position:absolute;bottom:40px;left:12px;' +
+                              'transform:translateX(-50%);">' +
                               _idLabel + '</div>'
                             : '';
 

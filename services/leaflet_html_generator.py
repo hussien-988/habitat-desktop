@@ -637,6 +637,11 @@ class LeafletHTMLGenerator:
             border: none !important;
         }}
 
+        /* Keep the hovered building pin above neighboring markers. */
+        .building-pin-icon:hover {{
+            z-index: 10000 !important;
+        }}
+
         .building-pin-icon svg {{
             transition: transform 0.15s ease-in-out;
         }}
@@ -676,20 +681,32 @@ class LeafletHTMLGenerator:
         .building-id-tooltip::before {{
             border-top-color: rgba(30, 41, 59, 0.92) !important;
         }}
-        /* Building number label shown permanently above preview pin */
+        /* Building number labels displayed above map pins */
         .building-number-label {{
             background: rgba(255, 255, 255, 0.96) !important;
-            color: #0072BC !important;
-            border: 1px solid rgba(0, 114, 188, 0.28) !important;
-            border-radius: 999px !important;
-            padding: 2px 7px !important;
-            font-size: 10px !important;
+            color: #1F2937 !important;
+            border: 1px solid rgba(31, 41, 55, 0.28) !important;
+            border-radius: 5px !important;
+            padding: 3px 7px !important;
+            font-size: 13px !important;
             font-weight: 700 !important;
             direction: ltr !important;
             font-family: 'Segoe UI', Tahoma, sans-serif !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.18) !important;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.25) !important;
             white-space: nowrap !important;
-            pointer-events: none !important;
+            /* Make the number itself hoverable, not just its pin. */
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            transition: font-size 0.15s ease, border-color 0.15s ease,
+                        color 0.15s ease, box-shadow 0.15s ease;
+        }}
+
+        /* Highlight only the building currently under the mouse. */
+        .building-pin-icon:hover .building-number-label {{
+            color: #0072BC !important;
+            border: 2px solid #0072BC !important;
+            font-size: 16px !important;
+            box-shadow: 0 2px 10px rgba(0, 114, 188, 0.38) !important;
         }}
 
         .building-number-label::before {{
@@ -835,6 +852,10 @@ class LeafletHTMLGenerator:
         effective_min_zoom = min_zoom if min_zoom is not None else tile_meta.get('minzoom', MapConstants.MIN_ZOOM)
         effective_max_zoom = max_zoom if max_zoom != MapConstants.MAX_ZOOM else tile_meta.get('maxzoom', MapConstants.MAX_ZOOM)
 
+        # Overzoom for crowded buildings without requesting unavailable tile levels.
+        native_max_zoom = effective_max_zoom
+        effective_max_zoom = max(native_max_zoom, 22)
+
         # Determine actual tile URL template — Docker TileServer GL returns its own URL in tiles[0]
         tile_template_from_meta = tile_meta.get('tile_template')
         if tile_template_from_meta:
@@ -978,7 +999,7 @@ class LeafletHTMLGenerator:
         // Add tile layer
         var tileLayer = L.tileLayer({tile_layer_url_js}, {{
             maxZoom: {effective_max_zoom},
-            maxNativeZoom: {effective_max_zoom},
+            maxNativeZoom: {native_max_zoom},
             minZoom: {effective_min_zoom},
             noWrap: true,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
@@ -1205,8 +1226,8 @@ class LeafletHTMLGenerator:
                 // Permanent Leaflet tooltips mis-position inside MarkerCluster groups even
                 // when clustering is disabled — embedding avoids that entirely.
                 var _embeddedLabel = (_showLabels && _idLabel)
-                    ? '<div style="position:absolute;bottom:40px;left:12px;transform:translateX(-50%);' +
-                      'white-space:nowrap;pointer-events:none;color:#0072BC;font-size:10px;font-weight:700;">' +
+                    ? '<div class="building-number-label" style="position:absolute;bottom:40px;left:12px;' +
+                      'transform:translateX(-50%);">' +
                       _idLabel + '</div>'
                     : '';
 
