@@ -852,6 +852,10 @@ class LeafletHTMLGenerator:
         effective_min_zoom = min_zoom if min_zoom is not None else tile_meta.get('minzoom', MapConstants.MIN_ZOOM)
         effective_max_zoom = max_zoom if max_zoom != MapConstants.MAX_ZOOM else tile_meta.get('maxzoom', MapConstants.MAX_ZOOM)
 
+        # Overzoom for crowded buildings without requesting unavailable tile levels.
+        native_max_zoom = effective_max_zoom
+        effective_max_zoom = max(native_max_zoom, 22)
+
         # Determine actual tile URL template — Docker TileServer GL returns its own URL in tiles[0]
         tile_template_from_meta = tile_meta.get('tile_template')
         if tile_template_from_meta:
@@ -995,7 +999,7 @@ class LeafletHTMLGenerator:
         // Add tile layer
         var tileLayer = L.tileLayer({tile_layer_url_js}, {{
             maxZoom: {effective_max_zoom},
-            maxNativeZoom: {effective_max_zoom},
+            maxNativeZoom: {native_max_zoom},
             minZoom: {effective_min_zoom},
             noWrap: true,
             attribution: 'Map data &copy; OpenStreetMap | UN-Habitat Syria',
