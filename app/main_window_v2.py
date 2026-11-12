@@ -199,7 +199,7 @@ class MainWindow(QMainWindow):
 
     def _setup_window(self):
         """Configure window properties — adapts to screen size."""
-        self.setWindowTitle("UN-HABITAT")
+        self._set_base_window_title("UN-HABITAT")
 
         screen = self.screen().availableGeometry()
 
@@ -2799,7 +2799,19 @@ class MainWindow(QMainWindow):
 
         # Update window title
         title = Config.APP_TITLE_AR if is_arabic else Config.APP_TITLE
-        self.setWindowTitle(f"{Config.APP_NAME} - {title}")
+        self._set_base_window_title(f"{Config.APP_NAME} - {title}")
+
+    def _set_base_window_title(self, title: str):
+        self._base_window_title = title
+        self.refresh_window_title()
+
+    def refresh_window_title(self):
+        """Apply the window title, marked [DEBUG] while debug mode is on."""
+        from utils.logger import is_debug_mode_enabled
+        title = getattr(self, "_base_window_title", "UN-HABITAT")
+        if is_debug_mode_enabled():
+            title = f"{title} [DEBUG]"
+        self.setWindowTitle(title)
 
     def closeEvent(self, event):
         """Handle window close event."""
