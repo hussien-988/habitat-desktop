@@ -68,8 +68,8 @@ class ServerSettingsDialog(QDialog):
         self.setModal(True)
         from PyQt5.QtWidgets import QApplication
         _scr = QApplication.primaryScreen().availableGeometry()
-        self.resize(min(540, int(_scr.width() * 0.45)), min(480, int(_scr.height() * 0.55)))
-        self.setMinimumSize(400, 360)
+        self.resize(min(540, int(_scr.width() * 0.45)), min(620, int(_scr.height() * 0.75)))
+        self.setMinimumSize(400, 480)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("QDialog { background-color: transparent; }")
@@ -191,6 +191,9 @@ class ServerSettingsDialog(QDialog):
             )
         self._api_url_input.textChanged.connect(lambda: self._on_url_changed(False))
 
+        # -- Debug mode section --
+        self._build_debug_section(layout)
+
         layout.addStretch()
 
         # -- Buttons row --
@@ -273,6 +276,96 @@ class ServerSettingsDialog(QDialog):
 
         parent_layout.addWidget(section)
         return url_input, test_btn, status_lbl
+
+    def _build_debug_section(self, parent_layout):
+        """Debug mode card: on/off toggle (applied at once) + open logs folder."""
+        section = QFrame()
+        section.setObjectName("sectionCard")
+        section.setStyleSheet("""
+            QFrame#sectionCard {
+                background-color: rgba(20, 40, 75, 180);
+                border: 1px solid rgba(56, 144, 223, 20);
+                border-left: 3px solid rgba(255, 167, 38, 120);
+                border-radius: 10px;
+            }
+            QFrame#sectionCard QLabel {
+                background: transparent;
+            }
+        """)
+
+        card_lay = QVBoxLayout(section)
+        card_lay.setContentsMargins(16, 14, 16, 14)
+        card_lay.setSpacing(6)
+
+        header_lbl = QLabel("⚙  " + tr("dialog.server_settings.debug_header"))
+        header_lbl.setFont(create_font(size=11, weight=FontManager.WEIGHT_MEDIUM))
+        header_lbl.setStyleSheet("color: white;")
+        card_lay.addWidget(header_lbl)
+
+        desc_lbl = QLabel(tr("dialog.server_settings.debug_description"))
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setFont(create_font(size=8, weight=FontManager.WEIGHT_REGULAR))
+        desc_lbl.setStyleSheet("color: #8BACC8;")
+        card_lay.addWidget(desc_lbl)
+
+        card_lay.addSpacing(4)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        self._debug_status = QLabel("")
+        self._debug_status.setFont(create_font(size=9, weight=FontManager.WEIGHT_MEDIUM))
+        row.addWidget(self._debug_status, 1)
+
+        open_logs_btn = self._make_btn(
+            tr("dialog.server_settings.debug_open_logs"), "secondary", width=140, height=40
+        )
+        open_logs_btn.clicked.connect(self._on_open_logs_folder)
+        row.addWidget(open_logs_btn)
+
+        self._debug_toggle_btn = self._make_btn("", "secondary", width=100, height=40)
+        self._debug_toggle_btn.clicked.connect(self._on_toggle_debug)
+        row.addWidget(self._debug_toggle_btn)
+
+        card_lay.addLayout(row)
+        parent_layout.addWidget(section)
+        self._refresh_debug_section()
+
+    def _refresh_debug_section(self):
+        from utils.logger import is_debug_mode_enabled
+        if is_debug_mode_enabled():
+            self._debug_status.setText("● " + tr("dialog.server_settings.debug_on"))
+            self._debug_status.setStyleSheet("color: #FFA726;")
+            self._debug_toggle_btn.setText(tr("dialog.server_settings.debug_turn_off"))
+        else:
+            self._debug_status.setText("● " + tr("dialog.server_settings.debug_off"))
+            self._debug_status.setStyleSheet("color: #8BACC8;")
+            self._debug_toggle_btn.setText(tr("dialog.server_settings.debug_turn_on"))
+
+    def _on_toggle_debug(self):
+        from utils.logger import is_debug_mode_enabled, set_debug_mode
+        try:
+            set_debug_mode(not is_debug_mode_enabled())
+        except Exception as e:
+            self._debug_status.setText("● " + str(e))
+            self._debug_status.setStyleSheet("color: #EF5350;")
+            return
+        self._refresh_debug_section()
+        parent = self.parent()
+        main_window = parent.window() if parent is not None else None
+        if main_window is not None and hasattr(main_window, "refresh_window_title"):
+            main_window.refresh_window_title()
+
+    def _on_open_logs_folder(self):
+        from PyQt5.QtCore import QUrl
+        from PyQt5.QtGui import QDesktopServices
+        from utils.logger import get_debug_logs_dir
+        logs_dir = get_debug_logs_dir()
+        try:
+            logs_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(logs_dir)))
 
     # -- Connection testing --
 
