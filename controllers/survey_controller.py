@@ -524,6 +524,11 @@ class SurveyController:
                     "survey_property_unit_id": unit_id or "",
                     "household_id": hh_id,
                     "contact_person_id": resolved_cp_id,
+                    # The contact person actually linked on the survey record.
+                    # Empty when resolved_cp_id came from a fallback (e.g. an
+                    # imported field package that left surveys.contact_person_id
+                    # empty); the applicant step then links it before saving.
+                    "survey_contact_person_id": contact_person_id or "",
                 },
                 "building": building_data,
                 "unit": unit_data,

@@ -1270,10 +1270,11 @@ class ApplicantInfoStep(BaseStep):
                         self._api_client.create_contact_person,
                         survey_id, self.context.applicant,
                     )
-                    self.context.update_data(
-                        "contact_person_id",
-                        response.get("id") or response.get("contactPersonId", "")
-                    )
+                    new_cp_id = response.get("id") or response.get("contactPersonId", "")
+                    self.context.update_data("contact_person_id", new_cp_id)
+                    if self.context.get_data("survey_contact_person_id") is not None:
+                        # POST contact-person links the new person to the survey
+                        self.context.update_data("survey_contact_person_id", new_cp_id)
                     self._loaded_applicant_snapshot = self._applicant_snapshot(self.context.applicant)
                 except Exception as e:
                     if isinstance(e, ApiException) and e.status_code == 409:
@@ -1284,6 +1285,29 @@ class ApplicantInfoStep(BaseStep):
                     Toast.show_toast(self.window(), msg, Toast.ERROR)
                     result.add_error(msg)
             else:
+                linked_cp_id = self.context.get_data("survey_contact_person_id")
+                if linked_cp_id is not None and linked_cp_id != existing_cp_id:
+                    # The applicant shown was resolved from the household (the
+                    # survey record has no contact person, as with imported
+                    # field packages): link it to the survey first, otherwise
+                    # the backend rejects the update and the step is stuck.
+                    try:
+                        run_blocking_async(
+                            self._api_client.set_contact_point,
+                            survey_id, existing_cp_id,
+                        )
+                        self.context.update_data("survey_contact_person_id", existing_cp_id)
+                        logger.info(
+                            f"[APPLICANT-STEP] linked contact person {existing_cp_id} "
+                            f"to survey {survey_id} (was {linked_cp_id or '-'})"
+                        )
+                    except Exception as e:
+                        logger.error(f"Linking contact person to survey failed: {e}")
+                        msg = map_exception(e)
+                        Toast.show_toast(self.window(), msg, Toast.ERROR)
+                        result.add_error(msg)
+
+            if existing_cp_id and result.is_valid:
                 if not self._applicant_data_changed(self.context.applicant):
                     logger.info(f"[APPLICANT-STEP] unchanged ({existing_cp_id}), skipping update_contact_person")
                 else:
